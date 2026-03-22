@@ -140,7 +140,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ## Phase 7: MLP — Minimum Lovable Product
 
 ### 7.1 — Random Unsplash images
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-22
 **Depends on:** 5.1
 **Description:** On "New Game", fetch a random landscape photo from Unsplash to use as the puzzle image. Use the Unsplash API (free tier, needs API key). Filter for landscape orientation to match the puzzle grid aspect ratio. Store the image URL in GameState so the image persists across app restarts. Handle errors gracefully (fall back to default image if fetch fails). The API key should be configured via environment variable at build time (not committed to repo).
 
