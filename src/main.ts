@@ -4,7 +4,7 @@ import { SvgDomRenderer } from './renderer/index.js';
 import { setupDragHandling, ViewportTransform, ViewportController } from './interaction/index.js';
 import { createNewGame, processDrop, checkAndMarkWin } from './game/index.js';
 import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
-import { createNewGameButton } from './ui/index.js';
+import { createNewGameButton, createCentreViewButton } from './ui/index.js';
 
 const PUZZLE_IMAGE_URL = 'puzzle-image.jpg';
 const IMAGE_WIDTH = 800;
@@ -174,6 +174,15 @@ createNewGameButton({
     onNewGame: () => {
         clearSavedState();
         startNewGame();
+    },
+});
+
+// Set up the Centre View button
+createCentreViewButton({
+    container: app,
+    onCentreView: () => {
+        viewportTransform.reset();
+        applyViewportTransform();
     },
 });
 
