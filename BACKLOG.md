@@ -174,6 +174,11 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 - **Edge line wobble** — the cuts between pieces don't follow perfectly straight grid lines; they meander slightly
 Compare with real puzzle piece photos for reference. The goal is that the pieces should look like they could have been cut from cardboard with a real puzzle die.
 
+### 5.4.1 — Fix: Gather pieces should scatter, not solve
+**Status:** todo
+**Depends on:** 5.4
+**Description:** The "Gather Pieces" button currently places all groups near their solved positions, essentially solving the puzzle for the player. Instead, it should collect all groups into the visible viewport area with randomized positions — like sweeping scattered pieces into a pile on the table. The groups should be loosely distributed so they don't all stack on one point, but their positions should have no relation to their solved positions. Think "dump all the pieces in the middle of the table" not "put them back where they belong".
+
 ### 7.5 — Background colour selection
 **Status:** done
 **Done:** 2026-03-22
