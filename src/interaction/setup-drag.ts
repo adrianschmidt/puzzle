@@ -61,8 +61,10 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
             },
             bringToFront(groupId: number) {
                 renderer.bringGroupToFront(groupId);
+                renderer.setGroupDragging(groupId, true);
             },
             onDrop(groupId: number) {
+                renderer.setGroupDragging(groupId, false);
                 onDrop(groupId);
             },
             requestRender() {

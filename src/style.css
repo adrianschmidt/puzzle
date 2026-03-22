@@ -127,6 +127,25 @@ html, body {
   background: rgba(255, 255, 255, 0.25);
 }
 
+/* Piece/group shadows for depth */
+[data-group-id] {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+}
+
+/* Lifted shadow when a group is being dragged */
+[data-group-id].dragging {
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
+}
+
+/* Brief pulse on a group after a successful merge */
+[data-group-id].merge-pulse {
+  animation: merge-pulse 0.25s ease-out;
+}
+
+@keyframes merge-pulse {
+  0% { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35)) brightness(1.2); }
+  100% { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35)) brightness(1); }
+}
 /* Win detection overlay */
 .completion-overlay {
   position: absolute;
@@ -152,6 +171,13 @@ html, body {
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 
+.completion-message p {
+  margin-top: 0.5rem;
+  font-size: 1.1rem;
+  opacity: 0.85;
+  animation: fade-in 0.5s ease-out 0.6s both;
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -166,4 +192,30 @@ html, body {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+/* Completion celebration — puzzle glows briefly */
+.completion-glow [data-group-id] {
+  filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.6))
+          drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  transition: filter 1s ease-out;
+}
+
+/* Responsive: ensure buttons don't overlap on small screens */
+@media (max-height: 400px) {
+  .new-game-button,
+  .centre-view-button,
+  .gather-pieces-button {
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
+
+  .new-game-button { top: 8px; right: 8px; }
+  .centre-view-button { top: 40px; right: 8px; }
+  .gather-pieces-button { top: 72px; right: 8px; }
 }

@@ -416,6 +416,62 @@ describe('SvgDomRenderer', () => {
         });
     });
 
+    describe('setGroupDragging', () => {
+        it('adds the dragging class when dragging is true', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            renderer.setGroupDragging(0, true);
+
+            const groupEl = container.querySelector('[data-group-id="0"]')!;
+            expect(groupEl.classList.contains('dragging')).toBe(true);
+        });
+
+        it('removes the dragging class when dragging is false', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            renderer.setGroupDragging(0, true);
+            renderer.setGroupDragging(0, false);
+
+            const groupEl = container.querySelector('[data-group-id="0"]')!;
+            expect(groupEl.classList.contains('dragging')).toBe(false);
+        });
+
+        it('is a no-op for non-existent group ids', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            // Should not throw
+            renderer.setGroupDragging(999, true);
+        });
+    });
+
+    describe('flashMergePulse', () => {
+        it('adds the merge-pulse class to the group element', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            renderer.flashMergePulse(0);
+
+            const groupEl = container.querySelector('[data-group-id="0"]')!;
+            expect(groupEl.classList.contains('merge-pulse')).toBe(true);
+        });
+
+        it('is a no-op for non-existent group ids', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            // Should not throw
+            renderer.flashMergePulse(999);
+        });
+    });
+
     describe('destroy', () => {
         it('removes the table element', () => {
             renderer.init(container);

@@ -39,11 +39,15 @@ function showCompletionOverlay(): void {
         return;
     }
 
+    // Add a glow effect to the completed puzzle
+    app.classList.add('completion-glow');
+
     const overlay = document.createElement('div');
     overlay.className = 'completion-overlay';
     overlay.innerHTML = `
         <div class="completion-message">
             <h1>🧩 Puzzle Complete!</h1>
+            <p>Well done!</p>
         </div>
     `;
 
@@ -58,6 +62,8 @@ function removeCompletionOverlay(): void {
     if (overlay) {
         overlay.remove();
     }
+
+    app.classList.remove('completion-glow');
 }
 
 let gameState: GameState;
@@ -145,6 +151,7 @@ function initGame(state: GameState): void {
             const result = processDrop(groupId, gameState);
             if (result) {
                 renderer.renderState(gameState);
+                renderer.flashMergePulse(result.group.id);
                 autoSave();
 
                 if (checkAndMarkWin(gameState)) {
