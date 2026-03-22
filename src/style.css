@@ -206,6 +206,28 @@ html, body {
   transition: filter 1s ease-out;
 }
 
+/* Image attribution (e.g. Unsplash) */
+.image-attribution {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 9999;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: auto;
+}
+
+.image-attribution a {
+  color: rgba(255, 255, 255, 0.65);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.image-attribution a:hover {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: underline;
+}
+
 /* Responsive: ensure buttons don't overlap on small screens */
 @media (max-height: 400px) {
   .new-game-button,

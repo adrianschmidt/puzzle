@@ -57,6 +57,14 @@ describe('createNewGame', () => {
         expect(state.completed).toBe(false);
     });
 
+    it('stores the image size in the game state', () => {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+            random: seededRandom([0.5]),
+        });
+
+        expect(state.imageSize).toEqual(IMAGE_SIZE);
+    });
+
     it('each group contains exactly one piece', () => {
         const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
             random: seededRandom([0.5]),

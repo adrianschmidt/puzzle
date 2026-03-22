@@ -11,22 +11,23 @@ import {
     type SerializedGameState,
 } from './serialization.js';
 
-/** Create a minimal valid piece for testing. */
+/**
+ * Create a minimal valid piece for testing with 4 edges forming a 100×100 square.
+ *
+ * Image offsets simulate a grid: piece 0 at (0,0), piece 1 at (-100,0), etc.
+ * This lets getImageDimensions derive a meaningful size from the pieces.
+ */
 function makePiece(id: number): Piece {
     return {
         id,
         edges: [
-            {
-                id: id * 10,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: 'M0,0 L100,0',
-                start: { x: 0, y: 0 },
-                end: { x: 100, y: 0 },
-            },
+            { id: id * 10, mateEdgeId: -1, matePieceId: -1, path: 'L100,0', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
+            { id: id * 10 + 1, mateEdgeId: -1, matePieceId: -1, path: 'L100,100', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
+            { id: id * 10 + 2, mateEdgeId: -1, matePieceId: -1, path: 'L0,100', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
+            { id: id * 10 + 3, mateEdgeId: -1, matePieceId: -1, path: 'L0,0', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
         ],
         shape: 'M0,0 L100,0 L100,100 L0,100 Z',
-        imageOffset: { x: id * 100, y: 0 },
+        imageOffset: { x: id === 0 ? 0 : -id * 100, y: 0 },
     };
 }
 
@@ -54,6 +55,7 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
         pieces,
         groups,
         imageUrl: 'test-image.jpg',
+        imageSize: { width: 800, height: 600 },
         completed: false,
         ...overrides,
     };
@@ -83,6 +85,7 @@ describe('serializeState', () => {
         const serialized = serializeState(state);
 
         expect(serialized.imageUrl).toBe('test-image.jpg');
+        expect(serialized.imageSize).toEqual({ width: 800, height: 600 });
         expect(serialized.completed).toBe(true);
         expect(serialized.pieces).toEqual(state.pieces);
     });
@@ -104,6 +107,30 @@ describe('serializeState', () => {
         const parsed = JSON.parse(json);
 
         expect(parsed).toEqual(serialized);
+    });
+
+    it('includes attribution when present', () => {
+        const state = makeGameState({
+            attribution: {
+                photographerName: 'Test Author',
+                photographerUrl: 'https://unsplash.com/@test',
+                photoUrl: 'https://unsplash.com/photos/abc',
+            },
+        });
+        const serialized = serializeState(state);
+
+        expect(serialized.attribution).toEqual({
+            photographerName: 'Test Author',
+            photographerUrl: 'https://unsplash.com/@test',
+            photoUrl: 'https://unsplash.com/photos/abc',
+        });
+    });
+
+    it('omits attribution when not present', () => {
+        const state = makeGameState();
+        const serialized = serializeState(state);
+
+        expect(serialized.attribution).toBeUndefined();
     });
 });
 
@@ -144,7 +171,45 @@ describe('deserializeState', () => {
         }
 
         expect(restored.imageUrl).toBe(original.imageUrl);
+        expect(restored.imageSize).toEqual(original.imageSize);
         expect(restored.completed).toBe(original.completed);
+    });
+
+    it('round-trips attribution through JSON', () => {
+        const original = makeGameState({
+            attribution: {
+                photographerName: 'Jane Doe',
+                photographerUrl: 'https://unsplash.com/@jane',
+                photoUrl: 'https://unsplash.com/photos/xyz',
+            },
+        });
+
+        const serialized = serializeState(original);
+        const json = JSON.stringify(serialized);
+        const parsed = JSON.parse(json) as SerializedGameState;
+        const restored = deserializeState(parsed);
+
+        expect(restored.attribution).toEqual(original.attribution);
+    });
+
+    it('migrates v1 state by deriving imageSize from pieces', () => {
+        // Simulate a v1 saved state (no imageSize field)
+        const v1Serialized: SerializedGameState = {
+            version: 1,
+            pieces: [makePiece(0), makePiece(1), makePiece(2)],
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
+            ],
+            imageUrl: 'old-image.jpg',
+            completed: false,
+        };
+
+        const restored = deserializeState(v1Serialized);
+
+        // Should derive imageSize from piece data
+        expect(restored.imageSize).toBeDefined();
+        expect(restored.imageSize.width).toBeGreaterThan(0);
+        expect(restored.imageSize.height).toBeGreaterThan(0);
     });
 
     it('throws on unsupported version', () => {

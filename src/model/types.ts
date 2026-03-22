@@ -73,6 +73,18 @@ export interface PieceGroup {
 }
 
 /**
+ * Attribution info for the puzzle image (e.g. Unsplash photographer).
+ */
+export interface ImageAttribution {
+    /** Photographer / artist name. */
+    photographerName: string;
+    /** Link to the photographer's profile. */
+    photographerUrl: string;
+    /** Link to the original photo page. */
+    photoUrl: string;
+}
+
+/**
  * Complete game state — everything needed to render and persist a game.
  */
 export interface GameState {
@@ -82,6 +94,10 @@ export interface GameState {
     groups: PieceGroup[];
     /** URL of the puzzle image. */
     imageUrl: string;
+    /** Pixel dimensions of the puzzle image. */
+    imageSize: Size;
     /** True when all pieces have been merged into a single group. */
     completed: boolean;
+    /** Optional attribution for the puzzle image (e.g. from Unsplash). */
+    attribution?: ImageAttribution;
 }

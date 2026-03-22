@@ -46,6 +46,7 @@ export function createNewGame(
         pieces,
         groups,
         imageUrl,
+        imageSize,
         completed: false,
     };
 }

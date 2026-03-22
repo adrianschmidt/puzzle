@@ -81,6 +81,7 @@ function make2x2State(): GameState {
             makeGroup(3, [3], 200, 200),
         ],
         imageUrl: 'test-puzzle.jpg',
+        imageSize: { width: 200, height: 200 },
         completed: false,
     };
 }

@@ -8,6 +8,10 @@ dist/
 .vscode/
 .idea/
 
+# Env files with secrets
+.env.local
+.env.*.local
+
 # OS
 .DS_Store
 
