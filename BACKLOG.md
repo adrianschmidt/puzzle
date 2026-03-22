@@ -177,7 +177,7 @@ Compare with real puzzle piece photos for reference. The goal is that the pieces
 ### 5.4.1 — Fix: Gather pieces should scatter, not solve
 **Status:** todo
 **Depends on:** 5.4
-**Description:** The "Gather Pieces" button currently places all groups near their solved positions, essentially solving the puzzle for the player. Instead, it should collect all groups into the visible viewport area with randomized positions — like sweeping scattered pieces into a pile on the table. The groups should be loosely distributed so they don't all stack on one point, but their positions should have no relation to their solved positions. Think "dump all the pieces in the middle of the table" not "put them back where they belong".
+**Description:** The "Gather Pieces" button currently places all groups near their solved positions, essentially solving the puzzle for the player. Instead, it should scatter groups into a random grid layout within an area roughly 2-3× the dimensions of the finished puzzle (not viewport-relative — consistent regardless of screen size). Apply generous jitter to each group's position so it doesn't look like a perfect grid. Positions should have no relation to solved positions. Think "dump all the pieces onto a table a few times bigger than the puzzle" — everything's visible and reachable, but nothing's where it belongs.
 
 ### 7.5 — Background colour selection
 **Status:** done
