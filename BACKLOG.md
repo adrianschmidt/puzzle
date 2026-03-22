@@ -49,8 +49,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ## Phase 4: Core Mechanic
 
 ### 4.1 — Merge detection
-**Status:** todo
+**Status:** done
 **Depends on:** 3.1
+**Done:** 2026-03-22
 **Description:** After a group is dropped: for each piece in the moved group, iterate its edges. For edges with mates, find the mate piece. If the mate piece is in a different group, calculate expected vs actual edge alignment. If within tolerance (~15-20px), trigger merge. Tolerance should be a named constant (`MERGE_TOLERANCE_PX`).
 
 ### 4.2 — Group merging
