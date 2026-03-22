@@ -307,6 +307,8 @@ createGatherPiecesButton({
             visibleArea,
             pieceWidth,
             pieceHeight,
+            gameState.gridSize.cols,
+            gameState.gridSize.rows,
         );
 
         applyGatheredPositions(gameState.groups, positions);

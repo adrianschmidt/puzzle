@@ -8,7 +8,6 @@ import {
     computeGatheredPositions,
     applyGatheredPositions,
     getGroupOffsetBounds,
-    GATHER_PADDING,
 } from './gather.js';
 import type { WorldRect } from './gather.js';
 
@@ -129,7 +128,7 @@ describe('computeGatheredPositions', () => {
         }
     });
 
-    it('should distribute groups in a grid pattern', () => {
+    it('should scatter groups within the puzzle-relative area', () => {
         const groups = [
             makeGroup(1, 0, 0),
             makeGroup(2, 1000, 0),
@@ -142,54 +141,54 @@ describe('computeGatheredPositions', () => {
             defaultVisibleArea,
             pieceWidth,
             pieceHeight,
+            8, // puzzleCols
+            6, // puzzleRows
         );
 
-        // 4 groups → 2x2 grid
-        const cellWidth = pieceWidth + GATHER_PADDING;
-        const cellHeight = pieceHeight + GATHER_PADDING;
+        // All 4 groups should get positions
+        expect(result.size).toBe(4);
 
-        const pos1 = result.get(1)!;
-        const pos2 = result.get(2)!;
-        const pos3 = result.get(3)!;
-        const pos4 = result.get(4)!;
+        // Scatter area is 2.5× puzzle size = 2000×1500, centred on visible area
+        // Positions should be within a reasonable range of the centre
+        const centreX = 400;
+        const centreY = 300;
+        const maxDist = 1500; // generous bound
 
-        // Groups in the same row should have the same y
-        expect(pos1.y).toBe(pos2.y);
-        expect(pos3.y).toBe(pos4.y);
-
-        // Groups in the same column should have the same x
-        expect(pos1.x).toBe(pos3.x);
-        expect(pos2.x).toBe(pos4.x);
-
-        // The horizontal gap between columns should be cellWidth
-        expect(pos2.x - pos1.x).toBe(cellWidth);
-
-        // The vertical gap between rows should be cellHeight
-        expect(pos3.y - pos1.y).toBe(cellHeight);
+        for (const pos of result.values()) {
+            expect(Math.abs(pos.x - centreX)).toBeLessThan(maxDist);
+            expect(Math.abs(pos.y - centreY)).toBeLessThan(maxDist);
+        }
     });
 
-    it('should centre the grid on the visible area', () => {
-        const groups = [makeGroup(1, 0, 0), makeGroup(2, 500, 500)];
-        const visibleArea: WorldRect = { x: 100, y: 100, width: 600, height: 400 };
+    it('should produce different positions on repeated calls (shuffle + jitter)', () => {
+        const groups = Array.from({ length: 10 }, (_, i) =>
+            makeGroup(i, i * 100, i * 100),
+        );
 
-        const result = computeGatheredPositions(
+        const result1 = computeGatheredPositions(
             groups,
-            visibleArea,
+            defaultVisibleArea,
+            pieceWidth,
+            pieceHeight,
+        );
+        const result2 = computeGatheredPositions(
+            groups,
+            defaultVisibleArea,
             pieceWidth,
             pieceHeight,
         );
 
-        const cellWidth = pieceWidth + GATHER_PADDING;
-        // 2 groups → 2 cols, 1 row
-        const gridWidth = 2 * cellWidth;
-
-        const centreX = 100 + 600 / 2; // 400
-
-        const pos1 = result.get(1)!;
-
-        // startX = centreX - gridWidth / 2
-        const expectedStartX = centreX - gridWidth / 2;
-        expect(pos1.x).toBe(expectedStartX);
+        // At least some positions should differ (extremely unlikely to match)
+        let anyDifferent = false;
+        for (const group of groups) {
+            const p1 = result1.get(group.id)!;
+            const p2 = result2.get(group.id)!;
+            if (p1.x !== p2.x || p1.y !== p2.y) {
+                anyDifferent = true;
+                break;
+            }
+        }
+        expect(anyDifferent).toBe(true);
     });
 
     it('should handle a visible area with non-zero origin', () => {
