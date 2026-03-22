@@ -338,6 +338,338 @@ describe('DragController', () => {
         });
     });
 
+    describe('viewport clamping', () => {
+        // These tests use a small viewport to exercise pointer clamping.
+        // The margin constant in drag-controller.ts is 40px.
+        const MARGIN = 40;
+        const VP_W = 400;
+        const VP_H = 300;
+
+        let clampedController: DragController;
+
+        beforeEach(() => {
+            clampedController = new DragController(
+                () => groups,
+                callbacks,
+                () => ({ width: VP_W, height: VP_H }),
+            );
+        });
+
+        it('should clamp pointer on pointerdown at left edge', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 5,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            const drag = clampedController.getActiveDrag();
+            expect(drag!.lastPointer.x).toBe(MARGIN);
+            expect(drag!.lastPointer.y).toBe(150);
+        });
+
+        it('should clamp pointer on pointerdown at right edge', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: VP_W + 10,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            const drag = clampedController.getActiveDrag();
+            expect(drag!.lastPointer.x).toBe(VP_W - MARGIN);
+        });
+
+        it('should clamp pointer on pointerdown at top edge', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 10,
+                    pointerId: 1,
+                }),
+            );
+
+            const drag = clampedController.getActiveDrag();
+            expect(drag!.lastPointer.y).toBe(MARGIN);
+        });
+
+        it('should clamp pointer on pointerdown at bottom edge', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: VP_H + 5,
+                    pointerId: 1,
+                }),
+            );
+
+            const drag = clampedController.getActiveDrag();
+            expect(drag!.lastPointer.y).toBe(VP_H - MARGIN);
+        });
+
+        it('should not clamp pointer that is inside the margin', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            const drag = clampedController.getActiveDrag();
+            expect(drag!.lastPointer).toEqual({ x: 200, y: 150 });
+        });
+
+        it('should clamp pointer during move at left edge', () => {
+            // Start in the middle
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            // Move pointer past the left edge
+            clampedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: -50,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            // Delta should be from 200 → MARGIN (40), not 200 → -50
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: MARGIN - 200,
+                y: 0,
+            });
+        });
+
+        it('should clamp pointer during move at right edge', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            clampedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: VP_W + 100,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            // Delta should be from 200 → (VP_W - MARGIN), not → VP_W + 100
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: VP_W - MARGIN - 200,
+                y: 0,
+            });
+        });
+
+        it('should clamp pointer during move at top edge', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            clampedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: -30,
+                    pointerId: 1,
+                }),
+            );
+
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: 0,
+                y: MARGIN - 150,
+            });
+        });
+
+        it('should clamp pointer during move at bottom edge', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            clampedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: VP_H + 50,
+                    pointerId: 1,
+                }),
+            );
+
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: 0,
+                y: VP_H - MARGIN - 150,
+            });
+        });
+
+        it('should clamp at both axes simultaneously (corner)', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            // Move to bottom-right corner, well past the edge
+            clampedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: VP_W + 200,
+                    clientY: VP_H + 200,
+                    pointerId: 1,
+                }),
+            );
+
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: VP_W - MARGIN - 200,
+                y: VP_H - MARGIN - 150,
+            });
+        });
+
+        it('should produce zero delta when already clamped and moving further out', () => {
+            // Start clamped against left edge
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 0,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            // Move even further left — should still clamp to MARGIN,
+            // producing zero delta since lastPointer is already at MARGIN.
+            clampedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: -100,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: 0,
+                y: 0,
+            });
+        });
+
+        it('should track clamped position for subsequent deltas', () => {
+            clampedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            // First move: clamped to left edge
+            clampedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: -50,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            // Second move: back to center — delta should be from
+            // clamped position (MARGIN), not from -50
+            clampedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            expect(callbacks.moveGroup).toHaveBeenNthCalledWith(2, 1, {
+                x: 200 - MARGIN,
+                y: 0,
+            });
+        });
+
+        it('should handle viewport resize between moves', () => {
+            let vpSize = { width: VP_W, height: VP_H };
+            const resizableController = new DragController(
+                () => groups,
+                callbacks,
+                () => vpSize,
+            );
+
+            // Start drag near the right edge
+            resizableController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: VP_W - MARGIN - 10,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            // Shrink viewport (e.g. virtual keyboard appears)
+            vpSize = { width: 200, height: 200 };
+
+            // Move slightly right — now clamped to the smaller viewport
+            resizableController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: VP_W - MARGIN,
+                    clientY: 150,
+                    pointerId: 1,
+                }),
+            );
+
+            // X: pointer at VP_W - MARGIN (360) clamps to new vp 200 - 40 = 160
+            // Delta from start (350) → 160 = -190
+            // Y: pointer at 150 is within new vp margin (40..160), no clamp
+            // Delta = 150 - 150 = 0
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: 160 - (VP_W - MARGIN - 10),
+                y: 0,
+            });
+        });
+    });
+
     describe('full drag cycle', () => {
         it('should complete a full drag: down → move → up', () => {
             // Start drag
