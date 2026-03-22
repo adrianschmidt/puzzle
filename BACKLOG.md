@@ -41,8 +41,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Implement pointer event handling for drag. On pointerdown on a piece: identify its group, capture pointer, track delta. On pointermove: update group position. On pointerup: release capture, trigger merge check. Dragged group moves to front (z-order).
 
 ### 3.2 — Game initialization
-**Status:** todo
+**Status:** done
 **Depends on:** 3.1
+**Done:** 2026-03-22
 **Description:** On "New Game": use the grid generator to create 48 pieces, initialize each in its own single-piece group, randomize group positions within the viewport (ensuring all pieces are visible and not overlapping too much), render the initial state.
 
 ## Phase 4: Core Mechanic
@@ -93,4 +94,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 13:40*
+*Last updated: 2026-03-22 13:48*
