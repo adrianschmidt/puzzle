@@ -110,4 +110,6 @@ export interface GameState {
     completed: boolean;
     /** Optional attribution for the puzzle image (e.g. from Unsplash). */
     attribution?: ImageAttribution;
+    /** PRNG seed used for procedural cut generation. Reproduces the same cuts. */
+    seed?: number;
 }
