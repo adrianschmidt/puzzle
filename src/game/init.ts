@@ -7,7 +7,8 @@
  */
 
 import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
-import { generateGridPuzzle } from '../puzzle/grid-generator.js';
+import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
+import { generateSeed } from '../puzzle/seeded-random.js';
 
 /** Default grid dimensions for the MVP puzzle. */
 export const DEFAULT_COLS = 8;
@@ -23,6 +24,8 @@ export const VIEWPORT_MARGIN = 20;
 export interface InitOptions {
     /** Random number generator: returns a value in [0, 1). Default: Math.random */
     random?: () => number;
+    /** PRNG seed for procedural cut generation. If omitted, a random seed is generated. */
+    seed?: number;
 }
 
 /**
@@ -41,7 +44,8 @@ export function createNewGame(
     gridSize: GridSize = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
     options: InitOptions = {},
 ): GameState {
-    const pieces = generateGridPuzzle(gridSize.cols, gridSize.rows, imageSize);
+    const seed = options.seed ?? generateSeed();
+    const pieces = generateProceduralPuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
     const groups = createInitialGroups(pieces, imageSize, viewport, gridSize, options);
 
     return {
@@ -51,6 +55,7 @@ export function createNewGame(
         imageSize,
         gridSize,
         completed: false,
+        seed,
     };
 }
 
