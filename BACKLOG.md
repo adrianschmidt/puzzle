@@ -86,8 +86,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Save full GameState to localStorage on every state change (debounced 500ms). Serialize Maps as entries arrays. On app load: check for saved state, restore if valid, otherwise show new game. Include state version number for future migrations. Wrap restore in try/catch.
 
 ### 5.2 — New Game button
-**Status:** todo
+**Status:** done
 **Depends on:** 5.1
+**Done:** 2026-03-22
 **Description:** Add a minimal UI: "New Game" button that clears saved state and re-randomizes. Confirm before discarding an in-progress game.
 
 ## Phase 6: Polish & Deploy
