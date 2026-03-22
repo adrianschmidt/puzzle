@@ -44,11 +44,6 @@ interface Point {
   y: number;
 }
 
-interface Size {
-  width: number;
-  height: number;
-}
-
 interface Edge {
   id: number;
   mateEdgeId: number;    // The matching edge on the adjacent piece (-1 for border edges)
@@ -62,8 +57,7 @@ interface Piece {
   id: number;
   edges: Edge[];         // All edges of this piece
   shape: string;         // Full SVG clip-path (d attribute)
-  imageOffset: Point;    // Where to sample the source image
-  imageSize: Size;       // How much of the image this piece covers
+  imageOffset: Point;    // Where to position the source image behind the clip-path
 }
 
 interface PieceGroup {
