@@ -24,3 +24,13 @@ export {
 export type { MergeResult } from './group-merging.js';
 
 export { checkWin, checkAndMarkWin } from './win-detection.js';
+
+export {
+    shouldSuppressMerge,
+    getGroupBounds,
+    rectsOverlap,
+    padRect,
+    PILE_OVERLAP_THRESHOLD,
+    OVERLAP_PADDING_PX,
+} from './pile-detection.js';
+export type { BoundingRect } from './pile-detection.js';
