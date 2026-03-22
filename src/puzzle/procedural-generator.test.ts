@@ -223,16 +223,18 @@ describe('randomTabParams', () => {
             const params = randomTabParams(random);
 
             expect(typeof params.isTab).toBe('boolean');
-            expect(params.heightFraction).toBeGreaterThanOrEqual(0.18);
-            expect(params.heightFraction).toBeLessThanOrEqual(0.32);
-            expect(params.neckFraction).toBeGreaterThanOrEqual(0.06);
-            expect(params.neckFraction).toBeLessThanOrEqual(0.14);
-            expect(params.headWidthFraction).toBeGreaterThanOrEqual(0.10);
-            expect(params.headWidthFraction).toBeLessThanOrEqual(0.22);
-            expect(params.centreOffset).toBeGreaterThanOrEqual(-0.06);
-            expect(params.centreOffset).toBeLessThanOrEqual(0.06);
+            expect(params.heightFraction).toBeGreaterThanOrEqual(0.16);
+            expect(params.heightFraction).toBeLessThanOrEqual(0.36);
+            expect(params.neckFraction).toBeGreaterThanOrEqual(0.04);
+            expect(params.neckFraction).toBeLessThanOrEqual(0.10);
+            expect(params.headWidthFraction).toBeGreaterThanOrEqual(0.14);
+            expect(params.headWidthFraction).toBeLessThanOrEqual(0.28);
+            expect(params.centreOffset).toBeGreaterThanOrEqual(-0.20);
+            expect(params.centreOffset).toBeLessThanOrEqual(0.20);
             expect(params.skew).toBeGreaterThanOrEqual(-0.04);
             expect(params.skew).toBeLessThanOrEqual(0.04);
+            expect(params.edgeCurve).toBeGreaterThanOrEqual(0.02);
+            expect(params.edgeCurve).toBeLessThanOrEqual(0.06);
         }
     });
 
