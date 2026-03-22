@@ -34,3 +34,11 @@ export {
     OVERLAP_PADDING_PX,
 } from './pile-detection.js';
 export type { BoundingRect } from './pile-detection.js';
+
+export {
+    computeGatheredPositions,
+    applyGatheredPositions,
+    getGroupOffsetBounds,
+    GATHER_PADDING,
+} from './gather.js';
+export type { WorldRect } from './gather.js';

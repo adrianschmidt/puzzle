@@ -95,6 +95,38 @@ html, body {
   background: rgba(255, 255, 255, 0.25);
 }
 
+/* Gather Pieces button */
+.gather-pieces-button {
+  position: absolute;
+  top: 92px;
+  right: 12px;
+  z-index: 9999;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  font-weight: 500;
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.gather-pieces-button:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.gather-pieces-button:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 /* Win detection overlay */
 .completion-overlay {
   position: absolute;
