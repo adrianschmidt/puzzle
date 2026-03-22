@@ -15,3 +15,10 @@ export {
     MERGE_TOLERANCE_PX,
 } from './merge-detection.js';
 export type { MergeCandidate } from './merge-detection.js';
+
+export {
+    mergeGroups,
+    selectBestCandidate,
+    processDrop,
+} from './group-merging.js';
+export type { MergeResult } from './group-merging.js';
