@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { getMateEdge, findGroupForPiece, getBorderEdges } from './helpers.js';
+import {
+    getMateEdge,
+    findGroupForPiece,
+    moveGroup,
+    getBorderEdges,
+} from './helpers.js';
 import type { Piece, PieceGroup, Edge } from './types.js';
 
 /** Create a minimal edge for testing. */
@@ -88,6 +93,36 @@ describe('findGroupForPiece', () => {
         expect(() => findGroupForPiece(99, [g1])).toThrow(
             'Piece 99 is not in any group',
         );
+    });
+});
+
+describe('moveGroup', () => {
+    it('moves a group by the given delta', () => {
+        const g = group(0, [0]);
+        g.position = { x: 100, y: 200 };
+
+        moveGroup(g, { x: 15, y: -10 });
+
+        expect(g.position).toEqual({ x: 115, y: 190 });
+    });
+
+    it('handles zero delta', () => {
+        const g = group(0, [0]);
+        g.position = { x: 50, y: 50 };
+
+        moveGroup(g, { x: 0, y: 0 });
+
+        expect(g.position).toEqual({ x: 50, y: 50 });
+    });
+
+    it('accumulates multiple moves', () => {
+        const g = group(0, [0]);
+        g.position = { x: 0, y: 0 };
+
+        moveGroup(g, { x: 10, y: 20 });
+        moveGroup(g, { x: 5, y: -3 });
+
+        expect(g.position).toEqual({ x: 15, y: 17 });
     });
 });
 

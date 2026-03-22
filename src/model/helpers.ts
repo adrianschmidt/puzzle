@@ -5,7 +5,7 @@
  * and know nothing about grids or specific puzzle shapes.
  */
 
-import type { Edge, Piece, PieceGroup } from './types.js';
+import type { Edge, Piece, PieceGroup, Point } from './types.js';
 
 /**
  * Look up the pieces array by id.
@@ -63,6 +63,19 @@ export function findGroupForPiece(
     }
 
     return group;
+}
+
+/**
+ * Move a group by a delta, mutating its position in place.
+ */
+export function moveGroup(
+    group: PieceGroup,
+    delta: Point,
+): void {
+    group.position = {
+        x: group.position.x + delta.x,
+        y: group.position.y + delta.y,
+    };
 }
 
 /**
