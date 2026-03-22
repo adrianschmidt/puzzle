@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { generateProceduralPuzzle, randomTabParams } from './procedural-generator.js';
+import {
+    generateProceduralPuzzle,
+    randomTabParams,
+    buildWobbleLine,
+    buildProceduralEdgePath,
+    Dir,
+} from './procedural-generator.js';
 import { createSeededRandom } from './seeded-random.js';
 
 describe('generateProceduralPuzzle', () => {
@@ -150,6 +156,26 @@ describe('generateProceduralPuzzle', () => {
             }
         }
     });
+
+    it('internal edges use cubic Bézier curves (C commands)', () => {
+        for (const piece of pieces) {
+            for (const edge of piece.edges) {
+                if (edge.mateEdgeId === -1) continue;
+                // Should contain C (cubic Bézier) commands for the tab shape
+                expect(edge.path).toContain('C ');
+            }
+        }
+    });
+
+    it('internal edges use quadratic Bézier (Q) for wobble segments', () => {
+        for (const piece of pieces) {
+            for (const edge of piece.edges) {
+                if (edge.mateEdgeId === -1) continue;
+                // Should contain Q (quadratic Bézier) for wobble lines
+                expect(edge.path).toContain('Q ');
+            }
+        }
+    });
 });
 
 describe('reproducibility', () => {
@@ -223,16 +249,24 @@ describe('randomTabParams', () => {
             const params = randomTabParams(random);
 
             expect(typeof params.isTab).toBe('boolean');
-            expect(params.heightFraction).toBeGreaterThanOrEqual(0.18);
-            expect(params.heightFraction).toBeLessThanOrEqual(0.32);
-            expect(params.neckFraction).toBeGreaterThanOrEqual(0.06);
-            expect(params.neckFraction).toBeLessThanOrEqual(0.14);
-            expect(params.headWidthFraction).toBeGreaterThanOrEqual(0.10);
-            expect(params.headWidthFraction).toBeLessThanOrEqual(0.22);
-            expect(params.centreOffset).toBeGreaterThanOrEqual(-0.06);
-            expect(params.centreOffset).toBeLessThanOrEqual(0.06);
-            expect(params.skew).toBeGreaterThanOrEqual(-0.04);
-            expect(params.skew).toBeLessThanOrEqual(0.04);
+            expect(params.heightFraction).toBeGreaterThanOrEqual(0.22);
+            expect(params.heightFraction).toBeLessThanOrEqual(0.36);
+            expect(params.neckFraction).toBeGreaterThanOrEqual(0.04);
+            expect(params.neckFraction).toBeLessThanOrEqual(0.09);
+            expect(params.headWidthFraction).toBeGreaterThanOrEqual(0.18);
+            expect(params.headWidthFraction).toBeLessThanOrEqual(0.30);
+            expect(params.centreOffset).toBeGreaterThanOrEqual(-0.05);
+            expect(params.centreOffset).toBeLessThanOrEqual(0.05);
+            expect(params.skew).toBeGreaterThanOrEqual(-0.03);
+            expect(params.skew).toBeLessThanOrEqual(0.03);
+            expect(params.headProfile).toBeGreaterThanOrEqual(0);
+            expect(params.headProfile).toBeLessThanOrEqual(1);
+            expect(params.neckPinch).toBeGreaterThanOrEqual(0.3);
+            expect(params.neckPinch).toBeLessThanOrEqual(0.8);
+            expect(params.wobbleAmplitude).toBeGreaterThanOrEqual(0.003);
+            expect(params.wobbleAmplitude).toBeLessThanOrEqual(0.012);
+            expect(params.wobblePhase).toBeGreaterThanOrEqual(0);
+            expect(params.wobblePhase).toBeLessThanOrEqual(Math.PI * 2);
         }
     });
 
@@ -247,9 +281,20 @@ describe('randomTabParams', () => {
             params1.neckFraction === params2.neckFraction &&
             params1.headWidthFraction === params2.headWidthFraction &&
             params1.centreOffset === params2.centreOffset &&
-            params1.skew === params2.skew;
+            params1.skew === params2.skew &&
+            params1.headProfile === params2.headProfile &&
+            params1.neckPinch === params2.neckPinch;
 
         expect(allSame).toBe(false);
+    });
+
+    it('head width is always wider than neck width', () => {
+        const random = createSeededRandom(42);
+
+        for (let i = 0; i < 200; i++) {
+            const params = randomTabParams(random);
+            expect(params.headWidthFraction).toBeGreaterThan(params.neckFraction);
+        }
     });
 });
 
@@ -270,5 +315,238 @@ describe('edge path variation', () => {
         // We expect at least half to be unique (both sides of a shared edge differ
         // because one is tab and one is blank with same params)
         expect(uniquePaths.size).toBeGreaterThan(internalPaths.length / 4);
+    });
+});
+
+describe('buildWobbleLine', () => {
+    it('returns a straight line for very short segments', () => {
+        const result = buildWobbleLine(
+            { x: 10, y: 10 },
+            { x: 10.5, y: 10 },
+            0, -1, 5, 0,
+        );
+        expect(result).toMatch(/^L /);
+    });
+
+    it('returns a quadratic Bézier for normal-length segments', () => {
+        const result = buildWobbleLine(
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            0, -1, 3, 1.0,
+        );
+        expect(result).toMatch(/^Q /);
+    });
+
+    it('control point is offset perpendicular to the line', () => {
+        // Horizontal line with normal pointing up (nx=0, ny=-1)
+        // With positive sin(phase) * amplitude, the CP should be offset upward (negative y)
+        const phase = Math.PI / 2; // sin(π/2) = 1
+        const amplitude = 5;
+        const result = buildWobbleLine(
+            { x: 0, y: 50 },
+            { x: 100, y: 50 },
+            0, -1, amplitude, phase,
+        );
+
+        // Parse the Q command: Q cpX cpY, toX toY
+        const match = result.match(/Q ([\d.-]+) ([\d.-]+),/);
+        expect(match).not.toBeNull();
+
+        const cpX = parseFloat(match![1]);
+        const cpY = parseFloat(match![2]);
+
+        // CP should be at midpoint x=50, with y offset = 50 + (-1)*5 = 45
+        expect(cpX).toBeCloseTo(50, 1);
+        expect(cpY).toBeCloseTo(45, 1);
+    });
+
+    it('wobble amplitude of 0 produces a nearly straight line', () => {
+        const result = buildWobbleLine(
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            0, -1, 0, 1.0,
+        );
+        // CP should be very close to the midpoint (50, 0)
+        const match = result.match(/Q ([\d.-]+) ([\d.-]+),/);
+        expect(match).not.toBeNull();
+
+        const cpX = parseFloat(match![1]);
+        const cpY = parseFloat(match![2]);
+
+        expect(cpX).toBeCloseTo(50, 1);
+        expect(cpY).toBeCloseTo(0, 1);
+    });
+});
+
+describe('buildProceduralEdgePath', () => {
+    const defaultParams = (): import('./procedural-generator.js').TabParams => ({
+        isTab: true,
+        heightFraction: 0.28,
+        neckFraction: 0.065,
+        headWidthFraction: 0.24,
+        centreOffset: 0,
+        skew: 0,
+        headProfile: 0,
+        neckPinch: 0.5,
+        wobbleAmplitude: 0.006,
+        wobblePhase: 0,
+    });
+
+    it('contains cubic Bézier commands for the tab shape', () => {
+        const path = buildProceduralEdgePath(
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            Dir.Top,
+            true,
+            defaultParams(),
+        );
+
+        // Should have multiple C commands (neck + head curves)
+        const cCount = (path.match(/C /g) || []).length;
+        expect(cCount).toBeGreaterThanOrEqual(4);
+    });
+
+    it('contains Q commands for wobble segments', () => {
+        const path = buildProceduralEdgePath(
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            Dir.Top,
+            true,
+            defaultParams(),
+        );
+
+        // Should have Q commands for wobble lines before and after tab
+        const qCount = (path.match(/Q /g) || []).length;
+        expect(qCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it('tab extends outward (positive normal direction)', () => {
+        // Horizontal top edge: start (0,0) → end (100,0)
+        // Normal points upward (nx=0, ny changes sign based on isTab)
+        const tabPath = buildProceduralEdgePath(
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            Dir.Top,
+            true, // tab protrudes outward
+            defaultParams(),
+        );
+
+        // Extract Y coordinates from the path — tab should have negative Y values
+        // (protruding "up" from a top edge)
+        const yValues = [...tabPath.matchAll(/([\d.-]+)/g)]
+            .map((m) => parseFloat(m[1]))
+            .filter((_, i) => i % 2 === 1); // every other number is Y
+
+        const minY = Math.min(...yValues);
+        expect(minY).toBeLessThan(0); // tab extends above the edge line
+    });
+
+    it('blank indents inward (negative normal direction)', () => {
+        const blankPath = buildProceduralEdgePath(
+            { x: 0, y: 0 },
+            { x: 100, y: 0 },
+            Dir.Top,
+            false, // blank indents inward
+            defaultParams(),
+        );
+
+        // Extract Y coordinates — blank should have positive Y values
+        const yValues = [...blankPath.matchAll(/([\d.-]+)/g)]
+            .map((m) => parseFloat(m[1]))
+            .filter((_, i) => i % 2 === 1);
+
+        const maxY = Math.max(...yValues);
+        expect(maxY).toBeGreaterThan(0); // blank extends below the edge line
+    });
+
+    it('different head profiles produce different paths', () => {
+        const roundParams = { ...defaultParams(), headProfile: 0 };
+        const squareParams = { ...defaultParams(), headProfile: 0.5 };
+        const heartParams = { ...defaultParams(), headProfile: 1.0 };
+
+        const roundPath = buildProceduralEdgePath(
+            { x: 0, y: 0 }, { x: 100, y: 0 }, Dir.Top, true, roundParams,
+        );
+        const squarePath = buildProceduralEdgePath(
+            { x: 0, y: 0 }, { x: 100, y: 0 }, Dir.Top, true, squareParams,
+        );
+        const heartPath = buildProceduralEdgePath(
+            { x: 0, y: 0 }, { x: 100, y: 0 }, Dir.Top, true, heartParams,
+        );
+
+        // All three should be different
+        expect(roundPath).not.toBe(squarePath);
+        expect(squarePath).not.toBe(heartPath);
+        expect(roundPath).not.toBe(heartPath);
+    });
+
+    it('skew shifts the tab head along the edge', () => {
+        const noSkew = { ...defaultParams(), skew: 0 };
+        const rightSkew = { ...defaultParams(), skew: 0.03 };
+
+        const pathNoSkew = buildProceduralEdgePath(
+            { x: 0, y: 0 }, { x: 100, y: 0 }, Dir.Top, true, noSkew,
+        );
+        const pathRightSkew = buildProceduralEdgePath(
+            { x: 0, y: 0 }, { x: 100, y: 0 }, Dir.Top, true, rightSkew,
+        );
+
+        expect(pathNoSkew).not.toBe(pathRightSkew);
+    });
+
+    it('produces valid SVG path data (no NaN or Infinity)', () => {
+        const random = createSeededRandom(42);
+
+        for (let i = 0; i < 50; i++) {
+            const params = randomTabParams(random);
+            const path = buildProceduralEdgePath(
+                { x: 0, y: 0 },
+                { x: 100, y: 0 },
+                Dir.Top,
+                params.isTab,
+                params,
+            );
+
+            expect(path).not.toContain('NaN');
+            expect(path).not.toContain('Infinity');
+        }
+    });
+
+    it('works for all four edge directions', () => {
+        const params = defaultParams();
+        const dirs = [Dir.Top, Dir.Right, Dir.Bottom, Dir.Left] as const;
+        const endpoints: [{ x: number; y: number }, { x: number; y: number }][] = [
+            [{ x: 0, y: 0 }, { x: 100, y: 0 }],     // Top
+            [{ x: 100, y: 0 }, { x: 100, y: 100 }],   // Right
+            [{ x: 100, y: 100 }, { x: 0, y: 100 }],   // Bottom
+            [{ x: 0, y: 100 }, { x: 0, y: 0 }],       // Left
+        ];
+
+        for (let i = 0; i < dirs.length; i++) {
+            const path = buildProceduralEdgePath(
+                endpoints[i][0],
+                endpoints[i][1],
+                dirs[i],
+                true,
+                params,
+            );
+
+            expect(path).not.toContain('NaN');
+            expect(path).not.toContain('Infinity');
+            expect(path.length).toBeGreaterThan(0);
+        }
+    });
+});
+
+describe('neck narrower than head (mushroom shape)', () => {
+    it('the head is consistently wider than the neck across many random params', () => {
+        const random = createSeededRandom(123);
+
+        for (let i = 0; i < 200; i++) {
+            const params = randomTabParams(random);
+            // headWidthFraction should always exceed neckFraction
+            // (enforced by the parameter ranges: neck max 0.09 < head min 0.18)
+            expect(params.headWidthFraction).toBeGreaterThan(params.neckFraction * 1.5);
+        }
     });
 });
