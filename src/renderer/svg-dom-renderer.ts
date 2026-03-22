@@ -204,10 +204,26 @@ export class SvgDomRenderer implements Renderer {
             `url(#clip-piece-${piece.id})`,
         );
         image.setAttribute('draggable', 'false');
+        image.setAttribute('pointer-events', 'none');
         svg.appendChild(image);
 
-        // Pointer event handler
-        svg.addEventListener('pointerdown', (event: PointerEvent) => {
+        // Transparent hit-area matching the piece shape — ensures
+        // pointer events only fire inside the actual piece outline,
+        // not the rectangular SVG bounding box.
+        const hitArea = document.createElementNS(svgNS, 'path');
+        hitArea.setAttribute('d', piece.shape);
+        hitArea.setAttribute('fill', 'rgba(0,0,0,0)');
+        hitArea.setAttribute('stroke', 'none');
+        hitArea.setAttribute('pointer-events', 'fill');
+        hitArea.dataset.hitArea = 'true';
+        svg.appendChild(hitArea);
+
+        // Disable pointer events on the SVG container itself —
+        // only the hit-area path should respond.
+        svg.style.pointerEvents = 'none';
+
+        // Pointer event handler on the hit-area path
+        hitArea.addEventListener('pointerdown', (event: PointerEvent) => {
             if (this.callback) {
                 this.callback(piece.id, event);
             }

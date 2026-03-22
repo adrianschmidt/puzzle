@@ -304,10 +304,11 @@ describe('SvgDomRenderer', () => {
                 'svg[data-piece-id="0"]',
             ) as SVGSVGElement;
 
+            const hitArea = svg.querySelector('[data-hit-area]') as SVGPathElement;
             const event = new PointerEvent('pointerdown', {
                 bubbles: true,
             });
-            svg.dispatchEvent(event);
+            hitArea.dispatchEvent(event);
 
             expect(callback).toHaveBeenCalledOnce();
             expect(callback).toHaveBeenCalledWith(0, expect.any(PointerEvent));
@@ -324,7 +325,8 @@ describe('SvgDomRenderer', () => {
             const svg2 = container.querySelector(
                 'svg[data-piece-id="2"]',
             ) as SVGSVGElement;
-            svg2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+            const hitArea2 = svg2.querySelector('[data-hit-area]') as SVGPathElement;
+            hitArea2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
 
             expect(callback).toHaveBeenCalledWith(
                 2,
