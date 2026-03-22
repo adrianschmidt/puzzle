@@ -2,7 +2,7 @@ import './style.css';
 import type { GameState } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { setupDragHandling } from './interaction/index.js';
-import { createNewGame } from './game/index.js';
+import { createNewGame, processDrop } from './game/index.js';
 
 const PUZZLE_IMAGE_URL = 'puzzle-image.jpg';
 const IMAGE_WIDTH = 800;
@@ -40,8 +40,11 @@ function startNewGame(): void {
         renderer,
         getState: () => gameState,
         onStateChanged: () => renderer.renderState(gameState),
-        onDrop: (_groupId: number) => {
-            // Merge detection will be wired in task 4.1
+        onDrop: (groupId: number) => {
+            const result = processDrop(groupId, gameState);
+            if (result) {
+                renderer.renderState(gameState);
+            }
         },
     });
 }
