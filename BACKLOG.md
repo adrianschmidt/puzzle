@@ -93,6 +93,11 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 6.2
 **Description:** Subtle drop shadow on pieces/groups for depth. Smooth snap animation when pieces merge. Satisfying "complete" animation. Basic responsive layout (works on iPad in both orientations).
 
+### 6.4 — Suppress context menu on long-press
+**Status:** todo
+**Depends on:** 3.1
+**Description:** On touch devices (especially iPad), long-pressing a puzzle piece brings up the browser's context menu. Prevent this by adding `contextmenu` event prevention on the puzzle container. Also ensure no text selection or callout overlays appear during drag (`-webkit-touch-callout: none`, `user-select: none`).
+
 ---
 
 *Last updated: 2026-03-22 13:48*
