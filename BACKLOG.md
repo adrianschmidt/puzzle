@@ -99,13 +99,13 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Configure vite-plugin-pwa with proper manifest (name, icons, theme color, display: standalone). Generate app icons for iPad home screen. Test "Add to Home Screen" flow.
 
 ### 6.2 — GitHub Pages deployment
-**Status:** todo
-**Depends on:** 6.1
+**Status:** done
+**Done:** 2026-03-22
 **Description:** Set up GitHub Actions workflow to build and deploy to gh-pages on push to main. Verify the app loads correctly from the Pages URL.
 
 ### 6.3 — Visual polish
 **Status:** todo
-**Depends on:** 6.2
+**Depends on:** 5.2
 **Description:** Subtle drop shadow on pieces/groups for depth. Smooth snap animation when pieces merge. Satisfying "complete" animation. Basic responsive layout (works on iPad in both orientations).
 
 ### 6.4 — Suppress context menu on long-press
