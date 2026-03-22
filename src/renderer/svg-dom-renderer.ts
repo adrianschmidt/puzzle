@@ -105,6 +105,35 @@ export class SvgDomRenderer implements Renderer {
             `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
     }
 
+    setGroupDragging(groupId: number, dragging: boolean): void {
+        const el = this.groupElements.get(groupId);
+        if (!el) return;
+
+        if (dragging) {
+            el.classList.add('dragging');
+        } else {
+            el.classList.remove('dragging');
+        }
+    }
+
+    flashMergePulse(groupId: number): void {
+        const el = this.groupElements.get(groupId);
+        if (!el) return;
+
+        // Restart the animation by removing and re-adding the class
+        el.classList.remove('merge-pulse');
+        // Force a reflow to restart the animation
+        void el.offsetWidth;
+        el.classList.add('merge-pulse');
+
+        // Clean up the class when the animation ends
+        el.addEventListener(
+            'animationend',
+            () => el.classList.remove('merge-pulse'),
+            { once: true },
+        );
+    }
+
     getTableElement(): HTMLElement | null {
         return this.tableEl;
     }

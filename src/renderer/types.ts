@@ -50,6 +50,18 @@ export interface Renderer {
      */
     getTableElement(): HTMLElement | null;
 
+    /**
+     * Mark a group as being dragged (visual feedback like lifted shadow).
+     * Pass `false` to remove the dragging state.
+     */
+    setGroupDragging(groupId: number, dragging: boolean): void;
+
+    /**
+     * Play a brief visual pulse on a group after a merge.
+     * Used to give satisfying feedback when pieces snap together.
+     */
+    flashMergePulse(groupId: number): void;
+
     /** Clean up all DOM/resources created by this renderer. */
     destroy(): void;
 }
