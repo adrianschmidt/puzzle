@@ -7,3 +7,11 @@ export {
     VIEWPORT_MARGIN,
 } from './init.js';
 export type { InitOptions } from './init.js';
+
+export {
+    detectMerges,
+    checkEdgeAlignment,
+    getWorldPosition,
+    MERGE_TOLERANCE_PX,
+} from './merge-detection.js';
+export type { MergeCandidate } from './merge-detection.js';
