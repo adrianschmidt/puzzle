@@ -35,8 +35,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ## Phase 3: Interaction
 
 ### 3.1 — Drag handling
-**Status:** todo
+**Status:** done
 **Depends on:** 2.2
+**Done:** 2026-03-22
 **Description:** Implement pointer event handling for drag. On pointerdown on a piece: identify its group, capture pointer, track delta. On pointermove: update group position. On pointerup: release capture, trigger merge check. Dragged group moves to front (z-order).
 
 ### 3.2 — Game initialization
@@ -92,4 +93,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 13:30*
+*Last updated: 2026-03-22 13:40*
