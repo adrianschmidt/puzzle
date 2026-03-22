@@ -60,6 +60,16 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Done:** 2026-03-22
 **Description:** When merge is detected: combine two groups (recalculate piece offsets relative to new group anchor, snap position so edges align perfectly, remove old group, update DOM structure). Handle cascading merges (after A+B merge, re-check new group's border edges against all mates).
 
+### 3.3 — Clamp drag to viewport bounds
+**Status:** todo
+**Depends on:** 3.1
+**Description:** Prevent pieces/groups from being dragged out of reach. Clamp group positions during drag (pointermove) so that at least a grabbable portion of the group remains within the visible viewport. This prevents pieces from getting lost behind browser chrome or off-screen. Consider using `visualViewport` for accurate bounds on mobile.
+
+### 3.4 — Zoom and pan
+**Status:** todo
+**Depends on:** 3.1
+**Description:** Add a viewport transform layer so users can zoom in/out and pan the puzzle table. Pinch-to-zoom on touch, scroll-wheel zoom on desktop. Pan by dragging on empty space (not on a piece). The puzzle table should be larger than the screen, with the viewport acting as a window into it. Essential for puzzles that don't fit on screen.
+
 ### 4.3 — Win detection
 **Status:** todo
 **Depends on:** 4.2
