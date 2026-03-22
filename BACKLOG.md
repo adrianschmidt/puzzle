@@ -109,6 +109,11 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 5.2
 **Description:** Subtle drop shadow on pieces/groups for depth. Smooth snap animation when pieces merge. Satisfying "complete" animation. Basic responsive layout (works on iPad in both orientations).
 
+### 4.4 — Prevent accidental merges in piece piles
+**Status:** todo
+**Depends on:** 4.2
+**Description:** When dropping a piece near a pile of other pieces, it can accidentally snap to a matching edge even though the player clearly didn't intend to place it there. This makes sorting through piles frustrating. Add a heuristic to suppress merging when the dropped piece/group is overlapping with many other non-matching groups (i.e. it's in a pile, not being intentionally placed). Important: don't block intentional placement into a gap in an assembled section — there, neighboring pieces are expected to be close. Possible approach: count how many distinct other groups overlap the dropped piece's bounding area; if above a threshold and many of those are non-matching, skip the merge.
+
 ### 6.4 — Suppress context menu on long-press
 **Status:** done
 **Depends on:** 3.1
