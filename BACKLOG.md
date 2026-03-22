@@ -175,7 +175,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 Compare with real puzzle piece photos for reference. The goal is that the pieces should look like they could have been cut from cardboard with a real puzzle die.
 
 ### 7.5 — Background colour selection
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-22
 **Depends on:** 6.3
 **Description:** Let the player change the puzzle table background colour. Dark pieces are hard to see on the default dark background. Offer a few preset colours (dark, medium grey, light, wood tone, green felt) and/or a custom colour picker. Persist the choice in localStorage. Apply via CSS custom property on the body/container.
 
@@ -186,4 +187,4 @@ Compare with real puzzle piece photos for reference. The goal is that the pieces
 
 ---
 
-*Last updated: 2026-03-22*
+*Last updated: 2026-03-22 (7.5 done)*
