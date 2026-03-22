@@ -10,6 +10,7 @@ import type { GameState, Point } from '../model/types.js';
 import { moveGroup } from '../model/helpers.js';
 import type { Renderer } from '../renderer/types.js';
 import { DragController } from './drag-controller.js';
+import type { ScreenDeltaToWorld } from './drag-controller.js';
 
 export interface DragSetupOptions {
     /** The DOM container for the puzzle table (receives move/up events). */
@@ -22,6 +23,11 @@ export interface DragSetupOptions {
     onStateChanged: () => void;
     /** Called when a group is dropped (for merge detection). */
     onDrop: (groupId: number) => void;
+    /**
+     * Convert a screen-space delta to world-space.
+     * Needed when a viewport transform (zoom) is active.
+     */
+    screenDeltaToWorld?: ScreenDeltaToWorld;
 }
 
 /**
@@ -44,7 +50,7 @@ function findGroup(groupId: number, state: GameState) {
  * Returns a cleanup function that removes all event listeners.
  */
 export function setupDragHandling(options: DragSetupOptions): () => void {
-    const { container, renderer, getState, onStateChanged, onDrop } = options;
+    const { container, renderer, getState, onStateChanged, onDrop, screenDeltaToWorld } = options;
 
     const controller = new DragController(
         () => getState().groups,
@@ -63,6 +69,8 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
                 onStateChanged();
             },
         },
+        undefined, // getViewportSize — use default
+        screenDeltaToWorld,
     );
 
     // Wire renderer's piece pointerdown to the controller.

@@ -42,6 +42,14 @@ export interface DragCallbacks {
 }
 
 /**
+ * Optional function to convert a screen-space delta to world-space.
+ * When a viewport transform is active (zoom/pan), pointer deltas are
+ * in screen pixels but group positions are in world coordinates.
+ * Defaults to identity (no transform).
+ */
+export type ScreenDeltaToWorld = (delta: Point) => Point;
+
+/**
  * Create a drag controller.
  *
  * Call `handlePointerDown` from the renderer's piece-pointerdown callback.
@@ -52,11 +60,13 @@ export class DragController {
     private groups: () => PieceGroup[];
     private callbacks: DragCallbacks;
     private getViewportSize: () => { width: number; height: number };
+    private screenDeltaToWorld: ScreenDeltaToWorld;
 
     constructor(
         groups: () => PieceGroup[],
         callbacks: DragCallbacks,
         getViewportSize?: () => { width: number; height: number },
+        screenDeltaToWorld?: ScreenDeltaToWorld,
     ) {
         this.groups = groups;
         this.callbacks = callbacks;
@@ -64,6 +74,7 @@ export class DragController {
             width: window.visualViewport?.width ?? window.innerWidth,
             height: window.visualViewport?.height ?? window.innerHeight,
         }));
+        this.screenDeltaToWorld = screenDeltaToWorld ?? ((d) => d);
     }
 
     /** Returns the current drag state (for testing / inspection). */
@@ -110,12 +121,16 @@ export class DragController {
         const clampedX = Math.max(POINTER_MARGIN_PX, Math.min(vw - POINTER_MARGIN_PX, event.clientX));
         const clampedY = Math.max(POINTER_MARGIN_PX, Math.min(vh - POINTER_MARGIN_PX, event.clientY));
 
-        const dx = clampedX - this.drag.lastPointer.x;
-        const dy = clampedY - this.drag.lastPointer.y;
+        const screenDx = clampedX - this.drag.lastPointer.x;
+        const screenDy = clampedY - this.drag.lastPointer.y;
 
         this.drag.lastPointer = { x: clampedX, y: clampedY };
 
-        this.callbacks.moveGroup(this.drag.groupId, { x: dx, y: dy });
+        // Convert screen-space delta to world-space for group positioning.
+        // When zoomed in (scale > 1), a screen pixel is a smaller world distance.
+        const worldDelta = this.screenDeltaToWorld({ x: screenDx, y: screenDy });
+
+        this.callbacks.moveGroup(this.drag.groupId, worldDelta);
         this.callbacks.requestRender();
     }
 
