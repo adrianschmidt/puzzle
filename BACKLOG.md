@@ -110,6 +110,16 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 5.2
 **Description:** Subtle drop shadow on pieces/groups for depth. Smooth snap animation when pieces merge. Satisfying "complete" animation. Basic responsive layout (works on iPad in both orientations).
 
+### 5.3 — Centre view button
+**Status:** todo
+**Depends on:** 3.4
+**Description:** Add a UI button that resets the viewport pan/zoom to the default centred view. Useful after zooming/panning around to quickly get back to a known orientation.
+
+### 5.4 — Gather pieces button
+**Status:** todo
+**Depends on:** 3.2
+**Description:** Add a UI button that brings all groups together to the centre of the visible play area. When pieces are scattered widely (especially after zooming out), this collects them into a manageable area without changing their groupings. Should distribute groups loosely so they don't all stack on the exact same point.
+
 ### 4.4 — Prevent accidental merges in piece piles
 **Status:** todo
 **Depends on:** 4.2
