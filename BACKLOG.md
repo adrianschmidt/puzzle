@@ -163,21 +163,27 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 1.3
 **Description:** Create a new puzzle generator that produces varied, natural-looking cuts so no two puzzles have the same cut pattern. Each game should feel unique. The generator should still conform to the generic Piece/Edge model. Vary tab/blank shapes (different Bézier control points), edge positions (not perfectly grid-aligned), and possibly tab sizes. Use a seeded PRNG so the same seed reproduces the same cut (useful for save/restore).
 
-### 7.4 — Custom images
+### 7.4 — Improve procedural cut realism
 **Status:** todo
-**Depends on:** 7.1
-**Description:** Allow the player to use their own image: upload from device or paste a URL. Handle CORS issues (proxy or canvas-based approach for URL images). Resize/crop to fit the puzzle aspect ratio. Show a preview before starting. Error states for invalid images, too-small images, failed loads.
+**Depends on:** 7.3
+**Description:** The current procedural generator varies tab size, position, and skew, but the pieces don't look like real jigsaw puzzle pieces yet. Real puzzle pieces have several characteristics our generator lacks:
+- **Rounded, bulbous tab heads** — real tabs have a distinct mushroom/knob shape with a narrower neck and wider head, not a smooth bump
+- **Slightly irregular edge lines** — the straight portions between tabs aren't perfectly straight on real puzzles; they have subtle waviness from the die-cutting process
+- **More pronounced neck constriction** — the neck (where the tab meets the piece body) is narrower relative to the tab head than our current shapes
+- **Tab head shape variety** — some tabs are more round, some more square-ish, some slightly heart-shaped; real dies produce varied profiles
+- **Edge line wobble** — the cuts between pieces don't follow perfectly straight grid lines; they meander slightly
+Compare with real puzzle piece photos for reference. The goal is that the pieces should look like they could have been cut from cardboard with a real puzzle die.
 
-### 7.5 — Free rotation of pieces
-**Status:** todo
-**Depends on:** 4.2
-**Description:** Pieces start at random rotations. Two-finger rotate gesture on touch, or modifier+drag on desktop. Merge detection must account for rotation — edges only align when both pieces are at the correct relative rotation (within tolerance). Add rotation field to PieceGroup. Snap rotation to 0° on merge. This significantly increases puzzle difficulty and realism.
-
-### 7.6 — Background colour selection
+### 7.5 — Background colour selection
 **Status:** todo
 **Depends on:** 6.3
 **Description:** Let the player change the puzzle table background colour. Dark pieces are hard to see on the default dark background. Offer a few preset colours (dark, medium grey, light, wood tone, green felt) and/or a custom colour picker. Persist the choice in localStorage. Apply via CSS custom property on the body/container.
 
+### 7.6 — Free rotation of pieces
+**Status:** todo
+**Depends on:** 4.2
+**Description:** Pieces start at random rotations. Two-finger rotate gesture on touch, or modifier+drag on desktop. Merge detection must account for rotation — edges only align when both pieces are at the correct relative rotation (within tolerance). Add rotation field to PieceGroup. Snap rotation to 0° on merge. This significantly increases puzzle difficulty and realism.
+
 ---
 
-*Last updated: 2026-03-22 (7.3 done)*
+*Last updated: 2026-03-22*
