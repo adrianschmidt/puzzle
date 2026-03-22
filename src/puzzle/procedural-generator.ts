@@ -37,13 +37,13 @@ type Dir = (typeof Dir)[keyof typeof Dir];
 export interface TabParams {
     /** Whether the "first" side of the shared edge gets a tab (true) or blank (false). */
     isTab: boolean;
-    /** Bump height as a fraction of edge length. Range: [0.18, 0.32]. */
+    /** Bump height as a fraction of edge length. Range: [0.14, 0.36]. */
     heightFraction: number;
-    /** Neck width as a fraction of edge length. Range: [0.06, 0.14]. */
+    /** Neck width as a fraction of edge length. Range: [0.04, 0.10]. */
     neckFraction: number;
-    /** Tab head width as a fraction of edge length. Range: [0.10, 0.22]. */
+    /** Tab head width as a fraction of edge length. Range: [0.16, 0.28]. */
     headWidthFraction: number;
-    /** Tab centre offset along the edge, 0 = dead centre. Range: [-0.06, 0.06]. */
+    /** Tab centre offset along the edge, 0 = dead centre. Range: [-0.18, 0.18]. */
     centreOffset: number;
     /** Asymmetry: slight left/right skew of the tab head. Range: [-0.04, 0.04]. */
     skew: number;
@@ -341,10 +341,10 @@ function createParamsMap(
 export function randomTabParams(random: () => number): TabParams {
     return {
         isTab: random() < 0.5,
-        heightFraction: lerp(0.18, 0.32, random()),
-        neckFraction: lerp(0.06, 0.14, random()),
-        headWidthFraction: lerp(0.10, 0.22, random()),
-        centreOffset: lerp(-0.06, 0.06, random()),
+        heightFraction: lerp(0.14, 0.36, random()),
+        neckFraction: lerp(0.04, 0.10, random()),
+        headWidthFraction: lerp(0.16, 0.28, random()),
+        centreOffset: lerp(-0.18, 0.18, random()),
         skew: lerp(-0.04, 0.04, random()),
     };
 }
