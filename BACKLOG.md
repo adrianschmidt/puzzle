@@ -13,12 +13,12 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ### 1.2 — Core data model
 **Status:** todo
 **Depends on:** 1.1
-**Description:** Define TypeScript types for Piece, PieceGroup, GameState, EdgeType. Define the 48-piece grid (6×8) with edge types (ensuring adjacent pieces have complementary edges: tab ↔ blank). Include helper functions: `getNeighborId(pieceId, direction)`, `getPiecesOnBorder(group)`.
+**Description:** Define TypeScript types for Point, Size, Edge, Piece, PieceGroup, GameState as specified in DESIGN.md. The model is graph-based and shape-agnostic — no grid assumptions in the engine types. Include helper functions: `getMateEdge(piece, edge)` → finds the mate piece and edge, `getBorderEdges(group, pieces)` → returns edges in the group that have mates in other groups (used for merge detection).
 
-### 1.3 — Piece shape generation
+### 1.3 — Grid puzzle generator
 **Status:** todo
 **Depends on:** 1.2
-**Description:** Generate SVG clip-path data from edge definitions. Each edge is either flat (straight line), tab (Bézier curve outward), or blank (Bézier curve inward). The same curve must be used for both sides of a matching edge (tab on piece A = exact inverse of blank on piece B). Output: a function `generatePiecePath(piece, pieceWidth, pieceHeight) → string` returning an SVG path `d` attribute.
+**Description:** Create a puzzle generator that produces a 6×8 grid of pieces with tab/blank Bézier edges. The generator is a separate module from the engine — it outputs `Piece[]` conforming to the generic model. Each piece gets: an SVG clip-path built from its edges (flat/tab/blank using cubic Bézier curves), edge connectivity (mate relationships to adjacent pieces), and image sampling coordinates. Adjacent pieces must use the exact same curve (inverted) for their shared edge. Border edges have `mateEdgeId: -1, matePieceId: -1`.
 
 ## Phase 2: Rendering
 
@@ -42,19 +42,19 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ### 3.2 — Game initialization
 **Status:** todo
 **Depends on:** 3.1
-**Description:** On "New Game": create 48 single-piece groups, randomize positions within the viewport (ensuring all pieces are visible and not overlapping too much), render the initial state.
+**Description:** On "New Game": use the grid generator to create 48 pieces, initialize each in its own single-piece group, randomize group positions within the viewport (ensuring all pieces are visible and not overlapping too much), render the initial state.
 
 ## Phase 4: Core Mechanic
 
 ### 4.1 — Merge detection
 **Status:** todo
 **Depends on:** 3.1
-**Description:** After a group is dropped: for each border piece in the moved group, find grid-adjacent pieces in other groups. Calculate expected edge alignment position vs actual position. If within tolerance (~15-20px), trigger merge. Tolerance should be a named constant.
+**Description:** After a group is dropped: for each piece in the moved group, iterate its edges. For edges with mates, find the mate piece. If the mate piece is in a different group, calculate expected vs actual edge alignment. If within tolerance (~15-20px), trigger merge. Tolerance should be a named constant (`MERGE_TOLERANCE_PX`).
 
 ### 4.2 — Group merging
 **Status:** todo
 **Depends on:** 4.1
-**Description:** When merge is detected: combine two groups (move all pieces from group B into group A, snap position so edges align perfectly, remove group B, update DOM structure). Handle cascading merges (after A+B merge, check if new group touches C).
+**Description:** When merge is detected: combine two groups (recalculate piece offsets relative to new group anchor, snap position so edges align perfectly, remove old group, update DOM structure). Handle cascading merges (after A+B merge, re-check new group's border edges against all mates).
 
 ### 4.3 — Win detection
 **Status:** todo
@@ -66,7 +66,7 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ### 5.1 — Auto-save & restore
 **Status:** todo
 **Depends on:** 4.2
-**Description:** Save full GameState to localStorage on every state change (debounced 500ms). On app load: check for saved state, restore if valid, otherwise show new game. Include state version number for future migrations. Wrap restore in try/catch.
+**Description:** Save full GameState to localStorage on every state change (debounced 500ms). Serialize Maps as entries arrays. On app load: check for saved state, restore if valid, otherwise show new game. Include state version number for future migrations. Wrap restore in try/catch.
 
 ### 5.2 — New Game button
 **Status:** todo
