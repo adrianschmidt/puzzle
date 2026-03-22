@@ -124,7 +124,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Set up GitHub Actions workflow to build and deploy to gh-pages on push to main. Verify the app loads correctly from the Pages URL.
 
 ### 6.3 — Visual polish
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-22
 **Depends on:** 5.2
 **Description:** Subtle drop shadow on pieces/groups for depth. Smooth snap animation when pieces merge. Satisfying "complete" animation. Basic responsive layout (works on iPad in both orientations).
 
