@@ -2,9 +2,21 @@ import './style.css';
 import type { GameState } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { setupDragHandling, ViewportTransform, ViewportController } from './interaction/index.js';
-import { createNewGame, processDrop, checkAndMarkWin } from './game/index.js';
+import {
+    createNewGame,
+    processDrop,
+    checkAndMarkWin,
+    computeGatheredPositions,
+    applyGatheredPositions,
+    DEFAULT_COLS,
+    DEFAULT_ROWS,
+} from './game/index.js';
 import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
-import { createNewGameButton, createCentreViewButton } from './ui/index.js';
+import {
+    createNewGameButton,
+    createCentreViewButton,
+    createGatherPiecesButton,
+} from './ui/index.js';
 
 const PUZZLE_IMAGE_URL = 'puzzle-image.jpg';
 const IMAGE_WIDTH = 800;
@@ -183,6 +195,43 @@ createCentreViewButton({
     onCentreView: () => {
         viewportTransform.reset();
         applyViewportTransform();
+    },
+});
+
+// Set up the Gather Pieces button
+createGatherPiecesButton({
+    container: app,
+    onGatherPieces: () => {
+        // Compute the visible area in world coordinates
+        const screenWidth = app.clientWidth || window.innerWidth;
+        const screenHeight = app.clientHeight || window.innerHeight;
+
+        const topLeft = viewportTransform.screenToWorld({ x: 0, y: 0 });
+        const bottomRight = viewportTransform.screenToWorld({
+            x: screenWidth,
+            y: screenHeight,
+        });
+
+        const visibleArea = {
+            x: topLeft.x,
+            y: topLeft.y,
+            width: bottomRight.x - topLeft.x,
+            height: bottomRight.y - topLeft.y,
+        };
+
+        const pieceWidth = IMAGE_WIDTH / DEFAULT_COLS;
+        const pieceHeight = IMAGE_HEIGHT / DEFAULT_ROWS;
+
+        const positions = computeGatheredPositions(
+            gameState.groups,
+            visibleArea,
+            pieceWidth,
+            pieceHeight,
+        );
+
+        applyGatheredPositions(gameState.groups, positions);
+        renderer.renderState(gameState);
+        autoSave();
     },
 });
 
