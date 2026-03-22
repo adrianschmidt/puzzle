@@ -55,8 +55,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** After a group is dropped: for each piece in the moved group, iterate its edges. For edges with mates, find the mate piece. If the mate piece is in a different group, calculate expected vs actual edge alignment. If within tolerance (~15-20px), trigger merge. Tolerance should be a named constant (`MERGE_TOLERANCE_PX`).
 
 ### 4.2 — Group merging
-**Status:** todo
+**Status:** done
 **Depends on:** 4.1
+**Done:** 2026-03-22
 **Description:** When merge is detected: combine two groups (recalculate piece offsets relative to new group anchor, snap position so edges align perfectly, remove old group, update DOM structure). Handle cascading merges (after A+B merge, re-check new group's border edges against all mates).
 
 ### 4.3 — Win detection
@@ -100,4 +101,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 13:48*
+*Last updated: 2026-03-22 14:25*
