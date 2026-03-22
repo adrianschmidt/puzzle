@@ -16,14 +16,14 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Define TypeScript types for Point, Size, Edge, Piece, PieceGroup, GameState as specified in DESIGN.md. The model is graph-based and shape-agnostic — no grid assumptions in the engine types. Include helper functions: `getMateEdge(piece, edge)` → finds the mate piece and edge, `getBorderEdges(group, pieces)` → returns edges in the group that have mates in other groups (used for merge detection).
 
 ### 1.3 — Grid puzzle generator
-**Status:** todo
+**Status:** done
 **Depends on:** 1.2
 **Description:** Create a puzzle generator that produces a 6×8 grid of pieces with tab/blank Bézier edges. The generator is a separate module from the engine — it outputs `Piece[]` conforming to the generic model. Each piece gets: an SVG clip-path built from its edges (flat/tab/blank using cubic Bézier curves), edge connectivity (mate relationships to adjacent pieces), and image sampling coordinates. Adjacent pieces must use the exact same curve (inverted) for their shared edge. Border edges have `mateEdgeId: -1, matePieceId: -1`.
 
 ## Phase 2: Rendering
 
 ### 2.1 — Renderer interface
-**Status:** todo
+**Status:** done
 **Depends on:** 1.2
 **Description:** Define a `Renderer` interface that the game logic calls. Methods: `init(container)`, `renderState(gameState)`, `onPiecePointerDown(callback)`, `bringGroupToFront(groupId)`, `destroy()`. This abstraction allows swapping DOM→Canvas later.
 
@@ -92,4 +92,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 12:40*
+*Last updated: 2026-03-22 12:45*
