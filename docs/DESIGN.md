@@ -116,9 +116,16 @@ On drop of a group:
 - Free rotation of pieces
 - Zoom/pan for large puzzles (500+ pieces)
 
+## Testing
+- **Unit tests (Vitest):** All pure logic — data model helpers, puzzle generators, merge detection, state serialization. Tests are part of every task, not a separate phase.
+- **E2E tests (Playwright):** Interaction scenarios — drag pieces, merge groups, save/restore state, win detection. Added once the rendering layer is in place.
+- Run `npm test` before every commit. Don't push broken tests.
+
 ## Tech Stack
 - TypeScript
 - Vite (build + dev server)
+- Vitest (unit tests)
+- Playwright (e2e tests)
 - vite-plugin-pwa
 - No framework (vanilla TS)
 - GitHub Pages for deployment
