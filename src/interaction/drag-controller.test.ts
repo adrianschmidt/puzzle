@@ -57,7 +57,13 @@ describe('DragController', () => {
             requestRender: vi.fn(),
         };
 
-        controller = new DragController(() => groups, callbacks);
+        // Provide a large viewport so pointer clamping doesn't
+        // affect existing test values.
+        controller = new DragController(
+            () => groups,
+            callbacks,
+            () => ({ width: 10000, height: 10000 }),
+        );
     });
 
     describe('handlePointerDown', () => {
@@ -144,23 +150,23 @@ describe('DragController', () => {
             controller.handlePointerDown(
                 10,
                 fakePointerEvent({
-                    clientX: 0,
-                    clientY: 0,
+                    clientX: 100,
+                    clientY: 100,
                     pointerId: 1,
                 }),
             );
 
             controller.handlePointerMove(
                 fakePointerEvent({
-                    clientX: 10,
-                    clientY: 5,
+                    clientX: 110,
+                    clientY: 105,
                     pointerId: 1,
                 }),
             );
             controller.handlePointerMove(
                 fakePointerEvent({
-                    clientX: 30,
-                    clientY: 20,
+                    clientX: 130,
+                    clientY: 120,
                     pointerId: 1,
                 }),
             );
