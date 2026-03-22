@@ -158,7 +158,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Let the player choose puzzle size when starting a new game. Options: 24 (4×6), 48 (6×8), 96 (8×12), 192 (12×16). The grid generator already accepts rows/cols, so this is primarily a UI task. Show size options in a new-game dialog or screen. Save the chosen size preference. Consider piece size vs screen size — larger puzzles need smaller pieces.
 
 ### 7.3 — Procedurally generated cuts
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-22
 **Depends on:** 1.3
 **Description:** Create a new puzzle generator that produces varied, natural-looking cuts so no two puzzles have the same cut pattern. Each game should feel unique. The generator should still conform to the generic Piece/Edge model. Vary tab/blank shapes (different Bézier control points), edge positions (not perfectly grid-aligned), and possibly tab sizes. Use a seeded PRNG so the same seed reproduces the same cut (useful for save/restore).
 
@@ -179,4 +180,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22*
+*Last updated: 2026-03-22 (7.3 done)*
