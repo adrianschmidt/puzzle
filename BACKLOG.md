@@ -54,6 +54,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ### 3.4 — Zoom and pan
 **Status:** todo
+**Depends on:** 3.1
+**Description:** Add a viewport transform layer so users can zoom in/out and pan the puzzle table. Pinch-to-zoom on touch, scroll-wheel zoom on desktop. Pan by dragging on empty space (not on a piece). The puzzle table should be larger than the screen, with the viewport acting as a window into it. Essential for puzzles that don't fit on screen.
 
 ## Phase 4: Core Mechanic
 
@@ -68,8 +70,6 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 4.1
 **Done:** 2026-03-22
 **Description:** When merge is detected: combine two groups (recalculate piece offsets relative to new group anchor, snap position so edges align perfectly, remove old group, update DOM structure). Handle cascading merges (after A+B merge, re-check new group's border edges against all mates).
-**Depends on:** 3.1
-**Description:** Add a viewport transform layer so users can zoom in/out and pan the puzzle table. Pinch-to-zoom on touch, scroll-wheel zoom on desktop. Pan by dragging on empty space (not on a piece). The puzzle table should be larger than the screen, with the viewport acting as a window into it. Essential for puzzles that don't fit on screen.
 
 ### 4.3 — Win detection
 **Status:** done
@@ -114,4 +114,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 15:03*
+*Last updated: 2026-03-22 15:36*
