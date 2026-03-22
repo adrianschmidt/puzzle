@@ -37,18 +37,16 @@ type Dir = (typeof Dir)[keyof typeof Dir];
 export interface TabParams {
     /** Whether the "first" side of the shared edge gets a tab (true) or blank (false). */
     isTab: boolean;
-    /** Bump height as a fraction of edge length. Range: [0.16, 0.36]. */
+    /** Bump height as a fraction of edge length. Range: [0.18, 0.32]. */
     heightFraction: number;
-    /** Neck width as a fraction of edge length. Range: [0.04, 0.10]. */
+    /** Neck width as a fraction of edge length. Range: [0.06, 0.14]. */
     neckFraction: number;
-    /** Tab head width as a fraction of edge length. Range: [0.14, 0.28]. */
+    /** Tab head width as a fraction of edge length. Range: [0.10, 0.22]. */
     headWidthFraction: number;
-    /** Tab centre offset along the edge, 0 = dead centre. Range: [-0.20, 0.20]. */
+    /** Tab centre offset along the edge, 0 = dead centre. Range: [-0.06, 0.06]. */
     centreOffset: number;
     /** Asymmetry: slight left/right skew of the tab head. Range: [-0.04, 0.04]. */
     skew: number;
-    /** Curvature of the edge segments before and after the tab. Range: [0.02, 0.06]. */
-    edgeCurve: number;
 }
 
 /**
@@ -343,12 +341,11 @@ function createParamsMap(
 export function randomTabParams(random: () => number): TabParams {
     return {
         isTab: random() < 0.5,
-        heightFraction: lerp(0.16, 0.36, random()),
-        neckFraction: lerp(0.04, 0.10, random()),
-        headWidthFraction: lerp(0.14, 0.28, random()),
-        centreOffset: lerp(-0.20, 0.20, random()),
+        heightFraction: lerp(0.18, 0.32, random()),
+        neckFraction: lerp(0.06, 0.14, random()),
+        headWidthFraction: lerp(0.10, 0.22, random()),
+        centreOffset: lerp(-0.06, 0.06, random()),
         skew: lerp(-0.04, 0.04, random()),
-        edgeCurve: lerp(0.02, 0.06, random()),
     };
 }
 
@@ -389,11 +386,10 @@ function buildProceduralEdgePath(
     const bumpHeight = edgeLength * params.heightFraction;
     const neckWidth = edgeLength * params.neckFraction;
     const headWidth = edgeLength * params.headWidthFraction;
-    const edgeCurve = edgeLength * params.edgeCurve;
 
     // Tab centre position (0.5 = dead centre, offset shifts it)
     const tCentre = 0.5 + params.centreOffset;
-    const halfSpan = 0.12; // half the span of the tab along the edge
+    const halfSpan = 0.15; // half the span of the tab along the edge
 
     const t1 = tCentre - halfSpan; // start of neck
     const t2 = tCentre; // centre of bump
@@ -404,56 +400,31 @@ function buildProceduralEdgePath(
     const p2 = addVec(start, scaleVec(ux, uy, edgeLength * t2));
     const p3 = addVec(start, scaleVec(ux, uy, edgeLength * t3));
 
-    // Neck entry and exit points — narrower for more pronounced mushroom shape
-    const neckEntry = addVec(p1, scaleVec(nx, ny, sign * neckWidth * 0.3));
-    const neckMid1 = addVec(
-        addVec(p1, scaleVec(ux, uy, edgeLength * 0.04)),
-        scaleVec(nx, ny, sign * bumpHeight * 0.45),
-    );
-    const neckMid2 = addVec(
-        addVec(p3, scaleVec(ux, uy, -edgeLength * 0.04)),
-        scaleVec(nx, ny, sign * bumpHeight * 0.45),
-    );
-    const neckExit = addVec(p3, scaleVec(nx, ny, sign * neckWidth * 0.3));
+    // Neck entry — slight inward curve to the neck
+    const neck1 = addVec(p1, scaleVec(nx, ny, sign * neckWidth * 0.4));
+    // Neck exit
+    const neck2 = addVec(p3, scaleVec(nx, ny, sign * neckWidth * 0.4));
 
-    // Tab head peak points with skew for asymmetry — wider head for mushroom shape
+    // Tab head peak points with skew for asymmetry
     const skewOffset = params.skew * edgeLength;
 
-    const headLeft = addVec(
-        addVec(p1, scaleVec(nx, ny, sign * bumpHeight * 0.85)),
-        scaleVec(ux, uy, -headWidth * 0.4 + skewOffset),
+    const peak1 = addVec(
+        addVec(p1, scaleVec(nx, ny, sign * bumpHeight)),
+        scaleVec(ux, uy, -headWidth * 0.3 + skewOffset),
     );
     const peakCentre = addVec(p2, scaleVec(nx, ny, sign * bumpHeight));
-    const headRight = addVec(
-        addVec(p3, scaleVec(nx, ny, sign * bumpHeight * 0.85)),
-        scaleVec(ux, uy, headWidth * 0.4 + skewOffset),
-    );
-
-    // Control points for curved edge segments (before and after the tab)
-    // Use consistent direction (not sign-dependent) so mate edges match
-    const curve1Ctrl = addVec(
-        addVec(start, scaleVec(ux, uy, edgeLength * t1 * 0.5)),
-        scaleVec(nx, ny, edgeCurve),
-    );
-    const curve2Ctrl = addVec(
-        addVec(p3, scaleVec(ux, uy, edgeLength * (1 - t3) * 0.5)),
-        scaleVec(nx, ny, edgeCurve),
+    const peak2 = addVec(
+        addVec(p3, scaleVec(nx, ny, sign * bumpHeight)),
+        scaleVec(ux, uy, headWidth * 0.3 + skewOffset),
     );
 
     void dir; // dir already encoded in sign via isTab
 
     return [
-        // Curved segment from start to neck entry
-        `Q ${fmt(curve1Ctrl.x)} ${fmt(curve1Ctrl.y)}, ${fmt(p1.x)} ${fmt(p1.y)}`,
-        // Neck entry curve — narrow neck going up
-        `C ${fmt(neckEntry.x)} ${fmt(neckEntry.y)}, ${fmt(neckMid1.x)} ${fmt(neckMid1.y)}, ${fmt(headLeft.x)} ${fmt(headLeft.y)}`,
-        // Tab head — wide curved top
-        `C ${fmt(addVec(headLeft, scaleVec(nx, ny, sign * bumpHeight * 0.2)).x)} ${fmt(addVec(headLeft, scaleVec(nx, ny, sign * bumpHeight * 0.2)).y)}, ${fmt(addVec(peakCentre, scaleVec(ux, uy, -headWidth * 0.15)).x)} ${fmt(addVec(peakCentre, scaleVec(ux, uy, -headWidth * 0.15)).y)}, ${fmt(peakCentre.x)} ${fmt(peakCentre.y)}`,
-        `C ${fmt(addVec(peakCentre, scaleVec(ux, uy, headWidth * 0.15)).x)} ${fmt(addVec(peakCentre, scaleVec(ux, uy, headWidth * 0.15)).y)}, ${fmt(addVec(headRight, scaleVec(nx, ny, sign * bumpHeight * 0.2)).x)} ${fmt(addVec(headRight, scaleVec(nx, ny, sign * bumpHeight * 0.2)).y)}, ${fmt(headRight.x)} ${fmt(headRight.y)}`,
-        // Neck exit curve — narrow neck going down
-        `C ${fmt(neckMid2.x)} ${fmt(neckMid2.y)}, ${fmt(neckExit.x)} ${fmt(neckExit.y)}, ${fmt(p3.x)} ${fmt(p3.y)}`,
-        // Curved segment from neck exit to end
-        `Q ${fmt(curve2Ctrl.x)} ${fmt(curve2Ctrl.y)}, ${fmt(end.x)} ${fmt(end.y)}`,
+        `L ${fmt(p1.x)} ${fmt(p1.y)}`,
+        `C ${fmt(neck1.x)} ${fmt(neck1.y)}, ${fmt(peak1.x)} ${fmt(peak1.y)}, ${fmt(peakCentre.x)} ${fmt(peakCentre.y)}`,
+        `C ${fmt(peak2.x)} ${fmt(peak2.y)}, ${fmt(neck2.x)} ${fmt(neck2.y)}, ${fmt(p3.x)} ${fmt(p3.y)}`,
+        `L ${fmt(end.x)} ${fmt(end.y)}`,
     ].join(' ');
 }
 
