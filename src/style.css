@@ -1,7 +1,8 @@
 :root {
+  --puzzle-bg-colour: #1a1a2e;
   font-family: system-ui, -apple-system, sans-serif;
   color: #e0e0e0;
-  background-color: #1a1a2e;
+  background-color: var(--puzzle-bg-colour);
 }
 
 * {
@@ -322,6 +323,86 @@ html, body {
   margin-top: 4px;
 }
 
+/* Background colour picker button */
+.bg-colour-button {
+  position: absolute;
+  top: 132px;
+  right: 12px;
+  z-index: 9999;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 36px;
+  text-align: center;
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bg-colour-button:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.bg-colour-button:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Background colour picker panel */
+.bg-colour-panel {
+  position: absolute;
+  top: 132px;
+  right: 54px;
+  z-index: 10000;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(30, 30, 50, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: fade-in 0.15s ease-out;
+}
+
+.bg-colour-swatch {
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+  touch-action: manipulation;
+}
+
+.bg-colour-swatch:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.1);
+}
+
+.bg-colour-swatch:active {
+  transform: scale(0.95);
+}
+
+.bg-colour-swatch--selected {
+  border-color: rgba(100, 160, 255, 0.8);
+  box-shadow: 0 0 0 2px rgba(100, 160, 255, 0.3);
+}
+
+.bg-colour-swatch--selected:hover {
+  border-color: rgba(100, 160, 255, 1);
+}
+
 /* Responsive: ensure buttons don't overlap on small screens */
 @media (max-height: 400px) {
   .new-game-button,
@@ -334,4 +415,7 @@ html, body {
   .new-game-button { top: 8px; right: 8px; }
   .centre-view-button { top: 40px; right: 8px; }
   .gather-pieces-button { top: 72px; right: 8px; }
+
+  .bg-colour-button { top: 96px; right: 8px; }
+  .bg-colour-panel { top: 96px; right: 46px; }
 }
