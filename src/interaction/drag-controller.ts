@@ -11,6 +11,14 @@
 import type { Point, PieceGroup } from '../model/types.js';
 import { findGroupForPiece } from '../model/helpers.js';
 
+/**
+ * Margin in pixels. The pointer position is clamped so it stays
+ * at least this far inside the viewport. This means the point
+ * where you are holding the group can't leave the visible area,
+ * preventing pieces from being dragged out of reach.
+ */
+const POINTER_MARGIN_PX = 10;
+
 /** Snapshot of an active drag operation. */
 export interface DragState {
     /** The group being dragged. */
@@ -43,10 +51,19 @@ export class DragController {
     private drag: DragState | null = null;
     private groups: () => PieceGroup[];
     private callbacks: DragCallbacks;
+    private getViewportSize: () => { width: number; height: number };
 
-    constructor(groups: () => PieceGroup[], callbacks: DragCallbacks) {
+    constructor(
+        groups: () => PieceGroup[],
+        callbacks: DragCallbacks,
+        getViewportSize?: () => { width: number; height: number },
+    ) {
         this.groups = groups;
         this.callbacks = callbacks;
+        this.getViewportSize = getViewportSize ?? (() => ({
+            width: window.visualViewport?.width ?? window.innerWidth,
+            height: window.visualViewport?.height ?? window.innerHeight,
+        }));
     }
 
     /** Returns the current drag state (for testing / inspection). */
@@ -63,9 +80,13 @@ export class DragController {
     handlePointerDown(pieceId: number, event: PointerEvent): void {
         const group = findGroupForPiece(pieceId, this.groups());
 
+        const vp = this.getViewportSize();
         this.drag = {
             groupId: group.id,
-            lastPointer: { x: event.clientX, y: event.clientY },
+            lastPointer: {
+                x: Math.max(POINTER_MARGIN_PX, Math.min(vp.width - POINTER_MARGIN_PX, event.clientX)),
+                y: Math.max(POINTER_MARGIN_PX, Math.min(vp.height - POINTER_MARGIN_PX, event.clientY)),
+            },
             pointerId: event.pointerId,
         };
 
@@ -82,10 +103,17 @@ export class DragController {
         if (!this.drag) return;
         if (event.pointerId !== this.drag.pointerId) return;
 
-        const dx = event.clientX - this.drag.lastPointer.x;
-        const dy = event.clientY - this.drag.lastPointer.y;
+        // Clamp pointer to viewport so the held point can't leave
+        // the visible area — prevents losing pieces behind browser chrome.
+        const vw = this.getViewportSize().width;
+        const vh = this.getViewportSize().height;
+        const clampedX = Math.max(POINTER_MARGIN_PX, Math.min(vw - POINTER_MARGIN_PX, event.clientX));
+        const clampedY = Math.max(POINTER_MARGIN_PX, Math.min(vh - POINTER_MARGIN_PX, event.clientY));
 
-        this.drag.lastPointer = { x: event.clientX, y: event.clientY };
+        const dx = clampedX - this.drag.lastPointer.x;
+        const dy = clampedY - this.drag.lastPointer.y;
+
+        this.drag.lastPointer = { x: clampedX, y: clampedY };
 
         this.callbacks.moveGroup(this.drag.groupId, { x: dx, y: dy });
         this.callbacks.requestRender();
