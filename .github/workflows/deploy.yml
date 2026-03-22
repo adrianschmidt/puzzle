@@ -31,6 +31,8 @@ jobs:
       - run: npm ci --legacy-peer-deps
 
       - run: npm run build
+        env:
+          VITE_UNSPLASH_ACCESS_KEY: ${{ secrets.VITE_UNSPLASH_ACCESS_KEY }}
 
       - uses: actions/configure-pages@v5
 
