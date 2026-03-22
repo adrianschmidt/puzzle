@@ -10,6 +10,7 @@
 import type { GameState, PieceGroup, Point } from '../model/types.js';
 import { moveGroup } from '../model/helpers.js';
 import { detectMerges, type MergeCandidate } from './merge-detection.js';
+import { shouldSuppressMerge } from './pile-detection.js';
 
 /** Maximum cascade depth to prevent infinite loops in degenerate cases. */
 const MAX_CASCADE_DEPTH = 50;
@@ -122,6 +123,12 @@ export function processDrop(
     movedGroupId: number,
     state: GameState,
 ): MergeResult | null {
+    // Check if the group is being dropped into a pile of unrelated pieces.
+    // If so, suppress merging to avoid accidental snaps while sorting.
+    if (shouldSuppressMerge(movedGroupId, state)) {
+        return null;
+    }
+
     let currentGroupId = movedGroupId;
     let totalMerges = 0;
 
