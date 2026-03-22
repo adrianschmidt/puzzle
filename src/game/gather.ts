@@ -68,13 +68,32 @@ export function getGroupOffsetBounds(group: PieceGroup): {
 }
 
 /**
- * Compute new positions for all groups, distributing them in a loose
- * grid centred on the visible area.
+ * Scatter multiplier — the scatter area is this many times wider and
+ * taller than the finished puzzle. Gives a natural "dumped on the table"
+ * spread without pieces being unreachably far apart.
+ */
+const SCATTER_MULTIPLIER = 2.5;
+
+/**
+ * Maximum random jitter applied to each axis, as a fraction of the
+ * cell size. 0.4 = up to 40% of a cell width/height in either direction.
+ */
+const JITTER_FRACTION = 0.4;
+
+/**
+ * Compute new positions for all groups, scattering them in a randomised
+ * grid within an area relative to the finished puzzle size.
+ *
+ * Groups are shuffled before placement so their grid position has no
+ * correlation with their solved position. Each group gets random jitter
+ * so the layout doesn't look like a perfect grid.
  *
  * @param groups - Current groups with their positions (not mutated)
  * @param visibleArea - The visible viewport rectangle in world coordinates
  * @param pieceWidth - Width of a single puzzle piece in world units
  * @param pieceHeight - Height of a single puzzle piece in world units
+ * @param puzzleCols - Number of columns in the puzzle grid (for scatter area sizing)
+ * @param puzzleRows - Number of rows in the puzzle grid (for scatter area sizing)
  * @returns Map of groupId → new world position
  */
 export function computeGatheredPositions(
@@ -82,6 +101,8 @@ export function computeGatheredPositions(
     visibleArea: WorldRect,
     pieceWidth: number,
     pieceHeight: number,
+    puzzleCols?: number,
+    puzzleRows?: number,
 ): Map<number, Point> {
     if (groups.length === 0) {
         return new Map();
@@ -109,33 +130,45 @@ export function computeGatheredPositions(
         ]);
     }
 
-    // Multiple groups: lay them out in a grid around the centre.
-    // Each cell is sized to fit the largest group plus padding.
-    const cellWidth = pieceWidth + GATHER_PADDING;
-    const cellHeight = pieceHeight + GATHER_PADDING;
+    // Compute scatter area based on puzzle dimensions
+    const pCols = puzzleCols ?? Math.ceil(Math.sqrt(groups.length));
+    const pRows = puzzleRows ?? Math.ceil(groups.length / pCols);
+    const puzzleWidth = pCols * pieceWidth;
+    const puzzleHeight = pRows * pieceHeight;
+    const scatterWidth = puzzleWidth * SCATTER_MULTIPLIER;
+    const scatterHeight = puzzleHeight * SCATTER_MULTIPLIER;
 
-    // Determine grid dimensions — roughly square, biased wider
-    const cols = Math.ceil(Math.sqrt(groups.length));
-    const rows = Math.ceil(groups.length / cols);
+    // Grid layout within the scatter area
+    const gridCols = Math.ceil(Math.sqrt(groups.length));
+    const gridRows = Math.ceil(groups.length / gridCols);
+    const cellWidth = scatterWidth / gridCols;
+    const cellHeight = scatterHeight / gridRows;
 
-    // Total grid size
-    const gridWidth = cols * cellWidth;
-    const gridHeight = rows * cellHeight;
+    // Top-left of the scatter area, centred on the visible area
+    const startX = centreX - scatterWidth / 2;
+    const startY = centreY - scatterHeight / 2;
 
-    // Top-left of the grid, centred on the visible area
-    const startX = centreX - gridWidth / 2;
-    const startY = centreY - gridHeight / 2;
+    // Shuffle groups so grid position doesn't correlate with solved position
+    const shuffled = [...groups];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
 
     const result = new Map<number, Point>();
 
-    for (let i = 0; i < groups.length; i++) {
-        const group = groups[i];
-        const col = i % cols;
-        const row = Math.floor(i / cols);
+    for (let i = 0; i < shuffled.length; i++) {
+        const group = shuffled[i];
+        const col = i % gridCols;
+        const row = Math.floor(i / gridCols);
+
+        // Random jitter within the cell
+        const jitterX = (Math.random() - 0.5) * 2 * JITTER_FRACTION * cellWidth;
+        const jitterY = (Math.random() - 0.5) * 2 * JITTER_FRACTION * cellHeight;
 
         result.set(group.id, {
-            x: startX + col * cellWidth,
-            y: startY + row * cellHeight,
+            x: startX + col * cellWidth + jitterX,
+            y: startY + row * cellHeight + jitterY,
         });
     }
 
