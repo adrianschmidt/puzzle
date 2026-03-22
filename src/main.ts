@@ -3,7 +3,8 @@ import type { GameState } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { setupDragHandling } from './interaction/index.js';
 import { createNewGame, processDrop, checkAndMarkWin } from './game/index.js';
-import { loadState, createDebouncedSave } from './persistence/index.js';
+import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
+import { createNewGameButton } from './ui/index.js';
 
 const PUZZLE_IMAGE_URL = 'puzzle-image.jpg';
 const IMAGE_WIDTH = 800;
@@ -118,6 +119,18 @@ function startNewGame(): void {
     initGame(state);
     autoSave();
 }
+
+// Set up the New Game button
+createNewGameButton({
+    container: app,
+    isCompleted: () => gameState.completed,
+    getGroupCount: () => gameState.groups.length,
+    getPieceCount: () => gameState.pieces.length,
+    onNewGame: () => {
+        clearSavedState();
+        startNewGame();
+    },
+});
 
 // On load: try to restore a saved game, otherwise start fresh
 const savedState = loadState();
