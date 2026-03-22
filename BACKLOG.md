@@ -94,8 +94,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ## Phase 6: Polish & Deploy
 
 ### 6.1 — PWA manifest & icons
-**Status:** todo
+**Status:** done
 **Depends on:** 5.2
+**Done:** 2026-03-22
 **Description:** Configure vite-plugin-pwa with proper manifest (name, icons, theme color, display: standalone). Generate app icons for iPad home screen. Test "Add to Home Screen" flow.
 
 ### 6.2 — GitHub Pages deployment
@@ -116,4 +117,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 15:42*
+*Last updated: 2026-03-22 16:01*
