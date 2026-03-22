@@ -59,6 +59,7 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
         pieces,
         groups,
         imageUrl: 'test-image.jpg',
+        imageSize: { width: 800, height: 600 },
         completed: false,
         ...overrides,
     };

@@ -222,6 +222,7 @@ describe('detectMerges', () => {
             pieces,
             groups,
             imageUrl: 'test.jpg',
+            imageSize: { width: 800, height: 600 },
             completed: false,
         };
     }

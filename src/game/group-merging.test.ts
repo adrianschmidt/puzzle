@@ -35,7 +35,7 @@ function makeGameState(
     pieces: Piece[],
     groups: PieceGroup[],
 ): GameState {
-    return { pieces, groups, imageUrl: 'test.jpg', completed: false };
+    return { pieces, groups, imageUrl: 'test.jpg', imageSize: { width: 800, height: 600 }, completed: false };
 }
 
 /**

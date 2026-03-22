@@ -6,10 +6,25 @@
  * representation.
  */
 
-import type { GameState, PieceGroup, Point } from '../model/types.js';
+import type {
+    GameState,
+    ImageAttribution,
+    PieceGroup,
+    Point,
+    Size,
+} from '../model/types.js';
+import { getImageDimensions } from '../renderer/svg-dom-utils.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
+
+/**
+ * Supported schema versions.
+ *
+ * - v1: original format (no imageSize or attribution)
+ * - v2: adds imageSize and optional attribution
+ */
+const SUPPORTED_VERSIONS = [1, 2];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
@@ -24,7 +39,9 @@ export interface SerializedGameState {
     pieces: GameState['pieces'];
     groups: SerializedPieceGroup[];
     imageUrl: string;
+    imageSize?: Size;
     completed: boolean;
+    attribution?: ImageAttribution;
 }
 
 /**
@@ -33,36 +50,75 @@ export interface SerializedGameState {
  * Maps are converted to `[key, value][]` entries arrays.
  */
 export function serializeState(state: GameState): SerializedGameState {
-    return {
+    const serialized: SerializedGameState = {
         version: STATE_VERSION,
         pieces: state.pieces,
         groups: state.groups.map(serializeGroup),
         imageUrl: state.imageUrl,
+        imageSize: state.imageSize,
         completed: state.completed,
     };
+
+    if (state.attribution) {
+        serialized.attribution = state.attribution;
+    }
+
+    return serialized;
 }
 
 /**
  * Restore a GameState from its serialized form.
  *
  * Validates the version tag and reconstructs Maps from entries arrays.
+ * Supports migration from v1 (derives imageSize from pieces).
  * Throws if the data is invalid or the version is unsupported.
  */
 export function deserializeState(data: SerializedGameState): GameState {
-    if (data.version !== STATE_VERSION) {
+    if (!SUPPORTED_VERSIONS.includes(data.version)) {
         throw new Error(
-            `Unsupported state version: ${data.version} (expected ${STATE_VERSION})`,
+            `Unsupported state version: ${data.version} (expected one of ${SUPPORTED_VERSIONS.join(', ')})`,
         );
     }
 
     validateSerializedState(data);
 
-    return {
+    const groups = data.groups.map(deserializeGroup);
+
+    // For v1 saves (no imageSize), derive it from piece data
+    const imageSize = data.imageSize ?? deriveImageSize(data);
+
+    const state: GameState = {
         pieces: data.pieces,
-        groups: data.groups.map(deserializeGroup),
+        groups,
         imageUrl: data.imageUrl,
+        imageSize,
         completed: data.completed,
     };
+
+    if (data.attribution) {
+        state.attribution = data.attribution;
+    }
+
+    return state;
+}
+
+/**
+ * Derive image dimensions from piece data (for v1 migration).
+ *
+ * Uses the same algorithm as the renderer's getImageDimensions,
+ * but works on serialized data by constructing a temporary partial state.
+ */
+function deriveImageSize(data: SerializedGameState): Size {
+    // Construct a minimal GameState-like object for getImageDimensions
+    const tempState: GameState = {
+        pieces: data.pieces,
+        groups: [],
+        imageUrl: '',
+        imageSize: { width: 0, height: 0 },
+        completed: false,
+    };
+
+    return getImageDimensions(tempState);
 }
 
 function serializeGroup(group: PieceGroup): SerializedPieceGroup {

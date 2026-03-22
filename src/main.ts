@@ -17,10 +17,12 @@ import {
     createCentreViewButton,
     createGatherPiecesButton,
 } from './ui/index.js';
+import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
+import { createAttributionElement, removeAttribution } from './ui/attribution.js';
 
-const PUZZLE_IMAGE_URL = 'puzzle-image.jpg';
-const IMAGE_WIDTH = 800;
-const IMAGE_HEIGHT = 600;
+/** Fallback image used when Unsplash is unavailable. */
+const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
+const FALLBACK_IMAGE_SIZE = { width: 800, height: 600 };
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -122,6 +124,18 @@ function autoSave(): void {
 }
 
 /**
+ * Update the attribution display based on the current game state.
+ */
+function updateAttribution(): void {
+    removeAttribution(app);
+
+    if (gameState.attribution) {
+        const el = createAttributionElement(gameState.attribution);
+        app.appendChild(el);
+    }
+}
+
+/**
  * Set up the game with a given state: render it and wire up interaction.
  */
 function initGame(state: GameState): void {
@@ -134,6 +148,7 @@ function initGame(state: GameState): void {
 
     gameState = state;
     renderer.renderState(gameState);
+    updateAttribution();
 
     if (gameState.completed) {
         showCompletionOverlay();
@@ -164,7 +179,11 @@ function initGame(state: GameState): void {
     });
 }
 
-function startNewGame(): void {
+/**
+ * Start a new game, fetching a random Unsplash image if available.
+ * Falls back to the default image if the API key is missing or fetch fails.
+ */
+async function startNewGame(): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
     applyViewportTransform();
@@ -174,11 +193,45 @@ function startNewGame(): void {
         height: app.clientHeight || window.innerHeight,
     };
 
-    const state = createNewGame(
-        PUZZLE_IMAGE_URL,
-        { width: IMAGE_WIDTH, height: IMAGE_HEIGHT },
-        viewport,
-    );
+    let imageUrl = FALLBACK_IMAGE_URL;
+    let imageSize = FALLBACK_IMAGE_SIZE;
+    let attribution: GameState['attribution'];
+
+    // Try to fetch a random Unsplash image
+    const accessKey = getUnsplashAccessKey();
+
+    if (accessKey) {
+        try {
+            const result = await fetchRandomImage(accessKey);
+
+            if (result) {
+                imageUrl = result.imageUrl;
+                attribution = {
+                    photographerName: result.photographerName,
+                    photographerUrl: result.photographerUrl,
+                    photoUrl: result.photoUrl,
+                };
+
+                // The Unsplash "regular" URL delivers images scaled to 1080px
+                // wide. Compute the height from the original aspect ratio so
+                // the puzzle generator produces correctly proportioned pieces.
+                const aspectRatio = result.height / result.width;
+                const displayWidth = 1080;
+                imageSize = {
+                    width: displayWidth,
+                    height: Math.round(displayWidth * aspectRatio),
+                };
+            }
+        } catch (error) {
+            console.warn('Failed to fetch Unsplash image, using fallback:', error);
+        }
+    }
+
+    const state = createNewGame(imageUrl, imageSize, viewport);
+
+    if (attribution) {
+        state.attribution = attribution;
+    }
 
     initGame(state);
     autoSave();
@@ -192,7 +245,7 @@ createNewGameButton({
     getPieceCount: () => gameState.pieces.length,
     onNewGame: () => {
         clearSavedState();
-        startNewGame();
+        void startNewGame();
     },
 });
 
@@ -226,8 +279,8 @@ createGatherPiecesButton({
             height: bottomRight.y - topLeft.y,
         };
 
-        const pieceWidth = IMAGE_WIDTH / DEFAULT_COLS;
-        const pieceHeight = IMAGE_HEIGHT / DEFAULT_ROWS;
+        const pieceWidth = gameState.imageSize.width / DEFAULT_COLS;
+        const pieceHeight = gameState.imageSize.height / DEFAULT_ROWS;
 
         const positions = computeGatheredPositions(
             gameState.groups,
@@ -248,5 +301,5 @@ const savedState = loadState();
 if (savedState) {
     initGame(savedState);
 } else {
-    startNewGame();
+    void startNewGame();
 }
