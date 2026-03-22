@@ -137,4 +137,38 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 17:08*
+## Phase 7: MLP — Minimum Lovable Product
+
+### 7.1 — Random Unsplash images
+**Status:** todo
+**Depends on:** 5.1
+**Description:** On "New Game", fetch a random landscape photo from Unsplash to use as the puzzle image. Use the Unsplash API (free tier, needs API key). Filter for landscape orientation to match the puzzle grid aspect ratio. Store the image URL in GameState so the image persists across app restarts. Handle errors gracefully (fall back to default image if fetch fails). The API key should be configured via environment variable at build time (not committed to repo).
+
+### 7.2 — Selectable puzzle sizes
+**Status:** todo
+**Depends on:** 5.2
+**Description:** Let the player choose puzzle size when starting a new game. Options: 24 (4×6), 48 (6×8), 96 (8×12), 192 (12×16). The grid generator already accepts rows/cols, so this is primarily a UI task. Show size options in a new-game dialog or screen. Save the chosen size preference. Consider piece size vs screen size — larger puzzles need smaller pieces.
+
+### 7.3 — Procedurally generated cuts
+**Status:** todo
+**Depends on:** 1.3
+**Description:** Create a new puzzle generator that produces varied, natural-looking cuts so no two puzzles have the same cut pattern. Each game should feel unique. The generator should still conform to the generic Piece/Edge model. Vary tab/blank shapes (different Bézier control points), edge positions (not perfectly grid-aligned), and possibly tab sizes. Use a seeded PRNG so the same seed reproduces the same cut (useful for save/restore).
+
+### 7.4 — Custom images
+**Status:** todo
+**Depends on:** 7.1
+**Description:** Allow the player to use their own image: upload from device or paste a URL. Handle CORS issues (proxy or canvas-based approach for URL images). Resize/crop to fit the puzzle aspect ratio. Show a preview before starting. Error states for invalid images, too-small images, failed loads.
+
+### 7.5 — Free rotation of pieces
+**Status:** todo
+**Depends on:** 4.2
+**Description:** Pieces start at random rotations. Two-finger rotate gesture on touch, or modifier+drag on desktop. Merge detection must account for rotation — edges only align when both pieces are at the correct relative rotation (within tolerance). Add rotation field to PieceGroup. Snap rotation to 0° on merge. This significantly increases puzzle difficulty and realism.
+
+### 7.6 — Background colour selection
+**Status:** todo
+**Depends on:** 6.3
+**Description:** Let the player change the puzzle table background colour. Dark pieces are hard to see on the default dark background. Offer a few preset colours (dark, medium grey, light, wood tone, green felt) and/or a custom colour picker. Persist the choice in localStorage. Apply via CSS custom property on the body/container.
+
+---
+
+*Last updated: 2026-03-22*
