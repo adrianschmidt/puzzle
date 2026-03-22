@@ -28,7 +28,7 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Define a `Renderer` interface that the game logic calls. Methods: `init(container)`, `renderState(gameState)`, `onPiecePointerDown(callback)`, `bringGroupToFront(groupId)`, `destroy()`. This abstraction allows swapping DOM→Canvas later.
 
 ### 2.2 — SVG/DOM renderer implementation
-**Status:** todo
+**Status:** done
 **Depends on:** 1.3, 2.1
 **Description:** Implement the Renderer interface using SVG/DOM. Each piece = `<image>` element clipped by its SVG path. Groups are DOM containers with CSS `transform: translate(x, y)`. Handle devicePixelRatio for crisp rendering. Use a fixed puzzle image (find/create a suitable 800×600ish image).
 
@@ -92,4 +92,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 12:45*
+*Last updated: 2026-03-22 13:30*
