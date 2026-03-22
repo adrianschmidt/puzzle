@@ -9,6 +9,18 @@ export {
 export type { InitOptions } from './init.js';
 
 export {
+    PUZZLE_SIZE_OPTIONS,
+    DEFAULT_SIZE_INDEX,
+    SIZE_PREFERENCE_KEY,
+    getSizeOption,
+    toGridSize,
+    findSizeIndex,
+    saveSizePreference,
+    loadSizePreference,
+} from './puzzle-sizes.js';
+export type { PuzzleSizeOption } from './puzzle-sizes.js';
+
+export {
     detectMerges,
     checkEdgeAlignment,
     getWorldPosition,

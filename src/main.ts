@@ -1,5 +1,5 @@
 import './style.css';
-import type { GameState } from './model/types.js';
+import type { GameState, GridSize } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { setupDragHandling, ViewportTransform, ViewportController } from './interaction/index.js';
 import {
@@ -8,8 +8,6 @@ import {
     checkAndMarkWin,
     computeGatheredPositions,
     applyGatheredPositions,
-    DEFAULT_COLS,
-    DEFAULT_ROWS,
 } from './game/index.js';
 import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
 import {
@@ -19,6 +17,13 @@ import {
 } from './ui/index.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import { createAttributionElement, removeAttribution } from './ui/attribution.js';
+import {
+    loadSizePreference,
+    saveSizePreference,
+    getSizeOption,
+    toGridSize,
+} from './game/puzzle-sizes.js';
+import { createSizePickerDialog } from './ui/size-picker.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -182,8 +187,10 @@ function initGame(state: GameState): void {
 /**
  * Start a new game, fetching a random Unsplash image if available.
  * Falls back to the default image if the API key is missing or fetch fails.
+ *
+ * @param gridSize - Grid dimensions (cols × rows) for the puzzle
  */
-async function startNewGame(): Promise<void> {
+async function startNewGame(gridSize: GridSize): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
     applyViewportTransform();
@@ -227,7 +234,7 @@ async function startNewGame(): Promise<void> {
         }
     }
 
-    const state = createNewGame(imageUrl, imageSize, viewport);
+    const state = createNewGame(imageUrl, imageSize, viewport, gridSize);
 
     if (attribution) {
         state.attribution = attribution;
@@ -244,8 +251,17 @@ createNewGameButton({
     getGroupCount: () => gameState.groups.length,
     getPieceCount: () => gameState.pieces.length,
     onNewGame: () => {
-        clearSavedState();
-        void startNewGame();
+        const preferredIndex = loadSizePreference();
+        createSizePickerDialog({
+            container: app,
+            selectedIndex: preferredIndex,
+            onSelect: (index) => {
+                saveSizePreference(index);
+                const option = getSizeOption(index);
+                clearSavedState();
+                void startNewGame(toGridSize(option));
+            },
+        });
     },
 });
 
@@ -279,8 +295,8 @@ createGatherPiecesButton({
             height: bottomRight.y - topLeft.y,
         };
 
-        const pieceWidth = gameState.imageSize.width / DEFAULT_COLS;
-        const pieceHeight = gameState.imageSize.height / DEFAULT_ROWS;
+        const pieceWidth = gameState.imageSize.width / gameState.gridSize.cols;
+        const pieceHeight = gameState.imageSize.height / gameState.gridSize.rows;
 
         const positions = computeGatheredPositions(
             gameState.groups,
@@ -301,5 +317,8 @@ const savedState = loadState();
 if (savedState) {
     initGame(savedState);
 } else {
-    void startNewGame();
+    // First load with no saved game: use the preferred size
+    const preferredIndex = loadSizePreference();
+    const option = getSizeOption(preferredIndex);
+    void startNewGame(toGridSize(option));
 }

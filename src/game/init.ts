@@ -6,7 +6,7 @@
  * within the viewport so all pieces are visible.
  */
 
-import type { GameState, PieceGroup, Piece, Size } from '../model/types.js';
+import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
 import { generateGridPuzzle } from '../puzzle/grid-generator.js';
 
 /** Default grid dimensions for the MVP puzzle. */
@@ -31,22 +31,25 @@ export interface InitOptions {
  * @param imageUrl - URL of the puzzle image
  * @param imageSize - Pixel dimensions of the puzzle image
  * @param viewport - Available viewport size for positioning pieces
+ * @param gridSize - Grid dimensions (cols × rows). Defaults to 8×6.
  * @param options - Optional configuration (e.g. custom RNG)
  */
 export function createNewGame(
     imageUrl: string,
     imageSize: Size,
     viewport: Size,
+    gridSize: GridSize = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
     options: InitOptions = {},
 ): GameState {
-    const pieces = generateGridPuzzle(DEFAULT_COLS, DEFAULT_ROWS, imageSize);
-    const groups = createInitialGroups(pieces, imageSize, viewport, options);
+    const pieces = generateGridPuzzle(gridSize.cols, gridSize.rows, imageSize);
+    const groups = createInitialGroups(pieces, imageSize, viewport, gridSize, options);
 
     return {
         pieces,
         groups,
         imageUrl,
         imageSize,
+        gridSize,
         completed: false,
     };
 }
@@ -60,17 +63,19 @@ export function createNewGame(
  * @param pieces - All puzzle pieces
  * @param imageSize - Puzzle image dimensions (to compute piece cell size)
  * @param viewport - Available viewport dimensions
+ * @param gridSize - Grid dimensions (cols × rows)
  * @param options - Optional configuration
  */
 export function createInitialGroups(
     pieces: Piece[],
     imageSize: Size,
     viewport: Size,
+    gridSize: GridSize = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
     options: InitOptions = {},
 ): PieceGroup[] {
     const random = options.random ?? Math.random;
-    const cols = DEFAULT_COLS;
-    const rows = DEFAULT_ROWS;
+    const cols = gridSize.cols;
+    const rows = gridSize.rows;
 
     const pieceWidth = imageSize.width / cols;
     const pieceHeight = imageSize.height / rows;

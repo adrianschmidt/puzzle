@@ -56,6 +56,7 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
         groups,
         imageUrl: 'test-image.jpg',
         imageSize: { width: 800, height: 600 },
+        gridSize: { cols: 8, rows: 6 },
         completed: false,
         ...overrides,
     };
@@ -210,6 +211,40 @@ describe('deserializeState', () => {
         expect(restored.imageSize).toBeDefined();
         expect(restored.imageSize.width).toBeGreaterThan(0);
         expect(restored.imageSize.height).toBeGreaterThan(0);
+    });
+
+    it('migrates v2 state by defaulting gridSize to 8×6', () => {
+        // Simulate a v2 saved state (has imageSize but no gridSize)
+        const v2Serialized: SerializedGameState = {
+            version: 2,
+            pieces: [makePiece(0), makePiece(1)],
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
+                { id: 1, pieces: [[1, { x: 0, y: 0 }]], position: { x: 100, y: 0 } },
+            ],
+            imageUrl: 'v2-image.jpg',
+            imageSize: { width: 800, height: 600 },
+            completed: false,
+        };
+
+        const restored = deserializeState(v2Serialized);
+
+        expect(restored.gridSize).toEqual({ cols: 8, rows: 6 });
+    });
+
+    it('preserves gridSize in v3 round-trip', () => {
+        const original = makeGameState({
+            gridSize: { cols: 12, rows: 8 },
+        });
+
+        const serialized = serializeState(original);
+        expect(serialized.gridSize).toEqual({ cols: 12, rows: 8 });
+
+        const json = JSON.stringify(serialized);
+        const parsed = JSON.parse(json) as SerializedGameState;
+        const restored = deserializeState(parsed);
+
+        expect(restored.gridSize).toEqual({ cols: 12, rows: 8 });
     });
 
     it('throws on unsupported version', () => {

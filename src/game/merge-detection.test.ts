@@ -223,6 +223,7 @@ describe('detectMerges', () => {
             groups,
             imageUrl: 'test.jpg',
             imageSize: { width: 800, height: 600 },
+            gridSize: { cols: 8, rows: 6 },
             completed: false,
         };
     }
