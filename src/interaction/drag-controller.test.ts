@@ -670,6 +670,70 @@ describe('DragController', () => {
         });
     });
 
+    describe('screenDeltaToWorld', () => {
+        it('should convert screen deltas to world space when zoomed in', () => {
+            // At scale 2, a 20px screen movement = 10px world movement
+            const zoomedController = new DragController(
+                () => groups,
+                callbacks,
+                () => ({ width: 10000, height: 10000 }),
+                (delta) => ({ x: delta.x / 2, y: delta.y / 2 }),
+            );
+
+            zoomedController.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 100,
+                    clientY: 100,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            zoomedController.handlePointerMove(
+                fakePointerEvent({
+                    clientX: 120,
+                    clientY: 110,
+                    pointerId: 1,
+                }),
+            );
+
+            // Screen delta (20, 10) → world delta (10, 5)
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: 10,
+                y: 5,
+            });
+        });
+
+        it('should use identity transform by default', () => {
+            // Default controller (no transform) — delta passes through unchanged
+            controller.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 100,
+                    clientY: 100,
+                    pointerId: 1,
+                }),
+            );
+
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            controller.handlePointerMove(
+                fakePointerEvent({
+                    clientX: 120,
+                    clientY: 110,
+                    pointerId: 1,
+                }),
+            );
+
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
+                x: 20,
+                y: 10,
+            });
+        });
+    });
+
     describe('full drag cycle', () => {
         it('should complete a full drag: down → move → up', () => {
             // Start drag

@@ -377,6 +377,45 @@ describe('SvgDomRenderer', () => {
         });
     });
 
+    describe('setViewportTransform', () => {
+        it('applies CSS transform to the table element', () => {
+            renderer.init(container);
+
+            renderer.setViewportTransform(2, 100, 50);
+
+            const table = container.querySelector('div') as HTMLElement;
+            expect(table.style.transform).toBe('translate(100px, 50px) scale(2)');
+        });
+
+        it('handles identity transform', () => {
+            renderer.init(container);
+
+            renderer.setViewportTransform(1, 0, 0);
+
+            const table = container.querySelector('div') as HTMLElement;
+            expect(table.style.transform).toBe('translate(0px, 0px) scale(1)');
+        });
+
+        it('does nothing if init was not called', () => {
+            // Should not throw
+            renderer.setViewportTransform(2, 100, 50);
+        });
+    });
+
+    describe('getTableElement', () => {
+        it('returns the table element after init', () => {
+            renderer.init(container);
+
+            const table = renderer.getTableElement();
+            expect(table).not.toBeNull();
+            expect(table!.style.position).toBe('relative');
+        });
+
+        it('returns null before init', () => {
+            expect(renderer.getTableElement()).toBeNull();
+        });
+    });
+
     describe('destroy', () => {
         it('removes the table element', () => {
             renderer.init(container);

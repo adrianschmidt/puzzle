@@ -24,6 +24,7 @@ html, body {
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
   /* Prevent text selection and touch callout on puzzle pieces */
   user-select: none;
   -webkit-user-select: none;

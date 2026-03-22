@@ -37,6 +37,19 @@ export interface Renderer {
     /** Bring the given group's visual layer to the front (top z-order). */
     bringGroupToFront(groupId: number): void;
 
+    /**
+     * Apply a viewport transform (zoom + pan) to the rendering layer.
+     * The scale and offset define: screen = world × scale + offset.
+     */
+    setViewportTransform(scale: number, offsetX: number, offsetY: number): void;
+
+    /**
+     * Returns the table element (the rendering surface).
+     * Used by the viewport controller to check if pointer events
+     * hit piece elements vs empty space.
+     */
+    getTableElement(): HTMLElement | null;
+
     /** Clean up all DOM/resources created by this renderer. */
     destroy(): void;
 }

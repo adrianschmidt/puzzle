@@ -36,8 +36,9 @@ export class SvgDomRenderer implements Renderer {
         table.style.position = 'relative';
         table.style.width = '100%';
         table.style.height = '100%';
-        table.style.overflow = 'hidden';
+        table.style.overflow = 'visible';
         table.style.touchAction = 'none';
+        table.style.transformOrigin = '0 0';
         container.appendChild(table);
 
         this.tableEl = table;
@@ -95,6 +96,17 @@ export class SvgDomRenderer implements Renderer {
         if (el && this.tableEl) {
             this.tableEl.appendChild(el);
         }
+    }
+
+    setViewportTransform(scale: number, offsetX: number, offsetY: number): void {
+        if (!this.tableEl) return;
+
+        this.tableEl.style.transform =
+            `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+    }
+
+    getTableElement(): HTMLElement | null {
+        return this.tableEl;
     }
 
     destroy(): void {
