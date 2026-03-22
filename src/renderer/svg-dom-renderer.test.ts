@@ -82,6 +82,7 @@ function make2x2State(): GameState {
         ],
         imageUrl: 'test-puzzle.jpg',
         imageSize: { width: 200, height: 200 },
+        gridSize: { cols: 2, rows: 2 },
         completed: false,
     };
 }

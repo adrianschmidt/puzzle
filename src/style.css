@@ -228,6 +228,100 @@ html, body {
   text-decoration: underline;
 }
 
+/* Size picker dialog */
+.size-picker-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10001;
+  animation: fade-in 0.2s ease-out;
+}
+
+.size-picker-dialog {
+  background: rgba(30, 30, 50, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 360px;
+  width: 90%;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: pop-in 0.25s ease-out;
+}
+
+.size-picker-title {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.size-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.size-picker-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e0e0e0;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.size-picker-option:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.size-picker-option:active {
+  transform: scale(0.97);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.size-picker-option--selected {
+  border-color: rgba(100, 160, 255, 0.6);
+  background: rgba(100, 160, 255, 0.1);
+}
+
+.size-picker-option--selected:hover {
+  border-color: rgba(100, 160, 255, 0.8);
+  background: rgba(100, 160, 255, 0.15);
+}
+
+.size-picker-count {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.size-picker-label {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.size-picker-dims {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
 /* Responsive: ensure buttons don't overlap on small screens */
 @media (max-height: 400px) {
   .new-game-button,

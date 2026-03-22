@@ -85,6 +85,14 @@ export interface ImageAttribution {
 }
 
 /**
+ * Grid dimensions for the puzzle (cols × rows).
+ */
+export interface GridSize {
+    cols: number;
+    rows: number;
+}
+
+/**
  * Complete game state — everything needed to render and persist a game.
  */
 export interface GameState {
@@ -96,6 +104,8 @@ export interface GameState {
     imageUrl: string;
     /** Pixel dimensions of the puzzle image. */
     imageSize: Size;
+    /** Grid dimensions used to generate this puzzle. */
+    gridSize: GridSize;
     /** True when all pieces have been merged into a single group. */
     completed: boolean;
     /** Optional attribution for the puzzle image (e.g. from Unsplash). */

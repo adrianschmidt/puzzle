@@ -15,3 +15,6 @@ export {
     removeAttribution,
     formatAttributionText,
 } from './attribution.js';
+
+export { createSizePickerDialog, getSizeClass } from './size-picker.js';
+export type { SizePickerOptions } from './size-picker.js';

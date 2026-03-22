@@ -8,23 +8,26 @@
 
 import type {
     GameState,
+    GridSize,
     ImageAttribution,
     PieceGroup,
     Point,
     Size,
 } from '../model/types.js';
 import { getImageDimensions } from '../renderer/svg-dom-utils.js';
+import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /**
  * Supported schema versions.
  *
  * - v1: original format (no imageSize or attribution)
  * - v2: adds imageSize and optional attribution
+ * - v3: adds gridSize (cols × rows)
  */
-const SUPPORTED_VERSIONS = [1, 2];
+const SUPPORTED_VERSIONS = [1, 2, 3];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
@@ -40,6 +43,7 @@ export interface SerializedGameState {
     groups: SerializedPieceGroup[];
     imageUrl: string;
     imageSize?: Size;
+    gridSize?: GridSize;
     completed: boolean;
     attribution?: ImageAttribution;
 }
@@ -56,6 +60,7 @@ export function serializeState(state: GameState): SerializedGameState {
         groups: state.groups.map(serializeGroup),
         imageUrl: state.imageUrl,
         imageSize: state.imageSize,
+        gridSize: state.gridSize,
         completed: state.completed,
     };
 
@@ -87,11 +92,15 @@ export function deserializeState(data: SerializedGameState): GameState {
     // For v1 saves (no imageSize), derive it from piece data
     const imageSize = data.imageSize ?? deriveImageSize(data);
 
+    // For v1/v2 saves (no gridSize), assume the original 8×6 default
+    const gridSize = data.gridSize ?? { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
+
     const state: GameState = {
         pieces: data.pieces,
         groups,
         imageUrl: data.imageUrl,
         imageSize,
+        gridSize,
         completed: data.completed,
     };
 
@@ -115,6 +124,7 @@ function deriveImageSize(data: SerializedGameState): Size {
         groups: [],
         imageUrl: '',
         imageSize: { width: 0, height: 0 },
+        gridSize: { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
         completed: false,
     };
 

@@ -60,6 +60,7 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
         groups,
         imageUrl: 'test-image.jpg',
         imageSize: { width: 800, height: 600 },
+        gridSize: { cols: 8, rows: 6 },
         completed: false,
         ...overrides,
     };

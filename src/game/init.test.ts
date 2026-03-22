@@ -6,7 +6,7 @@ import {
     DEFAULT_ROWS,
     VIEWPORT_MARGIN,
 } from './init.js';
-import type { Size } from '../model/types.js';
+import type { GridSize, Size } from '../model/types.js';
 
 /** A deterministic RNG for reproducible tests: cycles through provided values. */
 function seededRandom(values: number[]): () => number {
@@ -22,11 +22,12 @@ function seededRandom(values: number[]): () => number {
 
 const IMAGE_SIZE: Size = { width: 800, height: 600 };
 const VIEWPORT: Size = { width: 1024, height: 768 };
+const DEFAULT_GRID: GridSize = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
 const TOTAL_PIECES = DEFAULT_COLS * DEFAULT_ROWS; // 48
 
 describe('createNewGame', () => {
     it('creates a game state with the correct number of pieces', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
@@ -34,7 +35,7 @@ describe('createNewGame', () => {
     });
 
     it('creates one group per piece', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
@@ -42,7 +43,7 @@ describe('createNewGame', () => {
     });
 
     it('sets the image URL', () => {
-        const state = createNewGame('my-image.png', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('my-image.png', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
@@ -50,7 +51,7 @@ describe('createNewGame', () => {
     });
 
     it('starts with completed = false', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
@@ -58,15 +59,34 @@ describe('createNewGame', () => {
     });
 
     it('stores the image size in the game state', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
         expect(state.imageSize).toEqual(IMAGE_SIZE);
     });
 
+    it('stores the grid size in the game state', () => {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom([0.5]),
+        });
+
+        expect(state.gridSize).toEqual(DEFAULT_GRID);
+    });
+
+    it('respects custom grid size', () => {
+        const customGrid: GridSize = { cols: 6, rows: 4 };
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, customGrid, {
+            random: seededRandom([0.5]),
+        });
+
+        expect(state.pieces).toHaveLength(24);
+        expect(state.groups).toHaveLength(24);
+        expect(state.gridSize).toEqual(customGrid);
+    });
+
     it('each group contains exactly one piece', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
@@ -76,7 +96,7 @@ describe('createNewGame', () => {
     });
 
     it('every piece appears in exactly one group', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
@@ -92,7 +112,7 @@ describe('createNewGame', () => {
     });
 
     it('each piece has groupOffset {0,0} (solo groups)', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
@@ -106,7 +126,7 @@ describe('createNewGame', () => {
 
 describe('createInitialGroups', () => {
     it('assigns unique group IDs matching piece IDs', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
         });
 
