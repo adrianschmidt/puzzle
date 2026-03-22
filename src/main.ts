@@ -1,7 +1,49 @@
 import './style.css';
+import type { GameState } from './model/types.js';
+import { SvgDomRenderer } from './renderer/index.js';
+import { setupDragHandling } from './interaction/index.js';
+import { createNewGame } from './game/index.js';
+
+const PUZZLE_IMAGE_URL = 'puzzle-image.jpg';
+const IMAGE_WIDTH = 800;
+const IMAGE_HEIGHT = 600;
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
-app.innerHTML = `
-  <h1>🧩 Puzzle</h1>
-  <p>Coming soon...</p>
-`;
+
+let gameState: GameState;
+let cleanupDrag: (() => void) | null = null;
+
+const renderer = new SvgDomRenderer();
+renderer.init(app);
+
+function startNewGame(): void {
+    if (cleanupDrag) {
+        cleanupDrag();
+        cleanupDrag = null;
+    }
+
+    const viewport = {
+        width: app.clientWidth || window.innerWidth,
+        height: app.clientHeight || window.innerHeight,
+    };
+
+    gameState = createNewGame(
+        PUZZLE_IMAGE_URL,
+        { width: IMAGE_WIDTH, height: IMAGE_HEIGHT },
+        viewport,
+    );
+
+    renderer.renderState(gameState);
+
+    cleanupDrag = setupDragHandling({
+        container: app,
+        renderer,
+        getState: () => gameState,
+        onStateChanged: () => renderer.renderState(gameState),
+        onDrop: (_groupId: number) => {
+            // Merge detection will be wired in task 4.1
+        },
+    });
+}
+
+startNewGame();
