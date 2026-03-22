@@ -17,7 +17,7 @@ import { findGroupForPiece } from '../model/helpers.js';
  * where you are holding the group can't leave the visible area,
  * preventing pieces from being dragged out of reach.
  */
-const POINTER_MARGIN_PX = 10;
+const POINTER_MARGIN_PX = 40;
 
 /** Snapshot of an active drag operation. */
 export interface DragState {
