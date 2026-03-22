@@ -30,6 +30,7 @@ export class SvgDomRenderer implements Renderer {
     private imageSize = { width: 0, height: 0 };
     private pieceBaseWidth = 0;
     private pieceBaseHeight = 0;
+    private currentImageUrl = '';
 
     init(container: HTMLElement): void {
         const table = document.createElement('div');
@@ -46,6 +47,15 @@ export class SvgDomRenderer implements Renderer {
 
     renderState(gameState: GameState): void {
         if (!this.tableEl) return;
+
+        // When the puzzle image changes (new game), invalidate all cached
+        // piece SVG elements.  Pieces reference the image via <image href>,
+        // and their shapes / dimensions may also differ if the grid size
+        // changed.  Clearing both maps forces a full re-render.
+        if (gameState.imageUrl !== this.currentImageUrl) {
+            this.clearAllElements();
+            this.currentImageUrl = gameState.imageUrl;
+        }
 
         this.imageSize = getImageDimensions(gameState);
         this.pieceBaseWidth = this.imageSize.width / getGridCols(gameState);
@@ -150,6 +160,25 @@ export class SvgDomRenderer implements Renderer {
     }
 
     // --- Private rendering helpers ---
+
+    /**
+     * Remove all cached group and piece DOM elements.
+     *
+     * Called when the puzzle image (or grid size) changes so that every
+     * SVG piece element is recreated with the correct `<image>` href,
+     * clip-path, and dimensions.
+     */
+    private clearAllElements(): void {
+        for (const el of this.groupElements.values()) {
+            el.remove();
+        }
+
+        this.groupElements.clear();
+
+        // Piece elements live inside group containers, so they are already
+        // removed from the DOM above.  We just need to clear the map.
+        this.pieceElements.clear();
+    }
 
     private renderGroup(
         group: PieceGroup,

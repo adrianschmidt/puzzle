@@ -265,6 +265,96 @@ describe('SvgDomRenderer', () => {
             ).not.toBeNull();
         });
 
+        it('recreates piece SVGs when the image URL changes', () => {
+            renderer.init(container);
+            const state = make2x2State();
+
+            renderer.renderState(state);
+
+            // Grab a reference to the original SVG element for piece 0
+            const originalSvg = container.querySelector(
+                'svg[data-piece-id="0"]',
+            ) as SVGSVGElement;
+            expect(originalSvg).not.toBeNull();
+
+            const originalImage = originalSvg.querySelector('image')!;
+            expect(originalImage.getAttributeNS(
+                'http://www.w3.org/1999/xlink',
+                'href',
+            )).toBe('test-puzzle.jpg');
+
+            // Render a new state with a different image URL
+            const newState: GameState = {
+                ...state,
+                imageUrl: 'new-puzzle-image.jpg',
+            };
+
+            renderer.renderState(newState);
+
+            // The SVG for piece 0 should be a new element
+            const newSvg = container.querySelector(
+                'svg[data-piece-id="0"]',
+            ) as SVGSVGElement;
+            expect(newSvg).not.toBeNull();
+            expect(newSvg).not.toBe(originalSvg);
+
+            // And it should reference the new image
+            const newImage = newSvg.querySelector('image')!;
+            expect(newImage.getAttributeNS(
+                'http://www.w3.org/1999/xlink',
+                'href',
+            )).toBe('new-puzzle-image.jpg');
+        });
+
+        it('keeps piece SVGs when re-rendering with the same image URL', () => {
+            renderer.init(container);
+            const state = make2x2State();
+
+            renderer.renderState(state);
+
+            const originalSvg = container.querySelector(
+                'svg[data-piece-id="0"]',
+            ) as SVGSVGElement;
+
+            // Re-render with same state (e.g. after a drag)
+            renderer.renderState(state);
+
+            const sameSvg = container.querySelector(
+                'svg[data-piece-id="0"]',
+            ) as SVGSVGElement;
+
+            // Should be the exact same DOM element (not recreated)
+            expect(sameSvg).toBe(originalSvg);
+        });
+
+        it('cleans up old group elements when image URL changes', () => {
+            renderer.init(container);
+            const state = make2x2State();
+
+            renderer.renderState(state);
+            expect(
+                container.querySelectorAll('[data-group-id]'),
+            ).toHaveLength(4);
+
+            // Render a new state with a different image and fewer groups
+            const newState: GameState = {
+                ...state,
+                imageUrl: 'different.jpg',
+                groups: [makeGroup(10, [0, 1], 0, 0)],
+                pieces: [state.pieces[0], state.pieces[1]],
+            };
+
+            renderer.renderState(newState);
+
+            // Old groups should be gone, only the new one remains
+            expect(
+                container.querySelectorAll('[data-group-id]'),
+            ).toHaveLength(1);
+            expect(
+                container.querySelector('[data-group-id="10"]'),
+            ).not.toBeNull();
+        });
+
         it('updates group positions on re-render', () => {
             renderer.init(container);
             const state = make2x2State();
