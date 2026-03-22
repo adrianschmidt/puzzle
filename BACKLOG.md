@@ -79,8 +79,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ## Phase 5: Persistence
 
 ### 5.1 — Auto-save & restore
-**Status:** todo
+**Status:** done
 **Depends on:** 4.2
+**Done:** 2026-03-22
 **Description:** Save full GameState to localStorage on every state change (debounced 500ms). Serialize Maps as entries arrays. On app load: check for saved state, restore if valid, otherwise show new game. Include state version number for future migrations. Wrap restore in try/catch.
 
 ### 5.2 — New Game button
@@ -112,4 +113,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 14:57*
+*Last updated: 2026-03-22 15:03*
