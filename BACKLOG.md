@@ -78,7 +78,13 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Done:** 2026-03-22
 **Description:** After each merge, check if all pieces are in a single group. If so, set `completed: true` and show a simple "Puzzle Complete!" message.
 
-## Phase 5: Persistence
+### 4.4 — Prevent accidental merges in piece piles
+**Status:** done
+**Depends on:** 4.2
+**Done:** 2026-03-22
+**Description:** When dropping a piece near a pile of other pieces, it can accidentally snap to a matching edge even though the player clearly didn't intend to place it there. This makes sorting through piles frustrating. Add a heuristic to suppress merging when the dropped piece/group is overlapping with many other non-matching groups (i.e. it's in a pile, not being intentionally placed). Important: don't block intentional placement into a gap in an assembled section — there, neighboring pieces are expected to be close. Possible approach: count how many distinct other groups overlap the dropped piece's bounding area; if above a threshold and many of those are non-matching, skip the merge.
+
+## Phase 5: Persistence & UI
 
 ### 5.1 — Auto-save & restore
 **Status:** done
@@ -91,6 +97,17 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 5.1
 **Done:** 2026-03-22
 **Description:** Add a minimal UI: "New Game" button that clears saved state and re-randomizes. Confirm before discarding an in-progress game.
+
+### 5.3 — Centre view button
+**Status:** done
+**Depends on:** 3.4
+**Done:** 2026-03-22
+**Description:** Add a UI button that resets the viewport pan/zoom to the default centred view. Useful after zooming/panning around to quickly get back to a known orientation.
+
+### 5.4 — Gather pieces button
+**Status:** todo
+**Depends on:** 3.2
+**Description:** Add a UI button that brings all groups together to the centre of the visible play area. When pieces are scattered widely (especially after zooming out), this collects them into a manageable area without changing their groupings. Should distribute groups loosely so they don't all stack on the exact same point.
 
 ## Phase 6: Polish & Deploy
 
@@ -109,23 +126,6 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Status:** todo
 **Depends on:** 5.2
 **Description:** Subtle drop shadow on pieces/groups for depth. Smooth snap animation when pieces merge. Satisfying "complete" animation. Basic responsive layout (works on iPad in both orientations).
-
-### 5.3 — Centre view button
-**Status:** done
-**Depends on:** 3.4
-**Done:** 2026-03-22
-**Description:** Add a UI button that resets the viewport pan/zoom to the default centred view. Useful after zooming/panning around to quickly get back to a known orientation.
-
-### 5.4 — Gather pieces button
-**Status:** todo
-**Depends on:** 3.2
-**Description:** Add a UI button that brings all groups together to the centre of the visible play area. When pieces are scattered widely (especially after zooming out), this collects them into a manageable area without changing their groupings. Should distribute groups loosely so they don't all stack on the exact same point.
-
-### 4.4 — Prevent accidental merges in piece piles
-**Status:** done
-**Depends on:** 4.2
-**Done:** 2026-03-22
-**Description:** When dropping a piece near a pile of other pieces, it can accidentally snap to a matching edge even though the player clearly didn't intend to place it there. This makes sorting through piles frustrating. Add a heuristic to suppress merging when the dropped piece/group is overlapping with many other non-matching groups (i.e. it's in a pile, not being intentionally placed). Important: don't block intentional placement into a gap in an assembled section — there, neighboring pieces are expected to be close. Possible approach: count how many distinct other groups overlap the dropped piece's bounding area; if above a threshold and many of those are non-matching, skip the merge.
 
 ### 6.4 — Suppress context menu on long-press
 **Status:** done
