@@ -24,6 +24,10 @@ html, body {
   align-items: center;
   justify-content: center;
   position: relative;
+  /* Prevent text selection and touch callout on puzzle pieces */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* Win detection overlay */

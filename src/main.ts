@@ -11,6 +11,11 @@ const IMAGE_HEIGHT = 600;
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
+// Suppress the browser context menu on the puzzle container.
+// On touch devices (especially iPad), long-pressing a piece would
+// otherwise trigger the context menu, interfering with drag.
+app.addEventListener('contextmenu', (e) => e.preventDefault());
+
 /**
  * Show a "Puzzle Complete!" overlay on top of the puzzle.
  * A simple centered message that fades in.
