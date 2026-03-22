@@ -151,7 +151,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Currently, starting a new game doesn't display a new image until the app is reloaded. The `startNewGame()` function fetches a new Unsplash image, but the rendered puzzle keeps showing the previous image. Investigate whether this is a browser caching issue, a renderer not updating the image source, or the SVG `<image>` elements holding stale `href` references. The new image should appear immediately when "New Game" is pressed.
 
 ### 7.2 — Selectable puzzle sizes
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-22
 **Depends on:** 5.2
 **Description:** Let the player choose puzzle size when starting a new game. Options: 24 (4×6), 48 (6×8), 96 (8×12), 192 (12×16). The grid generator already accepts rows/cols, so this is primarily a UI task. Show size options in a new-game dialog or screen. Save the chosen size preference. Consider piece size vs screen size — larger puzzles need smaller pieces.
 
