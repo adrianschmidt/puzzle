@@ -3,6 +3,7 @@ import type { GameState } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { setupDragHandling } from './interaction/index.js';
 import { createNewGame, processDrop, checkAndMarkWin } from './game/index.js';
+import { loadState, createDebouncedSave } from './persistence/index.js';
 
 const PUZZLE_IMAGE_URL = 'puzzle-image.jpg';
 const IMAGE_WIDTH = 800;
@@ -47,7 +48,19 @@ let cleanupDrag: (() => void) | null = null;
 const renderer = new SvgDomRenderer();
 renderer.init(app);
 
-function startNewGame(): void {
+const debouncedSave = createDebouncedSave();
+
+/**
+ * Trigger a debounced auto-save of the current game state.
+ */
+function autoSave(): void {
+    debouncedSave.save(gameState);
+}
+
+/**
+ * Set up the game with a given state: render it and wire up interaction.
+ */
+function initGame(state: GameState): void {
     removeCompletionOverlay();
 
     if (cleanupDrag) {
@@ -55,35 +68,57 @@ function startNewGame(): void {
         cleanupDrag = null;
     }
 
-    const viewport = {
-        width: app.clientWidth || window.innerWidth,
-        height: app.clientHeight || window.innerHeight,
-    };
-
-    gameState = createNewGame(
-        PUZZLE_IMAGE_URL,
-        { width: IMAGE_WIDTH, height: IMAGE_HEIGHT },
-        viewport,
-    );
-
+    gameState = state;
     renderer.renderState(gameState);
+
+    if (gameState.completed) {
+        showCompletionOverlay();
+    }
 
     cleanupDrag = setupDragHandling({
         container: app,
         renderer,
         getState: () => gameState,
-        onStateChanged: () => renderer.renderState(gameState),
+        onStateChanged: () => {
+            renderer.renderState(gameState);
+            autoSave();
+        },
         onDrop: (groupId: number) => {
             const result = processDrop(groupId, gameState);
             if (result) {
                 renderer.renderState(gameState);
+                autoSave();
 
                 if (checkAndMarkWin(gameState)) {
                     showCompletionOverlay();
+                    autoSave();
                 }
             }
         },
     });
 }
 
-startNewGame();
+function startNewGame(): void {
+    const viewport = {
+        width: app.clientWidth || window.innerWidth,
+        height: app.clientHeight || window.innerHeight,
+    };
+
+    const state = createNewGame(
+        PUZZLE_IMAGE_URL,
+        { width: IMAGE_WIDTH, height: IMAGE_HEIGHT },
+        viewport,
+    );
+
+    initGame(state);
+    autoSave();
+}
+
+// On load: try to restore a saved game, otherwise start fresh
+const savedState = loadState();
+
+if (savedState) {
+    initGame(savedState);
+} else {
+    startNewGame();
+}
