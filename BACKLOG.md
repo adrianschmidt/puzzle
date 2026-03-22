@@ -11,7 +11,7 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Vite + TypeScript + PWA plugin setup, folder structure, license, design doc.
 
 ### 1.2 — Core data model
-**Status:** todo
+**Status:** done
 **Depends on:** 1.1
 **Description:** Define TypeScript types for Point, Size, Edge, Piece, PieceGroup, GameState as specified in DESIGN.md. The model is graph-based and shape-agnostic — no grid assumptions in the engine types. Include helper functions: `getMateEdge(piece, edge)` → finds the mate piece and edge, `getBorderEdges(group, pieces)` → returns edges in the group that have mates in other groups (used for merge detection).
 
@@ -92,4 +92,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22*
+*Last updated: 2026-03-22 12:40*
