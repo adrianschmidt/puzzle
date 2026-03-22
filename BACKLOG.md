@@ -71,8 +71,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Add a viewport transform layer so users can zoom in/out and pan the puzzle table. Pinch-to-zoom on touch, scroll-wheel zoom on desktop. Pan by dragging on empty space (not on a piece). The puzzle table should be larger than the screen, with the viewport acting as a window into it. Essential for puzzles that don't fit on screen.
 
 ### 4.3 — Win detection
-**Status:** todo
+**Status:** done
 **Depends on:** 4.2
+**Done:** 2026-03-22
 **Description:** After each merge, check if all pieces are in a single group. If so, set `completed: true` and show a simple "Puzzle Complete!" message.
 
 ## Phase 5: Persistence
@@ -111,4 +112,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 14:25*
+*Last updated: 2026-03-22 14:57*
