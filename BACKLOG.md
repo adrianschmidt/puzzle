@@ -53,8 +53,9 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Prevent pieces/groups from being dragged out of reach. Clamp pointer position during drag so that at least a grabbable portion of the group remains within the visible viewport. This prevents pieces from getting lost behind browser chrome or off-screen. Uses `visualViewport` for accurate bounds on mobile.
 
 ### 3.4 — Zoom and pan
-**Status:** todo
+**Status:** done
 **Depends on:** 3.1
+**Done:** 2026-03-22
 **Description:** Add a viewport transform layer so users can zoom in/out and pan the puzzle table. Pinch-to-zoom on touch, scroll-wheel zoom on desktop. Pan by dragging on empty space (not on a piece). The puzzle table should be larger than the screen, with the viewport acting as a window into it. Essential for puzzles that don't fit on screen.
 
 ## Phase 4: Core Mechanic
@@ -122,4 +123,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-22 16:01*
+*Last updated: 2026-03-22 16:36*
