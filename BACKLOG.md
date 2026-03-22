@@ -145,6 +145,11 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 5.1
 **Description:** On "New Game", fetch a random landscape photo from Unsplash to use as the puzzle image. Use the Unsplash API (free tier, needs API key). Filter for landscape orientation to match the puzzle grid aspect ratio. Store the image URL in GameState so the image persists across app restarts. Handle errors gracefully (fall back to default image if fetch fails). The API key should be configured via environment variable at build time (not committed to repo).
 
+### 7.1.1 — Fix: New Game should show new Unsplash image immediately
+**Status:** todo
+**Depends on:** 7.1
+**Description:** Currently, starting a new game doesn't display a new image until the app is reloaded. The `startNewGame()` function fetches a new Unsplash image, but the rendered puzzle keeps showing the previous image. Investigate whether this is a browser caching issue, a renderer not updating the image source, or the SVG `<image>` elements holding stale `href` references. The new image should appear immediately when "New Game" is pressed.
+
 ### 7.2 — Selectable puzzle sizes
 **Status:** todo
 **Depends on:** 5.2
