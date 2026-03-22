@@ -23,4 +23,46 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+}
+
+/* Win detection overlay */
+.completion-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  animation: fade-in 0.6s ease-out;
+  pointer-events: none;
+}
+
+.completion-message {
+  text-align: center;
+  color: #fff;
+  animation: pop-in 0.5s ease-out 0.2s both;
+}
+
+.completion-message h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }

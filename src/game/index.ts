@@ -22,3 +22,5 @@ export {
     processDrop,
 } from './group-merging.js';
 export type { MergeResult } from './group-merging.js';
+
+export { checkWin, checkAndMarkWin } from './win-detection.js';
