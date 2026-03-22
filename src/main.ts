@@ -14,6 +14,10 @@ import {
     createNewGameButton,
     createCentreViewButton,
     createGatherPiecesButton,
+    loadColourPreference,
+    saveColourPreference,
+    applyBackgroundColour,
+    createBackgroundColourPicker,
 } from './ui/index.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import { createAttributionElement, removeAttribution } from './ui/attribution.js';
@@ -308,6 +312,19 @@ createGatherPiecesButton({
         applyGatheredPositions(gameState.groups, positions);
         renderer.renderState(gameState);
         autoSave();
+    },
+});
+
+// Set up the Background Colour picker
+const initialColourIndex = loadColourPreference();
+applyBackgroundColour(initialColourIndex);
+
+createBackgroundColourPicker({
+    container: app,
+    selectedIndex: initialColourIndex,
+    onSelect: (index) => {
+        saveColourPreference(index);
+        applyBackgroundColour(index);
     },
 });
 

@@ -18,3 +18,15 @@ export {
 
 export { createSizePickerDialog, getSizeClass } from './size-picker.js';
 export type { SizePickerOptions } from './size-picker.js';
+
+export {
+    BACKGROUND_COLOUR_PRESETS,
+    getColourPreset,
+    saveColourPreference,
+    loadColourPreference,
+    applyBackgroundColour,
+} from './background-colour.js';
+export type { BackgroundColourPreset } from './background-colour.js';
+
+export { createBackgroundColourPicker } from './background-colour-picker.js';
+export type { BackgroundColourPickerOptions } from './background-colour-picker.js';
