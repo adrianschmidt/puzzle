@@ -110,6 +110,12 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Done:** 2026-03-22
 **Description:** Add a UI button that brings all groups together to the centre of the visible play area. When pieces are scattered widely (especially after zooming out), this collects them into a manageable area without changing their groupings. Should distribute groups loosely so they don't all stack on the exact same point.
 
+### 5.4.1 — Fix: Gather pieces should scatter, not solve
+**Status:** done
+**Done:** 2026-03-22
+**Depends on:** 5.4
+**Description:** Scatter groups into a randomised grid within 2.5× the puzzle dimensions. Groups are shuffled and jittered — no correlation with solved positions.
+
 ## Phase 6: Polish & Deploy
 
 ### 6.1 — PWA manifest & icons
@@ -179,12 +185,6 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 - **Varied edge segments** — the portions of the edge on either side of the tab should be curves, not straight lines
 - **Non-uniform grid lines** — the overall grid lines should gently meander rather than being perfectly straight, producing pieces that aren't all identical rectangles
 - **Remove or reduce wobble/pinch** — the skeuomorphic "imperfect die cut" effects from 7.4 should be toned down or removed; focus on geometric variety instead
-
-### 5.4.1 — Fix: Gather pieces should scatter, not solve
-**Status:** done
-**Done:** 2026-03-22
-**Depends on:** 5.4
-**Description:** Scatter groups into a randomised grid within 2.5× the puzzle dimensions. Groups are shuffled and jittered — no correlation with solved positions.
 
 ### 7.5 — Background colour selection
 **Status:** done
