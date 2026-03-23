@@ -29,7 +29,6 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
         id,
         pieces: new Map([[pieceId, { x: 0, y: 0 }]]),
         position,
-        rotation: 0,
     };
 }
 
@@ -114,7 +113,6 @@ describe('getGroupBounds', () => {
                 [1, { x: 100, y: 0 }], // piece 1 is to the right
             ]),
             position: { x: 10, y: 20 },
-            rotation: 0,
         };
 
         const bounds = getGroupBounds(group, [piece0, piece1]);
@@ -143,7 +141,6 @@ describe('getGroupBounds', () => {
             id: 0,
             pieces: new Map([[0, { x: 50, y: 25 }]]),
             position: { x: 100, y: 100 },
-            rotation: 0,
         };
 
         const bounds = getGroupBounds(group, [piece]);
@@ -308,7 +305,6 @@ describe('shouldSuppressMerge', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 50, y: 50 },
-            rotation: 0,
         };
 
         // Pile of non-mates

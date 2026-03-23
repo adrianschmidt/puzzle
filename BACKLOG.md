@@ -193,8 +193,7 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Let the player change the puzzle table background colour. Dark pieces are hard to see on the default dark background. Offer a few preset colours (dark, medium grey, light, wood tone, green felt) and/or a custom colour picker. Persist the choice in localStorage. Apply via CSS custom property on the body/container.
 
 ### 7.6 — Free rotation of pieces
-**Status:** done
-**Done:** 2026-03-24
+**Status:** todo
 **Depends on:** 4.2
 **Description:** Pieces start at random rotations. Two-finger rotate gesture on touch, or modifier+drag on desktop. Merge detection must account for rotation — edges only align when both pieces are at the correct relative rotation (within tolerance). Add rotation field to PieceGroup. Snap rotation to 0° on merge. This significantly increases puzzle difficulty and realism.
 
@@ -264,4 +263,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-24*
+*Last updated: 2026-03-23*

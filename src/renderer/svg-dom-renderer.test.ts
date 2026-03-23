@@ -60,7 +60,6 @@ function makeGroup(id: number, pieceIds: number[], x = 0, y = 0): PieceGroup {
         id,
         pieces: new Map(pieceIds.map((pid, i) => [pid, { x: i * 100, y: 0 }])),
         position: { x, y },
-        rotation: 0,
     };
 }
 
@@ -233,7 +232,6 @@ describe('SvgDomRenderer', () => {
                     [1, { x: 100, y: 0 }],
                 ]),
                 position: { x: 50, y: 50 },
-                rotation: 0,
             };
 
             const newState: GameState = {

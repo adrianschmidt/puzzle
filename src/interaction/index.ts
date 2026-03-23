@@ -6,5 +6,3 @@ export { ViewportTransform, clampScale, MIN_SCALE, MAX_SCALE, WHEEL_ZOOM_FACTOR 
 export type { ViewportState } from './viewport-transform.js';
 export { ViewportController, touchDistance, touchMidpoint } from './viewport-controller.js';
 export type { ViewportControllerOptions } from './viewport-controller.js';
-export { setupRotationHandling } from './rotation-controller.js';
-export type { RotationCallbacks } from './rotation-controller.js';

@@ -17,7 +17,6 @@ function makeGroup(id: number, x: number, y: number): PieceGroup {
         id,
         pieces: new Map([[id, { x: 0, y: 0 }]]),
         position: { x, y },
-        rotation: 0,
     };
 }
 
@@ -31,7 +30,6 @@ function makeMultiGroup(
         id,
         pieces: new Map(pieceOffsets),
         position,
-        rotation: 0,
     };
 }
 
