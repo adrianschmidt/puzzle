@@ -33,6 +33,7 @@ jobs:
       - run: npm run build
         env:
           VITE_UNSPLASH_ACCESS_KEY: ${{ secrets.VITE_UNSPLASH_ACCESS_KEY }}
+          VITE_APP_VERSION: "#${{ github.run_number }}"
 
       - uses: actions/configure-pages@v5
 

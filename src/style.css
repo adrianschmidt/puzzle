@@ -229,6 +229,17 @@ html, body {
   text-decoration: underline;
 }
 
+/* Version display */
+.app-version {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  z-index: 9999;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
 /* Size picker dialog */
 .size-picker-overlay {
   position: absolute;
