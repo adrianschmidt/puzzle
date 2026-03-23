@@ -200,12 +200,14 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ## Phase 8: Generator Overhaul & UX
 
 ### 8.1 — Refactor generator: generate-once-reverse-for-mate
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-23
 **Depends on:** 7.3
 **Description:** Refactor the procedural generator to generate each shared edge's path ONCE (from one side's perspective), store the path points, and create the mating edge by reversing the points array. This eliminates the entire class of bugs where tab and blank don't match because of direction-dependent parameters (centreOffset, skew). Currently both sides are generated independently with shared params — this is fragile. The reversal approach is mathematically guaranteed to produce a perfect mirror. See `docs/reference-algorithms.md` for details on how Dillo's CodePen does this.
 
 ### 8.2 — Classic shape generator (Dillo-inspired)
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-23
 **Depends on:** 8.1
 **Description:** Replace the current 2-Bézier tab shape with a 6-Bézier classic jigsaw shape inspired by Dillo's CodePen (`twist0` function). Uses 5 key points (neck entry, head left, head top, head right, neck exit) with control points that create the distinct mushroom shape with a narrow neck and wide head. Coordinate system uses edge direction + perpendicular-to-opposite-side as axes. Randomize: horizontal scale (0.8-1.0), vertical scale (0.9-1.0), centre position (0.45-0.55). Credit Dillo in the info modal. Reference: `docs/reference-algorithms.md`.
 
@@ -229,6 +231,33 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Status:** todo
 **Depends on:** 8.2, 8.3
 **Description:** Add UI for selecting between cut styles when starting a new game. Options: "Classic" (default, Dillo-inspired), "Fractal" (circle-packing). Show in the new-game dialog alongside puzzle size selection. Save preference. The selected generator is used by createNewGame().
+
+## Phase 9: Interaction Polish
+
+### 9.1 — Dismiss completion overlay on tap
+**Status:** todo
+**Depends on:** 4.3
+**Description:** When the "Puzzle Complete!" message is shown, tapping/clicking anywhere on the screen should dismiss the overlay so the player can admire the finished image. Currently there's no way to close it.
+
+### 9.2 — Merge tolerance options
+**Status:** todo
+**Depends on:** 8.4
+**Description:** Add merge tolerance settings to the info/settings modal. At least two options: "Normal" (current tolerance) and "Forgiving" (larger tolerance for casual players). Persist the choice. Update `MERGE_TOLERANCE_PX` (or equivalent) based on the setting.
+
+### 9.3 — Prevent piece drag during pinch-to-zoom
+**Status:** todo
+**Depends on:** 3.4
+**Description:** When a pinch-to-zoom gesture begins, any piece drag that started from the first finger of that gesture should be cancelled immediately. Currently, pinching sometimes moves a piece with the first touch point while zooming with both. Detection: as soon as a second pointer goes down while a drag is active, cancel the drag (restore the piece to its pre-drag position) and let the gesture become a pure zoom/pan.
+
+### 9.4 — Bias touch targets toward pieces over background
+**Status:** todo
+**Depends on:** 3.1
+**Description:** When zoomed out, it's easy to miss a piece and grab the background instead (triggering pan). Improve hit detection so that touches near a piece edge are more likely to register as hitting the piece. Possible approach: expand the hit-test area of pieces by a few pixels (in screen space, not puzzle space — so the expansion is larger when zoomed out), but only for the purpose of choosing "piece vs background". When multiple pieces overlap, do NOT expand — use exact hit testing to avoid grabbing the wrong piece. The bias should only apply to the piece-vs-empty-space decision.
+
+### 9.5 — Auto-pan when dragging to viewport edge
+**Status:** todo
+**Depends on:** 3.4
+**Description:** When dragging a piece to the edge of the visible viewport, automatically pan the play area in that direction. This lets the player move pieces across large distances without the tedious cycle of: drag piece to edge → drop → pan → pick up → drag again. Implementation: define an edge zone (e.g. 40-60px from viewport edge), and while the pointer is in that zone during a drag, smoothly scroll the viewport in that direction. Pan speed should be proportional to how deep into the edge zone the pointer is. Stop panning when the pointer leaves the zone or the drag ends.
 
 ---
 
