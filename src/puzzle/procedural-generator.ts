@@ -292,9 +292,14 @@ function generateSharedEdgePath(
     const dyv = dxh * sign;
 
     // Randomization parameters (seeded PRNG for consistency)
-    const scalex = lerp(0.8, 1.0, random());  // horizontal scale of tab
-    const scaley = lerp(0.9, 1.0, random());  // vertical scale (height)
-    const mid = lerp(0.45, 0.55, random());   // centre position along edge
+    // Fix #3: Widen size variation ranges
+    const scalex = lerp(0.65, 1.0, random()); // horizontal scale of tab (was 0.8-1.0)
+    const scaley = lerp(0.7, 1.1, random()); // vertical scale/height (was 0.9-1.0)
+    const mid = lerp(0.38, 0.62, random()); // centre position along edge (was 0.45-0.55)
+
+    // Fix #1: Add neck thickness variation
+    // neckRatio = ratio of neck width to head width (0.25 = thin classic look, 0.80 = thick)
+    const neckRatio = lerp(0.25, 0.80, random());
 
     // Helper to compute point at (coeffh, coeffv) in edge-relative coordinates
     const pointAt = (coeffh: number, coeffv: number): Point => ({
@@ -304,7 +309,7 @@ function generateSharedEdgePath(
 
     // Key points defining the classic mushroom tab shape
     // Adjusted by scalex (horizontal), scaley (vertical), and mid (centre position)
-    const halfWidth = 0.17 * scalex;  // half-width of the tab section
+    const halfWidth = 0.17 * scalex; // half-width of the tab section (head width)
 
     // 5 key points along the tab:
     // pa = neck entry (where edge curves into neck)
@@ -313,21 +318,31 @@ function generateSharedEdgePath(
     // pd = head right (right side of mushroom head)
     // pe = neck exit (where neck returns to edge)
 
-    const pa = pointAt(mid - halfWidth, 0.08 * scaley);
+    // Neck entry/exit perpendicular coefficient varies with neckRatio
+    // neckRatio affects the horizontal position of neck points relative to head width
+    const neckHalfWidth = halfWidth * neckRatio;
+
+    const pa = pointAt(mid - neckHalfWidth, 0.08 * scaley);
     const pb = pointAt(mid - halfWidth * 0.9, 0.25 * scaley);
     const pc = pointAt(mid, 0.33 * scaley);
     const pd = pointAt(mid + halfWidth * 0.9, 0.25 * scaley);
-    const pe = pointAt(mid + halfWidth, 0.08 * scaley);
+    const pe = pointAt(mid + neckHalfWidth, 0.08 * scaley);
 
     // Build 6 cubic Bézier segments with appropriate control points
     // The control points create the smooth curves of the classic jigsaw shape
 
-    // Segment 1: p0 → pa (edge curves slightly into neck entry)
-    const cp1_1 = pointAt(mid - halfWidth * 1.5, 0);
-    const cp1_2 = pointAt(mid - halfWidth * 1.2, 0.02 * scaley);
+    // Fix #2: First and last segments should have control points ON the edge line
+    // (zero perpendicular component) to prevent bulging that depends on tab direction.
+    // The control points now only vary along the edge axis, not perpendicular to it.
+
+    // Segment 1: p0 → pa (straight portion leading to neck entry)
+    // Control points lie on edge line (coeffv = 0) to avoid direction-dependent bulge
+    const cp1_1 = pointAt(mid - neckHalfWidth * 2.5, 0);
+    const cp1_2 = pointAt(mid - neckHalfWidth * 1.5, 0);
 
     // Segment 2: pa → pb (neck curves outward to head left)
-    const cp2_1 = pointAt(mid - halfWidth * 0.85, 0.12 * scaley);
+    // Adjust control points to smoothly transition from the narrower neck
+    const cp2_1 = pointAt(mid - neckHalfWidth * 0.7, 0.12 * scaley);
     const cp2_2 = pointAt(mid - halfWidth * 1.1, 0.20 * scaley);
 
     // Segment 3: pb → pc (head left curves across to head top)
@@ -339,29 +354,43 @@ function generateSharedEdgePath(
     const cp4_2 = pointAt(mid + halfWidth * 0.6, 0.32 * scaley);
 
     // Segment 5: pd → pe (head right curves back to neck exit)
+    // Adjust control points to smoothly transition to the narrower neck
     const cp5_1 = pointAt(mid + halfWidth * 1.1, 0.20 * scaley);
-    const cp5_2 = pointAt(mid + halfWidth * 0.85, 0.12 * scaley);
+    const cp5_2 = pointAt(mid + neckHalfWidth * 0.7, 0.12 * scaley);
 
-    // Segment 6: pe → p1 (neck curves back to edge line)
-    const cp6_1 = pointAt(mid + halfWidth * 1.2, 0.02 * scaley);
-    const cp6_2 = pointAt(mid + halfWidth * 1.5, 0);
+    // Segment 6: pe → p1 (straight portion from neck exit to edge end)
+    // Control points lie on edge line (coeffv = 0) to avoid direction-dependent bulge
+    const cp6_1 = pointAt(mid + neckHalfWidth * 1.5, 0);
+    const cp6_2 = pointAt(mid + neckHalfWidth * 2.5, 0);
 
     // Build the Bézier path as an array of points
     // Format: [start, cp1, cp2, end, cp1, cp2, end, ...]
     return [
         start,
         // Segment 1: start → pa
-        cp1_1, cp1_2, pa,
+        cp1_1,
+        cp1_2,
+        pa,
         // Segment 2: pa → pb
-        cp2_1, cp2_2, pb,
+        cp2_1,
+        cp2_2,
+        pb,
         // Segment 3: pb → pc
-        cp3_1, cp3_2, pc,
+        cp3_1,
+        cp3_2,
+        pc,
         // Segment 4: pc → pd
-        cp4_1, cp4_2, pd,
+        cp4_1,
+        cp4_2,
+        pd,
         // Segment 5: pd → pe
-        cp5_1, cp5_2, pe,
+        cp5_1,
+        cp5_2,
+        pe,
         // Segment 6: pe → end
-        cp6_1, cp6_2, end,
+        cp6_1,
+        cp6_2,
+        end,
     ];
 }
 
