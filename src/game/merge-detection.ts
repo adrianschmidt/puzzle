@@ -18,6 +18,13 @@ import { getBorderEdges } from '../model/helpers.js';
 export const MERGE_TOLERANCE_PX = 18;
 
 /**
+ * Tolerance in degrees for rotation alignment.
+ * Both groups must have the same rotation (within this tolerance)
+ * for their edges to be considered aligned.
+ */
+export const ROTATION_TOLERANCE_DEG = 5;
+
+/**
  * A detected merge candidate: two groups whose edges are close enough.
  */
 export interface MergeCandidate {
@@ -41,9 +48,26 @@ export interface MergeCandidate {
 }
 
 /**
- * Compute the world position of a point on a piece.
+ * Rotate a point around the origin by a given angle in degrees.
+ */
+function rotatePoint(point: Point, angleDeg: number): Point {
+    if (angleDeg === 0) return point;
+
+    const rad = (angleDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    return {
+        x: point.x * cos - point.y * sin,
+        y: point.x * sin + point.y * cos,
+    };
+}
+
+/**
+ * Compute the world position of a point on a piece, accounting for group rotation.
  *
- * World position = group.position + piece's offset in group + point in piece-local coords.
+ * The local coordinates (piece offset + point) are rotated around the group's
+ * anchor (origin) by the group's rotation angle, then translated by the group position.
  */
 export function getWorldPosition(
     point: Point,
@@ -55,10 +79,38 @@ export function getWorldPosition(
         throw new Error(`Piece ${pieceId} not found in group ${group.id}`);
     }
 
-    return {
-        x: group.position.x + offset.x + point.x,
-        y: group.position.y + offset.y + point.y,
+    // Local position relative to group anchor
+    const local: Point = {
+        x: offset.x + point.x,
+        y: offset.y + point.y,
     };
+
+    // Apply group rotation around the anchor
+    const rotated = rotatePoint(local, group.rotation);
+
+    return {
+        x: group.position.x + rotated.x,
+        y: group.position.y + rotated.y,
+    };
+}
+
+/**
+ * Normalize an angle to the range [0, 360).
+ */
+export function normalizeAngle(angle: number): number {
+    return ((angle % 360) + 360) % 360;
+}
+
+/**
+ * Check if two rotation angles are within tolerance of each other.
+ */
+export function rotationsMatch(
+    rotA: number,
+    rotB: number,
+    tolerance: number = ROTATION_TOLERANCE_DEG,
+): boolean {
+    const diff = normalizeAngle(rotA - rotB);
+    return diff <= tolerance || diff >= 360 - tolerance;
 }
 
 /**
@@ -75,6 +127,7 @@ function distance(a: Point, b: Point): number {
  * Check alignment between two matching edges.
  *
  * For a pair of mate edges, "correct alignment" means:
+ * - Both groups have the same rotation (within ROTATION_TOLERANCE_DEG)
  * - Edge A's start aligns with Edge B's end (edges run in opposite directions)
  * - Edge A's end aligns with Edge B's start
  *
@@ -90,6 +143,10 @@ export function checkEdgeAlignment(
     targetGroup: PieceGroup,
     tolerance: number = MERGE_TOLERANCE_PX,
 ): { aligned: boolean; snapDelta: Point } {
+    // Rotation must match for edges to align
+    if (!rotationsMatch(movedGroup.rotation, targetGroup.rotation)) {
+        return { aligned: false, snapDelta: { x: 0, y: 0 } };
+    }
     // World positions of the moved edge endpoints
     const movedStart = getWorldPosition(movedEdge.start, movedPiece.id, movedGroup);
     const movedEnd = getWorldPosition(movedEdge.end, movedPiece.id, movedGroup);

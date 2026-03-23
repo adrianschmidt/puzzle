@@ -26,11 +26,15 @@ export interface MergeResult {
 }
 
 /**
- * Merge two groups into one.
+ * Merge two groups into one, snapping rotation to 0°.
  *
  * The target group is the "anchor" — its position stays fixed.
  * The moved group's pieces are absorbed into the target group,
  * with their offsets recalculated relative to the target group's position.
+ *
+ * When groups merge, the resulting group snaps to 0° rotation.
+ * All piece offsets are recalculated to account for the rotation
+ * being "baked in" to positions.
  *
  * @param movedGroup - The group that was just dropped (will be absorbed)
  * @param targetGroup - The group to merge into (stays in place)
@@ -45,20 +49,46 @@ export function mergeGroups(
     // First, snap the moved group into perfect alignment
     moveGroup(movedGroup, snapDelta);
 
+    const rotation = targetGroup.rotation;
+    const rad = (rotation * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    // If the target group is rotated, we need to "un-rotate" all piece offsets
+    // before merging, because the merged group will be at rotation 0.
+    // World position of a piece = group.position + rotate(offset, rotation)
+    // After un-rotation: new_offset = rotate(offset, rotation)
+    // new group.position stays the same (it's the anchor point)
+    if (rotation !== 0) {
+        // Un-rotate target group's piece offsets
+        for (const [pieceId, offset] of targetGroup.pieces) {
+            targetGroup.pieces.set(pieceId, {
+                x: offset.x * cos - offset.y * sin,
+                y: offset.x * sin + offset.y * cos,
+            });
+        }
+    }
+
     // Calculate the position difference between the two groups.
-    // Each piece's world position = group.position + piece offset.
-    // When we move pieces from movedGroup to targetGroup, we need to
-    // adjust their offsets to preserve their world positions.
+    // Since both groups have the same rotation, we need to un-rotate
+    // the moved group's offsets too.
     const dx = movedGroup.position.x - targetGroup.position.x;
     const dy = movedGroup.position.y - targetGroup.position.y;
 
     // Transfer all pieces from moved group to target group
     for (const [pieceId, offset] of movedGroup.pieces) {
+        // Un-rotate the moved group's piece offsets (same rotation as target)
+        const unrotatedX = offset.x * cos - offset.y * sin;
+        const unrotatedY = offset.x * sin + offset.y * cos;
+
         targetGroup.pieces.set(pieceId, {
-            x: offset.x + dx,
-            y: offset.y + dy,
+            x: unrotatedX + dx,
+            y: unrotatedY + dy,
         });
     }
+
+    // Snap rotation to 0°
+    targetGroup.rotation = 0;
 
     return targetGroup;
 }

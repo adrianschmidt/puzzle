@@ -18,7 +18,7 @@ import { getImageDimensions } from '../renderer/svg-dom-utils.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 /**
  * Supported schema versions.
@@ -27,14 +27,16 @@ export const STATE_VERSION = 4;
  * - v2: adds imageSize and optional attribution
  * - v3: adds gridSize (cols × rows)
  * - v4: adds seed for procedural cut generation
+ * - v5: adds rotation field to PieceGroup
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
     id: number;
     pieces: Array<[number, Point]>;
     position: Point;
+    rotation?: number;
 }
 
 /** JSON-safe representation of a full game state, with a version tag. */
@@ -146,6 +148,7 @@ function serializeGroup(group: PieceGroup): SerializedPieceGroup {
         id: group.id,
         pieces: Array.from(group.pieces.entries()),
         position: group.position,
+        rotation: group.rotation,
     };
 }
 
@@ -154,6 +157,7 @@ function deserializeGroup(group: SerializedPieceGroup): PieceGroup {
         id: group.id,
         pieces: new Map(group.pieces),
         position: group.position,
+        rotation: group.rotation ?? 0,
     };
 }
 

@@ -36,6 +36,7 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
         id,
         pieces: new Map([[pieceId, { x: 0, y: 0 }]]),
         position,
+        rotation: 0,
     };
 }
 
@@ -86,6 +87,7 @@ describe('getWorldPosition', () => {
             id: 1,
             pieces: new Map([[5, { x: 10, y: 20 }]]),
             position: { x: 100, y: 200 },
+            rotation: 0,
         };
 
         const result = getWorldPosition({ x: 30, y: 40 }, 5, group);
@@ -276,6 +278,7 @@ describe('detectMerges', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 0, y: 0 },
+            rotation: 0,
         };
 
         const state = makeGameState([piece0, piece1], [group]);
