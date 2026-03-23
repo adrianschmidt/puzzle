@@ -53,6 +53,7 @@ if (appVersion) {
 /**
  * Show a "Puzzle Complete!" overlay on top of the puzzle.
  * A simple centered message that fades in.
+ * The overlay can be dismissed by clicking/tapping anywhere on it.
  */
 function showCompletionOverlay(): void {
     // Guard against multiple overlays
@@ -69,8 +70,12 @@ function showCompletionOverlay(): void {
         <div class="completion-message">
             <h1>🧩 Puzzle Complete!</h1>
             <p>Well done!</p>
+            <p class="completion-dismiss-hint">Tap anywhere to dismiss</p>
         </div>
     `;
+
+    // Add click handler to dismiss the overlay
+    overlay.addEventListener('click', removeCompletionOverlay, { once: true });
 
     app.appendChild(overlay);
 }
