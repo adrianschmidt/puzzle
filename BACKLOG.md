@@ -212,7 +212,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Replace the current 2-Bézier tab shape with a 6-Bézier classic jigsaw shape inspired by Dillo's CodePen (`twist0` function). Uses 5 key points (neck entry, head left, head top, head right, neck exit) with control points that create the distinct mushroom shape with a narrow neck and wide head. Coordinate system uses edge direction + perpendicular-to-opposite-side as axes. Randomize: horizontal scale (0.8-1.0), vertical scale (0.9-1.0), centre position (0.45-0.55). Credit Dillo in the info modal. Reference: `docs/reference-algorithms.md`.
 
 ### 8.3 — Fractal cut generator (alternative style)
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-24
 **Depends on:** 8.1
 **Description:** Add the fractal/circle-packing generator as an alternative cut style, inspired by the Fractal Jigsaw Generator (proceduraljigsaw/Fractalpuzzlejs). Uses a circle-packing grid where pieces are organic shapes formed by merging adjacent circles — no traditional tabs/blanks. Very different aesthetic from classic cuts. Should be selectable as a cut style option. Must still produce Piece[] conforming to our generic data model. Credit the Fractal Jigsaw project in the info modal. Reference: `docs/reference-algorithms.md`.
 
