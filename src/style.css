@@ -422,6 +422,161 @@ html, body {
   border-color: rgba(100, 160, 255, 1);
 }
 
+/* Info button */
+.info-button {
+  position: absolute;
+  top: 175px;
+  right: 12px;
+  z-index: 9999;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 36px;
+  text-align: center;
+  color: #e0e0e0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.info-button:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.info-button:active {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Info modal */
+.info-modal-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10001;
+  animation: fade-in 0.2s ease-out;
+}
+
+.info-modal {
+  background: rgba(30, 30, 50, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  max-width: 480px;
+  width: 90%;
+  max-height: 80vh;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: pop-in 0.25s ease-out;
+  overflow: hidden;
+}
+
+.info-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0;
+}
+
+.info-modal-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.info-modal-close:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.info-modal-close:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.info-modal-content {
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+  max-height: calc(80vh - 80px);
+}
+
+.info-section {
+  margin-bottom: 20px;
+}
+
+.info-section:last-child {
+  margin-bottom: 0;
+}
+
+.info-section h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0 0 8px 0;
+}
+
+.info-section p {
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+  margin: 0 0 8px 0;
+}
+
+.info-section ul {
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.info-section ul ul {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+.info-section li {
+  margin-bottom: 4px;
+}
+
+.info-section li:last-child {
+  margin-bottom: 0;
+}
+
+.info-section a {
+  color: rgba(100, 160, 255, 0.9);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.info-section a:hover {
+  color: rgba(100, 160, 255, 1);
+  text-decoration: underline;
+}
+
 /* Responsive: ensure buttons don't overlap on small screens */
 @media (max-height: 400px) {
   .new-game-button,
@@ -437,4 +592,13 @@ html, body {
 
   .bg-colour-button { top: 96px; right: 8px; }
   .bg-colour-panel { top: 96px; right: 46px; }
+
+  .info-button { 
+    top: 120px; 
+    right: 8px;
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+    line-height: 32px;
+  }
 }

@@ -30,3 +30,9 @@ export type { BackgroundColourPreset } from './background-colour.js';
 
 export { createBackgroundColourPicker } from './background-colour-picker.js';
 export type { BackgroundColourPickerOptions } from './background-colour-picker.js';
+
+export { createInfoButton } from './info-button.js';
+export type { InfoButtonOptions } from './info-button.js';
+
+export { createInfoModal } from './info-modal.js';
+export type { InfoModalOptions } from './info-modal.js';
