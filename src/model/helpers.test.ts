@@ -36,7 +36,7 @@ function piece(id: number, edges: Edge[]): Piece {
 /** Create a group with given piece IDs. */
 function group(id: number, pieceIds: number[]): PieceGroup {
     const pieces = new Map(pieceIds.map((pid) => [pid, { x: 0, y: 0 }]));
-    return { id, pieces, position: { x: 0, y: 0 }, rotation: 0 };
+    return { id, pieces, position: { x: 0, y: 0 } };
 }
 
 describe('getMateEdge', () => {

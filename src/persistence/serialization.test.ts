@@ -43,13 +43,11 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 50, y: 50 },
-            rotation: 0,
         },
         {
             id: 2,
             pieces: new Map([[2, { x: 0, y: 0 }]]),
             position: { x: 300, y: 200 },
-            rotation: 0,
         },
     ];
 
@@ -314,7 +312,6 @@ describe('deserializeState', () => {
                     id: 0,
                     pieces: [[0, { x: 0, y: 0 }]],
                     position: { x: NaN, y: 0 },
-                    rotation: 0,
                 },
             ],
             imageUrl: 'test.jpg',

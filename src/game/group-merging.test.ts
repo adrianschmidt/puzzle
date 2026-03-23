@@ -28,7 +28,6 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
         id,
         pieces: new Map([[pieceId, { x: 0, y: 0 }]]),
         position,
-        rotation: 0,
     };
 }
 
@@ -131,13 +130,11 @@ describe('mergeGroups', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 100, y: 0 },
-            rotation: 0,
         };
         const targetGroup: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 200, y: 0 },
-            rotation: 0,
         };
 
         const result = mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
@@ -154,14 +151,12 @@ describe('mergeGroups', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 100, y: 50 },
-            rotation: 0,
         };
         // Target group at (300, 50) with piece at offset (0,0)
         const targetGroup: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 300, y: 50 },
-            rotation: 0,
         };
 
         mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
@@ -179,13 +174,11 @@ describe('mergeGroups', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 105, y: 0 },
-            rotation: 0,
         };
         const targetGroup: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 200, y: 0 },
-            rotation: 0,
         };
 
         // Snap delta: move moved group -5px in x to align
@@ -207,13 +200,11 @@ describe('mergeGroups', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 50, y: 50 },
-            rotation: 0,
         };
         const targetGroup: PieceGroup = {
             id: 2,
             pieces: new Map([[2, { x: 0, y: 0 }]]),
             position: { x: 250, y: 50 },
-            rotation: 0,
         };
 
         mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
@@ -247,13 +238,11 @@ describe('mergeGroups', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 108, y: -5 },
-            rotation: 0,
         };
         const targetGroup: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 200, y: 0 },
-            rotation: 0,
         };
 
         // Snap delta corrects to (100, 0) → dx=-8, dy=5
@@ -449,7 +438,6 @@ describe('processDrop', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 0, y: 0 },
-            rotation: 0,
         };
         const state = makeGameState([piece0, piece1], [group]);
 
@@ -469,7 +457,6 @@ describe('processDrop', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 0, y: 0 },
-            rotation: 0,
         };
         const groupB = makeGroup(2, 2, { x: 200, y: 0 });
 

@@ -1,7 +1,7 @@
 import './style.css';
 import type { GameState, GridSize } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
-import { setupDragHandling, setupRotationHandling, ViewportTransform, ViewportController } from './interaction/index.js';
+import { setupDragHandling, ViewportTransform, ViewportController } from './interaction/index.js';
 import {
     createNewGame,
     processDrop,
@@ -96,7 +96,6 @@ function removeCompletionOverlay(): void {
 
 let gameState: GameState;
 let cleanupDrag: (() => void) | null = null;
-let cleanupRotation: (() => void) | null = null;
 
 const renderer = new SvgDomRenderer();
 renderer.init(app);
@@ -129,25 +128,6 @@ function isPieceElement(target: EventTarget | null): boolean {
     const svg = target.closest('svg[data-piece-id]');
 
     return svg !== null;
-}
-
-/**
- * Extract the piece ID from a DOM target element.
- * Returns null if the target is not a piece element.
- */
-function findPieceIdFromTarget(target: EventTarget | null): number | null {
-    if (!target || !(target instanceof Element)) {
-        return null;
-    }
-
-    // Hit-area path is inside an SVG with data-piece-id
-    const svg = target.closest('svg[data-piece-id]');
-    if (svg) {
-        const id = Number((svg as HTMLElement).dataset.pieceId);
-        return Number.isFinite(id) ? id : null;
-    }
-
-    return null;
 }
 
 // Set up viewport controller (zoom & pan).
@@ -192,11 +172,6 @@ function initGame(state: GameState): void {
         cleanupDrag = null;
     }
 
-    if (cleanupRotation) {
-        cleanupRotation();
-        cleanupRotation = null;
-    }
-
     gameState = state;
     renderer.renderState(gameState);
     updateAttribution();
@@ -227,38 +202,6 @@ function initGame(state: GameState): void {
             }
         },
         screenDeltaToWorld: (delta) => viewportTransform.screenDeltaToWorld(delta),
-    });
-
-    cleanupRotation = setupRotationHandling({
-        container: app,
-        getGroups: () => gameState.groups,
-        callbacks: {
-            setRotation(groupId: number, angle: number) {
-                const group = gameState.groups.find(g => g.id === groupId);
-                if (group) {
-                    group.rotation = angle;
-                }
-            },
-            requestRender() {
-                renderer.renderState(gameState);
-                autoSave();
-            },
-            onDrop(groupId: number) {
-                const result = processDrop(groupId, gameState);
-                if (result) {
-                    renderer.renderState(gameState);
-                    renderer.flashMergePulse(result.group.id);
-                    autoSave();
-
-                    if (checkAndMarkWin(gameState)) {
-                        showCompletionOverlay();
-                        autoSave();
-                    }
-                }
-            },
-        },
-        isPieceElement,
-        findPieceId: findPieceIdFromTarget,
     });
 }
 

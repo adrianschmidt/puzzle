@@ -70,8 +70,6 @@ export interface PieceGroup {
     pieces: Map<number, Point>;
     /** The group's position in world (table) coordinates. */
     position: Point;
-    /** Rotation angle in degrees (0–359). Defaults to 0 (upright). */
-    rotation: number;
 }
 
 /**
