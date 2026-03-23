@@ -181,9 +181,10 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 - **Remove or reduce wobble/pinch** — the skeuomorphic "imperfect die cut" effects from 7.4 should be toned down or removed; focus on geometric variety instead
 
 ### 5.4.1 — Fix: Gather pieces should scatter, not solve
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-22
 **Depends on:** 5.4
-**Description:** The "Gather Pieces" button currently places all groups near their solved positions, essentially solving the puzzle for the player. Instead, it should scatter groups into a random grid layout within an area roughly 2-3× the dimensions of the finished puzzle (not viewport-relative — consistent regardless of screen size). Apply generous jitter to each group's position so it doesn't look like a perfect grid. Positions should have no relation to solved positions. Think "dump all the pieces onto a table a few times bigger than the puzzle" — everything's visible and reachable, but nothing's where it belongs.
+**Description:** Scatter groups into a randomised grid within 2.5× the puzzle dimensions. Groups are shuffled and jittered — no correlation with solved positions.
 
 ### 7.5 — Background colour selection
 **Status:** done
@@ -196,6 +197,39 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 4.2
 **Description:** Pieces start at random rotations. Two-finger rotate gesture on touch, or modifier+drag on desktop. Merge detection must account for rotation — edges only align when both pieces are at the correct relative rotation (within tolerance). Add rotation field to PieceGroup. Snap rotation to 0° on merge. This significantly increases puzzle difficulty and realism.
 
+## Phase 8: Generator Overhaul & UX
+
+### 8.1 — Refactor generator: generate-once-reverse-for-mate
+**Status:** todo
+**Depends on:** 7.3
+**Description:** Refactor the procedural generator to generate each shared edge's path ONCE (from one side's perspective), store the path points, and create the mating edge by reversing the points array. This eliminates the entire class of bugs where tab and blank don't match because of direction-dependent parameters (centreOffset, skew). Currently both sides are generated independently with shared params — this is fragile. The reversal approach is mathematically guaranteed to produce a perfect mirror. See `docs/reference-algorithms.md` for details on how Dillo's CodePen does this.
+
+### 8.2 — Classic shape generator (Dillo-inspired)
+**Status:** todo
+**Depends on:** 8.1
+**Description:** Replace the current 2-Bézier tab shape with a 6-Bézier classic jigsaw shape inspired by Dillo's CodePen (`twist0` function). Uses 5 key points (neck entry, head left, head top, head right, neck exit) with control points that create the distinct mushroom shape with a narrow neck and wide head. Coordinate system uses edge direction + perpendicular-to-opposite-side as axes. Randomize: horizontal scale (0.8-1.0), vertical scale (0.9-1.0), centre position (0.45-0.55). Credit Dillo in the info modal. Reference: `docs/reference-algorithms.md`.
+
+### 8.3 — Fractal cut generator (alternative style)
+**Status:** todo
+**Depends on:** 8.1
+**Description:** Add the fractal/circle-packing generator as an alternative cut style, inspired by the Fractal Jigsaw Generator (proceduraljigsaw/Fractalpuzzlejs). Uses a circle-packing grid where pieces are organic shapes formed by merging adjacent circles — no traditional tabs/blanks. Very different aesthetic from classic cuts. Should be selectable as a cut style option. Must still produce Piece[] conforming to our generic data model. Credit the Fractal Jigsaw project in the info modal. Reference: `docs/reference-algorithms.md`.
+
+### 8.4 — Info/help modal with credits
+**Status:** todo
+**Depends on:** 5.2
+**Description:** Add an info/help button (ℹ️ or similar) that opens a modal overlay with:
+- **Credits:** algorithm inspirations (Dillo's CodePen, Fractal Jigsaw Generator), with links
+- **Project link:** link to our GitHub repo (adrianschmidt/puzzle)
+- **License info:** MIT
+- **How to play:** brief help text explaining features — drag pieces, pinch to zoom, pan on empty space, piece merging, buttons (New Game, Gather Pieces, Centre View, Background Colour)
+- Keep the Unsplash photo credit in its current position (tied to the current image)
+- Style: glassmorphism modal matching the existing button aesthetic, dismissable by clicking outside or a close button
+
+### 8.5 — Cut style selection UI
+**Status:** todo
+**Depends on:** 8.2, 8.3
+**Description:** Add UI for selecting between cut styles when starting a new game. Options: "Classic" (default, Dillo-inspired), "Fractal" (circle-packing). Show in the new-game dialog alongside puzzle size selection. Save preference. The selected generator is used by createNewGame().
+
 ---
 
-*Last updated: 2026-03-22 (7.5 done)*
+*Last updated: 2026-03-23*
