@@ -40,6 +40,16 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 // otherwise trigger the context menu, interfering with drag.
 app.addEventListener('contextmenu', (e) => e.preventDefault());
 
+// Display app version in bottom-right corner.
+// Injected at build time by the deploy workflow via VITE_APP_VERSION.
+const appVersion = import.meta.env.VITE_APP_VERSION as string | undefined;
+if (appVersion) {
+    const versionEl = document.createElement('div');
+    versionEl.className = 'app-version';
+    versionEl.textContent = appVersion;
+    app.appendChild(versionEl);
+}
+
 /**
  * Show a "Puzzle Complete!" overlay on top of the puzzle.
  * A simple centered message that fades in.
