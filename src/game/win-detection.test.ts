@@ -19,7 +19,7 @@ function makeGroup(id: number, pieceIds: number[]): PieceGroup {
         pieces.set(pid, { x: 0, y: 0 });
     }
 
-    return { id, pieces, position: { x: 0, y: 0 } };
+    return { id, pieces, position: { x: 0, y: 0 }, rotation: 0 };
 }
 
 /** Create a game state with the given pieces and groups. */

@@ -93,10 +93,15 @@ export function createInitialGroups(
         random,
     );
 
+    // Random initial rotations in 90° increments (0, 90, 180, 270)
+    // Using 90° increments ensures pieces can always be rotated to align
+    const rotationSteps = [0, 90, 180, 270];
+
     return pieces.map((piece, index) => ({
         id: piece.id,
         pieces: new Map([[piece.id, { x: 0, y: 0 }]]),
         position: positions[index],
+        rotation: rotationSteps[Math.floor(random() * rotationSteps.length)],
     }));
 }
 
