@@ -799,4 +799,145 @@ describe('DragController', () => {
             expect(controller.getActiveDrag()!.groupId).toBe(2);
         });
     });
+
+    describe('pinch-to-zoom cancellation', () => {
+        it('should cancel drag when a second pointer goes down', () => {
+            const group = groups[0]; // Group 1 at position (0, 0)
+            
+            // Start dragging piece 10 (in group 1)
+            controller.handleAnyPointerDown(
+                fakePointerEvent({
+                    clientX: 100,
+                    clientY: 100,
+                    pointerId: 1,
+                }),
+            );
+            controller.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 100,
+                    clientY: 100,
+                    pointerId: 1,
+                }),
+            );
+
+            // Verify drag is active
+            expect(controller.getActiveDrag()!.groupId).toBe(1);
+            expect(callbacks.bringToFront).toHaveBeenCalledWith(1);
+
+            // Move the piece to simulate some dragging
+            controller.handlePointerMove(
+                fakePointerEvent({
+                    clientX: 150,
+                    clientY: 120,
+                    pointerId: 1,
+                }),
+            );
+
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, { x: 50, y: 20 });
+            
+            // Simulate the piece being moved by the callback
+            group.position = { x: 50, y: 20 };
+
+            // Clear call history to verify restoration
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            // Second pointer goes down (pinch gesture starts)
+            controller.handleAnyPointerDown(
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 2,
+                }),
+            );
+
+            // Drag should be cancelled and piece restored to original position
+            expect(controller.getActiveDrag()).toBeNull();
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, { x: -50, y: -20 }); // Restore to (0, 0)
+        });
+
+        it('should cancel drag on pointermove when second pointer is detected', () => {
+            const group = groups[0]; // Group 1 at position (0, 0)
+            
+            // Start drag
+            controller.handleAnyPointerDown(
+                fakePointerEvent({
+                    clientX: 100,
+                    clientY: 100,
+                    pointerId: 1,
+                }),
+            );
+            controller.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 100,
+                    clientY: 100,
+                    pointerId: 1,
+                }),
+            );
+
+            // Move to simulate dragging
+            controller.handlePointerMove(
+                fakePointerEvent({
+                    clientX: 120,
+                    clientY: 110,
+                    pointerId: 1,
+                }),
+            );
+
+            // Simulate the piece being moved
+            group.position = { x: 20, y: 10 };
+
+            // Clear call history
+            vi.mocked(callbacks.moveGroup).mockClear();
+
+            // Second pointer move (without explicit pointerdown)
+            controller.handlePointerMove(
+                fakePointerEvent({
+                    clientX: 200,
+                    clientY: 150,
+                    pointerId: 2,
+                }),
+            );
+
+            // Should cancel drag and restore position
+            expect(controller.getActiveDrag()).toBeNull();
+            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, { x: -20, y: -10 }); // Restore to (0, 0)
+        });
+
+        it('should clean up pointer tracking on pointerup', () => {
+            controller.handleAnyPointerDown(
+                fakePointerEvent({ pointerId: 1 }),
+            );
+            controller.handleAnyPointerDown(
+                fakePointerEvent({ pointerId: 2 }),
+            );
+
+            controller.handleAnyPointerUp(
+                fakePointerEvent({ pointerId: 1 }),
+            );
+            controller.handleAnyPointerUp(
+                fakePointerEvent({ pointerId: 2 }),
+            );
+
+            // Start new drag after cleanup should work normally
+            controller.handleAnyPointerDown(
+                fakePointerEvent({
+                    clientX: 100,
+                    clientY: 100,
+                    pointerId: 3,
+                }),
+            );
+            controller.handlePointerDown(
+                10,
+                fakePointerEvent({
+                    clientX: 100,
+                    clientY: 100,
+                    pointerId: 3,
+                }),
+            );
+
+            expect(controller.getActiveDrag()!.groupId).toBe(1);
+        });
+    });
 });

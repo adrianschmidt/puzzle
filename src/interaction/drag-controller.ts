@@ -27,6 +27,8 @@ export interface DragState {
     lastPointer: Point;
     /** The pointerId for this drag (for pointer capture). */
     pointerId: number;
+    /** The group's position at drag start (for cancellation). */
+    startPosition: Point;
 }
 
 /** Callbacks the drag controller invokes to update the game. */
@@ -61,6 +63,8 @@ export class DragController {
     private callbacks: DragCallbacks;
     private getViewportSize: () => { width: number; height: number };
     private screenDeltaToWorld: ScreenDeltaToWorld;
+    /** Track all active pointers to detect multi-touch during drag */
+    private activePointers: Set<number> = new Set();
 
     constructor(
         groups: () => PieceGroup[],
@@ -99,6 +103,7 @@ export class DragController {
                 y: Math.max(POINTER_MARGIN_PX, Math.min(vp.height - POINTER_MARGIN_PX, event.clientY)),
             },
             pointerId: event.pointerId,
+            startPosition: { x: group.position.x, y: group.position.y },
         };
 
         this.callbacks.bringToFront(group.id);
@@ -111,6 +116,15 @@ export class DragController {
      * Computes delta from last pointer position and moves the group.
      */
     handlePointerMove(event: PointerEvent): void {
+        // Track all pointers, even if we're not dragging with them
+        this.activePointers.add(event.pointerId);
+
+        // Cancel drag if we detect a second pointer (pinch-to-zoom gesture)
+        if (this.drag && this.activePointers.size > 1) {
+            this.cancelDrag();
+            return;
+        }
+
         if (!this.drag) return;
         if (event.pointerId !== this.drag.pointerId) return;
 
@@ -140,6 +154,9 @@ export class DragController {
      * Ends the drag and triggers the drop callback (for merge detection).
      */
     handlePointerUp(event: PointerEvent): void {
+        // Remove this pointer from tracking
+        this.activePointers.delete(event.pointerId);
+
         if (!this.drag) return;
         if (event.pointerId !== this.drag.pointerId) return;
 
@@ -147,5 +164,49 @@ export class DragController {
         this.drag = null;
 
         this.callbacks.onDrop(groupId);
+    }
+
+    /**
+     * Handle any pointer-down event to track active pointers.
+     * Should be called for all pointerdown events, not just piece hits.
+     */
+    handleAnyPointerDown(event: PointerEvent): void {
+        this.activePointers.add(event.pointerId);
+
+        // If we're currently dragging and this is a second pointer, cancel the drag
+        if (this.drag && this.activePointers.size > 1 && event.pointerId !== this.drag.pointerId) {
+            this.cancelDrag();
+        }
+    }
+
+    /**
+     * Handle any pointer-up event to track active pointers.
+     * Should be called for all pointerup events.
+     */
+    handleAnyPointerUp(event: PointerEvent): void {
+        this.activePointers.delete(event.pointerId);
+    }
+
+    /**
+     * Cancel the current drag and restore the piece to its starting position.
+     * Used when a second pointer is detected during drag (pinch-to-zoom).
+     */
+    private cancelDrag(): void {
+        if (!this.drag) return;
+
+        // Restore group to its starting position
+        const group = this.groups().find(g => g.id === this.drag!.groupId);
+        if (group) {
+            // Calculate the delta needed to restore original position
+            const restoreDelta = {
+                x: this.drag.startPosition.x - group.position.x,
+                y: this.drag.startPosition.y - group.position.y,
+            };
+            this.callbacks.moveGroup(this.drag.groupId, restoreDelta);
+            this.callbacks.requestRender();
+        }
+
+        // Clear drag state
+        this.drag = null;
     }
 }
