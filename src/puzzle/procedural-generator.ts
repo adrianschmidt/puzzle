@@ -110,6 +110,7 @@ export function generateProceduralPuzzle(
         pieceHeight,
         horizontalParams,
         verticalParams,
+        random,
     );
 
     let nextEdgeId = 0;
@@ -205,6 +206,7 @@ function generateAllSharedEdgePaths(
     pieceHeight: number,
     horizontalParams: TabParams[][],
     verticalParams: TabParams[][],
+    random: () => number,
 ): SharedEdgePaths {
     // Horizontal edges (between row and row+1)
     // The "first side" is the bottom edge of the upper piece
@@ -223,6 +225,7 @@ function generateAllSharedEdgePaths(
                 end,
                 params.isTab, // first side uses isTab directly
                 params,
+                random,
             );
         }
     }
@@ -243,6 +246,7 @@ function generateAllSharedEdgePaths(
                 end,
                 params.isTab, // first side uses isTab directly
                 params,
+                random,
             );
         }
     }
@@ -251,7 +255,15 @@ function generateAllSharedEdgePaths(
 }
 
 /**
- * Generate a Bézier path for a shared edge.
+ * Generate a Bézier path for a shared edge using the classic 6-segment
+ * jigsaw shape inspired by Dillo's twist0 algorithm.
+ *
+ * The algorithm uses a coordinate system relative to the edge:
+ * - p0, p1 = start and end of the edge
+ * - dxh, dyh = delta along the edge (horizontal in edge-relative coords)
+ * - dxv, dyv = delta perpendicular to edge (vertical in edge-relative coords)
+ * - pointAt(coeffh, coeffv) = p0 + coeffh * (dxh, dyh) + coeffv * (dxv, dyv)
+ *
  * This produces the path from the "first side" perspective.
  * The "second side" will reverse this path.
  *
@@ -259,79 +271,97 @@ function generateAllSharedEdgePaths(
  * @param end - End point of the edge (in piece-local coordinates)
  * @param isTab - Whether this side gets a tab (true) or blank (false)
  * @param params - Shape parameters for the tab/blank
+ * @param random - Seeded PRNG function for consistent randomization
  * @returns Array of points representing Bézier curve segments
  */
 function generateSharedEdgePath(
     start: Point,
     end: Point,
     isTab: boolean,
-    params: TabParams,
+    _params: TabParams,
+    random: () => number,
 ): BezierPath {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const edgeLength = Math.sqrt(dx * dx + dy * dy);
+    // Edge vectors
+    const dxh = end.x - start.x;
+    const dyh = end.y - start.y;
 
-    // Unit vectors along and perpendicular to the edge
-    const ux = dx / edgeLength;
-    const uy = dy / edgeLength;
-    const nx = -uy; // normal (perpendicular)
-    const ny = ux;
-
+    // Perpendicular vectors (90° counterclockwise rotation)
+    // For a tab, this points outward from the piece
     const sign = isTab ? 1 : -1;
+    const dxv = -dyh * sign;
+    const dyv = dxh * sign;
 
-    const bumpHeight = edgeLength * params.heightFraction;
-    const neckWidth = edgeLength * params.neckFraction;
-    const headWidth = edgeLength * params.headWidthFraction;
+    // Randomization parameters (seeded PRNG for consistency)
+    const scalex = lerp(0.8, 1.0, random());  // horizontal scale of tab
+    const scaley = lerp(0.9, 1.0, random());  // vertical scale (height)
+    const mid = lerp(0.45, 0.55, random());   // centre position along edge
 
-    // Tab centre position (0.5 = dead centre, offset shifts it)
-    // centreOffset and skew are used directly for first side
-    const tCentre = 0.5 + params.centreOffset;
-    const halfSpan = 0.15;
+    // Helper to compute point at (coeffh, coeffv) in edge-relative coordinates
+    const pointAt = (coeffh: number, coeffv: number): Point => ({
+        x: start.x + coeffh * dxh + coeffv * dxv,
+        y: start.y + coeffh * dyh + coeffv * dyv,
+    });
 
-    const t1 = tCentre - halfSpan; // start of neck
-    const t2 = tCentre;            // centre of bump
-    const t3 = tCentre + halfSpan; // end of neck
+    // Key points defining the classic mushroom tab shape
+    // Adjusted by scalex (horizontal), scaley (vertical), and mid (centre position)
+    const halfWidth = 0.17 * scalex;  // half-width of the tab section
 
-    // Points along the edge
-    const p1 = addVec(start, scaleVec(ux, uy, edgeLength * t1));
-    const p2 = addVec(start, scaleVec(ux, uy, edgeLength * t2));
-    const p3 = addVec(start, scaleVec(ux, uy, edgeLength * t3));
+    // 5 key points along the tab:
+    // pa = neck entry (where edge curves into neck)
+    // pb = head left (left side of mushroom head)
+    // pc = head top (top centre of mushroom)
+    // pd = head right (right side of mushroom head)
+    // pe = neck exit (where neck returns to edge)
 
-    // Neck entry/exit points
-    const neck1 = addVec(p1, scaleVec(nx, ny, sign * neckWidth * 0.4));
-    const neck2 = addVec(p3, scaleVec(nx, ny, sign * neckWidth * 0.4));
+    const pa = pointAt(mid - halfWidth, 0.08 * scaley);
+    const pb = pointAt(mid - halfWidth * 0.9, 0.25 * scaley);
+    const pc = pointAt(mid, 0.33 * scaley);
+    const pd = pointAt(mid + halfWidth * 0.9, 0.25 * scaley);
+    const pe = pointAt(mid + halfWidth, 0.08 * scaley);
 
-    // Tab head peak points with skew for asymmetry
-    const skewOffset = params.skew * edgeLength;
+    // Build 6 cubic Bézier segments with appropriate control points
+    // The control points create the smooth curves of the classic jigsaw shape
 
-    const peak1 = addVec(
-        addVec(p1, scaleVec(nx, ny, sign * bumpHeight)),
-        scaleVec(ux, uy, -headWidth * 0.3 + skewOffset),
-    );
-    const peakCentre = addVec(p2, scaleVec(nx, ny, sign * bumpHeight));
-    const peak2 = addVec(
-        addVec(p3, scaleVec(nx, ny, sign * bumpHeight)),
-        scaleVec(ux, uy, headWidth * 0.3 + skewOffset),
-    );
+    // Segment 1: p0 → pa (edge curves slightly into neck entry)
+    const cp1_1 = pointAt(mid - halfWidth * 1.5, 0);
+    const cp1_2 = pointAt(mid - halfWidth * 1.2, 0.02 * scaley);
+
+    // Segment 2: pa → pb (neck curves outward to head left)
+    const cp2_1 = pointAt(mid - halfWidth * 0.85, 0.12 * scaley);
+    const cp2_2 = pointAt(mid - halfWidth * 1.1, 0.20 * scaley);
+
+    // Segment 3: pb → pc (head left curves across to head top)
+    const cp3_1 = pointAt(mid - halfWidth * 0.6, 0.32 * scaley);
+    const cp3_2 = pointAt(mid - halfWidth * 0.3, 0.33 * scaley);
+
+    // Segment 4: pc → pd (head top curves to head right)
+    const cp4_1 = pointAt(mid + halfWidth * 0.3, 0.33 * scaley);
+    const cp4_2 = pointAt(mid + halfWidth * 0.6, 0.32 * scaley);
+
+    // Segment 5: pd → pe (head right curves back to neck exit)
+    const cp5_1 = pointAt(mid + halfWidth * 1.1, 0.20 * scaley);
+    const cp5_2 = pointAt(mid + halfWidth * 0.85, 0.12 * scaley);
+
+    // Segment 6: pe → p1 (neck curves back to edge line)
+    const cp6_1 = pointAt(mid + halfWidth * 1.2, 0.02 * scaley);
+    const cp6_2 = pointAt(mid + halfWidth * 1.5, 0);
 
     // Build the Bézier path as an array of points
     // Format: [start, cp1, cp2, end, cp1, cp2, end, ...]
-    // We have 4 segments:
-    // 1. start → p1 (line, but we'll use degenerate cubic)
-    // 2. p1 → peakCentre (neck to head via neck1 and peak1)
-    // 3. peakCentre → p3 (head to neck via peak2 and neck2)
-    // 4. p3 → end (line)
-
     return [
         start,
-        // Segment 1: start → p1 (straight line as degenerate cubic)
-        start, p1, p1,
-        // Segment 2: p1 → peakCentre (through neck1 and peak1)
-        neck1, peak1, peakCentre,
-        // Segment 3: peakCentre → p3 (through peak2 and neck2)
-        peak2, neck2, p3,
-        // Segment 4: p3 → end (straight line as degenerate cubic)
-        p3, end, end,
+        // Segment 1: start → pa
+        cp1_1, cp1_2, pa,
+        // Segment 2: pa → pb
+        cp2_1, cp2_2, pb,
+        // Segment 3: pb → pc
+        cp3_1, cp3_2, pc,
+        // Segment 4: pc → pd
+        cp4_1, cp4_2, pd,
+        // Segment 5: pd → pe
+        cp5_1, cp5_2, pe,
+        // Segment 6: pe → end
+        cp6_1, cp6_2, end,
     ];
 }
 
@@ -704,14 +734,6 @@ function buildFlatEdgePath(end: Point): string {
 
 function fmt(n: number): string {
     return n.toFixed(2);
-}
-
-function addVec(p: Point, v: Point): Point {
-    return { x: p.x + v.x, y: p.y + v.y };
-}
-
-function scaleVec(ux: number, uy: number, s: number): Point {
-    return { x: ux * s, y: uy * s };
 }
 
 /**
