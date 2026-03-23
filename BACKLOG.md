@@ -217,7 +217,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Add the fractal/circle-packing generator as an alternative cut style, inspired by the Fractal Jigsaw Generator (proceduraljigsaw/Fractalpuzzlejs). Uses a circle-packing grid where pieces are organic shapes formed by merging adjacent circles — no traditional tabs/blanks. Very different aesthetic from classic cuts. Should be selectable as a cut style option. Must still produce Piece[] conforming to our generic data model. Credit the Fractal Jigsaw project in the info modal. Reference: `docs/reference-algorithms.md`.
 
 ### 8.4 — Info/help modal with credits
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-23
 **Depends on:** 5.2
 **Description:** Add an info/help button (ℹ️ or similar) that opens a modal overlay with:
 - **Credits:** algorithm inspirations (Dillo's CodePen, Fractal Jigsaw Generator), with links
