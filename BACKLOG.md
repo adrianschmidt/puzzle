@@ -170,7 +170,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Added mushroom/knob tabs, three head profiles (round, square, heart), neck pinch, and edge wobble. PR #40.
 
 ### 7.4.1 — Improve procedural cut geometry (round 2)
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-22
 **Depends on:** 7.4
 **Description:** Round 1 improved tab head shapes, but the overall edge geometry is still too uniform. This task is about making the *geometry* more varied and interesting — not skeuomorphic effects like cardboard deformation. Also, the edge wobble and neck pinch added in round 1 should be reverted or toned down — they simulate manufacturing imperfections which isn't what we're going for. Focus areas:
 - **Curved edge lines** — the boundary between two pieces shouldn't be a straight line with a bump. Real puzzle dies produce gentle S-curves or arcs between pieces
