@@ -157,7 +157,7 @@ html, body {
   background: rgba(0, 0, 0, 0.5);
   z-index: 10000;
   animation: fade-in 0.6s ease-out;
-  pointer-events: none;
+  cursor: pointer;
 }
 
 .completion-message {
@@ -177,6 +177,14 @@ html, body {
   font-size: 1.1rem;
   opacity: 0.85;
   animation: fade-in 0.5s ease-out 0.6s both;
+}
+
+.completion-dismiss-hint {
+  font-size: 0.9rem !important;
+  opacity: 0.6 !important;
+  margin-top: 1rem !important;
+  font-style: italic;
+  animation-delay: 1s !important;
 }
 
 @keyframes fade-in {
