@@ -202,7 +202,8 @@ function buildEdge(params: BuildEdgeParams): Edge {
     } else {
         const tabParams = getTabParams(dir, row, col, horizontalParams, verticalParams);
         const isTab = getIsTab(dir, row, col, tabParams);
-        path = buildProceduralEdgePath(start, end, dir, isTab, tabParams);
+        const isSecondSide = dir === Dir.Top || dir === Dir.Left;
+        path = buildProceduralEdgePath(start, end, dir, isTab, tabParams, isSecondSide);
     }
 
     return { id, mateEdgeId, matePieceId, path, start, end };
@@ -370,6 +371,7 @@ function buildProceduralEdgePath(
     dir: Dir,
     isTab: boolean,
     params: TabParams,
+    isSecondSide: boolean,
 ): string {
     const dx = end.x - start.x;
     const dy = end.y - start.y;
@@ -387,8 +389,11 @@ function buildProceduralEdgePath(
     const neckWidth = edgeLength * params.neckFraction;
     const headWidth = edgeLength * params.headWidthFraction;
 
-    // Tab centre position (0.5 = dead centre, offset shifts it)
-    const tCentre = 0.5 + params.centreOffset;
+    // Tab centre position (0.5 = dead centre, offset shifts it).
+    // The "second" side traverses the edge in the opposite direction,
+    // so its centreOffset and skew must be negated to match the first side.
+    const dirSign = isSecondSide ? -1 : 1;
+    const tCentre = 0.5 + params.centreOffset * dirSign;
     const halfSpan = 0.15; // half the span of the tab along the edge
 
     const t1 = tCentre - halfSpan; // start of neck
@@ -406,7 +411,7 @@ function buildProceduralEdgePath(
     const neck2 = addVec(p3, scaleVec(nx, ny, sign * neckWidth * 0.4));
 
     // Tab head peak points with skew for asymmetry
-    const skewOffset = params.skew * edgeLength;
+    const skewOffset = params.skew * edgeLength * dirSign;
 
     const peak1 = addVec(
         addVec(p1, scaleVec(nx, ny, sign * bumpHeight)),
