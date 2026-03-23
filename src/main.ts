@@ -18,6 +18,8 @@ import {
     saveColourPreference,
     applyBackgroundColour,
     createBackgroundColourPicker,
+    createInfoButton,
+    createInfoModal,
 } from './ui/index.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import { createAttributionElement, removeAttribution } from './ui/attribution.js';
@@ -342,6 +344,16 @@ createBackgroundColourPicker({
     onSelect: (index) => {
         saveColourPreference(index);
         applyBackgroundColour(index);
+    },
+});
+
+// Set up the Info button
+createInfoButton({
+    container: app,
+    onShowInfo: () => {
+        createInfoModal({
+            container: app,
+        });
     },
 });
 
