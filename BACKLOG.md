@@ -246,7 +246,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Add merge tolerance settings to the info/settings modal. At least two options: "Normal" (current tolerance) and "Forgiving" (larger tolerance for casual players). Persist the choice. Update `MERGE_TOLERANCE_PX` (or equivalent) based on the setting.
 
 ### 9.3 — Prevent piece drag during pinch-to-zoom
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-23
 **Depends on:** 3.4
 **Description:** When a pinch-to-zoom gesture begins, any piece drag that started from the first finger of that gesture should be cancelled immediately. Currently, pinching sometimes moves a piece with the first touch point while zooming with both. Detection: as soon as a second pointer goes down while a drag is active, cancel the drag (restore the piece to its pre-drag position) and let the gesture become a pure zoom/pan.
 
