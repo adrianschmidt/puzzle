@@ -107,6 +107,32 @@ let cleanupDrag: (() => void) | null = null;
 const renderer = new SvgDomRenderer();
 renderer.init(app);
 
+// Debug helper: solve the puzzle by placing all pieces in their correct positions.
+// Merges everything into a single group at (0,0).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).__solvePuzzle = () => {
+    if (!gameState) return;
+
+    // Create a single group containing all pieces at their solved offsets
+    const solvedGroup: import('./model/types.js').PieceGroup = {
+        id: 0,
+        pieces: new Map(),
+        position: { x: 0, y: 0 },
+    };
+
+    for (const piece of gameState.pieces) {
+        // Solved offset = negative of imageOffset (where the piece belongs in the image)
+        solvedGroup.pieces.set(piece.id, {
+            x: -piece.imageOffset.x,
+            y: -piece.imageOffset.y,
+        });
+    }
+
+    gameState.groups = [solvedGroup];
+    gameState.completed = true;
+    renderer.renderState(gameState);
+};
+
 // Viewport transform for zoom & pan
 const viewportTransform = new ViewportTransform();
 

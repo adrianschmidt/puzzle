@@ -486,6 +486,77 @@ function adoptOrphanTiles(
     }
 }
 
+/**
+ * Fill empty cells by adding diagonal connections through them.
+ * A cell at (cx, cy) has 4 corner tiles: (cx,cy), (cx+1,cy),
+ * (cx,cy+1), (cx+1,cy+1). An empty cell means no diagonal
+ * connection passes through it, leaving a visible star-shaped hole.
+ * We fix this by adding a connection between two corner tiles
+ * that belong to the same piece (or to any piece if needed).
+ */
+function fillEmptyCells(
+    grid: CellGrid,
+    pieces: DiagonalConnection[][],
+    cols: number,
+    rows: number,
+): void {
+    // Build a map of tile → piece index for quick lookup
+    const tileToPiece = new Map<string, number>();
+    for (let pi = 0; pi < pieces.length; pi++) {
+        const p = pieces[pi];
+        tileToPiece.set(`${p[0].p1.x},${p[0].p1.y}`, pi);
+        for (const c of p) {
+            tileToPiece.set(`${c.p2.x},${c.p2.y}`, pi);
+        }
+    }
+
+    for (let cy = 0; cy < rows - 1; cy++) {
+        for (let cx = 0; cx < cols - 1; cx++) {
+            if (!grid.isCellEmpty({ x: cx, y: cy })) continue;
+
+            // Try both diagonals through this cell
+            const diagonals: [Tile, Tile][] = [
+                [makeTile(cx, cy), makeTile(cx + 1, cy + 1)],
+                [makeTile(cx + 1, cy), makeTile(cx, cy + 1)],
+            ];
+
+            let filled = false;
+            for (const [t1, t2] of diagonals) {
+                const k1 = `${t1.x},${t1.y}`;
+                const k2 = `${t2.x},${t2.y}`;
+                const pi1 = tileToPiece.get(k1);
+                const pi2 = tileToPiece.get(k2);
+
+                if (pi1 === undefined && pi2 === undefined) continue;
+
+                // Prefer connecting within the same piece
+                // Otherwise add to whichever piece owns a corner tile
+                const targetPi = pi1 !== undefined ? pi1 : pi2!;
+                const from = pi1 !== undefined ? t1 : t2;
+                const to = pi1 !== undefined ? t2 : t1;
+                const dc = makeConnection(from, to, tileToPiece.has(`${to.x},${to.y}`));
+
+                pieces[targetPi].push(dc);
+                grid.occupyCell(dc.cell);
+                if (!grid.isTileVisited(to)) grid.visitTile(to);
+                if (!tileToPiece.has(`${to.x},${to.y}`)) {
+                    tileToPiece.set(`${to.x},${to.y}`, targetPi);
+                }
+                filled = true;
+                break;
+            }
+
+            if (!filled) {
+                // Neither diagonal has a tile in a piece — log for debugging
+                console.warn(`[fractal] Could not fill cell (${cx},${cy}). Corner tiles:`,
+                    diagonals.map(([t1, t2]) =>
+                        `(${t1.x},${t1.y}):pi=${tileToPiece.get(`${t1.x},${t1.y}`) ?? 'none'} ↔ (${t2.x},${t2.y}):pi=${tileToPiece.get(`${t2.x},${t2.y}`) ?? 'none'}`
+                    ).join(', '));
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Convert fractal pieces to standard Piece[] format
 // ---------------------------------------------------------------------------
@@ -707,6 +778,9 @@ export function generateFractalPuzzle(
     // a piece (e.g. because the piece was too small and got discarded).
     // For each orphan, find an adjacent piece and add a connection to it.
     adoptOrphanTiles(grid, pieces, cols, rows);
+
+    // Fill any remaining empty cells (star-shaped holes)
+    fillEmptyCells(grid, pieces, cols, rows);
 
     // Convert to standard Piece[] format
     return convertToStandardPieces(pieces, rad, frameOffset, imageSize, cols, rows);
