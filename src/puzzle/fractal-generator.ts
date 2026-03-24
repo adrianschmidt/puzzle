@@ -710,6 +710,44 @@ function fmt(n: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Fractal grid scaling
+// ---------------------------------------------------------------------------
+
+/**
+ * Average number of tiles consumed per piece in the fractal generator.
+ * Empirically measured across many seeds with default piece-size params.
+ */
+const TILES_PER_PIECE = 4.9;
+
+/**
+ * Compute tile-grid dimensions that produce approximately `targetPieces`
+ * fractal pieces while matching the aspect ratio of the puzzle image.
+ *
+ * @param targetPieces - Desired number of pieces (e.g. 24, 48, 96, 192)
+ * @param imageAspect  - Image width / height (e.g. 4/3 ≈ 1.333)
+ * @returns `{ cols, rows }` for the tile grid
+ */
+export function scaleFractalGrid(
+    targetPieces: number,
+    imageAspect: number,
+): { cols: number; rows: number } {
+    // Total tiles needed ≈ targetPieces × tilesPerPiece
+    const totalTiles = targetPieces * TILES_PER_PIECE;
+
+    // Solve cols × rows = totalTiles with cols/rows = imageAspect
+    //   cols = sqrt(totalTiles × imageAspect)
+    //   rows = totalTiles / cols
+    const rawCols = Math.sqrt(totalTiles * imageAspect);
+    const rawRows = totalTiles / rawCols;
+
+    // Round to even numbers (≥ 4) for symmetric grids
+    const cols = Math.max(4, 2 * Math.round(rawCols / 2));
+    const rows = Math.max(4, 2 * Math.round(rawRows / 2));
+
+    return { cols, rows };
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
