@@ -2,14 +2,16 @@
  * Gather pieces — computes new positions for all groups to bring them
  * together near the centre of the visible play area.
  *
- * Groups are distributed in a loose grid so they don't all stack on the
- * exact same point, but are close enough to be manageable.
+ * Groups are arranged in a compact layout using row-based packing,
+ * where each row's height adapts to its tallest group. Groups are
+ * shuffled so their layout position has no correlation with their
+ * solved position.
  */
 
-import type { Point, PieceGroup } from '../model/types.js';
+import type { Point, Piece, PieceGroup } from '../model/types.js';
 
 /** Padding between groups when distributing in the gather layout. */
-export const GATHER_PADDING = 10;
+export const GATHER_PADDING = 50;
 
 /**
  * A rectangular area in world coordinates.
@@ -68,131 +70,157 @@ export function getGroupOffsetBounds(group: PieceGroup): {
 }
 
 /**
- * Minimum margin between groups in the gather layout, in world units.
- * This ensures pieces don't touch each other when gathered.
+ * Compute the visual bounding box of a group by examining the actual
+ * SVG shape geometry of its pieces. This gives accurate dimensions
+ * for both classic (rectangular + tabs) and fractal (organic arcs) pieces.
  */
-const MIN_MARGIN = 20;
+function getGroupVisualBounds(
+    group: PieceGroup,
+    pieces: ReadonlyArray<Readonly<Piece>>,
+): { minX: number; minY: number; width: number; height: number } {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const [pieceId, offset] of group.pieces) {
+        const piece = pieces.find(p => p.id === pieceId);
+        if (!piece) continue;
+
+        // Use edge start/end points to determine piece extents
+        for (const edge of piece.edges) {
+            const points = [edge.start, edge.end];
+            for (const pt of points) {
+                const wx = offset.x + pt.x;
+                const wy = offset.y + pt.y;
+                if (wx < minX) minX = wx;
+                if (wy < minY) minY = wy;
+                if (wx > maxX) maxX = wx;
+                if (wy > maxY) maxY = wy;
+            }
+        }
+    }
+
+    if (!isFinite(minX)) {
+        return { minX: 0, minY: 0, width: 0, height: 0 };
+    }
+
+    return { minX, minY, width: maxX - minX, height: maxY - minY };
+}
 
 /**
  * Compute new positions for all groups, arranging them in a compact
- * grid layout with consistent minimum margins between pieces.
+ * row-based layout with consistent margins between pieces.
  *
- * Groups are shuffled and sorted by size before placement so their grid
- * position has no correlation with their solved position. Each group is
- * positioned using its actual bounding box for efficient space usage.
+ * Uses actual visual bounding boxes for each group, so it works
+ * correctly with both classic and fractal piece shapes. Rows are
+ * packed left-to-right, wrapping when the target width is exceeded.
  *
  * @param groups - Current groups with their positions (not mutated)
  * @param visibleArea - The visible viewport rectangle in world coordinates
- * @param pieceWidth - Width of a single puzzle piece in world units
- * @param pieceHeight - Height of a single puzzle piece in world units
- * @param puzzleCols - Number of columns in the puzzle grid (unused in new layout)
- * @param puzzleRows - Number of rows in the puzzle grid (unused in new layout)
+ * @param pieces - All pieces in the puzzle (for computing visual bounds)
  * @returns Map of groupId → new world position
  */
 export function computeGatheredPositions(
     groups: ReadonlyArray<Readonly<PieceGroup>>,
     visibleArea: WorldRect,
-    pieceWidth: number,
-    pieceHeight: number,
-    _puzzleCols?: number,
-    _puzzleRows?: number,
+    pieces: ReadonlyArray<Readonly<Piece>>,
 ): Map<number, Point> {
     if (groups.length === 0) {
         return new Map();
     }
 
-    // Centre of the visible area
+    const margin = GATHER_PADDING;
+
+    // Compute visual bounds for each group
+    interface GroupLayout {
+        group: PieceGroup;
+        bounds: ReturnType<typeof getGroupVisualBounds>;
+    }
+
+    const layouts: GroupLayout[] = groups.map(group => ({
+        group,
+        bounds: getGroupVisualBounds(group, pieces),
+    }));
+
+    // Shuffle so grid position doesn't correlate with solved position
+    for (let i = layouts.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [layouts[i], layouts[j]] = [layouts[j], layouts[i]];
+    }
+
+    // Sort by height descending for better row packing
+    layouts.sort((a, b) => b.bounds.height - a.bounds.height);
+
+    // Target width: use visible area width, or a reasonable default
+    const targetWidth = Math.max(visibleArea.width * 0.8, 400);
+
+    // Pack into rows
+    const rows: Array<{ items: GroupLayout[]; rowHeight: number }> = [];
+    let currentRow: GroupLayout[] = [];
+    let currentRowWidth = 0;
+    let currentRowHeight = 0;
+
+    for (const layout of layouts) {
+        const itemWidth = layout.bounds.width + margin;
+
+        if (currentRow.length > 0 && currentRowWidth + itemWidth > targetWidth) {
+            // Start a new row
+            rows.push({ items: currentRow, rowHeight: currentRowHeight });
+            currentRow = [];
+            currentRowWidth = 0;
+            currentRowHeight = 0;
+        }
+
+        currentRow.push(layout);
+        currentRowWidth += itemWidth;
+        currentRowHeight = Math.max(currentRowHeight, layout.bounds.height);
+    }
+
+    if (currentRow.length > 0) {
+        rows.push({ items: currentRow, rowHeight: currentRowHeight });
+    }
+
+    // Compute total layout height
+    let totalHeight = 0;
+    for (const row of rows) {
+        totalHeight += row.rowHeight + margin;
+    }
+    totalHeight -= margin; // Remove trailing margin
+
+    // Centre the layout in the visible area
     const centreX = visibleArea.x + visibleArea.width / 2;
     const centreY = visibleArea.y + visibleArea.height / 2;
-
-    if (groups.length === 1) {
-        // Single group: place it at the centre
-        const group = groups[0];
-        const bounds = getGroupOffsetBounds(group);
-        const groupWidth = (bounds.maxX - bounds.minX) + pieceWidth;
-        const groupHeight = (bounds.maxY - bounds.minY) + pieceHeight;
-
-        return new Map([
-            [
-                group.id,
-                {
-                    x: centreX - groupWidth / 2 - bounds.minX,
-                    y: centreY - groupHeight / 2 - bounds.minY,
-                },
-            ],
-        ]);
-    }
-
-    // Prepare groups with their dimensions for layout
-    interface GroupWithSize {
-        group: PieceGroup;
-        bounds: ReturnType<typeof getGroupOffsetBounds>;
-        width: number;
-        height: number;
-    }
-
-    const groupsWithSizes: GroupWithSize[] = groups.map((group) => {
-        const bounds = getGroupOffsetBounds(group);
-        return {
-            group,
-            bounds,
-            width: (bounds.maxX - bounds.minX) + pieceWidth,
-            height: (bounds.maxY - bounds.minY) + pieceHeight,
-        };
-    });
-
-    // Shuffle groups so grid position doesn't correlate with solved position
-    for (let i = groupsWithSizes.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [groupsWithSizes[i], groupsWithSizes[j]] = [groupsWithSizes[j], groupsWithSizes[i]];
-    }
-
-    // Sort by size (larger groups first) for better packing efficiency
-    groupsWithSizes.sort((a, b) => {
-        const areaA = a.width * a.height;
-        const areaB = b.width * b.height;
-        return areaB - areaA;
-    });
-
-    // Use a simple grid layout with dynamic cell sizing
-    const gridCols = Math.ceil(Math.sqrt(groups.length));
-    const gridRows = Math.ceil(groups.length / gridCols);
-
-    // Find the maximum dimensions among all groups for consistent grid sizing
-    let maxWidth = 0;
-    let maxHeight = 0;
-    for (const { width, height } of groupsWithSizes) {
-        maxWidth = Math.max(maxWidth, width);
-        maxHeight = Math.max(maxHeight, height);
-    }
-
-    // Cell dimensions include the largest group plus margin
-    const cellWidth = maxWidth + MIN_MARGIN;
-    const cellHeight = maxHeight + MIN_MARGIN;
-
-    // Total grid dimensions
-    const totalGridWidth = gridCols * cellWidth - MIN_MARGIN; // Subtract margin from final edge
-    const totalGridHeight = gridRows * cellHeight - MIN_MARGIN;
-
-    // Position the grid centred in the visible area
-    const startX = centreX - totalGridWidth / 2;
-    const startY = centreY - totalGridHeight / 2;
+    const startY = centreY - totalHeight / 2;
 
     const result = new Map<number, Point>();
+    let y = startY;
 
-    for (let i = 0; i < groupsWithSizes.length; i++) {
-        const { group, bounds } = groupsWithSizes[i];
-        const col = i % gridCols;
-        const row = Math.floor(i / gridCols);
+    for (const row of rows) {
+        // Compute row width for centering
+        let rowWidth = 0;
+        for (const layout of row.items) {
+            rowWidth += layout.bounds.width + margin;
+        }
+        rowWidth -= margin;
 
-        // Position group at the top-left corner of its cell, accounting for its bounds
-        const cellX = startX + col * cellWidth;
-        const cellY = startY + row * cellHeight;
+        let x = centreX - rowWidth / 2;
 
-        result.set(group.id, {
-            x: cellX - bounds.minX,
-            y: cellY - bounds.minY,
-        });
+        for (const layout of row.items) {
+            const { group, bounds } = layout;
+
+            // Position the group so its visual bounds start at (x, y)
+            // The group's position determines where offset (0,0) goes in world space.
+            // We want bounds.minX (in group-local space) to map to x in world space.
+            result.set(group.id, {
+                x: x - bounds.minX,
+                y: y - bounds.minY,
+            });
+
+            x += bounds.width + margin;
+        }
+
+        y += row.rowHeight + margin;
     }
 
     return result;
