@@ -32,7 +32,7 @@ export const MERGE_TOLERANCE_PRESETS: readonly MergeTolerancePreset[] = [
     {
         label: 'Forgiving',
         description: 'Pieces snap from further away',
-        tolerance: 30,
+        tolerance: MERGE_TOLERANCE_PX * 4,
     },
 ] as const;
 
