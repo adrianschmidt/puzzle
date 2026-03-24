@@ -243,7 +243,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** When the "Puzzle Complete!" message is shown, tapping/clicking anywhere on the screen should dismiss the overlay so the player can admire the finished image. Currently there's no way to close it.
 
 ### 9.2 — Merge tolerance options
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-24
 **Depends on:** 8.4
 **Description:** Add merge tolerance settings to the info/settings modal. At least two options: "Normal" (current tolerance) and "Forgiving" (larger tolerance for casual players). Persist the choice. Update `MERGE_TOLERANCE_PX` (or equivalent) based on the setting.
 

@@ -1,15 +1,25 @@
 /**
- * Info/Help modal — shows credits, project info, license, and help text.
+ * Info/Help modal — shows credits, project info, license, help text,
+ * and settings (merge tolerance).
  *
  * A glassmorphism modal overlay with information about the app,
- * credits to algorithm inspirations, and brief help for features.
+ * credits to algorithm inspirations, brief help for features,
+ * and configurable game settings.
  */
+
+import {
+    MERGE_TOLERANCE_PRESETS,
+    loadTolerancePreference,
+    saveTolerancePreference,
+} from './merge-tolerance.js';
 
 export interface InfoModalOptions {
     /** Container to append the modal to. */
     container: HTMLElement;
     /** Called when the modal is dismissed. */
     onDismiss?: () => void;
+    /** Called when the merge tolerance preference changes. */
+    onToleranceChanged?: (index: number) => void;
 }
 
 /**
@@ -18,7 +28,7 @@ export interface InfoModalOptions {
  * Returns a cleanup function that removes the modal from the DOM.
  */
 export function createInfoModal(options: InfoModalOptions): () => void {
-    const { container, onDismiss } = options;
+    const { container, onDismiss, onToleranceChanged } = options;
 
     // Build overlay
     const overlay = document.createElement('div');
@@ -50,6 +60,7 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     const content = document.createElement('div');
     content.className = 'info-modal-content';
 
+    // Build static HTML sections
     content.innerHTML = `
         <section class="info-section">
             <h3>How to Play</h3>
@@ -66,6 +77,15 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                     <li>🎨 <strong>Background</strong> — Change table colour</li>
                 </ul>
             </ul>
+        </section>
+
+        <section class="info-section">
+            <h3>Settings</h3>
+            <div class="info-setting">
+                <label class="info-setting-label">Snap distance</label>
+                <p class="info-setting-description">How close pieces need to be before they snap together.</p>
+                <div class="tolerance-options" data-testid="tolerance-options"></div>
+            </div>
         </section>
 
         <section class="info-section">
@@ -86,6 +106,40 @@ export function createInfoModal(options: InfoModalOptions): () => void {
             </ul>
         </section>
     `;
+
+    // Build tolerance option buttons
+    const toleranceContainer = content.querySelector('.tolerance-options')!;
+    const currentToleranceIndex = loadTolerancePreference();
+
+    MERGE_TOLERANCE_PRESETS.forEach((preset, index) => {
+        const button = document.createElement('button');
+        button.className = 'tolerance-option';
+        button.type = 'button';
+        button.dataset.testid = `tolerance-${preset.label.toLowerCase()}`;
+
+        if (index === currentToleranceIndex) {
+            button.classList.add('selected');
+        }
+
+        button.innerHTML = `
+            <span class="tolerance-option-label">${preset.label}</span>
+            <span class="tolerance-option-desc">${preset.description}</span>
+        `;
+
+        button.addEventListener('click', () => {
+            saveTolerancePreference(index);
+
+            // Update button states
+            toleranceContainer
+                .querySelectorAll('.tolerance-option')
+                .forEach((btn) => btn.classList.remove('selected'));
+            button.classList.add('selected');
+
+            onToleranceChanged?.(index);
+        });
+
+        toleranceContainer.appendChild(button);
+    });
 
     modal.appendChild(header);
     modal.appendChild(content);

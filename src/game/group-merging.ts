@@ -117,11 +117,13 @@ function removeGroup(state: GameState, groupId: number): void {
  *
  * @param movedGroupId - The group that was just dropped
  * @param state - The current game state (mutated)
+ * @param tolerance - Optional custom merge tolerance in pixels
  * @returns MergeResult if any merges happened, or null if no merges
  */
 export function processDrop(
     movedGroupId: number,
     state: GameState,
+    tolerance?: number,
 ): MergeResult | null {
     // Check if the group is being dropped into a pile of unrelated pieces.
     // If so, suppress merging to avoid accidental snaps while sorting.
@@ -133,7 +135,7 @@ export function processDrop(
     let totalMerges = 0;
 
     for (let depth = 0; depth < MAX_CASCADE_DEPTH; depth++) {
-        const candidates = detectMerges(currentGroupId, state);
+        const candidates = detectMerges(currentGroupId, state, tolerance);
 
         if (candidates.length === 0) {
             break;
