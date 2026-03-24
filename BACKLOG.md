@@ -238,7 +238,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ## Phase 9: Interaction Polish
 
 ### 9.1 — Dismiss completion overlay on tap
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-24
 **Depends on:** 4.3
 **Description:** When the "Puzzle Complete!" message is shown, tapping/clicking anywhere on the screen should dismiss the overlay so the player can admire the finished image. Currently there's no way to close it.
 
