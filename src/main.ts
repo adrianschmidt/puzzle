@@ -362,16 +362,10 @@ createGatherPiecesButton({
             height: bottomRight.y - topLeft.y,
         };
 
-        const pieceWidth = gameState.imageSize.width / gameState.gridSize.cols;
-        const pieceHeight = gameState.imageSize.height / gameState.gridSize.rows;
-
         const positions = computeGatheredPositions(
             gameState.groups,
             visibleArea,
-            pieceWidth,
-            pieceHeight,
-            gameState.gridSize.cols,
-            gameState.gridSize.rows,
+            gameState.pieces,
         );
 
         applyGatheredPositions(gameState.groups, positions);
