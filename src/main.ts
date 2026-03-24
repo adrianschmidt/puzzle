@@ -21,6 +21,7 @@ import {
     createInfoButton,
     createInfoModal,
 } from './ui/index.js';
+import { getActiveTolerance } from './ui/merge-tolerance.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import { createAttributionElement, removeAttribution } from './ui/attribution.js';
 import {
@@ -195,7 +196,7 @@ function initGame(state: GameState): void {
             autoSave();
         },
         onDrop: (groupId: number) => {
-            const result = processDrop(groupId, gameState);
+            const result = processDrop(groupId, gameState, getActiveTolerance());
             if (result) {
                 renderer.renderState(gameState);
                 renderer.flashMergePulse(result.group.id);

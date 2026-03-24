@@ -39,3 +39,12 @@ export type { InfoModalOptions } from './info-modal.js';
 
 export { createCutStylePicker } from './cut-style-picker.js';
 export type { CutStylePickerOptions } from './cut-style-picker.js';
+
+export {
+    MERGE_TOLERANCE_PRESETS,
+    getTolerancePreset,
+    saveTolerancePreference,
+    loadTolerancePreference,
+    getActiveTolerance,
+} from './merge-tolerance.js';
+export type { MergeTolerancePreset } from './merge-tolerance.js';
