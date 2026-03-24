@@ -267,6 +267,23 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 3.4
 **Description:** When dragging a piece to the edge of the visible viewport, automatically pan the play area in that direction. This lets the player move pieces across large distances without the tedious cycle of: drag piece to edge → drop → pan → pick up → drag again. Implementation: define an edge zone (e.g. 40-60px from viewport edge), and while the pointer is in that zone during a drag, smoothly scroll the viewport in that direction. Pan speed should be proportional to how deep into the edge zone the pointer is. Stop panning when the pointer leaves the zone or the drag ends.
 
+## Phase 10: Fractal & UX Polish
+
+### 10.1 — Scale fractal grid to match target piece count
+**Status:** todo
+**Depends on:** 8.3
+**Description:** The fractal generator receives a tile grid size (e.g. 6×4), not a piece count. Since each piece spans multiple tiles, a 6×4 grid produces far fewer than 24 pieces. We need to scale the tile grid so the resulting piece count approximately matches the target (24, 48, 96, 192). This likely means using a larger tile grid and calibrating the min/max piece size parameters. Could use a lookup table or a formula based on empirical testing. The New Game dialog should still show approximate piece counts, not tile grid dimensions.
+
+### 10.2 — Fix remaining visual gaps in fractal puzzles
+**Status:** todo
+**Depends on:** 8.3
+**Description:** Some fractal puzzles still show small star-shaped visual gaps at 4-piece junctions. The cells are topologically filled (a diagonal connection exists), but the `addArcs` algorithm doesn't generate arcs that visually cover the full cell area at certain piece boundary configurations. The fix likely involves adjusting how piece boundary paths are drawn — either extending arcs slightly to overlap at junctions, or adding extra arc segments at junction points.
+
+### 10.3 — Improve Gather Pieces layout
+**Status:** todo
+**Depends on:** 5.4
+**Description:** The current Gather Pieces function spreads pieces out too much, making them hard to work with. Improve it to arrange pieces in a compact grid layout with a consistent minimum margin between each piece. Use the bounding box of each piece/group to tile them efficiently. Important: the layout must NOT correlate with the solved positions — pieces should be shuffled so it doesn't accidentally solve the puzzle. Consider sorting by size (larger groups first) and packing them in a grid pattern. Also update the description of the Gather Pieces button in the info modal to reflect the new behaviour.
+
 ---
 
 *Last updated: 2026-03-24*
