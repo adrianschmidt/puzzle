@@ -285,6 +285,11 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 5.4
 **Description:** The current Gather Pieces function spreads pieces out too much, making them hard to work with. Improve it to arrange pieces in a compact grid layout with a consistent minimum margin between each piece. Use the bounding box of each piece/group to tile them efficiently. Important: the layout must NOT correlate with the solved positions — pieces should be shuffled so it doesn't accidentally solve the puzzle. Consider sorting by size (larger groups first) and packing them in a grid pattern. Also update the description of the Gather Pieces button in the info modal to reflect the new behaviour.
 
+### 10.4 — Use gather layout for new game initial placement
+**Status:** todo
+**Depends on:** 10.3
+**Description:** When starting a new game, use the same gather layout algorithm (compact grid with zoom-to-fit) instead of random scattering. This gives the player a neatly organized starting point at the right zoom level, immediately playable without having to zoom out and hunt for pieces.
+
 ---
 
 *Last updated: 2026-03-24*
