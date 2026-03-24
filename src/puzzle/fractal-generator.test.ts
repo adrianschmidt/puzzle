@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { generateFractalPuzzle } from './fractal-generator.js';
+import { generateFractalPuzzle, scaleFractalGrid } from './fractal-generator.js';
 
 describe('generateFractalPuzzle', () => {
     const imageSize = { width: 400, height: 300 };
@@ -139,5 +139,70 @@ describe('generateFractalPuzzle', () => {
         }
         const uniqueIds = new Set(edgeIds);
         expect(uniqueIds.size).toBe(edgeIds.length);
+    });
+});
+
+describe('scaleFractalGrid', () => {
+    const LANDSCAPE_ASPECT = 4 / 3; // 800×600
+
+    test('returns cols and rows as even numbers ≥ 4', () => {
+        for (const target of [24, 48, 96, 192]) {
+            const { cols, rows } = scaleFractalGrid(target, LANDSCAPE_ASPECT);
+            expect(cols).toBeGreaterThanOrEqual(4);
+            expect(rows).toBeGreaterThanOrEqual(4);
+            expect(cols % 2).toBe(0);
+            expect(rows % 2).toBe(0);
+        }
+    });
+
+    test('larger targets produce larger grids', () => {
+        const small = scaleFractalGrid(24, LANDSCAPE_ASPECT);
+        const medium = scaleFractalGrid(48, LANDSCAPE_ASPECT);
+        const large = scaleFractalGrid(96, LANDSCAPE_ASPECT);
+        const xlarge = scaleFractalGrid(192, LANDSCAPE_ASPECT);
+
+        expect(small.cols * small.rows).toBeLessThan(medium.cols * medium.rows);
+        expect(medium.cols * medium.rows).toBeLessThan(large.cols * large.rows);
+        expect(large.cols * large.rows).toBeLessThan(xlarge.cols * xlarge.rows);
+    });
+
+    test('respects image aspect ratio (landscape has more cols than rows)', () => {
+        const { cols, rows } = scaleFractalGrid(96, 2.0); // very wide image
+        expect(cols).toBeGreaterThan(rows);
+    });
+
+    test('respects image aspect ratio (portrait has more rows than cols)', () => {
+        const { cols, rows } = scaleFractalGrid(96, 0.5); // tall image
+        expect(rows).toBeGreaterThan(cols);
+    });
+
+    test('square aspect ratio produces roughly equal cols and rows', () => {
+        const { cols, rows } = scaleFractalGrid(96, 1.0);
+        expect(Math.abs(cols - rows)).toBeLessThanOrEqual(2);
+    });
+
+    test('scaled grid produces approximately target piece count', () => {
+        const imageSize = { width: 800, height: 600 };
+
+        for (const target of [24, 48, 96, 192]) {
+            const { cols, rows } = scaleFractalGrid(
+                target,
+                imageSize.width / imageSize.height,
+            );
+
+            // Generate multiple puzzles and check the average
+            const counts: number[] = [];
+            for (let seed = 1; seed <= 20; seed++) {
+                const pieces = generateFractalPuzzle(
+                    cols, rows, imageSize, seed,
+                );
+                counts.push(pieces.length);
+            }
+            const avg = counts.reduce((a, b) => a + b) / counts.length;
+
+            // Average should be within 25% of target
+            expect(avg).toBeGreaterThan(target * 0.75);
+            expect(avg).toBeLessThan(target * 1.25);
+        }
     });
 });

@@ -8,7 +8,7 @@
 
 import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
 import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
-import { generateFractalPuzzle } from '../puzzle/fractal-generator.js';
+import { generateFractalPuzzle, scaleFractalGrid } from '../puzzle/fractal-generator.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
 
@@ -51,9 +51,19 @@ export function createNewGame(
     const seed = options.seed ?? generateSeed();
     const cutStyle = options.cutStyle ?? 'classic';
 
+    // For fractal puzzles, scale the tile grid to produce approximately
+    // the target piece count. The gridSize cols×rows for classic puzzles
+    // equals the piece count, but fractal pieces span multiple tiles.
+    const fractalGrid = cutStyle === 'fractal'
+        ? scaleFractalGrid(
+            gridSize.cols * gridSize.rows,
+            imageSize.width / imageSize.height,
+        )
+        : undefined;
+
     const pieces =
         cutStyle === 'fractal'
-            ? generateFractalPuzzle(gridSize.cols, gridSize.rows, imageSize, seed)
+            ? generateFractalPuzzle(fractalGrid!.cols, fractalGrid!.rows, imageSize, seed)
             : generateProceduralPuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
 
     const groups = createInitialGroups(pieces, imageSize, viewport, gridSize, options);

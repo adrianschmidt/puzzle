@@ -270,7 +270,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 ## Phase 10: Fractal & UX Polish
 
 ### 10.1 — Scale fractal grid to match target piece count
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-24
 **Depends on:** 8.3
 **Description:** The fractal generator receives a tile grid size (e.g. 6×4), not a piece count. Since each piece spans multiple tiles, a 6×4 grid produces far fewer than 24 pieces. We need to scale the tile grid so the resulting piece count approximately matches the target (24, 48, 96, 192). This likely means using a larger tile grid and calibrating the min/max piece size parameters. Could use a lookup table or a formula based on empirical testing. The New Game dialog should still show approximate piece counts, not tile grid dimensions.
 
