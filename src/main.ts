@@ -29,6 +29,12 @@ import {
     getSizeOption,
     toGridSize,
 } from './game/puzzle-sizes.js';
+import {
+    loadCutStylePreference,
+    saveCutStylePreference,
+    getCutStyleOption,
+} from './game/cut-styles.js';
+import type { CutStyle } from './game/cut-styles.js';
 import { createSizePickerDialog } from './ui/size-picker.js';
 
 /** Fallback image used when Unsplash is unavailable. */
@@ -210,8 +216,9 @@ function initGame(state: GameState): void {
  * Falls back to the default image if the API key is missing or fetch fails.
  *
  * @param gridSize - Grid dimensions (cols × rows) for the puzzle
+ * @param cutStyle - Cut style to use for piece generation
  */
-async function startNewGame(gridSize: GridSize): Promise<void> {
+async function startNewGame(gridSize: GridSize, cutStyle: CutStyle = 'classic'): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
     applyViewportTransform();
@@ -255,7 +262,7 @@ async function startNewGame(gridSize: GridSize): Promise<void> {
         }
     }
 
-    const state = createNewGame(imageUrl, imageSize, viewport, gridSize);
+    const state = createNewGame(imageUrl, imageSize, viewport, gridSize, { cutStyle });
 
     if (attribution) {
         state.attribution = attribution;
@@ -273,14 +280,19 @@ createNewGameButton({
     getPieceCount: () => gameState.pieces.length,
     onNewGame: () => {
         const preferredIndex = loadSizePreference();
+        const preferredCutStyleIndex = loadCutStylePreference();
         createSizePickerDialog({
             container: app,
             selectedIndex: preferredIndex,
-            onSelect: (index) => {
+            selectedCutStyleIndex: preferredCutStyleIndex,
+            onSelect: (index, cutStyleIndex) => {
                 saveSizePreference(index);
+                const resolvedCutStyleIndex = cutStyleIndex ?? preferredCutStyleIndex;
+                saveCutStylePreference(resolvedCutStyleIndex);
                 const option = getSizeOption(index);
+                const cutStyle = getCutStyleOption(resolvedCutStyleIndex).id;
                 clearSavedState();
-                void startNewGame(toGridSize(option));
+                void startNewGame(toGridSize(option), cutStyle);
             },
         });
     },
@@ -363,8 +375,9 @@ const savedState = loadState();
 if (savedState) {
     initGame(savedState);
 } else {
-    // First load with no saved game: use the preferred size
+    // First load with no saved game: use the preferred size and cut style
     const preferredIndex = loadSizePreference();
     const option = getSizeOption(preferredIndex);
-    void startNewGame(toGridSize(option));
+    const preferredCutStyle = getCutStyleOption(loadCutStylePreference()).id;
+    void startNewGame(toGridSize(option), preferredCutStyle);
 }

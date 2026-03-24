@@ -112,4 +112,6 @@ export interface GameState {
     attribution?: ImageAttribution;
     /** PRNG seed used for procedural cut generation. Reproduces the same cuts. */
     seed?: number;
+    /** Cut style used for this puzzle. Defaults to 'classic' when absent. */
+    cutStyle?: string;
 }

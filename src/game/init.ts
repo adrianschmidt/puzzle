@@ -8,7 +8,9 @@
 
 import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
 import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
+import { generateFractalPuzzle } from '../puzzle/fractal-generator.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
+import type { CutStyle } from './cut-styles.js';
 
 /** Default grid dimensions for the MVP puzzle. */
 export const DEFAULT_COLS = 8;
@@ -26,6 +28,8 @@ export interface InitOptions {
     random?: () => number;
     /** PRNG seed for procedural cut generation. If omitted, a random seed is generated. */
     seed?: number;
+    /** Cut style to use. Defaults to 'classic'. */
+    cutStyle?: CutStyle;
 }
 
 /**
@@ -45,7 +49,13 @@ export function createNewGame(
     options: InitOptions = {},
 ): GameState {
     const seed = options.seed ?? generateSeed();
-    const pieces = generateProceduralPuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
+    const cutStyle = options.cutStyle ?? 'classic';
+
+    const pieces =
+        cutStyle === 'fractal'
+            ? generateFractalPuzzle(gridSize.cols, gridSize.rows, imageSize, seed)
+            : generateProceduralPuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
+
     const groups = createInitialGroups(pieces, imageSize, viewport, gridSize, options);
 
     return {
@@ -56,6 +66,7 @@ export function createNewGame(
         gridSize,
         completed: false,
         seed,
+        cutStyle,
     };
 }
 

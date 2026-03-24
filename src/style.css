@@ -342,6 +342,81 @@ html, body {
   margin-top: 4px;
 }
 
+/* Cut style picker (inside new-game dialog) */
+.cut-style-section {
+  margin-bottom: 16px;
+}
+
+.cut-style-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #c0c0c0;
+  margin: 0 0 8px;
+}
+
+.size-picker-subtitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #c0c0c0;
+  margin: 0 0 8px;
+}
+
+.cut-style-grid {
+  display: flex;
+  gap: 8px;
+}
+
+.cut-style-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #e0e0e0;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cut-style-option:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.cut-style-option:active {
+  transform: scale(0.97);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cut-style-option--selected {
+  border-color: rgba(100, 160, 255, 0.6);
+  background: rgba(100, 160, 255, 0.1);
+}
+
+.cut-style-option--selected:hover {
+  border-color: rgba(100, 160, 255, 0.8);
+  background: rgba(100, 160, 255, 0.15);
+}
+
+.cut-style-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.cut-style-desc {
+  font-size: 0.65rem;
+  opacity: 0.6;
+  margin-top: 3px;
+}
+
 /* Background colour picker button */
 .bg-colour-button {
   position: absolute;

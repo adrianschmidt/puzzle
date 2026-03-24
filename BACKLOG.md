@@ -230,7 +230,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 - Style: glassmorphism modal matching the existing button aesthetic, dismissable by clicking outside or a close button
 
 ### 8.5 — Cut style selection UI
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-24
 **Depends on:** 8.2, 8.3
 **Description:** Add UI for selecting between cut styles when starting a new game. Options: "Classic" (default, Dillo-inspired), "Fractal" (circle-packing). Show in the new-game dialog alongside puzzle size selection. Save preference. The selected generator is used by createNewGame().
 
@@ -264,4 +265,4 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 
 ---
 
-*Last updated: 2026-03-23*
+*Last updated: 2026-03-24*
