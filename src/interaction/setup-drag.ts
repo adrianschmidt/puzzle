@@ -11,6 +11,7 @@ import { moveGroup } from '../model/helpers.js';
 import type { Renderer } from '../renderer/types.js';
 import { DragController } from './drag-controller.js';
 import type { ScreenDeltaToWorld } from './drag-controller.js';
+import { AutoPanController } from './auto-pan.js';
 
 export interface DragSetupOptions {
     /** The DOM container for the puzzle table (receives move/up events). */
@@ -28,6 +29,11 @@ export interface DragSetupOptions {
      * Needed when a viewport transform (zoom) is active.
      */
     screenDeltaToWorld?: ScreenDeltaToWorld;
+    /**
+     * Pan the viewport by a screen-space delta.
+     * Required for auto-pan when dragging to viewport edges.
+     */
+    panViewport?: (screenDelta: Point) => void;
 }
 
 /**
@@ -50,7 +56,26 @@ function findGroup(groupId: number, state: GameState) {
  * Returns a cleanup function that removes all event listeners.
  */
 export function setupDragHandling(options: DragSetupOptions): () => void {
-    const { container, renderer, getState, onStateChanged, onDrop, screenDeltaToWorld } = options;
+    const { container, renderer, getState, onStateChanged, onDrop, screenDeltaToWorld, panViewport } = options;
+
+    const deltaToWorld = screenDeltaToWorld ?? ((d: Point) => d);
+
+    // Auto-pan controller: pans viewport when dragging near edges
+    const autoPan = panViewport
+        ? new AutoPanController({
+            panViewport,
+            moveGroup(groupId: number, worldDelta: Point) {
+                const group = findGroup(groupId, getState());
+                moveGroup(group, worldDelta);
+            },
+            screenDeltaToWorld: deltaToWorld,
+            requestRender: onStateChanged,
+            getViewportSize: () => ({
+                width: window.visualViewport?.width ?? window.innerWidth,
+                height: window.visualViewport?.height ?? window.innerHeight,
+            }),
+        })
+        : null;
 
     const controller = new DragController(
         () => getState().groups,
@@ -64,6 +89,7 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
                 renderer.setGroupDragging(groupId, true);
             },
             onDrop(groupId: number) {
+                autoPan?.stop();
                 renderer.setGroupDragging(groupId, false);
                 onDrop(groupId);
             },
@@ -80,17 +106,38 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
     renderer.onPiecePointerDown((pieceId, event) => {
         controller.handlePointerDown(pieceId, event);
 
+        // Start auto-pan tracking for this drag
+        const drag = controller.getActiveDrag();
+        if (drag && autoPan) {
+            autoPan.start(drag.groupId);
+            autoPan.updatePointer({ x: event.clientX, y: event.clientY });
+        }
+
         // Capture pointer on the container so we get move/up even
         // if the pointer leaves the piece element.
         container.setPointerCapture(event.pointerId);
     });
 
     // Attach move and up handlers to the container.
-    const onPointerMove = (e: PointerEvent) =>
+    const onPointerMove = (e: PointerEvent) => {
         controller.handlePointerMove(e);
+
+        // Update auto-pan pointer position if dragging
+        if (controller.getActiveDrag() && autoPan) {
+            autoPan.updatePointer({ x: e.clientX, y: e.clientY });
+        } else if (autoPan?.isActive()) {
+            // Drag was cancelled (e.g. pinch-to-zoom) — stop auto-pan
+            autoPan.stop();
+        }
+    };
 
     const onPointerUp = (e: PointerEvent) => {
         controller.handlePointerUp(e);
+
+        // Stop auto-pan when drag ends
+        if (!controller.getActiveDrag() && autoPan?.isActive()) {
+            autoPan.stop();
+        }
 
         if (container.hasPointerCapture(e.pointerId)) {
             container.releasePointerCapture(e.pointerId);
@@ -103,6 +150,7 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
 
     // Return cleanup function
     return () => {
+        autoPan?.stop();
         container.removeEventListener('pointermove', onPointerMove);
         container.removeEventListener('pointerup', onPointerUp);
         container.removeEventListener('pointercancel', onPointerUp);

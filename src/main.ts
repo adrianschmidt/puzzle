@@ -212,6 +212,10 @@ function initGame(state: GameState): void {
             }
         },
         screenDeltaToWorld: (delta) => viewportTransform.screenDeltaToWorld(delta),
+        panViewport: (screenDelta) => {
+            viewportTransform.pan(screenDelta);
+            applyViewportTransform();
+        },
     });
 }
 
