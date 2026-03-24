@@ -256,7 +256,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** When a pinch-to-zoom gesture begins, any piece drag that started from the first finger of that gesture should be cancelled immediately. Currently, pinching sometimes moves a piece with the first touch point while zooming with both. Detection: as soon as a second pointer goes down while a drag is active, cancel the drag (restore the piece to its pre-drag position) and let the gesture become a pure zoom/pan.
 
 ### 9.4 — Bias touch targets toward pieces over background
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-24
 **Depends on:** 3.1
 **Description:** When zoomed out, it's easy to miss a piece and grab the background instead (triggering pan). Improve hit detection so that touches near a piece edge are more likely to register as hitting the piece. Possible approach: expand the hit-test area of pieces by a few pixels (in screen space, not puzzle space — so the expansion is larger when zoomed out), but only for the purpose of choosing "piece vs background". When multiple pieces overlap, do NOT expand — use exact hit testing to avoid grabbing the wrong piece. The bias should only apply to the piece-vs-empty-space decision.
 

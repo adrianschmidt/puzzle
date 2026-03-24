@@ -17,6 +17,7 @@ import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
 import type { PiecePointerDownCallback, Renderer } from './types.js';
 import {
     PIECE_PADDING,
+    HIT_AREA_EXPANSION_PX,
     getImageDimensions,
     getGridCols,
     getGridRows,
@@ -277,6 +278,23 @@ export class SvgDomRenderer implements Renderer {
         image.setAttribute('pointer-events', 'none');
         svg.appendChild(image);
 
+        // Expanded hit-area — a thick transparent stroke around the
+        // piece shape that catches near-misses.  Placed *before* the
+        // exact hit-area so the exact path is higher in z-order.
+        // Only fires when no other piece's exact hit-area is under the
+        // pointer (piece-vs-background bias, not piece-vs-piece).
+        const expandedHitArea = document.createElementNS(svgNS, 'path');
+        expandedHitArea.setAttribute('d', piece.shape);
+        expandedHitArea.setAttribute('fill', 'rgba(0,0,0,0)');
+        expandedHitArea.setAttribute('stroke', 'rgba(0,0,0,0)');
+        expandedHitArea.setAttribute(
+            'stroke-width',
+            String(HIT_AREA_EXPANSION_PX * 2),
+        );
+        expandedHitArea.setAttribute('pointer-events', 'stroke');
+        expandedHitArea.dataset.hitAreaExpanded = 'true';
+        svg.appendChild(expandedHitArea);
+
         // Transparent hit-area matching the piece shape — ensures
         // pointer events only fire inside the actual piece outline,
         // not the rectangular SVG bounding box.
@@ -289,15 +307,41 @@ export class SvgDomRenderer implements Renderer {
         svg.appendChild(hitArea);
 
         // Disable pointer events on the SVG container itself —
-        // only the hit-area path should respond.
+        // only the hit-area paths should respond.
         svg.style.pointerEvents = 'none';
 
-        // Pointer event handler on the hit-area path
-        hitArea.addEventListener('pointerdown', (event: PointerEvent) => {
-            if (this.callback) {
-                this.callback(piece.id, event);
+        // Shared handler for both exact and expanded hit areas
+        const handlePointerDown = (event: PointerEvent) => {
+            if (!this.callback) return;
+
+            const isExpanded =
+                (event.target as HTMLElement)?.dataset?.hitAreaExpanded === 'true';
+
+            if (isExpanded) {
+                // Check if any other piece's exact hit-area is under the
+                // pointer.  If so, defer — don't steal the event from
+                // a piece that was hit precisely.
+                const elementsAtPoint = document.elementsFromPoint(
+                    event.clientX,
+                    event.clientY,
+                );
+
+                for (const el of elementsAtPoint) {
+                    if (el === expandedHitArea) continue;
+
+                    if ((el as HTMLElement).dataset?.hitArea === 'true') {
+                        // Another piece's exact hit area is here — let
+                        // the browser's normal event flow handle it.
+                        return;
+                    }
+                }
             }
-        });
+
+            this.callback(piece.id, event);
+        };
+
+        expandedHitArea.addEventListener('pointerdown', handlePointerDown);
+        hitArea.addEventListener('pointerdown', handlePointerDown);
 
         return svg;
     }

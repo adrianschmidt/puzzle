@@ -5,6 +5,7 @@ import {
     getGridCols,
     getGridRows,
     PIECE_PADDING,
+    HIT_AREA_EXPANSION_PX,
 } from './svg-dom-utils.js';
 import type { Edge, GameState, Piece } from '../model/types.js';
 
@@ -169,5 +170,16 @@ describe('getGridRows', () => {
         ];
 
         expect(getGridRows(gameState(pieces))).toBe(2);
+    });
+});
+
+describe('HIT_AREA_EXPANSION_PX', () => {
+    it('is a positive number', () => {
+        expect(HIT_AREA_EXPANSION_PX).toBeGreaterThan(0);
+    });
+
+    it('is reasonable (not too large)', () => {
+        // Should be small enough not to cause overlapping issues
+        expect(HIT_AREA_EXPANSION_PX).toBeLessThanOrEqual(20);
     });
 });
