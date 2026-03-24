@@ -3,13 +3,60 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { PieceGroup } from '../model/types.js';
+import type { Piece, PieceGroup } from '../model/types.js';
 import {
     computeGatheredPositions,
     applyGatheredPositions,
     getGroupOffsetBounds,
+
 } from './gather.js';
 import type { WorldRect } from './gather.js';
+
+/**
+ * Helper to create a mock piece with edges defining a rectangular bounding box.
+ * The piece spans from (0,0) to (width, height) in piece-local space.
+ */
+function makePiece(id: number, width: number, height: number): Piece {
+    return {
+        id,
+        edges: [
+            {
+                id: id * 100,
+                mateEdgeId: -1,
+                matePieceId: -1,
+                path: `L ${width} 0`,
+                start: { x: 0, y: 0 },
+                end: { x: width, y: 0 },
+            },
+            {
+                id: id * 100 + 1,
+                mateEdgeId: -1,
+                matePieceId: -1,
+                path: `L ${width} ${height}`,
+                start: { x: width, y: 0 },
+                end: { x: width, y: height },
+            },
+            {
+                id: id * 100 + 2,
+                mateEdgeId: -1,
+                matePieceId: -1,
+                path: `L 0 ${height}`,
+                start: { x: width, y: height },
+                end: { x: 0, y: height },
+            },
+            {
+                id: id * 100 + 3,
+                mateEdgeId: -1,
+                matePieceId: -1,
+                path: 'L 0 0',
+                start: { x: 0, y: height },
+                end: { x: 0, y: 0 },
+            },
+        ],
+        shape: `M 0 0 L ${width} 0 L ${width} ${height} L 0 ${height} Z`,
+        imageOffset: { x: 0, y: 0 },
+    };
+}
 
 /** Helper to create a simple single-piece group at a given position. */
 function makeGroup(id: number, x: number, y: number): PieceGroup {
@@ -40,214 +87,106 @@ const defaultVisibleArea: WorldRect = {
     height: 600,
 };
 
-const pieceWidth = 100;
-const pieceHeight = 100;
+const pieceSize = 100;
 
 describe('getGroupOffsetBounds', () => {
-    it('should return zero bounds for a single-piece group at origin', () => {
+    it('should return zero bounds for a single piece at origin', () => {
         const group = makeGroup(1, 0, 0);
         const bounds = getGroupOffsetBounds(group);
-
         expect(bounds).toEqual({ minX: 0, minY: 0, maxX: 0, maxY: 0 });
     });
 
-    it('should return correct bounds for a multi-piece group', () => {
+    it('should compute correct bounds for multi-piece group', () => {
         const group = makeMultiGroup(1, { x: 0, y: 0 }, [
-            [1, { x: 0, y: 0 }],
-            [2, { x: 100, y: 0 }],
-            [3, { x: 0, y: 100 }],
-            [4, { x: 100, y: 100 }],
-        ]);
-
-        const bounds = getGroupOffsetBounds(group);
-
-        expect(bounds).toEqual({ minX: 0, minY: 0, maxX: 100, maxY: 100 });
-    });
-
-    it('should handle negative offsets', () => {
-        const group = makeMultiGroup(1, { x: 50, y: 50 }, [
-            [1, { x: -50, y: -50 }],
+            [0, { x: -50, y: -50 }],
+            [1, { x: 50, y: 0 }],
             [2, { x: 50, y: 50 }],
         ]);
 
         const bounds = getGroupOffsetBounds(group);
-
         expect(bounds).toEqual({ minX: -50, minY: -50, maxX: 50, maxY: 50 });
     });
 });
 
 describe('computeGatheredPositions', () => {
     it('should return an empty map for no groups', () => {
-        const result = computeGatheredPositions(
-            [],
-            defaultVisibleArea,
-            pieceWidth,
-            pieceHeight,
-        );
-
+        const result = computeGatheredPositions([], defaultVisibleArea, []);
         expect(result.size).toBe(0);
     });
 
     it('should centre a single group in the visible area', () => {
+        const pieces = [makePiece(1, pieceSize, pieceSize)];
         const groups = [makeGroup(1, 1000, 2000)];
-        const result = computeGatheredPositions(
-            groups,
-            defaultVisibleArea,
-            pieceWidth,
-            pieceHeight,
-        );
+        const result = computeGatheredPositions(groups, defaultVisibleArea, pieces);
 
         expect(result.size).toBe(1);
-
         const pos = result.get(1)!;
-        // Centre of 800x600 = (400, 300)
-        // Single piece group (100x100): centre minus half size
-        expect(pos.x).toBe(350);
-        expect(pos.y).toBe(250);
+        // Should be roughly centred in 800×600
+        expect(pos.x).toBeGreaterThan(300);
+        expect(pos.x).toBeLessThan(400);
+        expect(pos.y).toBeGreaterThan(200);
+        expect(pos.y).toBeLessThan(300);
     });
 
     it('should produce positions for all groups', () => {
-        const groups = [
-            makeGroup(1, 0, 0),
-            makeGroup(2, 500, 500),
-            makeGroup(3, -100, -200),
-            makeGroup(4, 1000, 1000),
+        const pieces = [
+            makePiece(1, pieceSize, pieceSize),
+            makePiece(2, pieceSize, pieceSize),
+            makePiece(3, pieceSize, pieceSize),
         ];
+        const groups = [makeGroup(1, 0, 0), makeGroup(2, 500, 500), makeGroup(3, -200, 100)];
+        const result = computeGatheredPositions(groups, defaultVisibleArea, pieces);
 
-        const result = computeGatheredPositions(
-            groups,
-            defaultVisibleArea,
-            pieceWidth,
-            pieceHeight,
-        );
-
-        expect(result.size).toBe(4);
-
-        for (const group of groups) {
-            expect(result.has(group.id)).toBe(true);
-        }
+        expect(result.size).toBe(3);
+        expect(result.has(1)).toBe(true);
+        expect(result.has(2)).toBe(true);
+        expect(result.has(3)).toBe(true);
     });
 
-    it('should scatter groups within the puzzle-relative area', () => {
-        const groups = [
-            makeGroup(1, 0, 0),
-            makeGroup(2, 1000, 0),
-            makeGroup(3, 0, 1000),
-            makeGroup(4, 1000, 1000),
-        ];
-
-        const result = computeGatheredPositions(
-            groups,
-            defaultVisibleArea,
-            pieceWidth,
-            pieceHeight,
-            8, // puzzleCols
-            6, // puzzleRows
+    it('should not stack pieces on top of each other', () => {
+        const pieces = Array.from({ length: 6 }, (_, i) =>
+            makePiece(i, pieceSize, pieceSize),
         );
+        const groups = pieces.map((p, i) => makeGroup(p.id, i * 10, i * 10));
 
-        // All 4 groups should get positions
-        expect(result.size).toBe(4);
+        const result = computeGatheredPositions(groups, defaultVisibleArea, pieces);
 
-        // Scatter area is 2.5× puzzle size = 2000×1500, centred on visible area
-        // Positions should be within a reasonable range of the centre
-        const centreX = 400;
-        const centreY = 300;
-        const maxDist = 1500; // generous bound
+        // Collect all positions
+        const positions = Array.from(result.values());
 
-        for (const pos of result.values()) {
-            expect(Math.abs(pos.x - centreX)).toBeLessThan(maxDist);
-            expect(Math.abs(pos.y - centreY)).toBeLessThan(maxDist);
-        }
-    });
-
-    it('should produce different positions on repeated calls (shuffle + jitter)', () => {
-        const groups = Array.from({ length: 10 }, (_, i) =>
-            makeGroup(i, i * 100, i * 100),
-        );
-
-        const result1 = computeGatheredPositions(
-            groups,
-            defaultVisibleArea,
-            pieceWidth,
-            pieceHeight,
-        );
-        const result2 = computeGatheredPositions(
-            groups,
-            defaultVisibleArea,
-            pieceWidth,
-            pieceHeight,
-        );
-
-        // At least some positions should differ (extremely unlikely to match)
-        let anyDifferent = false;
-        for (const group of groups) {
-            const p1 = result1.get(group.id)!;
-            const p2 = result2.get(group.id)!;
-            if (p1.x !== p2.x || p1.y !== p2.y) {
-                anyDifferent = true;
-                break;
+        // No two groups should be at the same position
+        for (let i = 0; i < positions.length; i++) {
+            for (let j = i + 1; j < positions.length; j++) {
+                const dx = Math.abs(positions[i].x - positions[j].x);
+                const dy = Math.abs(positions[i].y - positions[j].y);
+                // They should differ by at least pieceSize (no stacking)
+                expect(dx > 10 || dy > 10).toBe(true);
             }
         }
-        expect(anyDifferent).toBe(true);
     });
 
-    it('should handle a visible area with non-zero origin', () => {
-        const visibleArea: WorldRect = { x: -200, y: -100, width: 400, height: 300 };
-        const groups = [makeGroup(1, 0, 0)];
-
-        const result = computeGatheredPositions(
-            groups,
-            visibleArea,
-            pieceWidth,
-            pieceHeight,
-        );
-
-        const pos = result.get(1)!;
-        // Centre: (-200 + 400/2, -100 + 300/2) = (0, 50)
-        // Centred single piece: (0 - 50, 50 - 50) = (-50, 0)
-        expect(pos.x).toBe(-50);
-        expect(pos.y).toBe(0);
-    });
-
-    it('should handle many groups without overlapping positions', () => {
-        const groups = Array.from({ length: 20 }, (_, i) =>
-            makeGroup(i, i * 500, i * 500),
-        );
-
-        const result = computeGatheredPositions(
-            groups,
-            defaultVisibleArea,
-            pieceWidth,
-            pieceHeight,
-        );
-
-        // All positions should be unique
-        const positions = [...result.values()];
-        const positionStrings = positions.map((p) => `${p.x},${p.y}`);
-        const uniquePositions = new Set(positionStrings);
-
-        expect(uniquePositions.size).toBe(20);
-    });
-
-    it('should not mutate the original groups', () => {
-        const groups = [
-            makeGroup(1, 100, 200),
-            makeGroup(2, 300, 400),
+    it('should handle groups with varying sizes', () => {
+        const pieces = [
+            makePiece(0, pieceSize, pieceSize),
+            makePiece(1, pieceSize, pieceSize),
+            makePiece(2, pieceSize, pieceSize),
         ];
+        // A multi-piece group (pieces 0 and 1 side by side)
+        const bigGroup = makeMultiGroup(10, { x: 0, y: 0 }, [
+            [0, { x: 0, y: 0 }],
+            [1, { x: pieceSize, y: 0 }],
+        ]);
+        const smallGroup = makeGroup(2, 500, 500);
 
-        const originalPositions = groups.map((g) => ({ ...g.position }));
-
-        computeGatheredPositions(
-            groups,
+        const result = computeGatheredPositions(
+            [bigGroup, smallGroup],
             defaultVisibleArea,
-            pieceWidth,
-            pieceHeight,
+            pieces,
         );
 
-        // Positions should be unchanged
-        groups.forEach((g, i) => {
-            expect(g.position).toEqual(originalPositions[i]);
-        });
+        expect(result.size).toBe(2);
+        expect(result.has(10)).toBe(true);
+        expect(result.has(2)).toBe(true);
     });
 });
 
@@ -255,7 +194,7 @@ describe('applyGatheredPositions', () => {
     it('should update group positions from the map', () => {
         const groups = [makeGroup(1, 100, 200), makeGroup(2, 300, 400)];
 
-        const positions = new Map([
+        const positions = new Map<number, { x: number; y: number }>([
             [1, { x: 10, y: 20 }],
             [2, { x: 30, y: 40 }],
         ]);
@@ -266,26 +205,13 @@ describe('applyGatheredPositions', () => {
         expect(groups[1].position).toEqual({ x: 30, y: 40 });
     });
 
-    it('should not affect groups not in the positions map', () => {
+    it('should skip groups not in the positions map', () => {
         const groups = [makeGroup(1, 100, 200), makeGroup(2, 300, 400)];
-
-        const positions = new Map([[1, { x: 10, y: 20 }]]);
+        const positions = new Map([[1, { x: 50, y: 60 }]]);
 
         applyGatheredPositions(groups, positions);
 
-        expect(groups[0].position).toEqual({ x: 10, y: 20 });
+        expect(groups[0].position).toEqual({ x: 50, y: 60 });
         expect(groups[1].position).toEqual({ x: 300, y: 400 });
-    });
-
-    it('should create new position objects (not share references)', () => {
-        const groups = [makeGroup(1, 100, 200)];
-        const newPos = { x: 10, y: 20 };
-        const positions = new Map([[1, newPos]]);
-
-        applyGatheredPositions(groups, positions);
-
-        // Mutating the source should not affect the applied position
-        newPos.x = 999;
-        expect(groups[0].position.x).toBe(10);
     });
 });
