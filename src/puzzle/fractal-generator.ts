@@ -304,6 +304,34 @@ function findPossibleConnections(
     return pcs;
 }
 
+/**
+ * Detect pinwheel/swastika shapes: a tile with connections spiralling
+ * out in all 4 quadrants creates an unfortunate resemblance.
+ * Returns true if the piece contains such a pattern.
+ */
+function hasPinwheelShape(connections: DiagonalConnection[]): boolean {
+    // Build a map of which quadrants each tile connects FROM (as p1)
+    const quadsByTile = new Map<string, Set<number>>();
+    for (const c of connections) {
+        const key = `${c.p1.x},${c.p1.y}`;
+        let quads = quadsByTile.get(key);
+        if (!quads) {
+            quads = new Set();
+            quadsByTile.set(key, quads);
+        }
+        quads.add(c.quad);
+    }
+
+    // A tile connecting in all 4 quadrants creates the pinwheel
+    for (const quads of quadsByTile.values()) {
+        if (quads.size >= 4) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function createPiece(
     grid: CellGrid,
     minSize: number,
@@ -323,6 +351,32 @@ function createPiece(
         if (pcs.length === 0) break;
 
         const chosen = pcs[Math.floor(random() * pcs.length)];
+
+        // Reject connections that would create a pinwheel shape
+        const tentative = [...myconnections, chosen];
+        if (hasPinwheelShape(tentative)) {
+            // Try another connection from the remaining candidates
+            const alternatives = pcs.filter(p => p !== chosen);
+            let found = false;
+            for (const alt of alternatives) {
+                const altTentative = [...myconnections, alt];
+                if (!hasPinwheelShape(altTentative)) {
+                    myconnections.push(alt);
+                    mytiles.push(alt.p2);
+                    grid.occupyCell(alt.cell);
+                    grid.visitTile(alt.p2);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                // All options create a pinwheel — stop growing this piece
+                break;
+            }
+
+            continue;
+        }
+
         myconnections.push(chosen);
         mytiles.push(chosen.p2);
         grid.occupyCell(chosen.cell);
