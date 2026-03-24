@@ -262,7 +262,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** When zoomed out, it's easy to miss a piece and grab the background instead (triggering pan). Improve hit detection so that touches near a piece edge are more likely to register as hitting the piece. Possible approach: expand the hit-test area of pieces by a few pixels (in screen space, not puzzle space — so the expansion is larger when zoomed out), but only for the purpose of choosing "piece vs background". When multiple pieces overlap, do NOT expand — use exact hit testing to avoid grabbing the wrong piece. The bias should only apply to the piece-vs-empty-space decision.
 
 ### 9.5 — Auto-pan when dragging to viewport edge
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-24
 **Depends on:** 3.4
 **Description:** When dragging a piece to the edge of the visible viewport, automatically pan the play area in that direction. This lets the player move pieces across large distances without the tedious cycle of: drag piece to edge → drop → pan → pick up → drag again. Implementation: define an edge zone (e.g. 40-60px from viewport edge), and while the pointer is in that zone during a drag, smoothly scroll the viewport in that direction. Pan speed should be proportional to how deep into the edge zone the pointer is. Stop panning when the pointer leaves the zone or the drag ends.
 

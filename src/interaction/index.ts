@@ -6,3 +6,5 @@ export { ViewportTransform, clampScale, MIN_SCALE, MAX_SCALE, WHEEL_ZOOM_FACTOR 
 export type { ViewportState } from './viewport-transform.js';
 export { ViewportController, touchDistance, touchMidpoint } from './viewport-controller.js';
 export type { ViewportControllerOptions } from './viewport-controller.js';
+export { AutoPanController, computeAutoPanVelocity, EDGE_ZONE_PX, MAX_PAN_SPEED_PX_PER_SEC } from './auto-pan.js';
+export type { AutoPanCallbacks } from './auto-pan.js';
