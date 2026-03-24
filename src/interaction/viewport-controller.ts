@@ -24,7 +24,7 @@ export interface ViewportControllerOptions {
      * Check if a pointer event hit a puzzle piece.
      * Returns true if the event target is a piece (not empty table).
      */
-    isPieceElement: (target: EventTarget | null) => boolean;
+    isPieceElement?: (target: EventTarget | null) => boolean;
 }
 
 /** Tracks a single active touch point for gesture detection. */
@@ -58,7 +58,7 @@ export class ViewportController {
     private container: HTMLElement;
     private transform: ViewportTransform;
     private onViewportChanged: () => void;
-    private isPieceElement: (target: EventTarget | null) => boolean;
+
 
     // Pan state (single pointer on empty space)
     private panPointerId: number | null = null;
@@ -79,7 +79,7 @@ export class ViewportController {
         this.container = options.container;
         this.transform = options.transform;
         this.onViewportChanged = options.onViewportChanged;
-        this.isPieceElement = options.isPieceElement;
+
 
         this.boundWheel = this.handleWheel.bind(this);
         this.boundPointerDown = this.handlePointerDown.bind(this);
@@ -137,8 +137,10 @@ export class ViewportController {
             }
         }
 
-        // Only start pan if the pointer is NOT on a piece
-        if (this.isPieceElement(e.target)) {
+        // Only start pan if the pointer landed on the background — either
+        // the container itself or its direct puzzle table child (empty space).
+        // This prevents pan from stealing clicks on buttons, overlays, etc.
+        if (!this.isBackgroundElement(e.target)) {
             return;
         }
 
@@ -199,6 +201,35 @@ export class ViewportController {
             this.panPointerId = null;
             this.panLastPoint = null;
         }
+    }
+
+    /**
+     * Check if the event target is the puzzle background (empty space).
+     * Only these elements should trigger pan — everything else (pieces,
+     * buttons, overlays) should receive its own click/pointer events.
+     */
+    private isBackgroundElement(target: EventTarget | null): boolean {
+        if (!target || !(target instanceof Element)) {
+            return false;
+        }
+
+        // The container itself (app background)
+        if (target === this.container) {
+            return true;
+        }
+
+        // Direct children that are the puzzle table (renderer's div),
+        // but not pieces, buttons, or other UI elements.
+        // The puzzle table is a plain div with no data attributes or roles.
+        if (
+            target.parentElement === this.container &&
+            target instanceof HTMLDivElement &&
+            !target.closest('button, a')
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     // --- Pinch-to-zoom ---
