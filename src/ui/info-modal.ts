@@ -73,7 +73,7 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 <ul>
                     <li>🎮 <strong>New Game</strong> — Start fresh with a random image</li>
                     <li>📍 <strong>Centre View</strong> — Reset zoom and pan</li>
-                    <li>🔄 <strong>Gather Pieces</strong> — Bring all pieces to view</li>
+                    <li>🔄 <strong>Gather Pieces</strong> — Organize all pieces in a compact grid</li>
                     <li>🎨 <strong>Background</strong> — Change table colour</li>
                 </ul>
             </ul>

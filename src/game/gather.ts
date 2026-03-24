@@ -68,32 +68,25 @@ export function getGroupOffsetBounds(group: PieceGroup): {
 }
 
 /**
- * Scatter multiplier — the scatter area is this many times wider and
- * taller than the finished puzzle. Gives a natural "dumped on the table"
- * spread without pieces being unreachably far apart.
+ * Minimum margin between groups in the gather layout, in world units.
+ * This ensures pieces don't touch each other when gathered.
  */
-const SCATTER_MULTIPLIER = 2.5;
+const MIN_MARGIN = 20;
 
 /**
- * Maximum random jitter applied to each axis, as a fraction of the
- * cell size. 0.4 = up to 40% of a cell width/height in either direction.
- */
-const JITTER_FRACTION = 0.4;
-
-/**
- * Compute new positions for all groups, scattering them in a randomised
- * grid within an area relative to the finished puzzle size.
+ * Compute new positions for all groups, arranging them in a compact
+ * grid layout with consistent minimum margins between pieces.
  *
- * Groups are shuffled before placement so their grid position has no
- * correlation with their solved position. Each group gets random jitter
- * so the layout doesn't look like a perfect grid.
+ * Groups are shuffled and sorted by size before placement so their grid
+ * position has no correlation with their solved position. Each group is
+ * positioned using its actual bounding box for efficient space usage.
  *
  * @param groups - Current groups with their positions (not mutated)
  * @param visibleArea - The visible viewport rectangle in world coordinates
  * @param pieceWidth - Width of a single puzzle piece in world units
  * @param pieceHeight - Height of a single puzzle piece in world units
- * @param puzzleCols - Number of columns in the puzzle grid (for scatter area sizing)
- * @param puzzleRows - Number of rows in the puzzle grid (for scatter area sizing)
+ * @param puzzleCols - Number of columns in the puzzle grid (unused in new layout)
+ * @param puzzleRows - Number of rows in the puzzle grid (unused in new layout)
  * @returns Map of groupId → new world position
  */
 export function computeGatheredPositions(
@@ -130,45 +123,75 @@ export function computeGatheredPositions(
         ]);
     }
 
-    // Compute scatter area based on puzzle dimensions
-    const pCols = puzzleCols ?? Math.ceil(Math.sqrt(groups.length));
-    const pRows = puzzleRows ?? Math.ceil(groups.length / pCols);
-    const puzzleWidth = pCols * pieceWidth;
-    const puzzleHeight = pRows * pieceHeight;
-    const scatterWidth = puzzleWidth * SCATTER_MULTIPLIER;
-    const scatterHeight = puzzleHeight * SCATTER_MULTIPLIER;
+    // Prepare groups with their dimensions for layout
+    interface GroupWithSize {
+        group: PieceGroup;
+        bounds: ReturnType<typeof getGroupOffsetBounds>;
+        width: number;
+        height: number;
+    }
 
-    // Grid layout within the scatter area
-    const gridCols = Math.ceil(Math.sqrt(groups.length));
-    const gridRows = Math.ceil(groups.length / gridCols);
-    const cellWidth = scatterWidth / gridCols;
-    const cellHeight = scatterHeight / gridRows;
-
-    // Top-left of the scatter area, centred on the visible area
-    const startX = centreX - scatterWidth / 2;
-    const startY = centreY - scatterHeight / 2;
+    const groupsWithSizes: GroupWithSize[] = groups.map((group) => {
+        const bounds = getGroupOffsetBounds(group);
+        return {
+            group,
+            bounds,
+            width: (bounds.maxX - bounds.minX) + pieceWidth,
+            height: (bounds.maxY - bounds.minY) + pieceHeight,
+        };
+    });
 
     // Shuffle groups so grid position doesn't correlate with solved position
-    const shuffled = [...groups];
-    for (let i = shuffled.length - 1; i > 0; i--) {
+    for (let i = groupsWithSizes.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        [groupsWithSizes[i], groupsWithSizes[j]] = [groupsWithSizes[j], groupsWithSizes[i]];
     }
+
+    // Sort by size (larger groups first) for better packing efficiency
+    groupsWithSizes.sort((a, b) => {
+        const areaA = a.width * a.height;
+        const areaB = b.width * b.height;
+        return areaB - areaA;
+    });
+
+    // Use a simple grid layout with dynamic cell sizing
+    const gridCols = Math.ceil(Math.sqrt(groups.length));
+    const gridRows = Math.ceil(groups.length / gridCols);
+
+    // Find the maximum dimensions among all groups for consistent grid sizing
+    let maxWidth = 0;
+    let maxHeight = 0;
+    for (const { width, height } of groupsWithSizes) {
+        maxWidth = Math.max(maxWidth, width);
+        maxHeight = Math.max(maxHeight, height);
+    }
+
+    // Cell dimensions include the largest group plus margin
+    const cellWidth = maxWidth + MIN_MARGIN;
+    const cellHeight = maxHeight + MIN_MARGIN;
+
+    // Total grid dimensions
+    const totalGridWidth = gridCols * cellWidth - MIN_MARGIN; // Subtract margin from final edge
+    const totalGridHeight = gridRows * cellHeight - MIN_MARGIN;
+
+    // Position the grid centred in the visible area
+    const startX = centreX - totalGridWidth / 2;
+    const startY = centreY - totalGridHeight / 2;
 
     const result = new Map<number, Point>();
 
-    for (let i = 0; i < shuffled.length; i++) {
-        const group = shuffled[i];
+    for (let i = 0; i < groupsWithSizes.length; i++) {
+        const { group, bounds } = groupsWithSizes[i];
         const col = i % gridCols;
         const row = Math.floor(i / gridCols);
 
-        // Random jitter within the cell
-        const jitterX = (Math.random() - 0.5) * 2 * JITTER_FRACTION * cellWidth;
-        const jitterY = (Math.random() - 0.5) * 2 * JITTER_FRACTION * cellHeight;
+        // Position group at the top-left corner of its cell, accounting for its bounds
+        const cellX = startX + col * cellWidth;
+        const cellY = startY + row * cellHeight;
 
         result.set(group.id, {
-            x: startX + col * cellWidth + jitterX,
-            y: startY + row * cellHeight + jitterY,
+            x: cellX - bounds.minX,
+            y: cellY - bounds.minY,
         });
     }
 
