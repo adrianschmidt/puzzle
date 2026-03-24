@@ -345,30 +345,36 @@ createCentreViewButton({
 createGatherPiecesButton({
     container: app,
     onGatherPieces: () => {
-        // Compute the visible area in world coordinates
         const screenWidth = app.clientWidth || window.innerWidth;
         const screenHeight = app.clientHeight || window.innerHeight;
+        const aspectRatio = screenWidth / screenHeight;
 
-        const topLeft = viewportTransform.screenToWorld({ x: 0, y: 0 });
-        const bottomRight = viewportTransform.screenToWorld({
-            x: screenWidth,
-            y: screenHeight,
-        });
-
-        const visibleArea = {
-            x: topLeft.x,
-            y: topLeft.y,
-            width: bottomRight.x - topLeft.x,
-            height: bottomRight.y - topLeft.y,
-        };
-
-        const positions = computeGatheredPositions(
+        const { positions, layoutBounds } = computeGatheredPositions(
             gameState.groups,
-            visibleArea,
+            aspectRatio,
             gameState.pieces,
         );
 
         applyGatheredPositions(gameState.groups, positions);
+
+        // Zoom-to-fit: compute scale and offset so the layout fills the screen
+        const scaleX = screenWidth / layoutBounds.width;
+        const scaleY = screenHeight / layoutBounds.height;
+        const scale = Math.min(scaleX, scaleY) * 0.9; // 90% to leave margin
+
+        // Centre the layout on screen
+        const layoutCentreX = layoutBounds.x + layoutBounds.width / 2;
+        const layoutCentreY = layoutBounds.y + layoutBounds.height / 2;
+
+        viewportTransform.setState({
+            scale,
+            offset: {
+                x: screenWidth / 2 - layoutCentreX * scale,
+                y: screenHeight / 2 - layoutCentreY * scale,
+            },
+        });
+
+        applyViewportTransform();
         renderer.renderState(gameState);
         autoSave();
     },

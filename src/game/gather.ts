@@ -109,25 +109,44 @@ function getGroupVisualBounds(
 }
 
 /**
+ * Result of computing gathered positions, including the layout bounds
+ * so the caller can zoom-to-fit.
+ */
+export interface GatherResult {
+    /** Map of groupId → new world position. */
+    positions: Map<number, Point>;
+    /** Bounding box of the entire layout in world coordinates. */
+    layoutBounds: { x: number; y: number; width: number; height: number };
+}
+
+/**
  * Compute new positions for all groups, arranging them in a compact
- * row-based layout with consistent margins between pieces.
+ * row-based layout that matches the screen's aspect ratio.
  *
  * Uses actual visual bounding boxes for each group, so it works
  * correctly with both classic and fractal piece shapes. Rows are
- * packed left-to-right, wrapping when the target width is exceeded.
+ * packed left-to-right, wrapping to maintain the target aspect ratio.
+ *
+ * After calling this, the caller should zoom-to-fit the returned
+ * layoutBounds so all pieces are visible regardless of current zoom.
  *
  * @param groups - Current groups with their positions (not mutated)
- * @param visibleArea - The visible viewport rectangle in world coordinates
+ * @param screenAspectRatio - Width/height ratio of the screen viewport
  * @param pieces - All pieces in the puzzle (for computing visual bounds)
- * @returns Map of groupId → new world position
+ * @returns Positions and layout bounds for zoom-to-fit
  */
 export function computeGatheredPositions(
     groups: ReadonlyArray<Readonly<PieceGroup>>,
-    visibleArea: WorldRect,
+    screenAspectRatio: number,
     pieces: ReadonlyArray<Readonly<Piece>>,
-): Map<number, Point> {
+): GatherResult {
+    const emptyResult: GatherResult = {
+        positions: new Map(),
+        layoutBounds: { x: 0, y: 0, width: 0, height: 0 },
+    };
+
     if (groups.length === 0) {
-        return new Map();
+        return emptyResult;
     }
 
     const margin = GATHER_PADDING;
@@ -152,8 +171,18 @@ export function computeGatheredPositions(
     // Sort by height descending for better row packing
     layouts.sort((a, b) => b.bounds.height - a.bounds.height);
 
-    // Target width: use visible area width, or a reasonable default
-    const targetWidth = Math.max(visibleArea.width * 0.8, 400);
+    // Estimate a good target width based on the screen aspect ratio.
+    // We want the final layout to roughly match the screen's proportions.
+    // Estimate total content area from all groups, then derive target width.
+    let totalArea = 0;
+    for (const layout of layouts) {
+        totalArea += (layout.bounds.width + margin) * (layout.bounds.height + margin);
+    }
+
+    // targetWidth × (targetWidth / aspectRatio) ≈ totalArea
+    // targetWidth² ≈ totalArea × aspectRatio
+    const aspectRatio = Math.max(0.5, Math.min(3, screenAspectRatio));
+    const targetWidth = Math.sqrt(totalArea * aspectRatio) * 1.1; // 10% extra to avoid being too tight
 
     // Pack into rows
     const rows: Array<{ items: GroupLayout[]; rowHeight: number }> = [];
@@ -165,7 +194,6 @@ export function computeGatheredPositions(
         const itemWidth = layout.bounds.width + margin;
 
         if (currentRow.length > 0 && currentRowWidth + itemWidth > targetWidth) {
-            // Start a new row
             rows.push({ items: currentRow, rowHeight: currentRowHeight });
             currentRow = [];
             currentRowWidth = 0;
@@ -181,17 +209,23 @@ export function computeGatheredPositions(
         rows.push({ items: currentRow, rowHeight: currentRowHeight });
     }
 
-    // Compute total layout height
+    // Compute total layout dimensions
     let totalHeight = 0;
+    let maxRowWidth = 0;
     for (const row of rows) {
+        let rowWidth = 0;
+        for (const layout of row.items) {
+            rowWidth += layout.bounds.width + margin;
+        }
+        rowWidth -= margin;
+        maxRowWidth = Math.max(maxRowWidth, rowWidth);
         totalHeight += row.rowHeight + margin;
     }
-    totalHeight -= margin; // Remove trailing margin
+    totalHeight -= margin;
 
-    // Centre the layout in the visible area
-    const centreX = visibleArea.x + visibleArea.width / 2;
-    const centreY = visibleArea.y + visibleArea.height / 2;
-    const startY = centreY - totalHeight / 2;
+    // Layout centred at origin (0,0) — the caller will handle viewport positioning
+    const startX = -maxRowWidth / 2;
+    const startY = -totalHeight / 2;
 
     const result = new Map<number, Point>();
     let y = startY;
@@ -204,14 +238,11 @@ export function computeGatheredPositions(
         }
         rowWidth -= margin;
 
-        let x = centreX - rowWidth / 2;
+        let x = -rowWidth / 2; // Centre each row
 
         for (const layout of row.items) {
             const { group, bounds } = layout;
 
-            // Position the group so its visual bounds start at (x, y)
-            // The group's position determines where offset (0,0) goes in world space.
-            // We want bounds.minX (in group-local space) to map to x in world space.
             result.set(group.id, {
                 x: x - bounds.minX,
                 y: y - bounds.minY,
@@ -223,7 +254,15 @@ export function computeGatheredPositions(
         y += row.rowHeight + margin;
     }
 
-    return result;
+    return {
+        positions: result,
+        layoutBounds: {
+            x: startX - margin,
+            y: startY - margin,
+            width: maxRowWidth + margin * 2,
+            height: totalHeight + margin * 2,
+        },
+    };
 }
 
 /**
