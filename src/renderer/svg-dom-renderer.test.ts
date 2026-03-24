@@ -442,6 +442,140 @@ describe('SvgDomRenderer', () => {
         });
     });
 
+    describe('expanded hit area', () => {
+        it('creates an expanded hit-area path for each piece', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            for (const piece of state.pieces) {
+                const svg = container.querySelector(
+                    `svg[data-piece-id="${piece.id}"]`,
+                ) as SVGSVGElement;
+
+                const expandedHitArea = svg.querySelector(
+                    '[data-hit-area-expanded]',
+                ) as SVGPathElement;
+                expect(
+                    expandedHitArea,
+                    `Piece ${piece.id} should have an expanded hit area`,
+                ).not.toBeNull();
+
+                // Should use the same shape as the piece
+                expect(expandedHitArea.getAttribute('d')).toBe(piece.shape);
+
+                // Should have a transparent stroke for the expansion
+                expect(expandedHitArea.getAttribute('stroke')).toBe(
+                    'rgba(0,0,0,0)',
+                );
+                expect(
+                    Number(expandedHitArea.getAttribute('stroke-width')),
+                ).toBeGreaterThan(0);
+
+                // Should respond to stroke pointer events only
+                expect(expandedHitArea.getAttribute('pointer-events')).toBe(
+                    'stroke',
+                );
+            }
+        });
+
+        it('places expanded hit-area before exact hit-area in DOM order', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            const svg = container.querySelector(
+                'svg[data-piece-id="0"]',
+            ) as SVGSVGElement;
+
+            const expanded = svg.querySelector(
+                '[data-hit-area-expanded]',
+            ) as SVGPathElement;
+            const exact = svg.querySelector(
+                '[data-hit-area]',
+            ) as SVGPathElement;
+
+            // Expanded should come before exact in DOM siblings
+            const children = Array.from(svg.children);
+            const expandedIndex = children.indexOf(expanded);
+            const exactIndex = children.indexOf(exact);
+            expect(expandedIndex).toBeLessThan(exactIndex);
+        });
+
+        it('fires callback on expanded hit-area pointerdown when no exact hit overlaps', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            const callback = vi.fn();
+            renderer.onPiecePointerDown(callback);
+
+            const svg = container.querySelector(
+                'svg[data-piece-id="1"]',
+            ) as SVGSVGElement;
+            const expandedHitArea = svg.querySelector(
+                '[data-hit-area-expanded]',
+            ) as SVGPathElement;
+
+            // jsdom doesn't implement elementsFromPoint — define it
+            document.elementsFromPoint = vi.fn().mockReturnValue([
+                expandedHitArea,
+            ]);
+
+            const event = new PointerEvent('pointerdown', {
+                bubbles: true,
+                clientX: 50,
+                clientY: 50,
+            });
+            expandedHitArea.dispatchEvent(event);
+
+            expect(callback).toHaveBeenCalledOnce();
+            expect(callback).toHaveBeenCalledWith(
+                1,
+                expect.any(PointerEvent),
+            );
+        });
+
+        it('does NOT fire callback on expanded hit-area when another exact hit overlaps', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            renderer.renderState(state);
+
+            const callback = vi.fn();
+            renderer.onPiecePointerDown(callback);
+
+            const svg0 = container.querySelector(
+                'svg[data-piece-id="0"]',
+            ) as SVGSVGElement;
+            const svg1 = container.querySelector(
+                'svg[data-piece-id="1"]',
+            ) as SVGSVGElement;
+
+            const expandedHitArea1 = svg1.querySelector(
+                '[data-hit-area-expanded]',
+            ) as SVGPathElement;
+            const exactHitArea0 = svg0.querySelector(
+                '[data-hit-area]',
+            ) as SVGPathElement;
+
+            // Another piece's exact hit area is under the pointer
+            document.elementsFromPoint = vi.fn().mockReturnValue([
+                expandedHitArea1,
+                exactHitArea0,
+            ]);
+
+            const event = new PointerEvent('pointerdown', {
+                bubbles: true,
+                clientX: 50,
+                clientY: 50,
+            });
+            expandedHitArea1.dispatchEvent(event);
+
+            // Should NOT fire — the exact hit of piece 0 should take priority
+            expect(callback).not.toHaveBeenCalled();
+        });
+    });
+
     describe('bringGroupToFront', () => {
         it('moves the group element to the end of its parent', () => {
             renderer.init(container);

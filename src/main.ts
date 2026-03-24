@@ -119,15 +119,18 @@ function applyViewportTransform(): void {
 }
 
 /**
- * Check if an event target is a puzzle piece hit-area element.
+ * Check if an event target is a puzzle piece hit-area element
+ * (either exact or expanded).
  */
 function isPieceElement(target: EventTarget | null): boolean {
     if (!target || !(target instanceof Element)) {
         return false;
     }
 
-    // Piece hit-areas have data-hit-area="true"
-    if ((target as HTMLElement).dataset?.hitArea === 'true') {
+    const dataset = (target as HTMLElement).dataset;
+
+    // Piece hit-areas have data-hit-area="true" or data-hit-area-expanded="true"
+    if (dataset?.hitArea === 'true' || dataset?.hitAreaExpanded === 'true') {
         return true;
     }
 
