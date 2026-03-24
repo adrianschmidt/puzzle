@@ -1,539 +1,592 @@
 /**
  * Fractal circle-packing puzzle generator.
  *
- * Inspired by the Fractal Jigsaw Generator (proceduraljigsaw/Fractalpuzzlejs).
- * Uses a circle-packing grid where pieces are organic shapes formed by 
- * merging adjacent circles. No traditional tabs/blanks — pieces interlock 
- * through curved boundaries between circles.
+ * Ported from the Fractal Jigsaw Generator by proceduraljigsaw:
+ * https://github.com/proceduraljigsaw/Fractalpuzzlejs
  *
- * Algorithm:
- * 1. Create a hexagonal grid of circles that covers the puzzle area
- * 2. Randomly merge adjacent circles into pieces using flood-fill
- * 3. Generate piece boundaries using circular arcs between circle centres
- * 4. Convert to SVG paths and create Edge[] with mate relationships
+ * The algorithm places tiles on a square grid and connects them
+ * diagonally to form pieces. Each piece is bounded by quarter-circle
+ * arcs around the tile centres, producing organic, dragon-curve-like
+ * shapes that interlock without traditional tabs/blanks.
  *
- * This produces a very different aesthetic from classic jigsaw pieces —
- * organic, flowing shapes that still maintain the interlocking property.
+ * Key concepts:
+ * - **Tile:** a point on the grid, identified by (x, y).
+ * - **DiagonalConnection:** a diagonal link between two tiles,
+ *   occupying the cell (square) between them.
+ * - **Piece:** a set of DiagonalConnections grown via flood-fill.
+ * - **Arc:** a quarter-circle arc segment forming the piece boundary.
+ *
+ * The generator outputs standard Piece[] conforming to the engine's
+ * data model, with proper edge mate relationships for merge detection.
  */
 
 import type { Edge, Piece, Point, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
 
-/**
- * Represents a circle in the packing grid.
- */
-interface Circle {
-    /** Unique identifier for this circle. */
-    id: number;
-    /** Centre point of the circle. */
-    centre: Point;
-    /** Radius of the circle. */
-    radius: number;
-    /** Which piece this circle belongs to (assigned during merging). */
-    pieceId: number;
-    /** Adjacent circle IDs (connectivity graph). */
-    neighbors: number[];
+// ---------------------------------------------------------------------------
+// Internal types
+// ---------------------------------------------------------------------------
+
+interface Tile {
+    x: number;
+    y: number;
+    hasconnections: boolean;
 }
 
-/**
- * A piece formed by merging one or more circles.
- */
-interface FractalPiece {
-    /** Unique piece identifier. */
-    id: number;
-    /** Circle IDs that form this piece. */
-    circles: number[];
-    /** Boundary segments between this piece and others/border. */
-    boundaries: BoundarySegment[];
+interface DiagonalConnection {
+    p1: Tile;
+    p2: Tile;
+    p2_taken: boolean;
+    slope: number;
+    quad: number;
+    cell: { x: number; y: number };
 }
 
-/**
- * A boundary segment between two pieces (or piece and border).
- */
-interface BoundarySegment {
-    /** Which circles this boundary is between. */
-    fromCircle: number;
-    toCircle: number;
-    /** The piece this boundary borders (-1 for puzzle border). */
-    neighborPieceId: number;
-    /** Arc parameters for drawing the boundary. */
-    arc: ArcSegment;
+interface ArcData {
+    /** Centre point of the arc's circle. */
+    cx: number;
+    cy: number;
+    /** Radius. */
+    r: number;
+    /** Start point. */
+    sx: number;
+    sy: number;
+    /** End point. */
+    ex: number;
+    ey: number;
+    /** Sweep flag (0 or 1). */
+    sign: number;
+    /** Quadrant (0-3). */
+    quad: number;
 }
 
-/**
- * Parameters for a circular arc boundary segment.
- */
-interface ArcSegment {
-    /** Start point of the arc. */
-    start: Point;
-    /** End point of the arc. */
-    end: Point;
-    /** Centre of the circle the arc belongs to. */
-    centre: Point;
-    /** Radius of the arc. */
-    radius: number;
-    /** Whether this is a large arc (>180°) or small arc. */
-    largeArc: boolean;
+// ---------------------------------------------------------------------------
+// Tile / Connection helpers
+// ---------------------------------------------------------------------------
+
+function tileEq(a: Tile, b: Tile): boolean {
+    return a.x === b.x && a.y === b.y;
 }
 
+function makeTile(x: number, y: number): Tile {
+    return { x, y, hasconnections: true };
+}
+
+function makeConnection(p1: Tile, p2: Tile, p2_taken: boolean): DiagonalConnection {
+    const slope = (p2.y - p1.y) / (p2.x - p1.x);
+    const cell = { x: Math.min(p2.x, p1.x), y: Math.min(p2.y, p1.y) };
+    let quad: number;
+    if (slope > 0) {
+        quad = p2.y > p1.y ? 3 : 1;
+    } else {
+        quad = p2.y > p1.y ? 2 : 0;
+    }
+
+    return { p1, p2, p2_taken, slope, quad, cell };
+}
+
+function connectionFromQuad(p1: Tile, quadrant: number, p2_taken: boolean): DiagonalConnection {
+    let p2: Tile;
+    switch (quadrant) {
+        case 0: p2 = makeTile(p1.x + 1, p1.y - 1); break;
+        case 1: p2 = makeTile(p1.x - 1, p1.y - 1); break;
+        case 2: p2 = makeTile(p1.x - 1, p1.y + 1); break;
+        case 3: p2 = makeTile(p1.x + 1, p1.y + 1); break;
+        default: throw new Error(`Invalid quadrant: ${quadrant}`);
+    }
+
+    return makeConnection(p1, p2, p2_taken);
+}
+
+function connectionEq(a: DiagonalConnection, b: DiagonalConnection): boolean {
+    return a.cell.x === b.cell.x && a.cell.y === b.cell.y
+        && a.slope === b.slope && a.p2_taken === b.p2_taken;
+}
+
+// ---------------------------------------------------------------------------
+// CellGrid — tracks visited tiles and occupied cells
+// ---------------------------------------------------------------------------
+
+class CellGrid {
+    private readonly nrow: number;
+    private readonly ncol: number;
+    private readonly visited: boolean[];
+    private readonly cellmap: boolean[];
+    private _nunvisited: number;
+
+    constructor(nrow: number, ncol: number) {
+        this.nrow = nrow;
+        this.ncol = ncol;
+        this.visited = new Array(ncol * nrow).fill(false);
+        this.cellmap = new Array((ncol - 1) * (nrow - 1)).fill(false);
+        this._nunvisited = ncol * nrow;
+    }
+
+    get nunvisited(): number {
+        return this._nunvisited;
+    }
+
+    randomEmptyTile(random: () => number): Tile {
+        const empty: number[] = [];
+        for (let i = 0; i < this.visited.length; i++) {
+            if (!this.visited[i]) empty.push(i);
+        }
+
+        const idx = empty[Math.floor(random() * empty.length)];
+        const y = Math.floor(idx / this.nrow);
+        const x = idx % this.nrow;
+
+        return makeTile(x, y);
+    }
+
+    reset(): void {
+        this.visited.fill(false);
+        this.cellmap.fill(false);
+        this._nunvisited = this.ncol * this.nrow;
+    }
+
+    isTileValid(v: Tile): boolean {
+        return v.x >= 0 && v.x < this.nrow && v.y >= 0 && v.y < this.ncol;
+    }
+
+    isTileVisited(v: Tile): boolean {
+        return this.visited[v.y * this.nrow + v.x];
+    }
+
+    isCellEmpty(c: { x: number; y: number }): boolean {
+        return !this.cellmap[c.y * this.nrow + c.x];
+    }
+
+    visitTile(v: Tile): void {
+        const idx = v.y * this.nrow + v.x;
+        if (!this.visited[idx]) {
+            this.visited[idx] = true;
+            this._nunvisited--;
+        }
+    }
+
+    occupyCell(c: { x: number; y: number }): void {
+        this.cellmap[c.y * this.nrow + c.x] = true;
+    }
+
+    liberateCell(c: { x: number; y: number }): void {
+        this.cellmap[c.y * this.nrow + c.x] = false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Arc generation (piece boundary)
+// ---------------------------------------------------------------------------
+
+function makeArc(
+    gcp: Tile, rad: number, offs: number, quad: number, sign: number,
+): ArcData {
+    const cx = gcp.x * 2 * rad + rad + offs;
+    const cy = gcp.y * 2 * rad + rad + offs;
+
+    let pax: number, pay: number, pbx: number, pby: number;
+    switch (quad) {
+        case 0: pax = cx + rad; pay = cy; pbx = cx; pby = cy - rad; break;
+        case 1: pax = cx; pay = cy - rad; pbx = cx - rad; pby = cy; break;
+        case 2: pax = cx - rad; pay = cy; pbx = cx; pby = cy + rad; break;
+        case 3: pax = cx; pay = cy + rad; pbx = cx + rad; pby = cy; break;
+        default: throw new Error(`Invalid quad: ${quad}`);
+    }
+
+    let sx: number, sy: number, ex: number, ey: number;
+    if (sign === 0) {
+        sx = pax; sy = pay; ex = pbx; ey = pby;
+    } else {
+        sx = pbx; sy = pby; ex = pax; ey = pay;
+    }
+
+    return { cx, cy, r: rad, sx, sy, ex, ey, sign, quad };
+}
+
+// ---------------------------------------------------------------------------
+// Build arcs for a piece (recursive, matches original algorithm exactly)
+// ---------------------------------------------------------------------------
+
+function addArcs(
+    con: DiagonalConnection,
+    connections: DiagonalConnection[],
+    arcs: ArcData[],
+    rad: number,
+    frameOffset: number,
+    first: boolean,
+): void {
+    // Arc on the "first" side of the connection
+    let newarc: ArcData;
+    switch (con.quad) {
+        case 0: newarc = makeArc(makeTile(con.p1.x + 1, con.p1.y), rad, frameOffset, 1, 1); break;
+        case 1: newarc = makeArc(makeTile(con.p1.x, con.p1.y - 1), rad, frameOffset, 2, 1); break;
+        case 2: newarc = makeArc(makeTile(con.p1.x - 1, con.p1.y), rad, frameOffset, 3, 1); break;
+        case 3: newarc = makeArc(makeTile(con.p1.x, con.p1.y + 1), rad, frameOffset, 0, 1); break;
+        default: throw new Error(`Invalid quad: ${con.quad}`);
+    }
+    arcs.push(newarc);
+
+    // Handle p2 side
+    if (con.p2_taken) {
+        const p2quads = [(con.quad + 3) % 4, (con.quad + 4) % 4, (con.quad + 5) % 4];
+        for (const q of p2quads) {
+            const pct = connectionFromQuad(con.p2, q, true);
+            const pcnt = connectionFromQuad(con.p2, q, false);
+            if (connections.find(c => connectionEq(c, pct))) {
+                addArcs(pct, connections, arcs, rad, frameOffset, false);
+            } else if (connections.find(c => connectionEq(c, pcnt))) {
+                addArcs(pcnt, connections, arcs, rad, frameOffset, false);
+            } else {
+                arcs.push(makeArc(con.p2, rad, frameOffset, q, 0));
+            }
+        }
+    } else {
+        arcs.push(makeArc(con.p2, rad, frameOffset, (con.quad + 2) % 4, 1));
+    }
+
+    // Arc on the "second" side of the connection
+    switch (con.quad) {
+        case 0: newarc = makeArc(makeTile(con.p1.x, con.p1.y - 1), rad, frameOffset, 3, 1); break;
+        case 1: newarc = makeArc(makeTile(con.p1.x - 1, con.p1.y), rad, frameOffset, 0, 1); break;
+        case 2: newarc = makeArc(makeTile(con.p1.x, con.p1.y + 1), rad, frameOffset, 1, 1); break;
+        case 3: newarc = makeArc(makeTile(con.p1.x + 1, con.p1.y), rad, frameOffset, 2, 1); break;
+        default: throw new Error(`Invalid quad: ${con.quad}`);
+    }
+    arcs.push(newarc);
+
+    // Handle p1 side (only on first call)
+    if (first) {
+        const p1quads = [(con.quad + 1) % 4, (con.quad + 2) % 4, (con.quad + 3) % 4];
+        for (const q of p1quads) {
+            const pct = connectionFromQuad(con.p1, q, true);
+            const pcnt = connectionFromQuad(con.p1, q, false);
+            if (connections.find(c => connectionEq(c, pct))) {
+                addArcs(pct, connections, arcs, rad, frameOffset, false);
+            } else if (connections.find(c => connectionEq(c, pcnt))) {
+                addArcs(pcnt, connections, arcs, rad, frameOffset, false);
+            } else {
+                arcs.push(makeArc(con.p1, rad, frameOffset, q, 0));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Piece generation (flood-fill on diagonal connections)
+// ---------------------------------------------------------------------------
+
+function findPossibleConnections(
+    grid: CellGrid,
+    mytiles: Tile[],
+    allowPartials: boolean,
+): DiagonalConnection[] {
+    const neighbors = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+    const pcs: DiagonalConnection[] = [];
+
+    for (const v of mytiles) {
+        if (v.hasconnections || allowPartials) {
+            v.hasconnections = false;
+            for (const n of neighbors) {
+                const cpt = makeTile(v.x + n[0], v.y + n[1]);
+                if (grid.isTileValid(cpt) && !mytiles.find(nv => tileEq(nv, cpt))) {
+                    const dc = makeConnection(v, cpt, !grid.isTileVisited(cpt));
+                    if (grid.isCellEmpty(dc.cell)) {
+                        if (allowPartials || !grid.isTileVisited(cpt)) {
+                            pcs.push(dc);
+                            v.hasconnections = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return pcs;
+}
+
+function createPiece(
+    grid: CellGrid,
+    minSize: number,
+    maxSize: number,
+    random: () => number,
+): DiagonalConnection[] | null {
+    const mytiles: Tile[] = [];
+    const myconnections: DiagonalConnection[] = [];
+    const targetLen = Math.round(minSize + random() * (maxSize - minSize));
+
+    const vi = grid.randomEmptyTile(random);
+    mytiles.push(vi);
+    grid.visitTile(vi);
+
+    while (grid.nunvisited > 0 && mytiles.length < targetLen) {
+        const pcs = findPossibleConnections(grid, mytiles, false);
+        if (pcs.length === 0) break;
+
+        const chosen = pcs[Math.floor(random() * pcs.length)];
+        myconnections.push(chosen);
+        mytiles.push(chosen.p2);
+        grid.occupyCell(chosen.cell);
+        grid.visitTile(chosen.p2);
+    }
+
+    if (mytiles.length >= minSize) {
+        return myconnections;
+    }
+
+    // Too small — release cells
+    for (const c of myconnections) {
+        grid.liberateCell(c.cell);
+    }
+
+    return null;
+}
+
+function fillHoles(
+    grid: CellGrid,
+    pieces: DiagonalConnection[][],
+    allowPartials: boolean,
+): boolean {
+    let filled = false;
+    pieces.sort((a, b) => a.length - b.length);
+
+    for (const p of pieces) {
+        const tiles: Tile[] = [p[0].p1];
+        for (const con of p) tiles.push(con.p2);
+
+        for (const v of tiles) {
+            let pcs = findPossibleConnections(grid, [v], allowPartials);
+            pcs = pcs.filter(ele => !tiles.find(vf => tileEq(vf, ele.p2)));
+
+            for (const pc of pcs) {
+                p.push(pc);
+                tiles.push(pc.p2);
+                filled = true;
+                grid.occupyCell(pc.cell);
+                grid.visitTile(pc.p2);
+            }
+        }
+    }
+
+    return filled;
+}
+
+// ---------------------------------------------------------------------------
+// Convert fractal pieces to standard Piece[] format
+// ---------------------------------------------------------------------------
+
 /**
- * Generate a fractal puzzle using circle-packing.
+ * Build arcs for all pieces, then convert each piece's arc sequence
+ * into Edge[] with proper mate relationships.
  *
- * @param cols - Approximate number of pieces horizontally (affects circle density)
- * @param rows - Approximate number of pieces vertically (affects circle density)
+ * Two arcs are "mates" when they share the same centre + quadrant
+ * but belong to different pieces (one has sign=0, the other sign=1).
+ */
+function convertToStandardPieces(
+    fractalPieces: DiagonalConnection[][],
+    rad: number,
+    frameOffset: number,
+    imageSize: Size,
+    gridCols: number,
+    gridRows: number,
+): Piece[] {
+    // 1. Build all arc sequences for all pieces
+    const allPieceArcs: ArcData[][] = [];
+    for (const p of fractalPieces) {
+        const arcs: ArcData[] = [];
+        addArcs(p[0], p, arcs, rad, frameOffset, true);
+        allPieceArcs.push(arcs);
+    }
+
+    // 2. Build an index of arcs by (cx, cy, quad) for mate lookup
+    //    Must be done BEFORE scaling, using original abstract coordinates.
+    //    Also store each arc's key so we can look it up after scaling.
+    const arcIndex = new Map<string, Array<{ pieceIdx: number; arcIdx: number }>>();
+    const arcKeys: string[][] = [];
+    for (let pi = 0; pi < allPieceArcs.length; pi++) {
+        const arcs = allPieceArcs[pi];
+        arcKeys[pi] = [];
+        for (let ai = 0; ai < arcs.length; ai++) {
+            const a = arcs[ai];
+            const key = `${a.cx},${a.cy},${a.quad}`;
+            arcKeys[pi][ai] = key;
+            let list = arcIndex.get(key);
+            if (!list) {
+                list = [];
+                arcIndex.set(key, list);
+            }
+            list.push({ pieceIdx: pi, arcIdx: ai });
+        }
+    }
+
+    // 3. Scale all arc coordinates to image pixel space.
+    const puzzleWidth = gridCols * 2 * rad;
+    const puzzleHeight = gridRows * 2 * rad;
+    const scaleX = imageSize.width / puzzleWidth;
+    const scaleY = imageSize.height / puzzleHeight;
+
+    for (const arcs of allPieceArcs) {
+        for (const a of arcs) {
+            a.sx *= scaleX;
+            a.ex *= scaleX;
+            a.cx *= scaleX;
+            a.sy *= scaleY;
+            a.ey *= scaleY;
+            a.cy *= scaleY;
+        }
+    }
+
+    // 4. Convert each piece
+    let nextEdgeId = 0;
+    const edgeIds: number[][] = allPieceArcs.map(arcs => arcs.map(() => nextEdgeId++));
+
+    const pieces: Piece[] = [];
+
+    for (let pi = 0; pi < allPieceArcs.length; pi++) {
+        const arcs = allPieceArcs[pi];
+        if (arcs.length === 0) continue;
+
+        // Find bounding box of the piece in pixel-space
+        let minX = Infinity, minY = Infinity;
+        for (const a of arcs) {
+            minX = Math.min(minX, a.sx, a.ex);
+            minY = Math.min(minY, a.sy, a.ey);
+        }
+
+        // Each arc becomes one Edge
+        const edges: Edge[] = [];
+        for (let ai = 0; ai < arcs.length; ai++) {
+            const a = arcs[ai];
+            const edgeId = edgeIds[pi][ai];
+
+            // Find mate: same (cx, cy, quad) in a different piece
+            // Use the pre-scale key stored before coordinate scaling
+            const key = arcKeys[pi][ai];
+            const candidates = arcIndex.get(key) || [];
+            let mateEdgeId = -1;
+            let matePieceId = -1;
+            for (const c of candidates) {
+                if (c.pieceIdx !== pi) {
+                    mateEdgeId = edgeIds[c.pieceIdx][c.arcIdx];
+                    matePieceId = c.pieceIdx;
+                    break;
+                }
+            }
+
+            // Convert to piece-local coordinates (subtract bounding box origin)
+            const localSx = a.sx - minX;
+            const localSy = a.sy - minY;
+            const localEx = a.ex - minX;
+            const localEy = a.ey - minY;
+            const rx = a.r * scaleX;
+            const ry = a.r * scaleY;
+
+            const path = `A ${fmt(rx)} ${fmt(ry)} 0 0,${a.sign} ${fmt(localEx)} ${fmt(localEy)}`;
+
+            edges.push({
+                id: edgeId,
+                mateEdgeId,
+                matePieceId,
+                path,
+                start: { x: localSx, y: localSy },
+                end: { x: localEx, y: localEy },
+            });
+        }
+
+        // Shape: M + all arc paths + Z
+        const firstEdge = edges[0];
+        const shapeParts = [`M ${fmt(firstEdge.start.x)} ${fmt(firstEdge.start.y)}`];
+        for (const e of edges) {
+            shapeParts.push(e.path);
+        }
+        shapeParts.push('Z');
+        const shape = shapeParts.join(' ');
+
+        // imageOffset: piece-local (0,0) maps to (minX, minY) in image pixels
+        const imageOffset: Point = {
+            x: -minX,
+            y: -minY,
+        };
+
+        pieces.push({
+            id: pi,
+            edges,
+            shape,
+            imageOffset,
+        });
+    }
+
+    return pieces;
+}
+
+function fmt(n: number): string {
+    return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Configuration for the fractal generator.
+ */
+export interface FractalConfig {
+    /** Minimum number of tiles per piece (default: 2). */
+    minPieceSize?: number;
+    /** Maximum number of tiles per piece (default: 8). */
+    maxPieceSize?: number;
+}
+
+/**
+ * Generate a fractal puzzle using the circle-packing diagonal connection algorithm.
+ *
+ * @param cols - Grid columns (tile grid, NOT piece columns)
+ * @param rows - Grid rows (tile grid, NOT piece rows)
  * @param imageSize - Pixel dimensions of the puzzle image
- * @param seed - PRNG seed for reproducible piece layouts
- * @returns Array of pieces with organic shapes and circular arc boundaries
+ * @param seed - PRNG seed for reproducible layouts
+ * @param config - Optional configuration for piece sizes
+ * @returns Array of pieces with organic arc-based shapes
  */
 export function generateFractalPuzzle(
     cols: number,
     rows: number,
     imageSize: Size,
     seed: number,
+    config?: FractalConfig,
 ): Piece[] {
     const random = createSeededRandom(seed);
-    
-    // Calculate circle density to achieve roughly cols×rows pieces
-    const targetPieceCount = cols * rows;
-    const circleRadius = Math.min(imageSize.width, imageSize.height) / (Math.max(cols, rows) * 2.5);
-    
-    // Create hexagonal circle grid
-    const circles = createHexagonalCircleGrid(imageSize, circleRadius);
-    
-    // Randomly merge circles into pieces
-    const pieces = mergeCirclesIntoPieces(circles, targetPieceCount, random);
-    
-    // Generate boundaries between pieces
-    addBoundariesToPieces(pieces, circles, imageSize);
-    
-    // Convert to the standard Piece[] format
-    return convertToStandardPieces(pieces, circles, imageSize);
-}
+    const minPieceSize = config?.minPieceSize ?? 2;
+    const maxPieceSize = config?.maxPieceSize ?? 8;
 
-/**
- * Create a hexagonal grid of circles covering the puzzle area.
- * Hexagonal packing is more natural than rectangular grid.
- */
-function createHexagonalCircleGrid(imageSize: Size, radius: number): Circle[] {
-    const circles: Circle[] = [];
-    let circleId = 0;
-    
-    const dx = radius * 2;                    // Horizontal spacing
-    const dy = radius * Math.sqrt(3);        // Vertical spacing for hex pattern
-    const offsetX = radius;                   // Offset every other row
-    
-    // Add margin to ensure coverage at edges
-    const margin = radius * 2;
-    const startY = -margin;
-    const endY = imageSize.height + margin;
-    const startX = -margin;
-    const endX = imageSize.width + margin;
-    
-    for (let y = startY; y < endY; y += dy) {
-        const isOffsetRow = Math.floor((y - startY) / dy) % 2 === 1;
-        const xStart = isOffsetRow ? startX + offsetX : startX;
-        
-        for (let x = xStart; x < endX; x += dx) {
-            circles.push({
-                id: circleId++,
-                centre: { x, y },
-                radius,
-                pieceId: -1, // Unassigned initially
-                neighbors: [],
-            });
+    // Tile radius in abstract units. The actual pixel size is
+    // determined by scaling in convertToStandardPieces.
+    const rad = 6.0;
+    const frameOffset = 0;
+
+    // Create grid and generate pieces
+    const grid = new CellGrid(cols, rows);
+    const pieces: DiagonalConnection[][] = [];
+
+    while (grid.nunvisited > 0) {
+        const piece = createPiece(grid, minPieceSize, maxPieceSize, random);
+        if (piece) {
+            pieces.push(piece);
         }
     }
-    
-    // Build adjacency graph (circles are neighbors if their centres are close)
-    const maxNeighborDistance = dx * 1.1; // Slightly larger than spacing to catch neighbors
-    
-    for (let i = 0; i < circles.length; i++) {
-        for (let j = i + 1; j < circles.length; j++) {
-            const dist = distance(circles[i].centre, circles[j].centre);
-            if (dist <= maxNeighborDistance) {
-                circles[i].neighbors.push(j);
-                circles[j].neighbors.push(i);
-            }
+
+    // Regenerate grid state for hole-filling
+    grid.reset();
+    for (const p of pieces) {
+        for (const c of p) {
+            if (!grid.isTileVisited(c.p1)) grid.visitTile(c.p1);
+            if (c.p2_taken && !grid.isTileVisited(c.p2)) grid.visitTile(c.p2);
+            grid.occupyCell(c.cell);
         }
     }
-    
-    return circles;
-}
 
-/**
- * Randomly merge circles into pieces using flood-fill algorithm.
- */
-function mergeCirclesIntoPieces(
-    circles: Circle[],
-    targetPieceCount: number,
-    random: () => number,
-): FractalPiece[] {
-    const pieces: FractalPiece[] = [];
-    const visited = new Set<number>();
-    
-    // Calculate average piece size
-    const avgPieceSize = Math.ceil(circles.length / targetPieceCount);
-    const minPieceSize = Math.max(1, avgPieceSize - 2);
-    const maxPieceSize = avgPieceSize + 3;
-    
-    let pieceId = 0;
-    
-    // Start flood-fill from random unvisited circles
-    for (const startCircle of shuffleArray([...circles], random)) {
-        if (visited.has(startCircle.id)) continue;
-        
-        // Grow a piece from this circle
-        const pieceCircles: number[] = [];
-        const queue = [startCircle.id];
-        visited.add(startCircle.id);
-        
-        while (queue.length > 0 && pieceCircles.length < maxPieceSize) {
-            const circleId = queue.shift()!;
-            pieceCircles.push(circleId);
-            circles[circleId].pieceId = pieceId;
-            
-            // Maybe add neighbors (probabilistic growth)
-            if (pieceCircles.length < minPieceSize || random() < 0.4) {
-                for (const neighborId of circles[circleId].neighbors) {
-                    if (!visited.has(neighborId) && !queue.includes(neighborId)) {
-                        visited.add(neighborId);
-                        queue.push(neighborId);
-                    }
-                }
-            }
-        }
-        
-        if (pieceCircles.length > 0) {
-            pieces.push({
-                id: pieceId++,
-                circles: pieceCircles,
-                boundaries: [],
-            });
-        }
-    }
-    
-    return pieces;
-}
+    // Fill remaining holes
+    while (fillHoles(grid, pieces, false)) { /* keep going */ }
+    fillHoles(grid, pieces, true);
 
-/**
- * Generate boundary segments between pieces.
- */
-function addBoundariesToPieces(
-    pieces: FractalPiece[],
-    circles: Circle[],
-    imageSize: Size,
-): void {
-    // For each piece, find boundaries with neighbors and borders
-    for (const piece of pieces) {
-        const boundaryMap = new Map<number, BoundarySegment[]>();
-        
-        // Check each circle in this piece
-        for (const circleId of piece.circles) {
-            const circle = circles[circleId];
-            
-            // Check each neighbor of this circle
-            for (const neighborId of circle.neighbors) {
-                const neighbor = circles[neighborId];
-                const neighborPieceId = neighbor.pieceId;
-                
-                // Skip if neighbor is in same piece
-                if (neighborPieceId === piece.id) continue;
-                
-                // Create boundary segment between these circles
-                const arc = createArcBetweenCircles(circle, neighbor);
-                
-                const boundary: BoundarySegment = {
-                    fromCircle: circleId,
-                    toCircle: neighborId,
-                    neighborPieceId,
-                    arc,
-                };
-                
-                if (!boundaryMap.has(neighborPieceId)) {
-                    boundaryMap.set(neighborPieceId, []);
-                }
-                boundaryMap.get(neighborPieceId)!.push(boundary);
-            }
-            
-            // Check if circle is near puzzle border
-            const borderSegments = createBorderSegments(circle, imageSize);
-            for (const borderSegment of borderSegments) {
-                if (!boundaryMap.has(-1)) {
-                    boundaryMap.set(-1, []);
-                }
-                boundaryMap.get(-1)!.push(borderSegment);
-            }
-        }
-        
-        // Consolidate boundaries
-        piece.boundaries = Array.from(boundaryMap.values()).flat();
-    }
-}
-
-/**
- * Create an arc segment between two adjacent circles.
- */
-function createArcBetweenCircles(circle1: Circle, circle2: Circle): ArcSegment {
-    const c1 = circle1.centre;
-    const c2 = circle2.centre;
-    
-    // Find intersection points of the two circles
-    const dist = distance(c1, c2);
-    const r1 = circle1.radius;
-    const r2 = circle2.radius;
-    
-    // Calculate intersection using circle-circle intersection formula
-    const a = (r1 * r1 - r2 * r2 + dist * dist) / (2 * dist);
-    const h = Math.sqrt(r1 * r1 - a * a);
-    
-    // Point along the line between centres
-    const p0 = {
-        x: c1.x + a * (c2.x - c1.x) / dist,
-        y: c1.y + a * (c2.y - c1.y) / dist,
-    };
-    
-    // The two intersection points
-    const intersection1 = {
-        x: p0.x + h * (c2.y - c1.y) / dist,
-        y: p0.y - h * (c2.x - c1.x) / dist,
-    };
-    
-    const intersection2 = {
-        x: p0.x - h * (c2.y - c1.y) / dist,
-        y: p0.y + h * (c2.x - c1.x) / dist,
-    };
-    
-    // Use the arc on circle1's boundary between the intersections
-    return {
-        start: intersection1,
-        end: intersection2,
-        centre: c1,
-        radius: r1,
-        largeArc: false, // Most arcs will be small
-    };
-}
-
-/**
- * Create border segments for circles near the puzzle edge.
- */
-function createBorderSegments(circle: Circle, imageSize: Size): BoundarySegment[] {
-    const segments: BoundarySegment[] = [];
-    const { centre, radius } = circle;
-    
-    // Check if circle intersects with puzzle boundaries
-    const margin = radius * 0.1;
-    
-    // Left edge
-    if (centre.x - radius <= margin) {
-        segments.push(createBorderSegment(circle, -1, 'left', imageSize));
-    }
-    
-    // Right edge  
-    if (centre.x + radius >= imageSize.width - margin) {
-        segments.push(createBorderSegment(circle, -1, 'right', imageSize));
-    }
-    
-    // Top edge
-    if (centre.y - radius <= margin) {
-        segments.push(createBorderSegment(circle, -1, 'top', imageSize));
-    }
-    
-    // Bottom edge
-    if (centre.y + radius >= imageSize.height - margin) {
-        segments.push(createBorderSegment(circle, -1, 'bottom', imageSize));
-    }
-    
-    return segments;
-}
-
-/**
- * Create a single border segment.
- */
-function createBorderSegment(
-    circle: Circle,
-    neighborPieceId: number,
-    edge: 'left' | 'right' | 'top' | 'bottom',
-    imageSize: Size,
-): BoundarySegment {
-    const { centre, radius } = circle;
-    
-    let start: Point, end: Point;
-    
-    switch (edge) {
-        case 'left':
-            start = { x: 0, y: centre.y - radius };
-            end = { x: 0, y: centre.y + radius };
-            break;
-        case 'right':
-            start = { x: imageSize.width, y: centre.y - radius };
-            end = { x: imageSize.width, y: centre.y + radius };
-            break;
-        case 'top':
-            start = { x: centre.x - radius, y: 0 };
-            end = { x: centre.x + radius, y: 0 };
-            break;
-        case 'bottom':
-            start = { x: centre.x - radius, y: imageSize.height };
-            end = { x: centre.x + radius, y: imageSize.height };
-            break;
-    }
-    
-    return {
-        fromCircle: circle.id,
-        toCircle: -1, // Border
-        neighborPieceId,
-        arc: {
-            start,
-            end,
-            centre,
-            radius,
-            largeArc: false,
-        },
-    };
-}
-
-/**
- * Convert fractal pieces to standard Piece[] format.
- */
-function convertToStandardPieces(
-    fractalPieces: FractalPiece[],
-    circles: Circle[],
-    _imageSize: Size,
-): Piece[] {
-    const pieces: Piece[] = [];
-    let nextEdgeId = 0;
-    
-    // Keep track of shared boundaries for mate relationships
-    const sharedBoundaries = new Map<string, { edgeId1: number; edgeId2: number }>();
-    
-    for (const fractalPiece of fractalPieces) {
-        const edges: Edge[] = [];
-        
-        // Group boundaries by neighbor piece
-        const boundaryGroups = new Map<number, BoundarySegment[]>();
-        for (const boundary of fractalPiece.boundaries) {
-            if (!boundaryGroups.has(boundary.neighborPieceId)) {
-                boundaryGroups.set(boundary.neighborPieceId, []);
-            }
-            boundaryGroups.get(boundary.neighborPieceId)!.push(boundary);
-        }
-        
-        // Create edges from boundary groups
-        for (const [neighborPieceId, boundaries] of boundaryGroups) {
-            const edgeId = nextEdgeId++;
-            
-            // Create SVG path from all boundary arcs
-            const pathSegments: string[] = [];
-            let currentPoint: Point = boundaries[0].arc.start;
-            pathSegments.push(`M ${currentPoint.x} ${currentPoint.y}`);
-            
-            for (const boundary of boundaries) {
-                const arc = boundary.arc;
-                const largeArcFlag = arc.largeArc ? 1 : 0;
-                const sweepFlag = 1; // Positive direction
-                
-                pathSegments.push(
-                    `A ${arc.radius} ${arc.radius} 0 ${largeArcFlag} ${sweepFlag} ${arc.end.x} ${arc.end.y}`
-                );
-                currentPoint = arc.end;
-            }
-            
-            const path = pathSegments.join(' ');
-            
-            // Handle mate relationships
-            let mateEdgeId = -1;
-            let matePieceId = neighborPieceId;
-            
-            if (neighborPieceId !== -1) {
-                // This is a shared boundary - check if mate already exists
-                const boundaryKey = [fractalPiece.id, neighborPieceId].sort().join('-');
-                const sharedInfo = sharedBoundaries.get(boundaryKey);
-                
-                if (sharedInfo) {
-                    // Mate already exists
-                    mateEdgeId = sharedInfo.edgeId1;
-                    // Update the existing mate to point back to this edge
-                    sharedInfo.edgeId2 = edgeId;
-                } else {
-                    // First time seeing this boundary
-                    sharedBoundaries.set(boundaryKey, { edgeId1: edgeId, edgeId2: -1 });
-                }
-            } else {
-                matePieceId = -1; // Border edge
-            }
-            
-            edges.push({
-                id: edgeId,
-                mateEdgeId,
-                matePieceId,
-                path,
-                start: boundaries[0].arc.start,
-                end: boundaries[boundaries.length - 1].arc.end,
-            });
-        }
-        
-        // Calculate piece shape (union of all edges)
-        const shape = edges.map(edge => edge.path).join(' ') + ' Z';
-        
-        // Calculate image offset (use centre of circles in this piece)
-        const avgCentre = calculateAveragePoint(
-            fractalPiece.circles.map(id => circles[id].centre)
-        );
-        
-        pieces.push({
-            id: fractalPiece.id,
-            edges,
-            shape,
-            imageOffset: { x: -avgCentre.x, y: -avgCentre.y },
-        });
-    }
-    
-    // Update mate relationships for shared boundaries
-    for (const piece of pieces) {
-        for (const edge of piece.edges) {
-            if (edge.mateEdgeId === -1 && edge.matePieceId !== -1) {
-                // Find the mate edge
-                const matePiece = pieces.find(p => p.id === edge.matePieceId);
-                if (matePiece) {
-                    const mateEdge = matePiece.edges.find(e => 
-                        sharedBoundaries.get([piece.id, edge.matePieceId].sort().join('-'))?.edgeId2 === e.id
-                    );
-                    if (mateEdge) {
-                        edge.mateEdgeId = mateEdge.id;
-                        mateEdge.mateEdgeId = edge.id;
-                    }
-                }
-            }
-        }
-    }
-    
-    return pieces;
-}
-
-// Helper functions
-
-function distance(p1: Point, p2: Point): number {
-    const dx = p1.x - p2.x;
-    const dy = p1.y - p2.y;
-    return Math.sqrt(dx * dx + dy * dy);
-}
-
-function shuffleArray<T>(array: T[], random: () => number): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-}
-
-function calculateAveragePoint(points: Point[]): Point {
-    const sum = points.reduce(
-        (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
-        { x: 0, y: 0 }
-    );
-    return {
-        x: sum.x / points.length,
-        y: sum.y / points.length,
-    };
+    // Convert to standard Piece[] format
+    return convertToStandardPieces(pieces, rad, frameOffset, imageSize, cols, rows);
 }
