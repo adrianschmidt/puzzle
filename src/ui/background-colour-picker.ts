@@ -105,7 +105,7 @@ export function createBackgroundColourPicker(
         }
 
         if (dismissListener) {
-            document.removeEventListener('click', dismissListener);
+            document.removeEventListener('pointerdown', dismissListener, true);
             dismissListener = null;
         }
 
@@ -144,7 +144,9 @@ export function createBackgroundColourPicker(
                     dismissPanel();
                 }
             };
-            document.addEventListener('click', dismissListener);
+            // Use pointerdown in capture phase to reliably detect outside
+            // clicks even when the drag handler captures pointer events.
+            document.addEventListener('pointerdown', dismissListener, true);
 
             keyListener = (e: KeyboardEvent) => {
                 if (e.key === 'Escape') {

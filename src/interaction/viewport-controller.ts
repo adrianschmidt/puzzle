@@ -11,7 +11,7 @@
  */
 
 import type { Point } from '../model/types.js';
-import { ViewportTransform, WHEEL_ZOOM_FACTOR } from './viewport-transform.js';
+import { ViewportTransform } from './viewport-transform.js';
 
 export interface ViewportControllerOptions {
     /** The DOM container for the puzzle table. */
@@ -24,7 +24,7 @@ export interface ViewportControllerOptions {
      * Check if a pointer event hit a puzzle piece.
      * Returns true if the event target is a piece (not empty table).
      */
-    isPieceElement?: (target: EventTarget | null) => boolean;
+    isPieceElement: (target: EventTarget | null) => boolean;
 }
 
 /** Tracks a single active touch point for gesture detection. */
@@ -58,7 +58,7 @@ export class ViewportController {
     private container: HTMLElement;
     private transform: ViewportTransform;
     private onViewportChanged: () => void;
-
+    private isPieceElement: (target: EventTarget | null) => boolean;
 
     // Pan state (single pointer on empty space)
     private panPointerId: number | null = null;
@@ -77,6 +77,7 @@ export class ViewportController {
 
     constructor(options: ViewportControllerOptions) {
         this.container = options.container;
+        this.isPieceElement = options.isPieceElement;
         this.transform = options.transform;
         this.onViewportChanged = options.onViewportChanged;
 
@@ -107,9 +108,18 @@ export class ViewportController {
     // --- Wheel zoom ---
 
     private handleWheel(e: WheelEvent): void {
+        // Don't zoom when scrolling inside a UI element (e.g. info modal)
+        if (!this.isBackgroundElement(e.target) && !this.isPieceElement(e.target)) {
+            return;
+        }
+
         e.preventDefault();
 
-        const factor = e.deltaY < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR;
+        // Scale zoom factor based on deltaY magnitude for smooth trackpad/scroll experience.
+        // Trackpad pinch-to-zoom sends small deltaY values; mouse wheel sends larger ones.
+        // Clamp to prevent extreme jumps.
+        const delta = Math.max(-50, Math.min(50, e.deltaY));
+        const factor = 1 - delta * 0.005;
         this.transform.zoom(factor, { x: e.clientX, y: e.clientY });
         this.onViewportChanged();
     }
@@ -218,14 +228,8 @@ export class ViewportController {
             return true;
         }
 
-        // Direct children that are the puzzle table (renderer's div),
-        // but not pieces, buttons, or other UI elements.
-        // The puzzle table is a plain div with no data attributes or roles.
-        if (
-            target.parentElement === this.container &&
-            target instanceof HTMLDivElement &&
-            !target.closest('button, a')
-        ) {
+        // The puzzle table (renderer's container div, tagged with data-puzzle-table)
+        if ((target as HTMLElement).dataset?.puzzleTable === 'true') {
             return true;
         }
 
