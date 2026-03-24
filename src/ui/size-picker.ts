@@ -8,14 +8,17 @@
  */
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
+import { createCutStylePicker } from './cut-style-picker.js';
 
 export interface SizePickerOptions {
     /** Container to append the dialog to. */
     container: HTMLElement;
     /** Currently selected size index (highlighted in the dialog). */
     selectedIndex: number;
-    /** Called when the player selects a size. Receives the option index. */
-    onSelect: (index: number) => void;
+    /** Currently selected cut style index. */
+    selectedCutStyleIndex?: number;
+    /** Called when the player selects a size. Receives the size and cut style indices. */
+    onSelect: (index: number, cutStyleIndex?: number) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
 }
@@ -40,6 +43,9 @@ export function getSizeClass(pieceCount: number): string {
 export function createSizePickerDialog(options: SizePickerOptions): () => void {
     const { container, selectedIndex, onSelect, onCancel } = options;
 
+    // Track the current cut style selection
+    let currentCutStyleIndex = options.selectedCutStyleIndex ?? 0;
+
     // Build overlay
     const overlay = document.createElement('div');
     overlay.className = 'size-picker-overlay';
@@ -47,12 +53,27 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     const dialog = document.createElement('div');
     dialog.className = 'size-picker-dialog';
     dialog.setAttribute('role', 'dialog');
-    dialog.setAttribute('aria-label', 'Choose puzzle size');
+    dialog.setAttribute('aria-label', 'New game options');
 
     const title = document.createElement('h2');
     title.className = 'size-picker-title';
-    title.textContent = 'Choose Puzzle Size';
+    title.textContent = 'New Game';
     dialog.appendChild(title);
+
+    // Cut style picker section
+    const cutStyleSection = createCutStylePicker({
+        selectedIndex: currentCutStyleIndex,
+        onSelect: (index) => {
+            currentCutStyleIndex = index;
+        },
+    });
+    dialog.appendChild(cutStyleSection);
+
+    // Size section title
+    const sizeTitle = document.createElement('h3');
+    sizeTitle.className = 'size-picker-subtitle';
+    sizeTitle.textContent = 'Puzzle Size';
+    dialog.appendChild(sizeTitle);
 
     const grid = document.createElement('div');
     grid.className = 'size-picker-grid';
@@ -97,7 +118,7 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
 
         btn.addEventListener('click', () => {
             dismiss();
-            onSelect(i);
+            onSelect(i, currentCutStyleIndex);
         });
 
         grid.appendChild(btn);

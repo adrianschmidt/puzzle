@@ -80,7 +80,7 @@ describe('createSizePickerDialog', () => {
         const buttons = container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         buttons[3].click();
 
-        expect(onSelect).toHaveBeenCalledWith(3);
+        expect(onSelect).toHaveBeenCalledWith(3, 0);
     });
 
     it('removes the overlay after selection', () => {
@@ -165,5 +165,54 @@ describe('createSizePickerDialog', () => {
         expect(dims[1].textContent).toBe('8 × 6');
         expect(dims[2].textContent).toBe('12 × 8');
         expect(dims[3].textContent).toBe('16 × 12');
+    });
+
+    it('includes the cut style picker section', () => {
+        createSizePickerDialog({
+            container,
+            selectedIndex: 1,
+            onSelect: vi.fn(),
+        });
+
+        expect(container.querySelector('.cut-style-section')).not.toBeNull();
+    });
+
+    it('passes the selected cut style index to onSelect', () => {
+        const onSelect = vi.fn();
+        createSizePickerDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: 1,
+            onSelect,
+        });
+
+        // Click the first size option
+        const sizeButtons =
+            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
+        sizeButtons[0].click();
+
+        expect(onSelect).toHaveBeenCalledWith(0, 1);
+    });
+
+    it('updates the cut style when a different style is clicked before selecting size', () => {
+        const onSelect = vi.fn();
+        createSizePickerDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: 0,
+            onSelect,
+        });
+
+        // Switch to Fractal
+        const cutStyleButtons =
+            container.querySelectorAll<HTMLButtonElement>('.cut-style-option');
+        cutStyleButtons[1].click();
+
+        // Then pick a size
+        const sizeButtons =
+            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
+        sizeButtons[0].click();
+
+        expect(onSelect).toHaveBeenCalledWith(0, 1);
     });
 });

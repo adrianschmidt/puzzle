@@ -36,3 +36,6 @@ export type { InfoButtonOptions } from './info-button.js';
 
 export { createInfoModal } from './info-modal.js';
 export type { InfoModalOptions } from './info-modal.js';
+
+export { createCutStylePicker } from './cut-style-picker.js';
+export type { CutStylePickerOptions } from './cut-style-picker.js';

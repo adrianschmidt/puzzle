@@ -54,3 +54,14 @@ export {
     GATHER_PADDING,
 } from './gather.js';
 export type { WorldRect } from './gather.js';
+
+export {
+    CUT_STYLE_OPTIONS,
+    DEFAULT_CUT_STYLE_INDEX,
+    CUT_STYLE_PREFERENCE_KEY,
+    getCutStyleOption,
+    findCutStyleIndex,
+    saveCutStylePreference,
+    loadCutStylePreference,
+} from './cut-styles.js';
+export type { CutStyle, CutStyleOption } from './cut-styles.js';

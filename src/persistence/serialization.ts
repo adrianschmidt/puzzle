@@ -18,7 +18,7 @@ import { getImageDimensions } from '../renderer/svg-dom-utils.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 /**
  * Supported schema versions.
@@ -27,8 +27,9 @@ export const STATE_VERSION = 4;
  * - v2: adds imageSize and optional attribution
  * - v3: adds gridSize (cols × rows)
  * - v4: adds seed for procedural cut generation
+ * - v5: adds cutStyle ('classic' | 'fractal')
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
@@ -48,6 +49,7 @@ export interface SerializedGameState {
     completed: boolean;
     attribution?: ImageAttribution;
     seed?: number;
+    cutStyle?: string;
 }
 
 /**
@@ -72,6 +74,10 @@ export function serializeState(state: GameState): SerializedGameState {
 
     if (state.seed !== undefined) {
         serialized.seed = state.seed;
+    }
+
+    if (state.cutStyle) {
+        serialized.cutStyle = state.cutStyle;
     }
 
     return serialized;
@@ -116,6 +122,10 @@ export function deserializeState(data: SerializedGameState): GameState {
 
     if (data.seed !== undefined) {
         state.seed = data.seed;
+    }
+
+    if (data.cutStyle) {
+        state.cutStyle = data.cutStyle;
     }
 
     return state;
