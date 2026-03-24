@@ -171,18 +171,19 @@ export function computeGatheredPositions(
     // Sort by height descending for better row packing
     layouts.sort((a, b) => b.bounds.height - a.bounds.height);
 
-    // Estimate a good target width based on the screen aspect ratio.
-    // We want the final layout to roughly match the screen's proportions.
-    // Estimate total content area from all groups, then derive target width.
-    let totalArea = 0;
-    for (const layout of layouts) {
-        totalArea += (layout.bounds.width + margin) * (layout.bounds.height + margin);
-    }
-
-    // targetWidth × (targetWidth / aspectRatio) ≈ totalArea
-    // targetWidth² ≈ totalArea × aspectRatio
+    // Compute ideal number of columns to match screen aspect ratio.
+    // For n groups at aspect ratio r: cols ≈ sqrt(n * r), rows ≈ n / cols
+    const n = layouts.length;
     const aspectRatio = Math.max(0.5, Math.min(3, screenAspectRatio));
-    const targetWidth = Math.sqrt(totalArea * aspectRatio) * 1.1; // 10% extra to avoid being too tight
+    const idealCols = Math.max(1, Math.round(Math.sqrt(n * aspectRatio)));
+
+    // Compute average piece width to estimate target row width
+    let totalWidth = 0;
+    for (const layout of layouts) {
+        totalWidth += layout.bounds.width;
+    }
+    const avgWidth = totalWidth / n;
+    const targetWidth = idealCols * (avgWidth + margin);
 
     // Pack into rows
     const rows: Array<{ items: GroupLayout[]; rowHeight: number }> = [];
