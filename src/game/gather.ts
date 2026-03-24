@@ -94,8 +94,8 @@ export function computeGatheredPositions(
     visibleArea: WorldRect,
     pieceWidth: number,
     pieceHeight: number,
-    puzzleCols?: number,
-    puzzleRows?: number,
+    _puzzleCols?: number,
+    _puzzleRows?: number,
 ): Map<number, Point> {
     if (groups.length === 0) {
         return new Map();
