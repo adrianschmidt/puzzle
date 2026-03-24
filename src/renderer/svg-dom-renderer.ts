@@ -35,6 +35,7 @@ export class SvgDomRenderer implements Renderer {
 
     init(container: HTMLElement): void {
         const table = document.createElement('div');
+        table.dataset.puzzleTable = 'true';
         table.style.position = 'relative';
         table.style.width = '100%';
         table.style.height = '100%';
