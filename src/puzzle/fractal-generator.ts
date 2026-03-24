@@ -424,6 +424,68 @@ function fillHoles(
     return filled;
 }
 
+/**
+ * Find tiles that were visited but never made it into any piece,
+ * and attach them to the nearest adjacent piece via a diagonal connection.
+ */
+function adoptOrphanTiles(
+    grid: CellGrid,
+    pieces: DiagonalConnection[][],
+    cols: number,
+    rows: number,
+): void {
+    // Build a set of all tiles that ARE in pieces
+    const tilesInPieces = new Set<string>();
+    for (const p of pieces) {
+        tilesInPieces.add(`${p[0].p1.x},${p[0].p1.y}`);
+        for (const c of p) {
+            tilesInPieces.add(`${c.p2.x},${c.p2.y}`);
+        }
+    }
+
+    // Find orphans: tiles in the grid that aren't in any piece
+    const neighbors = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                const key = `${x},${y}`;
+                if (tilesInPieces.has(key)) continue;
+
+                // This tile is an orphan — try to connect it to an adjacent piece
+                const orphan = makeTile(x, y);
+                for (const n of neighbors) {
+                    const adj = makeTile(x + n[0], y + n[1]);
+                    const adjKey = `${adj.x},${adj.y}`;
+                    if (!grid.isTileValid(adj) || !tilesInPieces.has(adjKey)) continue;
+
+                    // Check if the cell between them is free
+                    const dc = makeConnection(adj, orphan, true);
+                    if (!grid.isCellEmpty(dc.cell)) continue;
+
+                    // Find which piece the adjacent tile belongs to
+                    for (const p of pieces) {
+                        const allTiles: Tile[] = [p[0].p1];
+                        for (const c of p) allTiles.push(c.p2);
+
+                        if (allTiles.find(t => tileEq(t, adj))) {
+                            // Add the orphan to this piece
+                            p.push(dc);
+                            grid.occupyCell(dc.cell);
+                            grid.visitTile(orphan);
+                            tilesInPieces.add(key);
+                            changed = true;
+                            break;
+                        }
+                    }
+                    if (tilesInPieces.has(key)) break;
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Convert fractal pieces to standard Piece[] format
 // ---------------------------------------------------------------------------
@@ -640,6 +702,11 @@ export function generateFractalPuzzle(
     // Fill remaining holes
     while (fillHoles(grid, pieces, false)) { /* keep going */ }
     fillHoles(grid, pieces, true);
+
+    // Adopt orphan tiles: tiles that were visited but never ended up in
+    // a piece (e.g. because the piece was too small and got discarded).
+    // For each orphan, find an adjacent piece and add a connection to it.
+    adoptOrphanTiles(grid, pieces, cols, rows);
 
     // Convert to standard Piece[] format
     return convertToStandardPieces(pieces, rad, frameOffset, imageSize, cols, rows);
