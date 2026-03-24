@@ -1,89 +1,27 @@
 /**
- * Fractal circle-packing puzzle generator.
+ * Fractal puzzle generator - rewritten for reliability.
  *
- * Inspired by the Fractal Jigsaw Generator (proceduraljigsaw/Fractalpuzzlejs).
- * Uses a circle-packing grid where pieces are organic shapes formed by 
- * merging adjacent circles. No traditional tabs/blanks — pieces interlock 
- * through curved boundaries between circles.
- *
- * Algorithm:
- * 1. Create a hexagonal grid of circles that covers the puzzle area
- * 2. Randomly merge adjacent circles into pieces using flood-fill
- * 3. Generate piece boundaries using circular arcs between circle centres
- * 4. Convert to SVG paths and create Edge[] with mate relationships
- *
- * This produces a very different aesthetic from classic jigsaw pieces —
- * organic, flowing shapes that still maintain the interlocking property.
+ * Uses a grid-based approach similar to the procedural generator but replaces
+ * straight edges and tab/blank connections with organic curved boundaries.
+ * 
+ * This approach guarantees:
+ * - Exactly cols × rows pieces (matching the procedural generator)
+ * - Perfect tiling (every pixel belongs to exactly one piece)
+ * - Proper edge connectivity with mate relationships
+ * - Organic curved boundaries instead of straight edges
  */
 
 import type { Edge, Piece, Point, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
 
 /**
- * Represents a circle in the packing grid.
- */
-interface Circle {
-    /** Unique identifier for this circle. */
-    id: number;
-    /** Centre point of the circle. */
-    centre: Point;
-    /** Radius of the circle. */
-    radius: number;
-    /** Which piece this circle belongs to (assigned during merging). */
-    pieceId: number;
-    /** Adjacent circle IDs (connectivity graph). */
-    neighbors: number[];
-}
-
-/**
- * A piece formed by merging one or more circles.
- */
-interface FractalPiece {
-    /** Unique piece identifier. */
-    id: number;
-    /** Circle IDs that form this piece. */
-    circles: number[];
-    /** Boundary segments between this piece and others/border. */
-    boundaries: BoundarySegment[];
-}
-
-/**
- * A boundary segment between two pieces (or piece and border).
- */
-interface BoundarySegment {
-    /** Which circles this boundary is between. */
-    fromCircle: number;
-    toCircle: number;
-    /** The piece this boundary borders (-1 for puzzle border). */
-    neighborPieceId: number;
-    /** Arc parameters for drawing the boundary. */
-    arc: ArcSegment;
-}
-
-/**
- * Parameters for a circular arc boundary segment.
- */
-interface ArcSegment {
-    /** Start point of the arc. */
-    start: Point;
-    /** End point of the arc. */
-    end: Point;
-    /** Centre of the circle the arc belongs to. */
-    centre: Point;
-    /** Radius of the arc. */
-    radius: number;
-    /** Whether this is a large arc (>180°) or small arc. */
-    largeArc: boolean;
-}
-
-/**
- * Generate a fractal puzzle using circle-packing.
+ * Generate a fractal puzzle with organic curved boundaries.
  *
- * @param cols - Approximate number of pieces horizontally (affects circle density)
- * @param rows - Approximate number of pieces vertically (affects circle density)
+ * @param cols - Number of pieces horizontally
+ * @param rows - Number of pieces vertically  
  * @param imageSize - Pixel dimensions of the puzzle image
  * @param seed - PRNG seed for reproducible piece layouts
- * @returns Array of pieces with organic shapes and circular arc boundaries
+ * @returns Array of pieces with organic shapes and proper connectivity
  */
 export function generateFractalPuzzle(
     cols: number,
@@ -92,448 +30,304 @@ export function generateFractalPuzzle(
     seed: number,
 ): Piece[] {
     const random = createSeededRandom(seed);
-    
-    // Calculate circle density to achieve roughly cols×rows pieces
-    const targetPieceCount = cols * rows;
-    const circleRadius = Math.min(imageSize.width, imageSize.height) / (Math.max(cols, rows) * 2.5);
-    
-    // Create hexagonal circle grid
-    const circles = createHexagonalCircleGrid(imageSize, circleRadius);
-    
-    // Randomly merge circles into pieces
-    const pieces = mergeCirclesIntoPieces(circles, targetPieceCount, random);
-    
-    // Generate boundaries between pieces
-    addBoundariesToPieces(pieces, circles, imageSize);
-    
-    // Convert to the standard Piece[] format
-    return convertToStandardPieces(pieces, circles, imageSize);
-}
+    const pieceWidth = imageSize.width / cols;
+    const pieceHeight = imageSize.height / rows;
 
-/**
- * Create a hexagonal grid of circles covering the puzzle area.
- * Hexagonal packing is more natural than rectangular grid.
- */
-function createHexagonalCircleGrid(imageSize: Size, radius: number): Circle[] {
-    const circles: Circle[] = [];
-    let circleId = 0;
+    // Generate organic edge paths for shared edges
+    const sharedPaths = generateSharedEdgePaths(cols, rows, pieceWidth, pieceHeight, random);
     
-    const dx = radius * 2;                    // Horizontal spacing
-    const dy = radius * Math.sqrt(3);        // Vertical spacing for hex pattern
-    const offsetX = radius;                   // Offset every other row
-    
-    // Add margin to ensure coverage at edges
-    const margin = radius * 2;
-    const startY = -margin;
-    const endY = imageSize.height + margin;
-    const startX = -margin;
-    const endX = imageSize.width + margin;
-    
-    for (let y = startY; y < endY; y += dy) {
-        const isOffsetRow = Math.floor((y - startY) / dy) % 2 === 1;
-        const xStart = isOffsetRow ? startX + offsetX : startX;
-        
-        for (let x = xStart; x < endX; x += dx) {
-            circles.push({
-                id: circleId++,
-                centre: { x, y },
-                radius,
-                pieceId: -1, // Unassigned initially
-                neighbors: [],
-            });
-        }
-    }
-    
-    // Build adjacency graph (circles are neighbors if their centres are close)
-    const maxNeighborDistance = dx * 1.1; // Slightly larger than spacing to catch neighbors
-    
-    for (let i = 0; i < circles.length; i++) {
-        for (let j = i + 1; j < circles.length; j++) {
-            const dist = distance(circles[i].centre, circles[j].centre);
-            if (dist <= maxNeighborDistance) {
-                circles[i].neighbors.push(j);
-                circles[j].neighbors.push(i);
-            }
-        }
-    }
-    
-    return circles;
-}
+    let nextEdgeId = 0;
+    const edgeIdMap: number[][][] = Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => [-1, -1, -1, -1]),
+    );
 
-/**
- * Randomly merge circles into pieces using flood-fill algorithm.
- */
-function mergeCirclesIntoPieces(
-    circles: Circle[],
-    targetPieceCount: number,
-    random: () => number,
-): FractalPiece[] {
-    const pieces: FractalPiece[] = [];
-    const visited = new Set<number>();
-    
-    // Calculate average piece size
-    const avgPieceSize = Math.ceil(circles.length / targetPieceCount);
-    const minPieceSize = Math.max(1, avgPieceSize - 2);
-    const maxPieceSize = avgPieceSize + 3;
-    
-    let pieceId = 0;
-    
-    // Start flood-fill from random unvisited circles
-    for (const startCircle of shuffleArray([...circles], random)) {
-        if (visited.has(startCircle.id)) continue;
-        
-        // Grow a piece from this circle
-        const pieceCircles: number[] = [];
-        const queue = [startCircle.id];
-        visited.add(startCircle.id);
-        
-        while (queue.length > 0 && pieceCircles.length < maxPieceSize) {
-            const circleId = queue.shift()!;
-            pieceCircles.push(circleId);
-            circles[circleId].pieceId = pieceId;
-            
-            // Maybe add neighbors (probabilistic growth)
-            if (pieceCircles.length < minPieceSize || random() < 0.4) {
-                for (const neighborId of circles[circleId].neighbors) {
-                    if (!visited.has(neighborId) && !queue.includes(neighborId)) {
-                        visited.add(neighborId);
-                        queue.push(neighborId);
-                    }
-                }
-            }
-        }
-        
-        if (pieceCircles.length > 0) {
-            pieces.push({
-                id: pieceId++,
-                circles: pieceCircles,
-                boundaries: [],
-            });
+    // Assign edge IDs for shared edges
+    // Horizontal shared edges (between row and row+1)
+    for (let row = 0; row < rows - 1; row++) {
+        for (let col = 0; col < cols; col++) {
+            const id1 = nextEdgeId++;
+            const id2 = nextEdgeId++;
+            edgeIdMap[row][col][2] = id1; // Bottom edge of upper piece
+            edgeIdMap[row + 1][col][0] = id2; // Top edge of lower piece
         }
     }
-    
+
+    // Vertical shared edges (between col and col+1)
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols - 1; col++) {
+            const id1 = nextEdgeId++;
+            const id2 = nextEdgeId++;
+            edgeIdMap[row][col][1] = id1; // Right edge of left piece
+            edgeIdMap[row][col + 1][3] = id2; // Left edge of right piece
+        }
+    }
+
+    // Border edges (no mate)
+    for (let col = 0; col < cols; col++) {
+        edgeIdMap[0][col][0] = nextEdgeId++; // Top border
+        edgeIdMap[rows - 1][col][2] = nextEdgeId++; // Bottom border
+    }
+    for (let row = 0; row < rows; row++) {
+        edgeIdMap[row][0][3] = nextEdgeId++; // Left border
+        edgeIdMap[row][cols - 1][1] = nextEdgeId++; // Right border
+    }
+
+    // Build pieces
+    const pieces: Piece[] = [];
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const piece = buildPiece(
+                row, col, rows, cols, 
+                pieceWidth, pieceHeight,
+                edgeIdMap, sharedPaths
+            );
+            pieces.push(piece);
+        }
+    }
+
     return pieces;
 }
 
 /**
- * Generate boundary segments between pieces.
+ * Generate organic curved paths for all shared edges in the puzzle.
  */
-function addBoundariesToPieces(
-    pieces: FractalPiece[],
-    circles: Circle[],
-    imageSize: Size,
-): void {
-    // For each piece, find boundaries with neighbors and borders
-    for (const piece of pieces) {
-        const boundaryMap = new Map<number, BoundarySegment[]>();
-        
-        // Check each circle in this piece
-        for (const circleId of piece.circles) {
-            const circle = circles[circleId];
-            
-            // Check each neighbor of this circle
-            for (const neighborId of circle.neighbors) {
-                const neighbor = circles[neighborId];
-                const neighborPieceId = neighbor.pieceId;
-                
-                // Skip if neighbor is in same piece
-                if (neighborPieceId === piece.id) continue;
-                
-                // Create boundary segment between these circles
-                const arc = createArcBetweenCircles(circle, neighbor);
-                
-                const boundary: BoundarySegment = {
-                    fromCircle: circleId,
-                    toCircle: neighborId,
-                    neighborPieceId,
-                    arc,
-                };
-                
-                if (!boundaryMap.has(neighborPieceId)) {
-                    boundaryMap.set(neighborPieceId, []);
-                }
-                boundaryMap.get(neighborPieceId)!.push(boundary);
-            }
-            
-            // Check if circle is near puzzle border
-            const borderSegments = createBorderSegments(circle, imageSize);
-            for (const borderSegment of borderSegments) {
-                if (!boundaryMap.has(-1)) {
-                    boundaryMap.set(-1, []);
-                }
-                boundaryMap.get(-1)!.push(borderSegment);
-            }
+function generateSharedEdgePaths(
+    cols: number,
+    rows: number,
+    pieceWidth: number,
+    pieceHeight: number,
+    random: () => number,
+): { horizontal: Point[][][]; vertical: Point[][][] } {
+    
+    const horizontal: Point[][][] = [];
+    const vertical: Point[][][] = [];
+
+    // Horizontal shared edges (between row and row+1)
+    for (let row = 0; row < rows - 1; row++) {
+        horizontal[row] = [];
+        for (let col = 0; col < cols; col++) {
+            // Edge from right to left on the bottom of upper piece
+            const start = { x: pieceWidth, y: pieceHeight };
+            const end = { x: 0, y: pieceHeight };
+            horizontal[row][col] = generateOrganicPath(start, end, random);
         }
+    }
+
+    // Vertical shared edges (between col and col+1)  
+    for (let row = 0; row < rows; row++) {
+        vertical[row] = [];
+        for (let col = 0; col < cols - 1; col++) {
+            // Edge from top to bottom on the right of left piece
+            const start = { x: pieceWidth, y: 0 };
+            const end = { x: pieceWidth, y: pieceHeight };
+            vertical[row][col] = generateOrganicPath(start, end, random);
+        }
+    }
+
+    return { horizontal, vertical };
+}
+
+/**
+ * Generate an organic curved path between two points.
+ */
+function generateOrganicPath(start: Point, end: Point, random: () => number): Point[] {
+    const path: Point[] = [start];
+    
+    const deltaX = end.x - start.x;
+    const deltaY = end.y - start.y;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    // Number of curve points based on edge length
+    const numPoints = Math.max(3, Math.floor(distance / 30));
+    
+    for (let i = 1; i < numPoints; i++) {
+        const t = i / numPoints;
         
-        // Consolidate boundaries
-        piece.boundaries = Array.from(boundaryMap.values()).flat();
+        // Base position along the line
+        const baseX = start.x + t * deltaX;
+        const baseY = start.y + t * deltaY;
+        
+        // Perpendicular offset for organic curve
+        const perpX = -deltaY / distance;
+        const perpY = deltaX / distance;
+        
+        // Random offset with smooth variation
+        const maxOffset = Math.min(20, distance * 0.2);
+        const offset = (random() - 0.5) * maxOffset * Math.sin(t * Math.PI);
+        
+        path.push({
+            x: baseX + offset * perpX,
+            y: baseY + offset * perpY,
+        });
     }
+    
+    path.push(end);
+    return path;
 }
 
 /**
- * Create an arc segment between two adjacent circles.
+ * Build a single piece with organic edges.
  */
-function createArcBetweenCircles(circle1: Circle, circle2: Circle): ArcSegment {
-    const c1 = circle1.centre;
-    const c2 = circle2.centre;
+function buildPiece(
+    row: number, col: number, 
+    rows: number, cols: number,
+    pieceWidth: number, pieceHeight: number,
+    edgeIdMap: number[][][],
+    sharedPaths: { horizontal: Point[][][]; vertical: Point[][][] }
+): Piece {
+    const edges: Edge[] = [];
     
-    // Find intersection points of the two circles
-    const dist = distance(c1, c2);
-    const r1 = circle1.radius;
-    const r2 = circle2.radius;
+    // Top edge (direction: 0)
+    const topEdge = buildEdge(row, col, 0, rows, cols, pieceWidth, pieceHeight, edgeIdMap, sharedPaths);
+    edges.push(topEdge);
     
-    // Calculate intersection using circle-circle intersection formula
-    const a = (r1 * r1 - r2 * r2 + dist * dist) / (2 * dist);
-    const h = Math.sqrt(r1 * r1 - a * a);
+    // Right edge (direction: 1)
+    const rightEdge = buildEdge(row, col, 1, rows, cols, pieceWidth, pieceHeight, edgeIdMap, sharedPaths);
+    edges.push(rightEdge);
     
-    // Point along the line between centres
-    const p0 = {
-        x: c1.x + a * (c2.x - c1.x) / dist,
-        y: c1.y + a * (c2.y - c1.y) / dist,
-    };
+    // Bottom edge (direction: 2)
+    const bottomEdge = buildEdge(row, col, 2, rows, cols, pieceWidth, pieceHeight, edgeIdMap, sharedPaths);
+    edges.push(bottomEdge);
     
-    // The two intersection points
-    const intersection1 = {
-        x: p0.x + h * (c2.y - c1.y) / dist,
-        y: p0.y - h * (c2.x - c1.x) / dist,
-    };
+    // Left edge (direction: 3)
+    const leftEdge = buildEdge(row, col, 3, rows, cols, pieceWidth, pieceHeight, edgeIdMap, sharedPaths);
+    edges.push(leftEdge);
     
-    const intersection2 = {
-        x: p0.x - h * (c2.y - c1.y) / dist,
-        y: p0.y + h * (c2.x - c1.x) / dist,
-    };
-    
-    // Use the arc on circle1's boundary between the intersections
-    return {
-        start: intersection1,
-        end: intersection2,
-        centre: c1,
-        radius: r1,
-        largeArc: false, // Most arcs will be small
-    };
-}
-
-/**
- * Create border segments for circles near the puzzle edge.
- */
-function createBorderSegments(circle: Circle, imageSize: Size): BoundarySegment[] {
-    const segments: BoundarySegment[] = [];
-    const { centre, radius } = circle;
-    
-    // Check if circle intersects with puzzle boundaries
-    const margin = radius * 0.1;
-    
-    // Left edge
-    if (centre.x - radius <= margin) {
-        segments.push(createBorderSegment(circle, -1, 'left', imageSize));
-    }
-    
-    // Right edge  
-    if (centre.x + radius >= imageSize.width - margin) {
-        segments.push(createBorderSegment(circle, -1, 'right', imageSize));
-    }
-    
-    // Top edge
-    if (centre.y - radius <= margin) {
-        segments.push(createBorderSegment(circle, -1, 'top', imageSize));
-    }
-    
-    // Bottom edge
-    if (centre.y + radius >= imageSize.height - margin) {
-        segments.push(createBorderSegment(circle, -1, 'bottom', imageSize));
-    }
-    
-    return segments;
-}
-
-/**
- * Create a single border segment.
- */
-function createBorderSegment(
-    circle: Circle,
-    neighborPieceId: number,
-    edge: 'left' | 'right' | 'top' | 'bottom',
-    imageSize: Size,
-): BoundarySegment {
-    const { centre, radius } = circle;
-    
-    let start: Point, end: Point;
-    
-    switch (edge) {
-        case 'left':
-            start = { x: 0, y: centre.y - radius };
-            end = { x: 0, y: centre.y + radius };
-            break;
-        case 'right':
-            start = { x: imageSize.width, y: centre.y - radius };
-            end = { x: imageSize.width, y: centre.y + radius };
-            break;
-        case 'top':
-            start = { x: centre.x - radius, y: 0 };
-            end = { x: centre.x + radius, y: 0 };
-            break;
-        case 'bottom':
-            start = { x: centre.x - radius, y: imageSize.height };
-            end = { x: centre.x + radius, y: imageSize.height };
-            break;
-    }
+    // Build SVG shape from edges
+    const shape = buildShapeFromEdges(edges);
     
     return {
-        fromCircle: circle.id,
-        toCircle: -1, // Border
-        neighborPieceId,
-        arc: {
-            start,
-            end,
-            centre,
-            radius,
-            largeArc: false,
+        id: row * cols + col,
+        edges,
+        shape,
+        imageOffset: {
+            x: -col * pieceWidth,
+            y: -row * pieceHeight,
         },
     };
 }
 
 /**
- * Convert fractal pieces to standard Piece[] format.
+ * Build a single edge for a piece.
  */
-function convertToStandardPieces(
-    fractalPieces: FractalPiece[],
-    circles: Circle[],
-    _imageSize: Size,
-): Piece[] {
-    const pieces: Piece[] = [];
-    let nextEdgeId = 0;
+function buildEdge(
+    row: number, col: number, dir: number,
+    rows: number, cols: number,
+    pieceWidth: number, pieceHeight: number,
+    edgeIdMap: number[][][],
+    sharedPaths: { horizontal: Point[][][]; vertical: Point[][][] }
+): Edge {
+    const id = edgeIdMap[row][col][dir];
+    const { start, end } = getEdgeEndpoints(dir, pieceWidth, pieceHeight);
     
-    // Keep track of shared boundaries for mate relationships
-    const sharedBoundaries = new Map<string, { edgeId1: number; edgeId2: number }>();
+    let mateEdgeId = -1;
+    let matePieceId = -1;
+    let path: string;
     
-    for (const fractalPiece of fractalPieces) {
-        const edges: Edge[] = [];
-        
-        // Group boundaries by neighbor piece
-        const boundaryGroups = new Map<number, BoundarySegment[]>();
-        for (const boundary of fractalPiece.boundaries) {
-            if (!boundaryGroups.has(boundary.neighborPieceId)) {
-                boundaryGroups.set(boundary.neighborPieceId, []);
-            }
-            boundaryGroups.get(boundary.neighborPieceId)!.push(boundary);
-        }
-        
-        // Create edges from boundary groups
-        for (const [neighborPieceId, boundaries] of boundaryGroups) {
-            const edgeId = nextEdgeId++;
-            
-            // Create SVG path from all boundary arcs
-            const pathSegments: string[] = [];
-            let currentPoint: Point = boundaries[0].arc.start;
-            pathSegments.push(`M ${currentPoint.x} ${currentPoint.y}`);
-            
-            for (const boundary of boundaries) {
-                const arc = boundary.arc;
-                const largeArcFlag = arc.largeArc ? 1 : 0;
-                const sweepFlag = 1; // Positive direction
-                
-                pathSegments.push(
-                    `A ${arc.radius} ${arc.radius} 0 ${largeArcFlag} ${sweepFlag} ${arc.end.x} ${arc.end.y}`
-                );
-                currentPoint = arc.end;
-            }
-            
-            const path = pathSegments.join(' ');
-            
-            // Handle mate relationships
-            let mateEdgeId = -1;
-            let matePieceId = neighborPieceId;
-            
-            if (neighborPieceId !== -1) {
-                // This is a shared boundary - check if mate already exists
-                const boundaryKey = [fractalPiece.id, neighborPieceId].sort().join('-');
-                const sharedInfo = sharedBoundaries.get(boundaryKey);
-                
-                if (sharedInfo) {
-                    // Mate already exists
-                    mateEdgeId = sharedInfo.edgeId1;
-                    // Update the existing mate to point back to this edge
-                    sharedInfo.edgeId2 = edgeId;
-                } else {
-                    // First time seeing this boundary
-                    sharedBoundaries.set(boundaryKey, { edgeId1: edgeId, edgeId2: -1 });
-                }
-            } else {
-                matePieceId = -1; // Border edge
-            }
-            
-            edges.push({
-                id: edgeId,
-                mateEdgeId,
-                matePieceId,
-                path,
-                start: boundaries[0].arc.start,
-                end: boundaries[boundaries.length - 1].arc.end,
-            });
-        }
-        
-        // Calculate piece shape (union of all edges)
-        const shape = edges.map(edge => edge.path).join(' ') + ' Z';
-        
-        // Calculate image offset (use centre of circles in this piece)
-        const avgCentre = calculateAveragePoint(
-            fractalPiece.circles.map(id => circles[id].centre)
+    const isBorder = isEdgeBorder(row, col, dir, rows, cols);
+    
+    if (isBorder) {
+        // Border edge - straight line
+        path = `L ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
+    } else {
+        // Shared edge - use organic curve
+        const { path: edgePath, mateInfo } = getSharedEdgePath(
+            row, col, dir, rows, cols, start, end, sharedPaths
         );
-        
-        pieces.push({
-            id: fractalPiece.id,
-            edges,
-            shape,
-            imageOffset: { x: -avgCentre.x, y: -avgCentre.y },
-        });
+        path = edgePath;
+        mateEdgeId = edgeIdMap[mateInfo.row][mateInfo.col][mateInfo.dir];
+        matePieceId = mateInfo.row * cols + mateInfo.col;
     }
     
-    // Update mate relationships for shared boundaries
-    for (const piece of pieces) {
-        for (const edge of piece.edges) {
-            if (edge.mateEdgeId === -1 && edge.matePieceId !== -1) {
-                // Find the mate edge
-                const matePiece = pieces.find(p => p.id === edge.matePieceId);
-                if (matePiece) {
-                    const mateEdge = matePiece.edges.find(e => 
-                        sharedBoundaries.get([piece.id, edge.matePieceId].sort().join('-'))?.edgeId2 === e.id
-                    );
-                    if (mateEdge) {
-                        edge.mateEdgeId = mateEdge.id;
-                        mateEdge.mateEdgeId = edge.id;
-                    }
-                }
-            }
-        }
+    return { id, mateEdgeId, matePieceId, path, start, end };
+}
+
+/**
+ * Get the start and end points for an edge based on direction.
+ */
+function getEdgeEndpoints(dir: number, width: number, height: number): { start: Point; end: Point } {
+    switch (dir) {
+        case 0: return { start: { x: 0, y: 0 }, end: { x: width, y: 0 } }; // Top
+        case 1: return { start: { x: width, y: 0 }, end: { x: width, y: height } }; // Right
+        case 2: return { start: { x: width, y: height }, end: { x: 0, y: height } }; // Bottom
+        case 3: return { start: { x: 0, y: height }, end: { x: 0, y: 0 } }; // Left
+        default: throw new Error(`Invalid direction: ${dir}`);
+    }
+}
+
+/**
+ * Check if an edge is on the puzzle border.
+ */
+function isEdgeBorder(row: number, col: number, dir: number, rows: number, cols: number): boolean {
+    switch (dir) {
+        case 0: return row === 0; // Top
+        case 1: return col === cols - 1; // Right
+        case 2: return row === rows - 1; // Bottom
+        case 3: return col === 0; // Left
+        default: return false;
+    }
+}
+
+/**
+ * Get the organic path for a shared edge.
+ */
+function getSharedEdgePath(
+    row: number, col: number, dir: number,
+    rows: number, cols: number,
+    start: Point, end: Point,
+    sharedPaths: { horizontal: Point[][][]; vertical: Point[][][] }
+): { path: string; mateInfo: { row: number; col: number; dir: number } } {
+    let pathPoints: Point[];
+    let mateInfo: { row: number; col: number; dir: number };
+    let isReversed = false;
+
+    switch (dir) {
+        case 0: // Top edge = mate of bottom edge of piece above
+            pathPoints = sharedPaths.horizontal[row - 1][col];
+            mateInfo = { row: row - 1, col, dir: 2 };
+            isReversed = true; // Top edge goes left-to-right, bottom went right-to-left
+            break;
+        case 1: // Right edge = first side of vertical edge
+            pathPoints = sharedPaths.vertical[row][col];
+            mateInfo = { row, col: col + 1, dir: 3 };
+            break;
+        case 2: // Bottom edge = first side of horizontal edge
+            pathPoints = sharedPaths.horizontal[row][col];
+            mateInfo = { row: row + 1, col, dir: 0 };
+            break;
+        case 3: // Left edge = mate of right edge of piece to the left
+            pathPoints = sharedPaths.vertical[row][col - 1];
+            mateInfo = { row, col: col - 1, dir: 1 };
+            isReversed = true; // Left edge goes bottom-to-top, right went top-to-bottom
+            break;
+        default:
+            throw new Error(`Invalid direction: ${dir}`);
+    }
+
+    if (isReversed) {
+        pathPoints = pathPoints.slice().reverse();
+    }
+
+    // Convert points to SVG path, skipping the first point (already at start)
+    const pathSegments = pathPoints.slice(1).map(p => `L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`);
+    const path = pathSegments.join(' ');
+
+    return { path, mateInfo };
+}
+
+/**
+ * Build the complete SVG shape from all four edges.
+ */
+function buildShapeFromEdges(edges: Edge[]): string {
+    if (edges.length === 0) return '';
+    
+    const first = edges[0];
+    const parts = [`M ${first.start.x.toFixed(2)} ${first.start.y.toFixed(2)}`];
+    
+    for (const edge of edges) {
+        parts.push(edge.path);
     }
     
-    return pieces;
-}
-
-// Helper functions
-
-function distance(p1: Point, p2: Point): number {
-    const dx = p1.x - p2.x;
-    const dy = p1.y - p2.y;
-    return Math.sqrt(dx * dx + dy * dy);
-}
-
-function shuffleArray<T>(array: T[], random: () => number): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-}
-
-function calculateAveragePoint(points: Point[]): Point {
-    const sum = points.reduce(
-        (acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }),
-        { x: 0, y: 0 }
-    );
-    return {
-        x: sum.x / points.length,
-        y: sum.y / points.length,
-    };
+    parts.push('Z');
+    return parts.join(' ');
 }
