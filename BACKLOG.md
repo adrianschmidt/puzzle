@@ -280,7 +280,8 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Description:** Some fractal puzzles still show small star-shaped visual gaps at 4-piece junctions. The cells are topologically filled (a diagonal connection exists), but the `addArcs` algorithm doesn't generate arcs that visually cover the full cell area at certain piece boundary configurations. The fix likely involves adjusting how piece boundary paths are drawn — either extending arcs slightly to overlap at junctions, or adding extra arc segments at junction points.
 
 ### 10.3 — Improve Gather Pieces layout
-**Status:** todo
+**Status:** done
+**Done:** 2026-03-24
 **Depends on:** 5.4
 **Description:** The current Gather Pieces function spreads pieces out too much, making them hard to work with. Improve it to arrange pieces in a compact grid layout with a consistent minimum margin between each piece. Use the bounding box of each piece/group to tile them efficiently. Important: the layout must NOT correlate with the solved positions — pieces should be shuffled so it doesn't accidentally solve the puzzle. Consider sorting by size (larger groups first) and packing them in a grid pattern. Also update the description of the Gather Pieces button in the info modal to reflect the new behaviour.
 
