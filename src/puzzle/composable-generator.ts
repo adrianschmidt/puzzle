@@ -12,7 +12,7 @@
 
 import type { Piece, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
-import { generateStraightGrid } from './composable/grid-cuts.js';
+import { generateWavyGrid } from './composable/grid-cuts.js';
 import { classicTabTemplate } from './composable/tab-shapes.js';
 import { composePuzzle } from './composable/compose.js';
 
@@ -37,8 +37,8 @@ export function generateComposablePuzzle(
 ): Piece[] {
     const random = createSeededRandom(seed);
 
-    // Layer 1: Grid cuts
-    const grid = generateStraightGrid(cols, rows, imageSize);
+    // Layer 1: Grid cuts (wavy internal cuts, straight borders)
+    const grid = generateWavyGrid(cols, rows, imageSize, random);
 
     // Layer 2: Tab template
     const template = classicTabTemplate;
