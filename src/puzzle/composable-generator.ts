@@ -18,6 +18,8 @@
 
 import type { Edge, Piece, Point, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
+import { generateStraightGrid } from './composable/grid-cuts.js';
+import type { GridDefinition } from './composable/grid-cuts.js';
 
 /** Direction of an edge relative to a grid cell. */
 const Dir = {
@@ -86,8 +88,10 @@ export function generateComposablePuzzle(
     seed: number,
 ): Piece[] {
     const random = createSeededRandom(seed);
-    const pieceWidth = imageSize.width / cols;
-    const pieceHeight = imageSize.height / rows;
+
+    // --- Grid layer: define cuts and compute grid structure ---
+    const grid: GridDefinition = generateStraightGrid(cols, rows, imageSize);
+    const { pieceWidth, pieceHeight } = grid;
 
     // Generate unique tab parameters for each shared internal edge
     const horizontalParams = createParamsMap(cols, rows - 1, random); // between rows
