@@ -20,6 +20,8 @@ import type { Edge, Piece, Point, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
 import { generateStraightGrid } from './composable/grid-cuts.js';
 import type { GridDefinition } from './composable/grid-cuts.js';
+// Tab shape layer: ./composable/tab-shapes.ts
+// Will replace inline shape generation in the composition step (#138).
 
 /** Direction of an edge relative to a grid cell. */
 const Dir = {
