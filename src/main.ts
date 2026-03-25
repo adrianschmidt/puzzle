@@ -252,7 +252,11 @@ function initGame(state: GameState): void {
  * @param gridSize - Grid dimensions (cols × rows) for the puzzle
  * @param cutStyle - Cut style to use for piece generation
  */
-async function startNewGame(gridSize: GridSize, cutStyle: CutStyle = 'classic'): Promise<void> {
+async function startNewGame(
+    gridSize: GridSize,
+    cutStyle: CutStyle = 'classic',
+    composableConfig?: import('./puzzle/composable-generator.js').ComposableConfig,
+): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
     applyViewportTransform();
@@ -296,7 +300,7 @@ async function startNewGame(gridSize: GridSize, cutStyle: CutStyle = 'classic'):
         }
     }
 
-    const state = createNewGame(imageUrl, imageSize, viewport, gridSize, { cutStyle });
+    const state = createNewGame(imageUrl, imageSize, viewport, gridSize, { cutStyle, composableConfig });
 
     if (attribution) {
         state.attribution = attribution;
@@ -352,14 +356,14 @@ createNewGameButton({
             container: app,
             selectedIndex: preferredIndex,
             selectedCutStyleIndex: preferredCutStyleIndex,
-            onSelect: (index, cutStyleIndex) => {
+            onSelect: (index, cutStyleIndex, composableConfig) => {
                 saveSizePreference(index);
                 const resolvedCutStyleIndex = cutStyleIndex ?? preferredCutStyleIndex;
                 saveCutStylePreference(resolvedCutStyleIndex);
                 const option = getSizeOption(index);
                 const cutStyle = getCutStyleOption(resolvedCutStyleIndex).id;
                 clearSavedState();
-                void startNewGame(toGridSize(option), cutStyle);
+                void startNewGame(toGridSize(option), cutStyle, composableConfig);
             },
         });
     },

@@ -17,16 +17,24 @@ import { classicTabTemplate } from './composable/tab-shapes.js';
 import { composePuzzle } from './composable/compose.js';
 
 /**
+ * Configuration for the composable generator.
+ * All parameters are optional — sensible defaults are used.
+ */
+export interface ComposableConfig {
+    /** Grid waviness amplitude (0 = straight, 0.3 = very wavy). Default: 0.12 */
+    waveAmplitude?: number;
+    /** Control points per grid segment (1 = gentle, 4 = wiggly). Default: 2 */
+    waveControlPoints?: number;
+}
+
+/**
  * Generate a puzzle using the composable architecture.
- *
- * Currently uses straight grid cuts and the classic tab template.
- * Future versions will accept configuration for different grid styles,
- * tab templates, and composition parameters.
  *
  * @param cols - Number of columns
  * @param rows - Number of rows
  * @param imageSize - Pixel dimensions of the puzzle image
  * @param seed - PRNG seed for reproducible cuts
+ * @param config - Optional composable configuration
  * @returns Array of pieces with full edge connectivity and SVG paths
  */
 export function generateComposablePuzzle(
@@ -34,11 +42,15 @@ export function generateComposablePuzzle(
     rows: number,
     imageSize: Size,
     seed: number,
+    config?: ComposableConfig,
 ): Piece[] {
     const random = createSeededRandom(seed);
 
     // Layer 1: Grid cuts (wavy internal cuts, straight borders)
-    const grid = generateWavyGrid(cols, rows, imageSize, random);
+    const grid = generateWavyGrid(cols, rows, imageSize, random, {
+        amplitude: config?.waveAmplitude,
+        controlPointsPerSegment: config?.waveControlPoints,
+    });
 
     // Layer 2: Tab template
     const template = classicTabTemplate;

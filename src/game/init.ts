@@ -10,6 +10,7 @@ import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/type
 import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
 import { generateFractalPuzzle, scaleFractalGrid } from '../puzzle/fractal-generator.js';
 import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
+import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
 
@@ -31,6 +32,8 @@ export interface InitOptions {
     seed?: number;
     /** Cut style to use. Defaults to 'classic'. */
     cutStyle?: CutStyle;
+    /** Configuration for the composable generator (only used when cutStyle is 'composable'). */
+    composableConfig?: ComposableConfig;
 }
 
 /**
@@ -66,7 +69,7 @@ export function createNewGame(
     if (cutStyle === 'fractal') {
         pieces = generateFractalPuzzle(fractalGrid!.cols, fractalGrid!.rows, imageSize, seed);
     } else if (cutStyle === 'composable') {
-        pieces = generateComposablePuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
+        pieces = generateComposablePuzzle(gridSize.cols, gridSize.rows, imageSize, seed, options.composableConfig);
     } else {
         pieces = generateProceduralPuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
     }
