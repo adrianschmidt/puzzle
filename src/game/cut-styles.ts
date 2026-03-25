@@ -8,7 +8,7 @@
 /**
  * Identifier for a cut style generator.
  */
-export type CutStyle = 'classic' | 'fractal';
+export type CutStyle = 'classic' | 'fractal' | 'composable';
 
 /**
  * A selectable cut style option.
@@ -35,6 +35,11 @@ export const CUT_STYLE_OPTIONS: readonly CutStyleOption[] = [
         id: 'fractal',
         label: 'Fractal',
         description: 'Organic circle-packing',
+    },
+    {
+        id: 'composable',
+        label: 'Composable',
+        description: 'Experimental — customizable cuts',
     },
 ] as const;
 
