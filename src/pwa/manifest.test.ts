@@ -20,9 +20,9 @@ describe('createManifestConfig', () => {
         expect(config.display).toBe('standalone');
     });
 
-    it('allows any orientation', () => {
+    it('does not set orientation (respects device rotation lock)', () => {
         const config = createManifestConfig('/puzzle/');
-        expect(config.orientation).toBe('any');
+        expect(config.orientation).toBeUndefined();
     });
 
     it('uses the provided base path for scope and start_url', () => {

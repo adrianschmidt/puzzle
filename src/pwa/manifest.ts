@@ -19,7 +19,7 @@ export interface ManifestConfig {
     theme_color: string;
     background_color: string;
     display: string;
-    orientation: string;
+    orientation?: string;
     scope: string;
     start_url: string;
     icons: ManifestIcon[];
@@ -44,7 +44,7 @@ export function createManifestConfig(basePath: string): ManifestConfig {
         theme_color: '#1a1a2e',
         background_color: '#1a1a2e',
         display: 'standalone',
-        orientation: 'any',
+
         scope: basePath,
         start_url: basePath,
         icons: [
