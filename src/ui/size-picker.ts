@@ -9,6 +9,7 @@
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
+import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
 
 export interface SizePickerOptions {
     /** Container to append the dialog to. */
@@ -60,15 +61,6 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     title.textContent = 'New Game';
     dialog.appendChild(title);
 
-    // Cut style picker section
-    const cutStyleSection = createCutStylePicker({
-        selectedIndex: currentCutStyleIndex,
-        onSelect: (index) => {
-            currentCutStyleIndex = index;
-        },
-    });
-    dialog.appendChild(cutStyleSection);
-
     // Size section title
     const sizeTitle = document.createElement('h3');
     sizeTitle.className = 'size-picker-subtitle';
@@ -90,6 +82,45 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
         }
     }
 
+    // Store button elements for re-rendering when cut style changes
+    const sizeButtons: HTMLButtonElement[] = [];
+
+    /**
+     * Update the content of size buttons based on the current cut style.
+     */
+    function updateSizeButtons(): void {
+        const currentCutStyle = CUT_STYLE_OPTIONS[currentCutStyleIndex];
+        const isFractal = currentCutStyle.id === 'fractal';
+
+        for (let i = 0; i < sizeButtons.length; i++) {
+            const btn = sizeButtons[i];
+            const opt = PUZZLE_SIZE_OPTIONS[i];
+
+            // Clear existing content
+            btn.innerHTML = '';
+
+            const count = document.createElement('span');
+            count.className = 'size-picker-count';
+            count.textContent = isFractal ? `~${opt.pieceCount}` : String(opt.pieceCount);
+
+            const label = document.createElement('span');
+            label.className = 'size-picker-label';
+            label.textContent = 'pieces';
+
+            btn.appendChild(count);
+            btn.appendChild(label);
+
+            // Only show dimensions for classic cut style
+            if (!isFractal) {
+                const dims = document.createElement('span');
+                dims.className = 'size-picker-dims';
+                dims.textContent = `${opt.cols} × ${opt.rows}`;
+                btn.appendChild(dims);
+            }
+        }
+    }
+
+    // Create size buttons
     for (let i = 0; i < PUZZLE_SIZE_OPTIONS.length; i++) {
         const opt = PUZZLE_SIZE_OPTIONS[i];
         const btn = document.createElement('button');
@@ -100,30 +131,28 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
             btn.classList.add('size-picker-option--selected');
         }
 
-        const count = document.createElement('span');
-        count.className = 'size-picker-count';
-        count.textContent = String(opt.pieceCount);
-
-        const label = document.createElement('span');
-        label.className = 'size-picker-label';
-        label.textContent = 'pieces';
-
-        const dims = document.createElement('span');
-        dims.className = 'size-picker-dims';
-        dims.textContent = `${opt.cols} × ${opt.rows}`;
-
-        btn.appendChild(count);
-        btn.appendChild(label);
-        btn.appendChild(dims);
-
         btn.addEventListener('click', () => {
             dismiss();
             onSelect(i, currentCutStyleIndex);
         });
 
+        sizeButtons.push(btn);
         grid.appendChild(btn);
     }
 
+    // Initial render of size buttons
+    updateSizeButtons();
+
+    // Cut style picker section (insert before size grid)
+    const cutStyleSection = createCutStylePicker({
+        selectedIndex: currentCutStyleIndex,
+        onSelect: (index) => {
+            currentCutStyleIndex = index;
+            updateSizeButtons(); // Re-render size buttons when cut style changes
+        },
+    });
+
+    dialog.appendChild(cutStyleSection);
     dialog.appendChild(grid);
     overlay.appendChild(dialog);
 
