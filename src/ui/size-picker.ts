@@ -11,6 +11,12 @@ import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
 import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
 
+/** Composable generator config passed through from sliders. */
+export interface ComposableSliderConfig {
+    waveAmplitude: number;
+    waveControlPoints: number;
+}
+
 export interface SizePickerOptions {
     /** Container to append the dialog to. */
     container: HTMLElement;
@@ -18,8 +24,8 @@ export interface SizePickerOptions {
     selectedIndex: number;
     /** Currently selected cut style index. */
     selectedCutStyleIndex?: number;
-    /** Called when the player selects a size. Receives the size and cut style indices. */
-    onSelect: (index: number, cutStyleIndex?: number) => void;
+    /** Called when the player selects a size. Receives the size, cut style, and composable config. */
+    onSelect: (index: number, cutStyleIndex?: number, composableConfig?: ComposableSliderConfig) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
 }
@@ -133,7 +139,10 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
 
         btn.addEventListener('click', () => {
             dismiss();
-            onSelect(i, currentCutStyleIndex);
+            const composableConfig = currentCutStyleIndex === composableCutIndex
+                ? getSliderValues()
+                : undefined;
+            onSelect(i, currentCutStyleIndex, composableConfig);
         });
 
         sizeButtons.push(btn);
@@ -143,17 +152,88 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     // Initial render of size buttons
     updateSizeButtons();
 
+    // Composable sliders container (populated below, visibility toggled here)
+    const composableCutIndex = CUT_STYLE_OPTIONS.findIndex(o => o.id === 'composable');
+    const slidersSection = document.createElement('div');
+    slidersSection.className = 'composable-sliders';
+    slidersSection.style.display = 'none';
+
+    function updateSlidersVisibility(): void {
+        slidersSection.style.display = currentCutStyleIndex === composableCutIndex ? 'block' : 'none';
+    }
+
     // Cut style picker section (insert before size grid)
     const cutStyleSection = createCutStylePicker({
         selectedIndex: currentCutStyleIndex,
         onSelect: (index) => {
             currentCutStyleIndex = index;
-            updateSizeButtons(); // Re-render size buttons when cut style changes
+            updateSizeButtons();
+            updateSlidersVisibility();
         },
     });
 
     dialog.appendChild(cutStyleSection);
     dialog.appendChild(grid);
+
+    // --- Populate composable parameter sliders ---
+    interface SliderDef {
+        id: string;
+        label: string;
+        min: number;
+        max: number;
+        step: number;
+        defaultValue: number;
+    }
+
+    const sliderDefs: SliderDef[] = [
+        { id: 'waveAmplitude', label: 'Wave Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: 0.12 },
+        { id: 'waveControlPoints', label: 'Wave Wiggliness', min: 1, max: 6, step: 1, defaultValue: 2 },
+    ];
+
+    const sliderInputs: Map<string, HTMLInputElement> = new Map();
+
+    for (const def of sliderDefs) {
+        const row = document.createElement('div');
+        row.className = 'composable-slider-row';
+
+        const lbl = document.createElement('label');
+        lbl.className = 'composable-slider-label';
+        lbl.textContent = def.label;
+
+        const valueDisplay = document.createElement('span');
+        valueDisplay.className = 'composable-slider-value';
+        valueDisplay.textContent = String(def.defaultValue);
+
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.className = 'composable-slider-input';
+        input.min = String(def.min);
+        input.max = String(def.max);
+        input.step = String(def.step);
+        input.value = String(def.defaultValue);
+
+        input.addEventListener('input', () => {
+            valueDisplay.textContent = input.value;
+        });
+
+        sliderInputs.set(def.id, input);
+
+        row.appendChild(lbl);
+        row.appendChild(input);
+        row.appendChild(valueDisplay);
+        slidersSection.appendChild(row);
+    }
+
+    function getSliderValues(): ComposableSliderConfig {
+        return {
+            waveAmplitude: parseFloat(sliderInputs.get('waveAmplitude')!.value),
+            waveControlPoints: parseInt(sliderInputs.get('waveControlPoints')!.value, 10),
+        };
+    }
+
+    dialog.appendChild(slidersSection);
+    updateSlidersVisibility();
+
     overlay.appendChild(dialog);
 
     // Dismiss on backdrop click
