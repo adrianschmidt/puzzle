@@ -47,52 +47,43 @@ export function composePuzzle(
     template: TabTemplate,
     random: () => number,
 ): Piece[] {
-    const { cols, rows, pieceWidth, pieceHeight } = grid;
+    const { cols, rows, pieceWidth, pieceHeight, corners } = grid;
 
-    // Step 1: Generate tab/blank assignment and shapes for all shared edges
-    // Each shared edge gets one BezierPath, generated once from the "first side"
+    // Helper: convert a world-space corner position to piece-local coordinates
+    // by subtracting the piece's top-left corner position.
+    const toLocal = (worldPt: Point, pieceRow: number, pieceCol: number): Point => {
+        const origin = corners[pieceRow][pieceCol].position;
+        return { x: worldPt.x - origin.x, y: worldPt.y - origin.y };
+    };
+
+    // Step 1: Generate tab shapes in NORMALIZED space (0,0)→(1,0).
+    // Store them normalized — each side transforms on-the-fly using its own
+    // corner positions. This avoids coordinate space mismatches between
+    // the first side and the reversed second side.
     const horizontalPaths: BezierPath[][] = []; // [row][col] between row and row+1
     const verticalPaths: BezierPath[][] = [];   // [row][col] between col and col+1
-    const horizontalIsTab: boolean[][] = [];
-    const verticalIsTab: boolean[][] = [];
 
     for (let row = 0; row < rows - 1; row++) {
         horizontalPaths[row] = [];
-        horizontalIsTab[row] = [];
         for (let col = 0; col < cols; col++) {
             const isTab = random() > 0.5;
-            horizontalIsTab[row][col] = isTab;
-
-            // Generate in normalized space, mirror if blank
             let normalizedPath = template.generate(random);
             if (!isTab) {
                 normalizedPath = mirrorBezierPathY(normalizedPath);
             }
-
-            // Transform from normalized (0,0)→(1,0) to edge coordinates
-            // Bottom edge of piece at (row, col): goes from (pieceWidth, pieceHeight) to (0, pieceHeight)
-            const start: Point = { x: pieceWidth, y: pieceHeight };
-            const end: Point = { x: 0, y: pieceHeight };
-            horizontalPaths[row][col] = transformNormalizedPath(normalizedPath, start, end);
+            horizontalPaths[row][col] = normalizedPath;
         }
     }
 
     for (let row = 0; row < rows; row++) {
         verticalPaths[row] = [];
-        verticalIsTab[row] = [];
         for (let col = 0; col < cols - 1; col++) {
             const isTab = random() > 0.5;
-            verticalIsTab[row][col] = isTab;
-
             let normalizedPath = template.generate(random);
             if (!isTab) {
                 normalizedPath = mirrorBezierPathY(normalizedPath);
             }
-
-            // Right edge of piece at (row, col): goes from (pieceWidth, 0) to (pieceWidth, pieceHeight)
-            const start: Point = { x: pieceWidth, y: 0 };
-            const end: Point = { x: pieceWidth, y: pieceHeight };
-            verticalPaths[row][col] = transformNormalizedPath(normalizedPath, start, end);
+            verticalPaths[row][col] = normalizedPath;
         }
     }
 
@@ -146,18 +137,21 @@ export function composePuzzle(
                     pieceWidth, pieceHeight,
                     edgeIdMap,
                     horizontalPaths, verticalPaths,
+                    corners, toLocal,
                 ));
             }
 
             const shape = buildShape(edges);
 
+            // Image offset: the piece's top-left corner in image space
+            const origin = corners[row][col].position;
             pieces.push({
                 id: row * cols + col,
                 edges,
                 shape,
                 imageOffset: {
-                    x: -col * pieceWidth,
-                    y: -row * pieceHeight,
+                    x: -origin.x,
+                    y: -origin.y,
                 },
             });
         }
@@ -179,26 +173,6 @@ export function composePuzzle(
  *   (1,0) → end
  *   (0,1) → perpendicular direction (for tab height)
  */
-function transformNormalizedPath(
-    path: BezierPath,
-    start: Point,
-    end: Point,
-): BezierPath {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    // Perpendicular (90° counterclockwise)
-    const px = -dy;
-    const py = dx;
-
-    return path.map(p => ({
-        x: start.x + p.x * dx + p.y * px,
-        y: start.y + p.x * dy + p.y * py,
-    }));
-}
-
-// ---------------------------------------------------------------------------
-// Edge building
-// ---------------------------------------------------------------------------
 
 function buildEdge(
     id: number,
@@ -212,8 +186,10 @@ function buildEdge(
     edgeIdMap: number[][][],
     horizontalPaths: BezierPath[][],
     verticalPaths: BezierPath[][],
+    corners: import('./grid-cuts.js').GridCorner[][],
+    toLocal: (worldPt: Point, pieceRow: number, pieceCol: number) => Point,
 ): Edge {
-    const { start, end } = getEdgeEndpoints(dir, pieceWidth, pieceHeight);
+    const { start, end } = getEdgeEndpointsFromCorners(dir, row, col, corners, toLocal);
     const border = isBorderEdge(dir, row, col, rows, cols);
 
     if (border) {
@@ -244,71 +220,61 @@ function getSharedEdge(
     row: number,
     col: number,
     cols: number,
-    pieceWidth: number,
-    pieceHeight: number,
+    _pieceWidth: number,
+    _pieceHeight: number,
     edgeIdMap: number[][][],
     horizontalPaths: BezierPath[][],
     verticalPaths: BezierPath[][],
     start: Point,
     end: Point,
 ): { path: string; mateEdgeId: number; matePieceId: number } {
-    let storedPath: BezierPath;
-    let originalStart: Point;
-    let originalEnd: Point;
-    let isSecondSide: boolean;
+    // Paths are stored in normalized space (0,0)→(1,0).
+    // For the first side, transform normalized to start→end.
+    // For the second side, reverse normalized path first.
+    let normalizedPath: BezierPath;
     let mateRow: number;
     let mateCol: number;
     let mateDir: Dir;
+    let isSecondSide: boolean;
 
     switch (dir) {
         case Dir.Bottom:
-            storedPath = horizontalPaths[row][col];
-            originalStart = { x: pieceWidth, y: pieceHeight };
-            originalEnd = { x: 0, y: pieceHeight };
+            normalizedPath = horizontalPaths[row][col];
             isSecondSide = false;
             mateRow = row + 1; mateCol = col; mateDir = Dir.Top;
             break;
         case Dir.Top:
-            storedPath = horizontalPaths[row - 1][col];
-            originalStart = { x: pieceWidth, y: pieceHeight };
-            originalEnd = { x: 0, y: pieceHeight };
+            normalizedPath = horizontalPaths[row - 1][col];
             isSecondSide = true;
             mateRow = row - 1; mateCol = col; mateDir = Dir.Bottom;
             break;
         case Dir.Right:
-            storedPath = verticalPaths[row][col];
-            originalStart = { x: pieceWidth, y: 0 };
-            originalEnd = { x: pieceWidth, y: pieceHeight };
+            normalizedPath = verticalPaths[row][col];
             isSecondSide = false;
             mateRow = row; mateCol = col + 1; mateDir = Dir.Left;
             break;
         case Dir.Left:
-            storedPath = verticalPaths[row][col - 1];
-            originalStart = { x: pieceWidth, y: 0 };
-            originalEnd = { x: pieceWidth, y: pieceHeight };
+            normalizedPath = verticalPaths[row][col - 1];
             isSecondSide = true;
             mateRow = row; mateCol = col - 1; mateDir = Dir.Right;
             break;
     }
 
-    let pathToUse = storedPath;
+    let pathToTransform = normalizedPath;
     if (isSecondSide) {
-        pathToUse = reverseBezierPath(storedPath);
-        const temp = originalStart;
-        originalStart = originalEnd;
-        originalEnd = temp;
+        pathToTransform = reverseBezierPath(normalizedPath);
     }
 
-    // Transform from storage coordinates to this piece's local coordinates
-    const transformedPath = transformBezierPath(
-        pathToUse, originalStart, originalEnd, start, end,
-    );
+    // Transform from normalized space to this edge's actual piece-local coordinates.
+    const nStart = isSecondSide ? { x: 1, y: 0 } : { x: 0, y: 0 };
+    const nEnd = isSecondSide ? { x: 0, y: 0 } : { x: 1, y: 0 };
+    const transformed = transformBezierPath(pathToTransform, nStart, nEnd, start, end);
 
     const mateEdgeId = edgeIdMap[mateRow][mateCol][mateDir];
     const matePieceId = mateRow * cols + mateCol;
 
     return {
-        path: bezierPathToSvg(transformedPath),
+        path: bezierPathToSvg(transformed),
         mateEdgeId,
         matePieceId,
     };
@@ -318,12 +284,31 @@ function getSharedEdge(
 // Geometry helpers (copied from composable-generator, will be deduplicated)
 // ---------------------------------------------------------------------------
 
-function getEdgeEndpoints(dir: Dir, w: number, h: number): { start: Point; end: Point } {
+function getEdgeEndpointsFromCorners(
+    dir: Dir,
+    row: number,
+    col: number,
+    corners: import('./grid-cuts.js').GridCorner[][],
+    toLocal: (worldPt: Point, pieceRow: number, pieceCol: number) => Point,
+): { start: Point; end: Point } {
+    // Map each edge direction to its two corner positions
     switch (dir) {
-        case Dir.Top: return { start: { x: 0, y: 0 }, end: { x: w, y: 0 } };
-        case Dir.Right: return { start: { x: w, y: 0 }, end: { x: w, y: h } };
-        case Dir.Bottom: return { start: { x: w, y: h }, end: { x: 0, y: h } };
-        case Dir.Left: return { start: { x: 0, y: h }, end: { x: 0, y: 0 } };
+        case Dir.Top: return {
+            start: toLocal(corners[row][col].position, row, col),
+            end: toLocal(corners[row][col + 1].position, row, col),
+        };
+        case Dir.Right: return {
+            start: toLocal(corners[row][col + 1].position, row, col),
+            end: toLocal(corners[row + 1][col + 1].position, row, col),
+        };
+        case Dir.Bottom: return {
+            start: toLocal(corners[row + 1][col + 1].position, row, col),
+            end: toLocal(corners[row + 1][col].position, row, col),
+        };
+        case Dir.Left: return {
+            start: toLocal(corners[row][col].position, row, col),
+            end: toLocal(corners[row + 1][col].position, row, col),
+        };
     }
 }
 
