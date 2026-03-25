@@ -9,6 +9,7 @@
 import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
 import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
 import { generateFractalPuzzle, scaleFractalGrid } from '../puzzle/fractal-generator.js';
+import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
 
@@ -61,10 +62,14 @@ export function createNewGame(
         )
         : undefined;
 
-    const pieces =
-        cutStyle === 'fractal'
-            ? generateFractalPuzzle(fractalGrid!.cols, fractalGrid!.rows, imageSize, seed)
-            : generateProceduralPuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
+    let pieces: Piece[];
+    if (cutStyle === 'fractal') {
+        pieces = generateFractalPuzzle(fractalGrid!.cols, fractalGrid!.rows, imageSize, seed);
+    } else if (cutStyle === 'composable') {
+        pieces = generateComposablePuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
+    } else {
+        pieces = generateProceduralPuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
+    }
 
     const groups = createInitialGroups(pieces, imageSize, viewport, gridSize, options);
 
