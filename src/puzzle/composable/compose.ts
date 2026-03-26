@@ -1,198 +1,91 @@
 /**
  * Composition layer for the composable puzzle generator.
  *
- * Takes a GridDefinition and TabTemplate, and produces Piece[] by:
- * 1. Deciding tab/blank assignment per shared edge
- * 2. Generating tab shapes from the template in normalized space
- * 3. Transforming tab shapes onto actual grid edges
- * 4. Building the final Piece objects with mate relationships
+ * Takes PieceDefinitions (abstract edges with mate relationships)
+ * and a TabTemplate, and produces the final Piece[] by:
+ * 1. For each shared edge's first side: generate a tab in normalized space
+ * 2. For each shared edge's second side: reverse the stored tab
+ * 3. Transform tab paths onto actual edge endpoints using tangent/normal frame
+ * 4. Build SVG paths and assemble Piece objects
  *
- * See issue #127 for the composable architecture design,
- * and #138 for this layer specifically.
+ * No grid-specific concepts (rows, columns, directions) — just edges.
+ *
+ * See issue #154 and docs/composable-reference/tab-clamping-reference.md
+ * for the coordinate frame approach.
  */
 
 import type { Edge, Piece, Point } from '../../model/types.js';
-import type { GridDefinition } from './grid-cuts.js';
+import type { PieceDefinition, EdgeDefinition } from './types.js';
 import type { TabTemplate, BezierPath } from './tab-shapes.js';
 import { reverseBezierPath, mirrorBezierPathY } from './tab-shapes.js';
 
 // ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Direction of an edge relative to a piece. */
-const Dir = {
-    Top: 0,
-    Right: 1,
-    Bottom: 2,
-    Left: 3,
-} as const;
-
-type Dir = (typeof Dir)[keyof typeof Dir];
-
-// ---------------------------------------------------------------------------
-// Composition
+// Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Compose a puzzle from a grid definition and tab template.
+ * Compose a puzzle from piece definitions and a tab template.
  *
- * @param grid - The grid structure (cuts, corners, edges)
+ * @param pieceDefs - Abstract piece definitions from the grid layer
  * @param template - Tab shape template to use
  * @param random - Seeded PRNG for tab assignment and shape variation
  * @returns Complete Piece[] ready for the game engine
  */
 export function composePuzzle(
-    grid: GridDefinition,
+    pieceDefs: PieceDefinition[],
     template: TabTemplate,
     random: () => number,
 ): Piece[] {
-    const { cols, rows, pieceWidth, pieceHeight, corners } = grid;
+    // Step 1: Generate tab shapes for all shared edges.
+    // Store in normalized space by shared edge key.
+    const tabPaths = new Map<string, BezierPath>();
+    const tabIsTab = new Map<string, boolean>();
 
-    // Helper: convert a world-space corner position to piece-local coordinates
-    // by subtracting the piece's top-left corner position.
-    const toLocal = (worldPt: Point, pieceRow: number, pieceCol: number): Point => {
-        const origin = corners[pieceRow][pieceCol].position;
-        return { x: worldPt.x - origin.x, y: worldPt.y - origin.y };
-    };
+    // First pass: identify all first-side edges and generate their tabs
+    for (const pieceDef of pieceDefs) {
+        for (const edge of pieceDef.edges) {
+            if (edge.sharedEdgeKey && edge.isFirstSide && !tabPaths.has(edge.sharedEdgeKey)) {
+                const isTab = random() > 0.5;
+                tabIsTab.set(edge.sharedEdgeKey, isTab);
 
-    // Step 1: Generate tab shapes in NORMALIZED space (0,0)→(1,0).
-    // Store them normalized — each side transforms on-the-fly using its own
-    // corner positions. This avoids coordinate space mismatches between
-    // the first side and the reversed second side.
-    const horizontalPaths: BezierPath[][] = []; // [row][col] between row and row+1
-    const verticalPaths: BezierPath[][] = [];   // [row][col] between col and col+1
-
-    for (let row = 0; row < rows - 1; row++) {
-        horizontalPaths[row] = [];
-        for (let col = 0; col < cols; col++) {
-            const isTab = random() > 0.5;
-            let normalizedPath = template.generate(random);
-            if (!isTab) {
-                normalizedPath = mirrorBezierPathY(normalizedPath);
+                let normalizedPath = template.generate(random);
+                if (!isTab) {
+                    normalizedPath = mirrorBezierPathY(normalizedPath);
+                }
+                tabPaths.set(edge.sharedEdgeKey, normalizedPath);
             }
-            horizontalPaths[row][col] = normalizedPath;
         }
     }
 
-    for (let row = 0; row < rows; row++) {
-        verticalPaths[row] = [];
-        for (let col = 0; col < cols - 1; col++) {
-            const isTab = random() > 0.5;
-            let normalizedPath = template.generate(random);
-            if (!isTab) {
-                normalizedPath = mirrorBezierPathY(normalizedPath);
-            }
-            verticalPaths[row][col] = normalizedPath;
-        }
-    }
+    // Step 2: Build pieces
+    return pieceDefs.map(pieceDef => {
+        const edges: Edge[] = pieceDef.edges.map(edgeDef =>
+            buildEdge(edgeDef, tabPaths),
+        );
 
-    // Step 2: Assign edge IDs
-    let nextEdgeId = 0;
-    const edgeIdMap: number[][][] = Array.from({ length: rows }, () =>
-        Array.from({ length: cols }, () => [-1, -1, -1, -1]),
-    );
+        const shape = buildShape(edges);
 
-    // Shared horizontal edges (between row and row+1)
-    for (let row = 0; row < rows - 1; row++) {
-        for (let col = 0; col < cols; col++) {
-            const id1 = nextEdgeId++;
-            const id2 = nextEdgeId++;
-            edgeIdMap[row][col][Dir.Bottom] = id1;
-            edgeIdMap[row + 1][col][Dir.Top] = id2;
-        }
-    }
-
-    // Shared vertical edges (between col and col+1)
-    for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols - 1; col++) {
-            const id1 = nextEdgeId++;
-            const id2 = nextEdgeId++;
-            edgeIdMap[row][col][Dir.Right] = id1;
-            edgeIdMap[row][col + 1][Dir.Left] = id2;
-        }
-    }
-
-    // Border edges
-    for (let col = 0; col < cols; col++) {
-        edgeIdMap[0][col][Dir.Top] = nextEdgeId++;
-        edgeIdMap[rows - 1][col][Dir.Bottom] = nextEdgeId++;
-    }
-    for (let row = 0; row < rows; row++) {
-        edgeIdMap[row][0][Dir.Left] = nextEdgeId++;
-        edgeIdMap[row][cols - 1][Dir.Right] = nextEdgeId++;
-    }
-
-    // Step 3: Build pieces
-    const pieces: Piece[] = [];
-
-    for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-            const edges: Edge[] = [];
-
-            for (const dir of [Dir.Top, Dir.Right, Dir.Bottom, Dir.Left]) {
-                edges.push(buildEdge(
-                    edgeIdMap[row][col][dir],
-                    dir, row, col, rows, cols,
-                    pieceWidth, pieceHeight,
-                    edgeIdMap,
-                    horizontalPaths, verticalPaths,
-                    corners, toLocal,
-                ));
-            }
-
-            const shape = buildShape(edges);
-
-            // Image offset: the piece's top-left corner in image space
-            const origin = corners[row][col].position;
-            pieces.push({
-                id: row * cols + col,
-                edges,
-                shape,
-                imageOffset: {
-                    x: -origin.x,
-                    y: -origin.y,
-                },
-            });
-        }
-    }
-
-    return pieces;
+        return {
+            id: pieceDef.id,
+            edges,
+            shape,
+            imageOffset: pieceDef.imageOffset,
+        };
+    });
 }
 
 // ---------------------------------------------------------------------------
-// Path transformation
+// Edge building
 // ---------------------------------------------------------------------------
 
-/**
- * Transform a BezierPath from normalized space ((0,0)→(1,0)) to
- * actual edge coordinates (start→end).
- *
- * Uses an affine transform that maps:
- *   (0,0) → start
- *   (1,0) → end
- *   (0,1) → perpendicular direction (for tab height)
- */
-
 function buildEdge(
-    id: number,
-    dir: Dir,
-    row: number,
-    col: number,
-    rows: number,
-    cols: number,
-    pieceWidth: number,
-    pieceHeight: number,
-    edgeIdMap: number[][][],
-    horizontalPaths: BezierPath[][],
-    verticalPaths: BezierPath[][],
-    corners: import('./grid-cuts.js').GridCorner[][],
-    toLocal: (worldPt: Point, pieceRow: number, pieceCol: number) => Point,
+    edgeDef: EdgeDefinition,
+    tabPaths: Map<string, BezierPath>,
 ): Edge {
-    const { start, end } = getEdgeEndpointsFromCorners(dir, row, col, corners, toLocal);
-    const border = isBorderEdge(dir, row, col, rows, cols);
+    const { id, start, end, mateEdgeId, matePieceId, sharedEdgeKey, isFirstSide } = edgeDef;
 
-    if (border) {
+    // Border edge: straight line
+    if (mateEdgeId === -1 || !sharedEdgeKey) {
         return {
             id,
             mateEdgeId: -1,
@@ -203,159 +96,81 @@ function buildEdge(
         };
     }
 
-    // Shared edge — get the stored path
-    const { path, mateEdgeId, matePieceId } = getSharedEdge(
-        dir, row, col, cols,
-        pieceWidth, pieceHeight,
-        edgeIdMap,
-        horizontalPaths, verticalPaths,
-        start, end,
-    );
-
-    return { id, mateEdgeId, matePieceId, path, start, end };
-}
-
-function getSharedEdge(
-    dir: Dir,
-    row: number,
-    col: number,
-    cols: number,
-    _pieceWidth: number,
-    _pieceHeight: number,
-    edgeIdMap: number[][][],
-    horizontalPaths: BezierPath[][],
-    verticalPaths: BezierPath[][],
-    start: Point,
-    end: Point,
-): { path: string; mateEdgeId: number; matePieceId: number } {
-    // Paths are stored in normalized space (0,0)→(1,0).
-    // For the first side, transform normalized to start→end.
-    // For the second side, reverse normalized path first.
-    let normalizedPath: BezierPath;
-    let mateRow: number;
-    let mateCol: number;
-    let mateDir: Dir;
-    let isSecondSide: boolean;
-
-    switch (dir) {
-        case Dir.Bottom:
-            normalizedPath = horizontalPaths[row][col];
-            isSecondSide = false;
-            mateRow = row + 1; mateCol = col; mateDir = Dir.Top;
-            break;
-        case Dir.Top:
-            normalizedPath = horizontalPaths[row - 1][col];
-            isSecondSide = true;
-            mateRow = row - 1; mateCol = col; mateDir = Dir.Bottom;
-            break;
-        case Dir.Right:
-            normalizedPath = verticalPaths[row][col];
-            isSecondSide = false;
-            mateRow = row; mateCol = col + 1; mateDir = Dir.Left;
-            break;
-        case Dir.Left:
-            normalizedPath = verticalPaths[row][col - 1];
-            isSecondSide = true;
-            mateRow = row; mateCol = col - 1; mateDir = Dir.Right;
-            break;
+    // Shared edge: get the normalized tab path
+    const normalizedPath = tabPaths.get(sharedEdgeKey);
+    if (!normalizedPath) {
+        // Fallback: straight line (shouldn't happen)
+        return {
+            id,
+            mateEdgeId,
+            matePieceId,
+            path: `L ${fmt(end.x)} ${fmt(end.y)}`,
+            start,
+            end,
+        };
     }
 
+    // For second side, reverse the normalized path
     let pathToTransform = normalizedPath;
-    if (isSecondSide) {
+    if (!isFirstSide) {
         pathToTransform = reverseBezierPath(normalizedPath);
     }
 
-    // Transform from normalized space to this edge's actual piece-local coordinates.
-    const nStart = isSecondSide ? { x: 1, y: 0 } : { x: 0, y: 0 };
-    const nEnd = isSecondSide ? { x: 0, y: 0 } : { x: 1, y: 0 };
-    const transformed = transformBezierPath(pathToTransform, nStart, nEnd, start, end);
-
-    const mateEdgeId = edgeIdMap[mateRow][mateCol][mateDir];
-    const matePieceId = mateRow * cols + mateCol;
+    // Transform from normalized space to edge coordinates
+    // using the tangent/normal frame approach.
+    //
+    // Normalized space: (0,0) → (1,0), tab protrudes in +Y
+    // After reversal: (1,0) → (0,0)
+    //
+    // We transform so that normalized (0,0) maps to `start`
+    // and normalized (1,0) maps to `end`.
+    const transformed = transformToEdge(pathToTransform, start, end);
 
     return {
-        path: bezierPathToSvg(transformed),
+        id,
         mateEdgeId,
         matePieceId,
+        path: bezierPathToSvg(transformed),
+        start,
+        end,
     };
 }
 
 // ---------------------------------------------------------------------------
-// Geometry helpers (copied from composable-generator, will be deduplicated)
+// Coordinate transform — tangent/normal frame
 // ---------------------------------------------------------------------------
 
-function getEdgeEndpointsFromCorners(
-    dir: Dir,
-    row: number,
-    col: number,
-    corners: import('./grid-cuts.js').GridCorner[][],
-    toLocal: (worldPt: Point, pieceRow: number, pieceCol: number) => Point,
-): { start: Point; end: Point } {
-    // Map each edge direction to its two corner positions
-    switch (dir) {
-        case Dir.Top: return {
-            start: toLocal(corners[row][col].position, row, col),
-            end: toLocal(corners[row][col + 1].position, row, col),
-        };
-        case Dir.Right: return {
-            start: toLocal(corners[row][col + 1].position, row, col),
-            end: toLocal(corners[row + 1][col + 1].position, row, col),
-        };
-        case Dir.Bottom: return {
-            start: toLocal(corners[row + 1][col + 1].position, row, col),
-            end: toLocal(corners[row + 1][col].position, row, col),
-        };
-        case Dir.Left: return {
-            start: toLocal(corners[row][col].position, row, col),
-            end: toLocal(corners[row + 1][col].position, row, col),
-        };
-    }
-}
-
-function isBorderEdge(dir: Dir, row: number, col: number, rows: number, cols: number): boolean {
-    switch (dir) {
-        case Dir.Top: return row === 0;
-        case Dir.Right: return col === cols - 1;
-        case Dir.Bottom: return row === rows - 1;
-        case Dir.Left: return col === 0;
-    }
-}
-
-function transformBezierPath(
+/**
+ * Transform a BezierPath from normalized space ((0,0)→(1,0), +Y protrusion)
+ * to actual edge coordinates (start→end) using the tangent/normal frame.
+ *
+ * This is the core of the tab-clamping approach:
+ *   T = normalize(end - start)    // tangent along the edge
+ *   N = perpendicular(T)          // normal (protrusion direction)
+ *   canvas = start + lx * (end - start) + ly * N * edgeLength
+ *
+ * No explicit rotation angles — the tangent/normal vectors ARE the rotation.
+ */
+function transformToEdge(
     path: BezierPath,
-    fromStart: Point, fromEnd: Point,
-    toStart: Point, toEnd: Point,
+    start: Point,
+    end: Point,
 ): BezierPath {
-    const fdx = fromEnd.x - fromStart.x;
-    const fdy = fromEnd.y - fromStart.y;
-    const fLen = Math.sqrt(fdx * fdx + fdy * fdy);
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    // Perpendicular (90° counterclockwise — tab protrudes to the left of travel)
+    const px = -dy;
+    const py = dx;
 
-    const tdx = toEnd.x - toStart.x;
-    const tdy = toEnd.y - toStart.y;
-    const tLen = Math.sqrt(tdx * tdx + tdy * tdy);
-
-    if (fLen < 1e-10 || tLen < 1e-10) return path;
-
-    const scale = tLen / fLen;
-    const cosFrom = fdx / fLen;
-    const sinFrom = fdy / fLen;
-    const cosTo = tdx / tLen;
-    const sinTo = tdy / tLen;
-    const cosRot = cosFrom * cosTo + sinFrom * sinTo;
-    const sinRot = sinFrom * cosTo - cosFrom * sinTo;
-
-    return path.map(p => {
-        const rx = p.x - fromStart.x;
-        const ry = p.y - fromStart.y;
-        const rotX = rx * cosRot - ry * sinRot;
-        const rotY = rx * sinRot + ry * cosRot;
-
-        return {
-            x: toStart.x + rotX * scale,
-            y: toStart.y + rotY * scale,
-        };
-    });
+    return path.map(p => ({
+        x: start.x + p.x * dx + p.y * px,
+        y: start.y + p.x * dy + p.y * py,
+    }));
 }
+
+// ---------------------------------------------------------------------------
+// SVG path helpers
+// ---------------------------------------------------------------------------
 
 function bezierPathToSvg(path: BezierPath): string {
     if (path.length < 4) {

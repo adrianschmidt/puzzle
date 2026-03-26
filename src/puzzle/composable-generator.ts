@@ -2,17 +2,17 @@
  * Composable puzzle generator.
  *
  * Uses the composable architecture with separate layers for:
- *   1. Grid cuts (row/column definitions)
- *   2. Tab shapes (standalone templates)
- *   3. Composition (placing tabs on edges)
+ *   1. Grid cuts (row/column definitions → abstract PieceDefinitions)
+ *   2. Tab shapes (standalone templates in normalized space)
+ *   3. Composition (placing tabs on edges using tangent/normal frame)
  *
- * See issue #127 for the design and sub-issues #128–#133 for
- * research decisions.
+ * See issue #127 for the design, #154 for the abstract edge approach,
+ * and docs/composable-reference/ for the tab-clamping reference.
  */
 
 import type { Piece, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
-import { generateWavyGrid } from './composable/grid-cuts.js';
+import { generateWavyGrid, gridToPieceDefinitions } from './composable/grid-cuts.js';
 import { classicTabTemplate } from './composable/tab-shapes.js';
 import { composePuzzle } from './composable/compose.js';
 
@@ -46,15 +46,16 @@ export function generateComposablePuzzle(
 ): Piece[] {
     const random = createSeededRandom(seed);
 
-    // Layer 1: Grid cuts (wavy internal cuts, straight borders)
+    // Layer 1: Grid cuts → abstract piece definitions
     const grid = generateWavyGrid(cols, rows, imageSize, random, {
         amplitude: config?.waveAmplitude,
         controlPointsPerSegment: config?.waveControlPoints,
     });
+    const pieceDefs = gridToPieceDefinitions(grid);
 
     // Layer 2: Tab template
     const template = classicTabTemplate;
 
-    // Layer 3: Composition
-    return composePuzzle(grid, template, random);
+    // Layer 3: Composition (works with abstract edges, no grid knowledge)
+    return composePuzzle(pieceDefs, template, random);
 }
