@@ -617,6 +617,61 @@ export function gridToPieceDefinitions(grid: GridDefinition): PieceDefinition[] 
         edgeIds[r][cols - 1][1] = nextEdgeId++;  // right border
     }
 
+    /**
+     * Extract the polyline segment from a CutLine between two world-space
+     * corner positions, converted to piece-local coordinates.
+     * If the cut is a straight line (2 points), returns undefined (straight edge).
+     */
+    function extractCurveSegment(
+        cut: CutLine,
+        fromWorld: Point,
+        toWorld: Point,
+        origin: Point,
+    ): Point[] | undefined {
+        if (cut.points.length <= 2) return undefined;
+
+        // Find the closest point indices to the from/to corners
+        const fromIdx = findClosestPointIndex(cut.points, fromWorld);
+        const toIdx = findClosestPointIndex(cut.points, toWorld);
+
+        if (fromIdx === toIdx) return undefined;
+
+        // Extract the segment (may be forward or reversed)
+        const localPoints: Point[] = [];
+        if (fromIdx < toIdx) {
+            for (let i = fromIdx; i <= toIdx; i++) {
+                localPoints.push({
+                    x: cut.points[i].x - origin.x,
+                    y: cut.points[i].y - origin.y,
+                });
+            }
+        } else {
+            for (let i = fromIdx; i >= toIdx; i--) {
+                localPoints.push({
+                    x: cut.points[i].x - origin.x,
+                    y: cut.points[i].y - origin.y,
+                });
+            }
+        }
+
+        return localPoints.length > 2 ? localPoints : undefined;
+    }
+
+    function findClosestPointIndex(points: Point[], target: Point): number {
+        let bestIdx = 0;
+        let bestDist = Infinity;
+        for (let i = 0; i < points.length; i++) {
+            const dx = points[i].x - target.x;
+            const dy = points[i].y - target.y;
+            const d = dx * dx + dy * dy;
+            if (d < bestDist) {
+                bestDist = d;
+                bestIdx = i;
+            }
+        }
+        return bestIdx;
+    }
+
     // Build PieceDefinitions
     const pieces: PieceDefinition[] = [];
 
@@ -635,12 +690,20 @@ export function gridToPieceDefinitions(grid: GridDefinition): PieceDefinition[] 
             const bl = toLocal(corners[r + 1][c].position);
 
             // Directions: 0=top, 1=right, 2=bottom, 3=left
-            // Edge endpoints (clockwise):
+            // Edge endpoints (clockwise) + world-space corners + which cut line
             const edgeEndpoints: [Point, Point][] = [
                 [tl, tr],  // top: TL → TR
                 [tr, br],  // right: TR → BR
                 [br, bl],  // bottom: BR → BL
-                [bl, tl],  // left: BL → TL  (note: this closes the shape but goes "up")
+                [bl, tl],  // left: BL → TL
+            ];
+
+            // World-space corner pairs and cut lines for curve extraction
+            const edgeCurveInfo: [Point, Point, CutLine][] = [
+                [corners[r][c].position, corners[r][c + 1].position, grid.rowCuts[r]],          // top
+                [corners[r][c + 1].position, corners[r + 1][c + 1].position, grid.colCuts[c + 1]], // right
+                [corners[r + 1][c + 1].position, corners[r + 1][c].position, grid.rowCuts[r + 1]], // bottom
+                [corners[r][c].position, corners[r + 1][c].position, grid.colCuts[c]],           // left
             ];
 
             // Mate info
@@ -661,6 +724,8 @@ export function gridToPieceDefinitions(grid: GridDefinition): PieceDefinition[] 
             for (let d = 0; d < 4; d++) {
                 const [start, end] = edgeEndpoints[d];
                 const border = isBorder[d];
+                const [fromWorld, toWorld, cutLine] = edgeCurveInfo[d];
+                const curvePoints = extractCurveSegment(cutLine, fromWorld, toWorld, origin);
 
                 if (border) {
                     edges.push({
@@ -669,6 +734,7 @@ export function gridToPieceDefinitions(grid: GridDefinition): PieceDefinition[] 
                         end,
                         mateEdgeId: -1,
                         matePieceId: -1,
+                        curvePoints,
                     });
                 } else {
                     const [mr, mc, md] = matePositions[d];
@@ -680,6 +746,7 @@ export function gridToPieceDefinitions(grid: GridDefinition): PieceDefinition[] 
                         matePieceId: mr * cols + mc,
                         sharedEdgeKey: sharedKeys[r][c][d],
                         isFirstSide: isFirstSide[d],
+                        curvePoints,
                     });
                 }
             }
