@@ -21,21 +21,18 @@ import { composePuzzle } from './composable/compose.js';
  * All parameters are optional — sensible defaults are used.
  */
 export interface ComposableConfig {
-    /** Grid waviness amplitude (0 = straight, 0.3 = very wavy). Default: 0.12 */
-    waveAmplitude?: number;
-    /** Control points per grid segment (1 = gentle, 4 = wiggly). Default: 2 */
-    waveControlPoints?: number;
+    /** Horizontal cut wave amplitude (0–0.5, fraction of piece height). Default: 0 */
+    horizontalAmplitude?: number;
+    /** Horizontal cut wave frequency in Hz (0–10). Default: 0 */
+    horizontalFrequency?: number;
+    /** Vertical cut wave amplitude (0–0.5, fraction of piece width). Default: 0 */
+    verticalAmplitude?: number;
+    /** Vertical cut wave frequency in Hz (0–10). Default: 0 */
+    verticalFrequency?: number;
 }
 
 /**
  * Generate a puzzle using the composable architecture.
- *
- * @param cols - Number of columns
- * @param rows - Number of rows
- * @param imageSize - Pixel dimensions of the puzzle image
- * @param seed - PRNG seed for reproducible cuts
- * @param config - Optional composable configuration
- * @returns Array of pieces with full edge connectivity and SVG paths
  */
 export function generateComposablePuzzle(
     cols: number,
@@ -48,8 +45,10 @@ export function generateComposablePuzzle(
 
     // Layer 1: Grid cuts → abstract piece definitions
     const grid = generateWavyGrid(cols, rows, imageSize, random, {
-        amplitude: config?.waveAmplitude,
-        controlPointsPerSegment: config?.waveControlPoints,
+        horizontalAmplitude: config?.horizontalAmplitude,
+        horizontalFrequency: config?.horizontalFrequency,
+        verticalAmplitude: config?.verticalAmplitude,
+        verticalFrequency: config?.verticalFrequency,
     });
     const pieceDefs = gridToPieceDefinitions(grid);
 

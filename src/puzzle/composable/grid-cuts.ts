@@ -222,19 +222,21 @@ export function generateStraightGrid(
 
 /**
  * Configuration for wavy grid cuts.
+ *
+ * Horizontal and vertical cuts can be configured independently.
+ * Amplitude is the peak-to-trough distance as a fraction of piece size
+ * (0 = straight, 0.5 = half a piece height/width).
+ * Frequency is in Hz: 1 Hz = one full sine wave across the puzzle width/height.
  */
 export interface WavyGridConfig {
-    /**
-     * Maximum perpendicular displacement of a cut line, as a fraction
-     * of piece size. E.g. 0.15 means up to 15% of piece width/height.
-     * Default: 0.12
-     */
-    amplitude?: number;
-    /**
-     * Number of control points per cut segment (between adjacent
-     * perpendicular cuts). More points = more wiggly. Default: 2
-     */
-    controlPointsPerSegment?: number;
+    /** Horizontal cuts (rows): amplitude as fraction of piece height (0–0.5). Default: 0 */
+    horizontalAmplitude?: number;
+    /** Horizontal cuts (rows): frequency in Hz across puzzle width. Default: 0 */
+    horizontalFrequency?: number;
+    /** Vertical cuts (columns): amplitude as fraction of piece width (0–0.5). Default: 0 */
+    verticalAmplitude?: number;
+    /** Vertical cuts (columns): frequency in Hz across puzzle height. Default: 0 */
+    verticalFrequency?: number;
 }
 
 /**
@@ -260,28 +262,43 @@ export function generateWavyGrid(
 ): GridDefinition {
     const pieceWidth = imageSize.width / cols;
     const pieceHeight = imageSize.height / rows;
-    const amplitude = config?.amplitude ?? 0.12;
-    const cpPerSeg = config?.controlPointsPerSegment ?? 2;
+
+    const hAmp = config?.horizontalAmplitude ?? 0;
+    const hFreq = config?.horizontalFrequency ?? 0;
+    const vAmp = config?.verticalAmplitude ?? 0;
+    const vFreq = config?.verticalFrequency ?? 0;
+
+    // Horizontal amplitude in pixels: fraction of piece height / 2
+    // (amplitude is peak-to-trough, we need half for the sine displacement)
+    const hPixelAmp = (hAmp * pieceHeight) / 2;
+    const vPixelAmp = (vAmp * pieceWidth) / 2;
+
+    // Random phase offset per cut so they don't all look identical
+    const rowPhases: number[] = [];
+    for (let r = 0; r <= rows; r++) {
+        rowPhases.push(random() * Math.PI * 2);
+    }
+    const colPhases: number[] = [];
+    for (let c = 0; c <= cols; c++) {
+        colPhases.push(random() * Math.PI * 2);
+    }
 
     // Generate row cuts (horizontal). Borders are straight.
     const rowCuts: CutLine[] = [];
     for (let r = 0; r <= rows; r++) {
         const y = r * pieceHeight;
-        if (r === 0 || r === rows) {
-            // Border: straight line
+        if (r === 0 || r === rows || hAmp === 0 || hFreq === 0) {
             rowCuts.push({
                 points: [{ x: 0, y }, { x: imageSize.width, y }],
             });
         } else {
-            // Internal: wavy cubic Bézier
             rowCuts.push({
-                points: generateWavyCut(
+                points: generateSineCut(
                     { x: 0, y },
                     { x: imageSize.width, y },
-                    cols,
-                    pieceHeight * amplitude,
-                    cpPerSeg,
-                    random,
+                    hPixelAmp,
+                    hFreq,
+                    rowPhases[r],
                 ),
             });
         }
@@ -291,19 +308,18 @@ export function generateWavyGrid(
     const colCuts: CutLine[] = [];
     for (let c = 0; c <= cols; c++) {
         const x = c * pieceWidth;
-        if (c === 0 || c === cols) {
+        if (c === 0 || c === cols || vAmp === 0 || vFreq === 0) {
             colCuts.push({
                 points: [{ x, y: 0 }, { x, y: imageSize.height }],
             });
         } else {
             colCuts.push({
-                points: generateWavyCut(
+                points: generateSineCut(
                     { x, y: 0 },
                     { x, y: imageSize.height },
-                    rows,
-                    pieceWidth * amplitude,
-                    cpPerSeg,
-                    random,
+                    vPixelAmp,
+                    vFreq,
+                    colPhases[c],
                 ),
             });
         }
@@ -381,22 +397,24 @@ export function generateWavyGrid(
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a wavy cut line using cubic Bézier segments.
+ * Generate a sine-wave cut line.
  *
- * The cut goes from start to end, divided into `segments` sections
- * (one per perpendicular cut it crosses). Each section gets random
- * control points that displace the line perpendicular to its direction.
+ * The cut goes from start to end with a sinusoidal displacement
+ * perpendicular to the main direction.
  *
- * The result is a BezierPath (sequence of points for cubic segments):
- * [p0, cp1, cp2, p1, cp1, cp2, p2, ...]
+ * @param start - Start point of the cut
+ * @param end - End point of the cut
+ * @param amplitude - Half the peak-to-trough displacement in pixels
+ * @param frequency - Number of full waves across the puzzle (Hz)
+ * @param phase - Phase offset in radians (for variety between cuts)
+ * @returns Array of points forming a polyline approximation of the sine curve
  */
-function generateWavyCut(
+function generateSineCut(
     start: Point,
     end: Point,
-    segments: number,
-    maxDisplacement: number,
-    controlPointsPerSegment: number,
-    random: () => number,
+    amplitude: number,
+    frequency: number,
+    phase: number,
 ): Point[] {
     const dx = end.x - start.x;
     const dy = end.y - start.y;
@@ -406,34 +424,21 @@ function generateWavyCut(
     const px = -dy / len;
     const py = dx / len;
 
-    const points: Point[] = [start];
+    // Sample enough points for smooth rendering
+    // At least 8 points per wave cycle, minimum 20 total
+    const numPoints = Math.max(20, Math.ceil(frequency * 16));
+    const points: Point[] = [];
 
-    for (let seg = 0; seg < segments; seg++) {
-        const t0 = seg / segments;
-        const t1 = (seg + 1) / segments;
-
-        // For each segment, create control points with random perpendicular offset
-        for (let cp = 1; cp <= controlPointsPerSegment; cp++) {
-            const t = t0 + (t1 - t0) * cp / (controlPointsPerSegment + 1);
-            const offset = (random() - 0.5) * 2 * maxDisplacement;
-            points.push({
-                x: start.x + t * dx + offset * px,
-                y: start.y + t * dy + offset * py,
-            });
-        }
-
-        // Segment endpoint (on the nominal line, with smaller displacement)
-        // Endpoints between segments get less displacement to keep cuts monotonic
-        if (seg < segments - 1) {
-            const edgeOffset = (random() - 0.5) * maxDisplacement * 0.5;
-            points.push({
-                x: start.x + t1 * dx + edgeOffset * px,
-                y: start.y + t1 * dy + edgeOffset * py,
-            });
-        }
+    for (let i = 0; i <= numPoints; i++) {
+        const t = i / numPoints;
+        // Sine displacement: frequency is relative to the full cut length
+        const offset = amplitude * Math.sin(2 * Math.PI * frequency * t + phase);
+        points.push({
+            x: start.x + t * dx + offset * px,
+            y: start.y + t * dy + offset * py,
+        });
     }
 
-    points.push(end);
     return points;
 }
 

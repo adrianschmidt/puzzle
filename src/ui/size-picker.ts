@@ -13,8 +13,10 @@ import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
 
 /** Composable generator config passed through from sliders. */
 export interface ComposableSliderConfig {
-    waveAmplitude: number;
-    waveControlPoints: number;
+    horizontalAmplitude: number;
+    horizontalFrequency: number;
+    verticalAmplitude: number;
+    verticalFrequency: number;
 }
 
 export interface SizePickerOptions {
@@ -186,8 +188,10 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     }
 
     const sliderDefs: SliderDef[] = [
-        { id: 'waveAmplitude', label: 'Wave Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: 0.12 },
-        { id: 'waveControlPoints', label: 'Wave Wiggliness', min: 1, max: 6, step: 1, defaultValue: 2 },
+        { id: 'horizontalAmplitude', label: 'H Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: 0.15 },
+        { id: 'horizontalFrequency', label: 'H Frequency', min: 0, max: 10, step: 0.1, defaultValue: 1.5 },
+        { id: 'verticalAmplitude', label: 'V Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: 0.15 },
+        { id: 'verticalFrequency', label: 'V Frequency', min: 0, max: 10, step: 0.1, defaultValue: 1.5 },
     ];
 
     const sliderInputs: Map<string, HTMLInputElement> = new Map();
@@ -226,8 +230,10 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
 
     function getSliderValues(): ComposableSliderConfig {
         return {
-            waveAmplitude: parseFloat(sliderInputs.get('waveAmplitude')!.value),
-            waveControlPoints: parseInt(sliderInputs.get('waveControlPoints')!.value, 10),
+            horizontalAmplitude: parseFloat(sliderInputs.get('horizontalAmplitude')!.value),
+            horizontalFrequency: parseFloat(sliderInputs.get('horizontalFrequency')!.value),
+            verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
+            verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
         };
     }
 
