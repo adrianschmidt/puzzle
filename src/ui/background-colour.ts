@@ -26,6 +26,7 @@ export const BACKGROUND_COLOUR_PRESETS: readonly BackgroundColourPreset[] = [
     { label: 'Light', colour: '#d4d4d4' },
     { label: 'Wood', colour: '#5c4033' },
     { label: 'Green felt', colour: '#2e5f3e' },
+    { label: 'Hot pink', colour: '#ff1493' },
 ] as const;
 
 /** Default preset index (Midnight — the original default). */
