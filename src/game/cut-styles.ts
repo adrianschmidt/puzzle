@@ -99,3 +99,65 @@ export function loadCutStylePreference(): number {
         return DEFAULT_CUT_STYLE_INDEX;
     }
 }
+
+/** localStorage key for the saved composable slider config. */
+export const COMPOSABLE_CONFIG_KEY = 'puzzle-composable-config';
+
+/**
+ * Shape of the composable slider config stored in preferences.
+ */
+export interface ComposableSliderPreference {
+    horizontalAmplitude: number;
+    horizontalFrequency: number;
+    verticalAmplitude: number;
+    verticalFrequency: number;
+    disableTabs: boolean;
+}
+
+/**
+ * Save the composable slider config to localStorage.
+ */
+export function saveComposableConfigPreference(
+    config: ComposableSliderPreference,
+): void {
+    localStorage.setItem(COMPOSABLE_CONFIG_KEY, JSON.stringify(config));
+}
+
+/**
+ * Load the composable slider config from localStorage.
+ * Returns undefined if nothing is saved or the value is invalid.
+ */
+export function loadComposableConfigPreference():
+    | ComposableSliderPreference
+    | undefined {
+    try {
+        const raw = localStorage.getItem(COMPOSABLE_CONFIG_KEY);
+        if (raw === null) {
+            return undefined;
+        }
+
+        const parsed: unknown = JSON.parse(raw);
+        if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            'horizontalAmplitude' in parsed &&
+            'horizontalFrequency' in parsed &&
+            'verticalAmplitude' in parsed &&
+            'verticalFrequency' in parsed
+        ) {
+            const config = parsed as Record<string, unknown>;
+
+            return {
+                horizontalAmplitude: Number(config.horizontalAmplitude),
+                horizontalFrequency: Number(config.horizontalFrequency),
+                verticalAmplitude: Number(config.verticalAmplitude),
+                verticalFrequency: Number(config.verticalFrequency),
+                disableTabs: Boolean(config.disableTabs),
+            };
+        }
+
+        return undefined;
+    } catch {
+        return undefined;
+    }
+}

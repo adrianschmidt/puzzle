@@ -34,6 +34,8 @@ import {
     loadCutStylePreference,
     saveCutStylePreference,
     getCutStyleOption,
+    loadComposableConfigPreference,
+    saveComposableConfigPreference,
 } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
 import { createSizePickerDialog } from './ui/size-picker.js';
@@ -368,14 +370,19 @@ createNewGameButton({
     onNewGame: () => {
         const preferredIndex = loadSizePreference();
         const preferredCutStyleIndex = loadCutStylePreference();
+        const savedComposableConfig = loadComposableConfigPreference();
         createSizePickerDialog({
             container: app,
             selectedIndex: preferredIndex,
             selectedCutStyleIndex: preferredCutStyleIndex,
+            savedComposableConfig: savedComposableConfig,
             onSelect: (index, cutStyleIndex, composableConfig, imageSource) => {
                 saveSizePreference(index);
                 const resolvedCutStyleIndex = cutStyleIndex ?? preferredCutStyleIndex;
                 saveCutStylePreference(resolvedCutStyleIndex);
+                if (composableConfig) {
+                    saveComposableConfigPreference(composableConfig);
+                }
                 const option = getSizeOption(index);
                 const cutStyle = getCutStyleOption(resolvedCutStyleIndex).id;
                 clearSavedState();

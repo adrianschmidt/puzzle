@@ -27,6 +27,8 @@ export interface SizePickerOptions {
     selectedIndex: number;
     /** Currently selected cut style index. */
     selectedCutStyleIndex?: number;
+    /** Previously saved composable slider config (used to pre-populate sliders). */
+    savedComposableConfig?: ComposableSliderConfig;
     /** Called when the player selects a size. */
     onSelect: (index: number, cutStyleIndex?: number, composableConfig?: ComposableSliderConfig, imageSource?: string) => void;
     /** Called when the dialog is dismissed without selecting. */
@@ -207,12 +209,13 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
         defaultValue: number;
     }
 
-    const sliderDefs: SliderDef[] = [
-        { id: 'horizontalAmplitude', label: 'H Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: 0.15 },
-        { id: 'horizontalFrequency', label: 'H Frequency', min: 0, max: 10, step: 0.1, defaultValue: 1.5 },
-        { id: 'verticalAmplitude', label: 'V Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: 0.15 },
-        { id: 'verticalFrequency', label: 'V Frequency', min: 0, max: 10, step: 0.1, defaultValue: 1.5 },
+    const saved = options.savedComposableConfig;
 
+    const sliderDefs: SliderDef[] = [
+        { id: 'horizontalAmplitude', label: 'H Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: saved?.horizontalAmplitude ?? 0.15 },
+        { id: 'horizontalFrequency', label: 'H Frequency', min: 0, max: 10, step: 0.1, defaultValue: saved?.horizontalFrequency ?? 1.5 },
+        { id: 'verticalAmplitude', label: 'V Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: saved?.verticalAmplitude ?? 0.15 },
+        { id: 'verticalFrequency', label: 'V Frequency', min: 0, max: 10, step: 0.1, defaultValue: saved?.verticalFrequency ?? 1.5 },
     ];
 
     const sliderInputs: Map<string, HTMLInputElement> = new Map();
@@ -269,7 +272,7 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
 
     const disableTabsCheckbox = document.createElement('input');
     disableTabsCheckbox.type = 'checkbox';
-    disableTabsCheckbox.checked = false;
+    disableTabsCheckbox.checked = saved?.disableTabs ?? false;
 
     checkboxRow.appendChild(checkboxLabel);
     checkboxRow.appendChild(disableTabsCheckbox);
