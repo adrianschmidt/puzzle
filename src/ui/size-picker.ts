@@ -17,6 +17,7 @@ export interface ComposableSliderConfig {
     horizontalFrequency: number;
     verticalAmplitude: number;
     verticalFrequency: number;
+    disableTabs: boolean;
 }
 
 export interface SizePickerOptions {
@@ -192,6 +193,7 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
         { id: 'horizontalFrequency', label: 'H Frequency', min: 0, max: 10, step: 0.1, defaultValue: 1.5 },
         { id: 'verticalAmplitude', label: 'V Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: 0.15 },
         { id: 'verticalFrequency', label: 'V Frequency', min: 0, max: 10, step: 0.1, defaultValue: 1.5 },
+
     ];
 
     const sliderInputs: Map<string, HTMLInputElement> = new Map();
@@ -234,8 +236,25 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
             horizontalFrequency: parseFloat(sliderInputs.get('horizontalFrequency')!.value),
             verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
             verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
+            disableTabs: disableTabsCheckbox?.checked ?? false,
         };
     }
+
+    // Disable tabs checkbox
+    const checkboxRow = document.createElement('div');
+    checkboxRow.className = 'composable-slider-row';
+
+    const checkboxLabel = document.createElement('label');
+    checkboxLabel.className = 'composable-slider-label';
+    checkboxLabel.textContent = 'Disable Tabs';
+
+    const disableTabsCheckbox = document.createElement('input');
+    disableTabsCheckbox.type = 'checkbox';
+    disableTabsCheckbox.checked = false;
+
+    checkboxRow.appendChild(checkboxLabel);
+    checkboxRow.appendChild(disableTabsCheckbox);
+    slidersSection.appendChild(checkboxRow);
 
     dialog.appendChild(slidersSection);
     updateSlidersVisibility();

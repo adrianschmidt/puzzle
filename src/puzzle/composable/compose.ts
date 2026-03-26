@@ -31,28 +31,41 @@ import { reverseBezierPath, mirrorBezierPathY } from './tab-shapes.js';
  * @param random - Seeded PRNG for tab assignment and shape variation
  * @returns Complete Piece[] ready for the game engine
  */
+/**
+ * Options for the composition step.
+ */
+export interface ComposeOptions {
+    /** When true, skip tab generation entirely — all shared edges are flat lines. */
+    disableTabs?: boolean;
+}
+
 export function composePuzzle(
     pieceDefs: PieceDefinition[],
     template: TabTemplate,
     random: () => number,
+    options?: ComposeOptions,
 ): Piece[] {
+    const disableTabs = options?.disableTabs ?? false;
     // Step 1: Generate tab shapes for all shared edges.
     // Store in normalized space by shared edge key.
+    // Skip entirely when tabs are disabled.
     const tabPaths = new Map<string, BezierPath>();
     const tabIsTab = new Map<string, boolean>();
 
-    // First pass: identify all first-side edges and generate their tabs
-    for (const pieceDef of pieceDefs) {
-        for (const edge of pieceDef.edges) {
-            if (edge.sharedEdgeKey && edge.isFirstSide && !tabPaths.has(edge.sharedEdgeKey)) {
-                const isTab = random() > 0.5;
-                tabIsTab.set(edge.sharedEdgeKey, isTab);
+    if (!disableTabs) {
+        for (const pieceDef of pieceDefs) {
+            for (const edge of pieceDef.edges) {
+                if (edge.sharedEdgeKey && edge.isFirstSide && !tabPaths.has(edge.sharedEdgeKey)) {
+                    const isTab = random() > 0.5;
+                    tabIsTab.set(edge.sharedEdgeKey, isTab);
 
-                let normalizedPath = template.generate(random);
-                if (!isTab) {
-                    normalizedPath = mirrorBezierPathY(normalizedPath);
+                    let normalizedPath = template.generate(random);
+                    if (!isTab) {
+                        normalizedPath = mirrorBezierPathY(normalizedPath);
+                    }
+
+                    tabPaths.set(edge.sharedEdgeKey, normalizedPath);
                 }
-                tabPaths.set(edge.sharedEdgeKey, normalizedPath);
             }
         }
     }
