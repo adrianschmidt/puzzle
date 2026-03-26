@@ -543,3 +543,149 @@ function dist(a: { x: number; y: number }, b: Point): number {
     const dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);
 }
+
+// ---------------------------------------------------------------------------
+// Grid → PieceDefinition conversion
+// ---------------------------------------------------------------------------
+
+import type { PieceDefinition, EdgeDefinition } from './types.js';
+
+/**
+ * Convert a GridDefinition to an array of PieceDefinitions.
+ *
+ * This resolves all grid-specific concepts (rows, columns, directions)
+ * into abstract edges with mate relationships. The composition layer
+ * can then work purely with edges — no grid knowledge needed.
+ *
+ * Edge IDs are assigned in a deterministic order. Shared edges get
+ * paired IDs (first side, second side) and a shared key for tab storage.
+ */
+export function gridToPieceDefinitions(grid: GridDefinition): PieceDefinition[] {
+    const { cols, rows, corners } = grid;
+
+    // Assign edge IDs. Shared edges get two IDs (one per side).
+    let nextEdgeId = 0;
+
+    // Store edge ID assignments: edgeIds[row][col] = [top, right, bottom, left]
+    const edgeIds: number[][][] = Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => [-1, -1, -1, -1]),
+    );
+
+    // Shared keys: sharedKeys[row][col] = [top, right, bottom, left]
+    const sharedKeys: (string | undefined)[][][] = Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => [undefined, undefined, undefined, undefined] as (string | undefined)[]),
+    );
+
+    // Horizontal shared edges (between row and row+1)
+    for (let r = 0; r < rows - 1; r++) {
+        for (let c = 0; c < cols; c++) {
+            const id1 = nextEdgeId++;
+            const id2 = nextEdgeId++;
+            const key = `h_${r}_${c}`;
+            edgeIds[r][c][2] = id1;     // bottom of upper piece (first side)
+            edgeIds[r + 1][c][0] = id2; // top of lower piece (second side)
+            sharedKeys[r][c][2] = key;
+            sharedKeys[r + 1][c][0] = key;
+        }
+    }
+
+    // Vertical shared edges (between col and col+1)
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols - 1; c++) {
+            const id1 = nextEdgeId++;
+            const id2 = nextEdgeId++;
+            const key = `v_${r}_${c}`;
+            edgeIds[r][c][1] = id1;     // right of left piece (first side)
+            edgeIds[r][c + 1][3] = id2; // left of right piece (second side)
+            sharedKeys[r][c][1] = key;
+            sharedKeys[r][c + 1][3] = key;
+        }
+    }
+
+    // Border edges
+    for (let c = 0; c < cols; c++) {
+        edgeIds[0][c][0] = nextEdgeId++;         // top border
+        edgeIds[rows - 1][c][2] = nextEdgeId++;  // bottom border
+    }
+    for (let r = 0; r < rows; r++) {
+        edgeIds[r][0][3] = nextEdgeId++;         // left border
+        edgeIds[r][cols - 1][1] = nextEdgeId++;  // right border
+    }
+
+    // Build PieceDefinitions
+    const pieces: PieceDefinition[] = [];
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const origin = corners[r][c].position;
+            const toLocal = (p: Point): Point => ({
+                x: p.x - origin.x,
+                y: p.y - origin.y,
+            });
+
+            // Corner positions for this piece (clockwise: TL, TR, BR, BL)
+            const tl = toLocal(corners[r][c].position);
+            const tr = toLocal(corners[r][c + 1].position);
+            const br = toLocal(corners[r + 1][c + 1].position);
+            const bl = toLocal(corners[r + 1][c].position);
+
+            // Directions: 0=top, 1=right, 2=bottom, 3=left
+            // Edge endpoints (clockwise):
+            const edgeEndpoints: [Point, Point][] = [
+                [tl, tr],  // top: TL → TR
+                [tr, br],  // right: TR → BR
+                [br, bl],  // bottom: BR → BL
+                [bl, tl],  // left: BL → TL  (note: this closes the shape but goes "up")
+            ];
+
+            // Mate info
+            const matePositions: [number, number, number][] = [
+                // [mateRow, mateCol, mateDir]
+                [r - 1, c, 2],   // top's mate is bottom of piece above
+                [r, c + 1, 3],   // right's mate is left of piece to right
+                [r + 1, c, 0],   // bottom's mate is top of piece below
+                [r, c - 1, 1],   // left's mate is right of piece to left
+            ];
+
+            const isBorder = [r === 0, c === cols - 1, r === rows - 1, c === 0];
+
+            // "First side" convention: bottom and right edges are first side
+            const isFirstSide = [false, true, true, false];
+
+            const edges: EdgeDefinition[] = [];
+            for (let d = 0; d < 4; d++) {
+                const [start, end] = edgeEndpoints[d];
+                const border = isBorder[d];
+
+                if (border) {
+                    edges.push({
+                        id: edgeIds[r][c][d],
+                        start,
+                        end,
+                        mateEdgeId: -1,
+                        matePieceId: -1,
+                    });
+                } else {
+                    const [mr, mc, md] = matePositions[d];
+                    edges.push({
+                        id: edgeIds[r][c][d],
+                        start,
+                        end,
+                        mateEdgeId: edgeIds[mr][mc][md],
+                        matePieceId: mr * cols + mc,
+                        sharedEdgeKey: sharedKeys[r][c][d],
+                        isFirstSide: isFirstSide[d],
+                    });
+                }
+            }
+
+            pieces.push({
+                id: r * cols + c,
+                edges,
+                imageOffset: { x: -origin.x, y: -origin.y },
+            });
+        }
+    }
+
+    return pieces;
+}
