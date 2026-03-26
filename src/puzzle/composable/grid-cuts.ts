@@ -698,12 +698,13 @@ export function gridToPieceDefinitions(grid: GridDefinition): PieceDefinition[] 
                 [bl, tl],  // left: BL → TL
             ];
 
-            // World-space corner pairs and cut lines for curve extraction
+            // World-space corner pairs and cut lines for curve extraction.
+            // The from→to direction must match the edge direction (clockwise).
             const edgeCurveInfo: [Point, Point, CutLine][] = [
-                [corners[r][c].position, corners[r][c + 1].position, grid.rowCuts[r]],          // top
-                [corners[r][c + 1].position, corners[r + 1][c + 1].position, grid.colCuts[c + 1]], // right
-                [corners[r + 1][c + 1].position, corners[r + 1][c].position, grid.rowCuts[r + 1]], // bottom
-                [corners[r][c].position, corners[r + 1][c].position, grid.colCuts[c]],           // left
+                [corners[r][c].position, corners[r][c + 1].position, grid.rowCuts[r]],          // top: left → right
+                [corners[r][c + 1].position, corners[r + 1][c + 1].position, grid.colCuts[c + 1]], // right: top → bottom
+                [corners[r + 1][c + 1].position, corners[r + 1][c].position, grid.rowCuts[r + 1]], // bottom: right → left
+                [corners[r + 1][c].position, corners[r][c].position, grid.colCuts[c]],           // left: bottom → top
             ];
 
             // Mate info
