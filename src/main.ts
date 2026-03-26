@@ -289,6 +289,7 @@ async function startNewGame(
     gridSize: GridSize,
     cutStyle: CutStyle = 'classic',
     composableConfig?: import('./puzzle/composable-generator.js').ComposableConfig,
+    imageSource?: string,
 ): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
@@ -303,8 +304,21 @@ async function startNewGame(
     let imageSize = FALLBACK_IMAGE_SIZE;
     let attribution: GameState['attribution'];
 
-    // Try to fetch a random Unsplash image
-    const accessKey = getUnsplashAccessKey();
+    // Blank puzzle: white image, no photo
+    if (imageSource === 'blank') {
+        // Create a white 1080×720 image via canvas data URL
+        const canvas = document.createElement('canvas');
+        canvas.width = 1080;
+        canvas.height = 720;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 1080, 720);
+        imageUrl = canvas.toDataURL('image/png');
+        imageSize = { width: 1080, height: 720 };
+    }
+
+    // Try to fetch a random Unsplash image (unless blank was selected)
+    const accessKey = imageSource !== 'blank' ? getUnsplashAccessKey() : null;
 
     if (accessKey) {
         try {
@@ -358,14 +372,14 @@ createNewGameButton({
             container: app,
             selectedIndex: preferredIndex,
             selectedCutStyleIndex: preferredCutStyleIndex,
-            onSelect: (index, cutStyleIndex, composableConfig) => {
+            onSelect: (index, cutStyleIndex, composableConfig, imageSource) => {
                 saveSizePreference(index);
                 const resolvedCutStyleIndex = cutStyleIndex ?? preferredCutStyleIndex;
                 saveCutStylePreference(resolvedCutStyleIndex);
                 const option = getSizeOption(index);
                 const cutStyle = getCutStyleOption(resolvedCutStyleIndex).id;
                 clearSavedState();
-                void startNewGame(toGridSize(option), cutStyle, composableConfig);
+                void startNewGame(toGridSize(option), cutStyle, composableConfig, imageSource);
             },
         });
     },
@@ -409,6 +423,10 @@ createInfoButton({
     onShowInfo: () => {
         createInfoModal({
             container: app,
+            onSolve: () => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (window as any).__solvePuzzle?.();
+            },
         });
     },
 });

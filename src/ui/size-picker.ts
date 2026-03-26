@@ -27,8 +27,8 @@ export interface SizePickerOptions {
     selectedIndex: number;
     /** Currently selected cut style index. */
     selectedCutStyleIndex?: number;
-    /** Called when the player selects a size. Receives the size, cut style, and composable config. */
-    onSelect: (index: number, cutStyleIndex?: number, composableConfig?: ComposableSliderConfig) => void;
+    /** Called when the player selects a size. */
+    onSelect: (index: number, cutStyleIndex?: number, composableConfig?: ComposableSliderConfig, imageSource?: string) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
 }
@@ -145,7 +145,7 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
             const composableConfig = currentCutStyleIndex === composableCutIndex
                 ? getSliderValues()
                 : undefined;
-            onSelect(i, currentCutStyleIndex, composableConfig);
+            onSelect(i, currentCutStyleIndex, composableConfig, imageSourceSelect.value);
         });
 
         sizeButtons.push(btn);
@@ -176,6 +176,25 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     });
 
     dialog.appendChild(cutStyleSection);
+
+    // Image source selector
+    const imageSourceSection = document.createElement('div');
+    imageSourceSection.className = 'composable-slider-row';
+    const imageSourceLabel = document.createElement('label');
+    imageSourceLabel.className = 'composable-slider-label';
+    imageSourceLabel.textContent = 'Image';
+    const imageSourceSelect = document.createElement('select');
+    imageSourceSelect.className = 'composable-slider-input';
+    for (const [value, label] of [['random', 'Random photo'], ['blank', 'Blank (white)']]) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        imageSourceSelect.appendChild(opt);
+    }
+    imageSourceSection.appendChild(imageSourceLabel);
+    imageSourceSection.appendChild(imageSourceSelect);
+    dialog.appendChild(imageSourceSection);
+
     dialog.appendChild(grid);
 
     // --- Populate composable parameter sliders ---
