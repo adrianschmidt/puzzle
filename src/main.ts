@@ -130,6 +130,36 @@ renderer.init(app);
 
     gameState.groups = [solvedGroup];
     gameState.completed = true;
+
+    // Use gather layout to zoom-to-fit the solved puzzle on screen
+    const screenWidth = app.clientWidth || window.innerWidth;
+    const screenHeight = app.clientHeight || window.innerHeight;
+    const aspectRatio = screenWidth / screenHeight;
+
+    const { positions, layoutBounds } = computeGatheredPositions(
+        gameState.groups,
+        aspectRatio,
+        gameState.pieces,
+    );
+
+    applyGatheredPositions(gameState.groups, positions);
+
+    const scaleX = screenWidth / layoutBounds.width;
+    const scaleY = screenHeight / layoutBounds.height;
+    const scale = Math.min(scaleX, scaleY) * 0.9;
+
+    const layoutCentreX = layoutBounds.x + layoutBounds.width / 2;
+    const layoutCentreY = layoutBounds.y + layoutBounds.height / 2;
+
+    viewportTransform.setState({
+        scale,
+        offset: {
+            x: screenWidth / 2 - layoutCentreX * scale,
+            y: screenHeight / 2 - layoutCentreY * scale,
+        },
+    });
+
+    applyViewportTransform();
     renderer.renderState(gameState);
 };
 
