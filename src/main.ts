@@ -107,13 +107,46 @@ let cleanupDrag: (() => void) | null = null;
 const renderer = new SvgDomRenderer();
 renderer.init(app);
 
+/**
+ * Gather all groups into a compact layout and zoom the viewport to fit.
+ * Reusable by the gather button, the solver, and new game initialization.
+ */
+function gatherAndZoomToFit(): void {
+    const screenWidth = app.clientWidth || window.innerWidth;
+    const screenHeight = app.clientHeight || window.innerHeight;
+    const aspectRatio = screenWidth / screenHeight;
+
+    const { positions, layoutBounds } = computeGatheredPositions(
+        gameState.groups,
+        aspectRatio,
+        gameState.pieces,
+    );
+
+    applyGatheredPositions(gameState.groups, positions);
+
+    const scaleX = screenWidth / layoutBounds.width;
+    const scaleY = screenHeight / layoutBounds.height;
+    const scale = Math.min(scaleX, scaleY) * 0.9;
+
+    const layoutCentreX = layoutBounds.x + layoutBounds.width / 2;
+    const layoutCentreY = layoutBounds.y + layoutBounds.height / 2;
+
+    viewportTransform.setState({
+        scale,
+        offset: {
+            x: screenWidth / 2 - layoutCentreX * scale,
+            y: screenHeight / 2 - layoutCentreY * scale,
+        },
+    });
+
+    applyViewportTransform();
+}
+
 // Debug helper: solve the puzzle by placing all pieces in their correct positions.
-// Merges everything into a single group at (0,0).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).__solvePuzzle = () => {
     if (!gameState) return;
 
-    // Create a single group containing all pieces at their solved offsets
     const solvedGroup: import('./model/types.js').PieceGroup = {
         id: 0,
         pieces: new Map(),
@@ -121,7 +154,6 @@ renderer.init(app);
     };
 
     for (const piece of gameState.pieces) {
-        // Solved offset = negative of imageOffset (where the piece belongs in the image)
         solvedGroup.pieces.set(piece.id, {
             x: -piece.imageOffset.x,
             y: -piece.imageOffset.y,
@@ -130,6 +162,7 @@ renderer.init(app);
 
     gameState.groups = [solvedGroup];
     gameState.completed = true;
+    gatherAndZoomToFit();
     renderer.renderState(gameState);
 };
 
@@ -306,40 +339,9 @@ async function startNewGame(
         state.attribution = attribution;
     }
 
-    // Apply gather layout so pieces start in a compact grid instead of
-    // randomly scattered. This gives the player a neatly organized
-    // starting point at the right zoom level.
-    const screenWidth = app.clientWidth || window.innerWidth;
-    const screenHeight = app.clientHeight || window.innerHeight;
-    const aspectRatio = screenWidth / screenHeight;
-
-    const { positions, layoutBounds } = computeGatheredPositions(
-        state.groups,
-        aspectRatio,
-        state.pieces,
-    );
-
-    applyGatheredPositions(state.groups, positions);
-
-    // Zoom-to-fit the gathered layout
-    const scaleX = screenWidth / layoutBounds.width;
-    const scaleY = screenHeight / layoutBounds.height;
-    const scale = Math.min(scaleX, scaleY) * 0.9; // 90% to leave margin
-
-    const layoutCentreX = layoutBounds.x + layoutBounds.width / 2;
-    const layoutCentreY = layoutBounds.y + layoutBounds.height / 2;
-
-    viewportTransform.setState({
-        scale,
-        offset: {
-            x: screenWidth / 2 - layoutCentreX * scale,
-            y: screenHeight / 2 - layoutCentreY * scale,
-        },
-    });
-
-    applyViewportTransform();
-
     initGame(state);
+    gatherAndZoomToFit();
+    renderer.renderState(gameState);
     autoSave();
 }
 
@@ -382,36 +384,7 @@ createCentreViewButton({
 createGatherPiecesButton({
     container: app,
     onGatherPieces: () => {
-        const screenWidth = app.clientWidth || window.innerWidth;
-        const screenHeight = app.clientHeight || window.innerHeight;
-        const aspectRatio = screenWidth / screenHeight;
-
-        const { positions, layoutBounds } = computeGatheredPositions(
-            gameState.groups,
-            aspectRatio,
-            gameState.pieces,
-        );
-
-        applyGatheredPositions(gameState.groups, positions);
-
-        // Zoom-to-fit: compute scale and offset so the layout fills the screen
-        const scaleX = screenWidth / layoutBounds.width;
-        const scaleY = screenHeight / layoutBounds.height;
-        const scale = Math.min(scaleX, scaleY) * 0.9; // 90% to leave margin
-
-        // Centre the layout on screen
-        const layoutCentreX = layoutBounds.x + layoutBounds.width / 2;
-        const layoutCentreY = layoutBounds.y + layoutBounds.height / 2;
-
-        viewportTransform.setState({
-            scale,
-            offset: {
-                x: screenWidth / 2 - layoutCentreX * scale,
-                y: screenHeight / 2 - layoutCentreY * scale,
-            },
-        });
-
-        applyViewportTransform();
+        gatherAndZoomToFit();
         renderer.renderState(gameState);
         autoSave();
     },
