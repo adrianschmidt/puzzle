@@ -29,6 +29,8 @@ export interface SizePickerOptions {
     selectedCutStyleIndex?: number;
     /** Previously saved composable slider config (used to pre-populate sliders). */
     savedComposableConfig?: ComposableSliderConfig;
+    /** Previously saved image source preference. */
+    savedImageSource?: string;
     /** Called when the player selects a size. */
     onSelect: (index: number, cutStyleIndex?: number, composableConfig?: ComposableSliderConfig, imageSource?: string) => void;
     /** Called when the dialog is dismissed without selecting. */
@@ -192,6 +194,9 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
         opt.value = value;
         opt.textContent = label;
         imageSourceSelect.appendChild(opt);
+    }
+    if (options.savedImageSource) {
+        imageSourceSelect.value = options.savedImageSource;
     }
     imageSourceSection.appendChild(imageSourceLabel);
     imageSourceSection.appendChild(imageSourceSelect);
