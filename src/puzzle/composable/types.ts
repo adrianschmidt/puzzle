@@ -51,4 +51,11 @@ export interface EdgeDefinition {
      * reverses the stored path. Undefined for border edges.
      */
     isFirstSide?: boolean;
+    /**
+     * The actual curve points along this edge, in piece-local coordinates.
+     * When present, the edge follows this polyline instead of a straight
+     * line from start to end. Used for wavy/curved grid cuts.
+     * The first point should match `start` and the last should match `end`.
+     */
+    curvePoints?: Point[];
 }

@@ -91,19 +91,37 @@ export function composePuzzle(
 // Edge building
 // ---------------------------------------------------------------------------
 
+/**
+ * Convert curvePoints to an SVG polyline path string (L commands).
+ * Skips the first point (assumed to be the moveTo/previous endpoint).
+ */
+function curvePointsToSvg(points: Point[]): string {
+    return points.slice(1).map(p => `L ${fmt(p.x)} ${fmt(p.y)}`).join(' ');
+}
+
+/**
+ * Fallback path: either a polyline from curvePoints or a straight line.
+ */
+function fallbackPath(edgeDef: EdgeDefinition): string {
+    if (edgeDef.curvePoints && edgeDef.curvePoints.length > 2) {
+        return curvePointsToSvg(edgeDef.curvePoints);
+    }
+    return `L ${fmt(edgeDef.end.x)} ${fmt(edgeDef.end.y)}`;
+}
+
 function buildEdge(
     edgeDef: EdgeDefinition,
     tabPaths: Map<string, BezierPath>,
 ): Edge {
     const { id, start, end, mateEdgeId, matePieceId, sharedEdgeKey, isFirstSide } = edgeDef;
 
-    // Border edge: straight line
+    // Border edge: follow curve if available, otherwise straight
     if (mateEdgeId === -1 || !sharedEdgeKey) {
         return {
             id,
             mateEdgeId: -1,
             matePieceId: -1,
-            path: `L ${fmt(end.x)} ${fmt(end.y)}`,
+            path: fallbackPath(edgeDef),
             start,
             end,
         };
@@ -112,12 +130,12 @@ function buildEdge(
     // Shared edge: get the normalized tab path
     const normalizedPath = tabPaths.get(sharedEdgeKey);
     if (!normalizedPath) {
-        // Fallback: straight line (shouldn't happen)
+        // No tab (tabs disabled): follow the curve
         return {
             id,
             mateEdgeId,
             matePieceId,
-            path: `L ${fmt(end.x)} ${fmt(end.y)}`,
+            path: fallbackPath(edgeDef),
             start,
             end,
         };
