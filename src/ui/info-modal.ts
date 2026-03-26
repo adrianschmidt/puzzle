@@ -20,6 +20,8 @@ export interface InfoModalOptions {
     onDismiss?: () => void;
     /** Called when the merge tolerance preference changes. */
     onToleranceChanged?: (index: number) => void;
+    /** Called when the solve button is pressed (debug). */
+    onSolve?: () => void;
 }
 
 /**
@@ -140,6 +142,19 @@ export function createInfoModal(options: InfoModalOptions): () => void {
 
         toleranceContainer.appendChild(button);
     });
+
+    // Debug: solve button at the bottom of the content
+    if (options.onSolve) {
+        const solveBtn = document.createElement('button');
+        solveBtn.className = 'info-modal-solve-btn';
+        solveBtn.textContent = '🧩 Solve Puzzle (debug)';
+        solveBtn.type = 'button';
+        solveBtn.addEventListener('click', () => {
+            dismiss();
+            options.onSolve!();
+        });
+        content.appendChild(solveBtn);
+    }
 
     modal.appendChild(header);
     modal.appendChild(content);
