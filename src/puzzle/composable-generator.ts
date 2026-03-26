@@ -21,14 +21,16 @@ import { composePuzzle } from './composable/compose.js';
  * All parameters are optional — sensible defaults are used.
  */
 export interface ComposableConfig {
-    /** Horizontal cut wave amplitude (0–0.5, fraction of piece height). Default: 0 */
+    /** Horizontal cut wave amplitude (0–0.5, fraction of piece height). Default: 0.15 */
     horizontalAmplitude?: number;
-    /** Horizontal cut wave frequency in Hz (0–10). Default: 0 */
+    /** Horizontal cut wave frequency in Hz (0–10). Default: 1.5 */
     horizontalFrequency?: number;
-    /** Vertical cut wave amplitude (0–0.5, fraction of piece width). Default: 0 */
+    /** Vertical cut wave amplitude (0–0.5, fraction of piece width). Default: 0.15 */
     verticalAmplitude?: number;
-    /** Vertical cut wave frequency in Hz (0–10). Default: 0 */
+    /** Vertical cut wave frequency in Hz (0–10). Default: 1.5 */
     verticalFrequency?: number;
+    /** When true, skip tab generation — all shared edges are flat lines. Default: false */
+    disableTabs?: boolean;
 }
 
 /**
@@ -56,5 +58,7 @@ export function generateComposablePuzzle(
     const template = classicTabTemplate;
 
     // Layer 3: Composition (works with abstract edges, no grid knowledge)
-    return composePuzzle(pieceDefs, template, random);
+    return composePuzzle(pieceDefs, template, random, {
+        disableTabs: config?.disableTabs,
+    });
 }
