@@ -10,7 +10,7 @@
  */
 
 import type { Point, Size } from '../../model/types.js';
-import { Bezier } from 'bezier-js';
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -465,25 +465,20 @@ function findCutIntersection(
         return lineLineIntersection(rPts[0], rPts[1], cPts[0], cPts[1]) ?? hint;
     }
 
-    // Curved case: use bezier-js
-    // Convert point arrays to Bezier curves and find intersections
-    const rowBeziers = pointsToBeziers(rPts);
-    const colBeziers = pointsToBeziers(cPts);
-
+    // Polyline case: test each segment of one against each segment of the other.
+    // Find the intersection point closest to the hint.
     let bestPoint = hint;
     let bestDist = Infinity;
 
-    for (const rb of rowBeziers) {
-        for (const cb of colBeziers) {
-            const pairs = rb.intersects(cb);
-            for (const pair of pairs) {
-                const [tStr] = (pair as string).split('/');
-                const t = parseFloat(tStr);
-                const pt = rb.get(t);
+    for (let i = 0; i < rPts.length - 1; i++) {
+        for (let j = 0; j < cPts.length - 1; j++) {
+            const pt = lineLineIntersection(rPts[i], rPts[i + 1], cPts[j], cPts[j + 1]);
+            if (pt && isOnSegment(rPts[i], rPts[i + 1], pt) &&
+                isOnSegment(cPts[j], cPts[j + 1], pt)) {
                 const d = dist(pt, hint);
                 if (d < bestDist) {
                     bestDist = d;
-                    bestPoint = { x: pt.x, y: pt.y };
+                    bestPoint = pt;
                 }
             }
         }
@@ -493,40 +488,14 @@ function findCutIntersection(
 }
 
 /**
- * Convert a point array to an array of cubic Bézier curves.
- *
- * The points are in BezierPath format:
- * [p0, cp1, cp2, p1, cp1, cp2, p2, ...]
- *
- * If the path has only 2 points (straight line), creates a
- * degenerate cubic Bézier.
+ * Check if point p lies on the segment from a to b (within tolerance).
  */
-function pointsToBeziers(points: Point[]): any[] {
-    if (points.length === 2) {
-        // Straight line: degenerate cubic
-        const [a, b] = points;
-        return [new Bezier(
-            a.x, a.y,
-            a.x + (b.x - a.x) / 3, a.y + (b.y - a.y) / 3,
-            a.x + 2 * (b.x - a.x) / 3, a.y + 2 * (b.y - a.y) / 3,
-            b.x, b.y,
-        )];
-    }
-
-    const beziers: any[] = [];
-    for (let i = 0; i < points.length - 1; i += 3) {
-        if (i + 3 < points.length) {
-            const p0 = points[i];
-            const cp1 = points[i + 1];
-            const cp2 = points[i + 2];
-            const p1 = points[i + 3];
-            beziers.push(new Bezier(
-                p0.x, p0.y, cp1.x, cp1.y, cp2.x, cp2.y, p1.x, p1.y,
-            ));
-        }
-    }
-
-    return beziers;
+function isOnSegment(a: Point, b: Point, p: Point): boolean {
+    const minX = Math.min(a.x, b.x) - 0.01;
+    const maxX = Math.max(a.x, b.x) + 0.01;
+    const minY = Math.min(a.y, b.y) - 0.01;
+    const maxY = Math.max(a.y, b.y) + 0.01;
+    return p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY;
 }
 
 function lineLineIntersection(
