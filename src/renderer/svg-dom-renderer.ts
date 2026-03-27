@@ -314,30 +314,6 @@ export class SvgDomRenderer implements Renderer {
         // Shared handler for both exact and expanded hit areas
         const handlePointerDown = (event: PointerEvent) => {
             if (!this.callback) return;
-
-            const isExpanded =
-                (event.target as HTMLElement)?.dataset?.hitAreaExpanded === 'true';
-
-            if (isExpanded) {
-                // Check if any other piece's exact hit-area is under the
-                // pointer.  If so, defer — don't steal the event from
-                // a piece that was hit precisely.
-                const elementsAtPoint = document.elementsFromPoint(
-                    event.clientX,
-                    event.clientY,
-                );
-
-                for (const el of elementsAtPoint) {
-                    if (el === expandedHitArea) continue;
-
-                    if ((el as HTMLElement).dataset?.hitArea === 'true') {
-                        // Another piece's exact hit area is here — let
-                        // the browser's normal event flow handle it.
-                        return;
-                    }
-                }
-            }
-
             this.callback(piece.id, event);
         };
 
