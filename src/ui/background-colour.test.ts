@@ -16,6 +16,7 @@ import {
     saveColourPreference,
     loadColourPreference,
     applyBackgroundColour,
+    isLightColour,
 } from './background-colour.js';
 
 describe('BACKGROUND_COLOUR_PRESETS', () => {
@@ -30,8 +31,8 @@ describe('BACKGROUND_COLOUR_PRESETS', () => {
         }
     });
 
-    it('first preset matches the original dark background', () => {
-        expect(BACKGROUND_COLOUR_PRESETS[0].colour).toBe('#1a1a2e');
+    it('first preset is Midnight (original default)', () => {
+        expect(BACKGROUND_COLOUR_PRESETS[0].label).toBe('Midnight');
     });
 });
 
@@ -87,11 +88,38 @@ describe('saveColourPreference / loadColourPreference', () => {
     });
 });
 
+describe('isLightColour', () => {
+    it('identifies white as light', () => {
+        expect(isLightColour('#ffffff')).toBe(true);
+    });
+
+    it('identifies pastel blush as light', () => {
+        expect(isLightColour('#f5e0e0')).toBe(true);
+    });
+
+    it('identifies light grey as light', () => {
+        expect(isLightColour('#d4d4d4')).toBe(true);
+    });
+
+    it('identifies midnight navy as dark', () => {
+        expect(isLightColour('#1a1a2e')).toBe(false);
+    });
+
+    it('identifies charcoal as dark', () => {
+        expect(isLightColour('#2d2d2d')).toBe(false);
+    });
+
+    it('identifies hot pink as dark', () => {
+        expect(isLightColour('#ff1493')).toBe(false);
+    });
+});
+
 describe('applyBackgroundColour', () => {
     beforeEach(() => {
         // Reset any inline styles
         document.documentElement.style.removeProperty(CSS_CUSTOM_PROPERTY);
         document.body.style.backgroundColor = '';
+        delete document.documentElement.dataset.uiScheme;
     });
 
     it('sets the CSS custom property on the document root', () => {
@@ -120,5 +148,17 @@ describe('applyBackgroundColour', () => {
         expect(value).toBe(
             BACKGROUND_COLOUR_PRESETS[DEFAULT_COLOUR_INDEX].colour,
         );
+    });
+
+    it('sets data-ui-scheme="light" for a light pastel preset', () => {
+        // Blush (#f5e0e0) is index 7
+        applyBackgroundColour(7);
+        expect(document.documentElement.dataset.uiScheme).toBe('light');
+    });
+
+    it('sets data-ui-scheme="dark" for a dark preset', () => {
+        // Midnight (#1a1a2e) is DEFAULT_COLOUR_INDEX (0)
+        applyBackgroundColour(DEFAULT_COLOUR_INDEX);
+        expect(document.documentElement.dataset.uiScheme).toBe('dark');
     });
 });
