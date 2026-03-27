@@ -72,6 +72,16 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
         ? new AutoPanController({
             panViewport,
             moveGroup(groupId: number, worldDelta: Point) {
+                // Also compensate other selected groups during auto-pan
+                if (selectionManager?.toolActive && selectionManager.isSelected(groupId)) {
+                    for (const selectedId of selectionManager.selectedGroupIds) {
+                        if (selectedId === groupId) continue;
+                        const otherGroup = getState().groups.find(g => g.id === selectedId);
+                        if (otherGroup) {
+                            moveGroup(otherGroup, worldDelta);
+                        }
+                    }
+                }
                 const group = findGroup(groupId, getState());
                 moveGroup(group, worldDelta);
             },
