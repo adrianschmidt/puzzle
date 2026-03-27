@@ -157,7 +157,7 @@ describe('applyBackgroundColour', () => {
     });
 
     it('sets data-ui-scheme="dark" for a dark preset', () => {
-        // Midnight (#1a1a2e) is DEFAULT_COLOUR_INDEX (0)
+        // Midnight (#1a1a2e) is DEFAULT_COLOUR_INDEX
         applyBackgroundColour(DEFAULT_COLOUR_INDEX);
         expect(document.documentElement.dataset.uiScheme).toBe('dark');
     });
