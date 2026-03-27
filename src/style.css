@@ -513,7 +513,8 @@ html, body {
   top: 132px;
   right: 54px;
   z-index: 10000;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(6, 28px);
   gap: 6px;
   padding: 8px;
   background: rgba(30, 30, 50, 0.95);
