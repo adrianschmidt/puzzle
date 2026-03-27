@@ -7,11 +7,12 @@
  */
 
 import type { GameState, Point } from '../model/types.js';
-import { moveGroup } from '../model/helpers.js';
+import { moveGroup, findGroupForPiece } from '../model/helpers.js';
 import type { Renderer } from '../renderer/types.js';
 import { DragController } from './drag-controller.js';
 import type { ScreenDeltaToWorld } from './drag-controller.js';
 import { AutoPanController } from './auto-pan.js';
+import type { SelectionManager } from './selection-manager.js';
 
 export interface DragSetupOptions {
     /** The DOM container for the puzzle table (receives move/up events). */
@@ -34,6 +35,12 @@ export interface DragSetupOptions {
      * Required for auto-pan when dragging to viewport edges.
      */
     panViewport?: (screenDelta: Point) => void;
+    /**
+     * Selection manager for multi-select tool.
+     * When provided and the tool is active, clicking toggles selection
+     * and dragging a selected piece moves all selected groups.
+     */
+    selectionManager?: SelectionManager;
 }
 
 /**
@@ -56,7 +63,7 @@ function findGroup(groupId: number, state: GameState) {
  * Returns a cleanup function that removes all event listeners.
  */
 export function setupDragHandling(options: DragSetupOptions): () => void {
-    const { container, renderer, getState, onStateChanged, onDrop, screenDeltaToWorld, panViewport } = options;
+    const { container, renderer, getState, onStateChanged, onDrop, screenDeltaToWorld, panViewport, selectionManager } = options;
 
     const deltaToWorld = screenDeltaToWorld ?? ((d: Point) => d);
 
@@ -81,15 +88,40 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
         () => getState().groups,
         {
             moveGroup(groupId: number, delta: Point) {
+                // If this group is part of a multi-selection, move all selected groups
+                if (selectionManager?.toolActive && selectionManager.isSelected(groupId)) {
+                    for (const selectedId of selectionManager.selectedGroupIds) {
+                        if (selectedId === groupId) continue;
+                        const otherGroup = getState().groups.find(g => g.id === selectedId);
+                        if (otherGroup) {
+                            moveGroup(otherGroup, delta);
+                        }
+                    }
+                }
+                // Always move the dragged group itself
                 const group = findGroup(groupId, getState());
                 moveGroup(group, delta);
             },
             bringToFront(groupId: number) {
+                // Bring all selected groups to front when dragging one
+                if (selectionManager?.toolActive && selectionManager.isSelected(groupId)) {
+                    for (const selectedId of selectionManager.selectedGroupIds) {
+                        if (selectedId === groupId) continue;
+                        renderer.bringGroupToFront(selectedId);
+                        renderer.setGroupDragging(selectedId, true);
+                    }
+                }
                 renderer.bringGroupToFront(groupId);
                 renderer.setGroupDragging(groupId, true);
             },
             onDrop(groupId: number) {
                 autoPan?.stop();
+                // Clear dragging visual from all selected groups
+                if (selectionManager?.toolActive && selectionManager.isSelected(groupId)) {
+                    for (const selectedId of selectionManager.selectedGroupIds) {
+                        renderer.setGroupDragging(selectedId, false);
+                    }
+                }
                 renderer.setGroupDragging(groupId, false);
                 onDrop(groupId);
             },
@@ -101,9 +133,27 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
         screenDeltaToWorld,
     );
 
+    // Track whether a pointerdown moved far enough to count as a drag
+    // (vs a tap for selection toggle).
+    let tapCandidate: { pieceId: number; x: number; y: number; pointerId: number } | null = null;
+    const TAP_THRESHOLD_PX = 8;
+
     // Wire renderer's piece pointerdown to the controller.
     // The renderer calls this when any piece is clicked/touched.
     renderer.onPiecePointerDown((pieceId, event) => {
+        if (selectionManager?.toolActive) {
+            // In select mode: record this as a potential tap.
+            // We still start the drag immediately (for smooth feel),
+            // but if the pointer barely moves, we treat it as a tap
+            // and toggle selection instead.
+            tapCandidate = {
+                pieceId,
+                x: event.clientX,
+                y: event.clientY,
+                pointerId: event.pointerId,
+            };
+        }
+
         controller.handlePointerDown(pieceId, event);
 
         // Start auto-pan tracking for this drag
@@ -120,6 +170,16 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
 
     // Attach move and up handlers to the container.
     const onPointerMove = (e: PointerEvent) => {
+        // If we have a tap candidate, check if movement exceeds threshold
+        if (tapCandidate && e.pointerId === tapCandidate.pointerId) {
+            const dx = e.clientX - tapCandidate.x;
+            const dy = e.clientY - tapCandidate.y;
+            if (dx * dx + dy * dy > TAP_THRESHOLD_PX * TAP_THRESHOLD_PX) {
+                // Moved too far — this is a drag, not a tap
+                tapCandidate = null;
+            }
+        }
+
         controller.handlePointerMove(e);
 
         // Update auto-pan pointer position if dragging
@@ -132,6 +192,45 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
     };
 
     const onPointerUp = (e: PointerEvent) => {
+        // Check for tap-to-select before the controller clears drag state
+        if (tapCandidate && e.pointerId === tapCandidate.pointerId && selectionManager?.toolActive) {
+            // This was a tap, not a drag — toggle selection
+            const group = findGroupForPiece(tapCandidate.pieceId, getState().groups);
+
+            // Restore group to its pre-drag position (cancel the micro-drag)
+            const drag = controller.getActiveDrag();
+            if (drag) {
+                const currentGroup = getState().groups.find(g => g.id === drag.groupId);
+                if (currentGroup) {
+                    const restoreDelta = {
+                        x: drag.startPosition.x - currentGroup.position.x,
+                        y: drag.startPosition.y - currentGroup.position.y,
+                    };
+                    moveGroup(currentGroup, restoreDelta);
+                }
+            }
+
+            // Clear 'dragging' class from all groups that bringToFront marked
+            // (this wasn't a real drag, so no group should look "lifted")
+            for (const g of getState().groups) {
+                renderer.setGroupDragging(g.id, false);
+            }
+
+            selectionManager.toggle(group.id);
+            renderer.setGroupSelected(group.id, selectionManager.isSelected(group.id));
+            tapCandidate = null;
+
+            // Still need to clean up the drag controller state
+            controller.handlePointerUp(e);
+            onStateChanged();
+
+            if (container.hasPointerCapture(e.pointerId)) {
+                container.releasePointerCapture(e.pointerId);
+            }
+            return;
+        }
+
+        tapCandidate = null;
         controller.handlePointerUp(e);
 
         // Stop auto-pan when drag ends
