@@ -128,6 +128,17 @@ export class SvgDomRenderer implements Renderer {
         }
     }
 
+    setGroupSelected(groupId: number, selected: boolean): void {
+        const el = this.groupElements.get(groupId);
+        if (!el) return;
+
+        if (selected) {
+            el.classList.add('selected');
+        } else {
+            el.classList.remove('selected');
+        }
+    }
+
     flashMergePulse(groupId: number): void {
         const el = this.groupElements.get(groupId);
         if (!el) return;

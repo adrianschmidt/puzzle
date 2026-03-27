@@ -157,9 +157,97 @@ html, body {
   background: var(--ui-overlay-active);
 }
 
+/* Multi-select tool button (top-left) */
+.select-tool-button {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 9999;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-fg);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.select-tool-button:hover {
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border-hover);
+}
+
+.select-tool-button:active {
+  background: var(--ui-overlay-active);
+}
+
+.select-tool-button--active {
+  border-color: rgba(100, 160, 255, 0.7);
+  background: rgba(100, 160, 255, 0.15);
+}
+
+.select-tool-button--active:hover {
+  border-color: rgba(100, 160, 255, 0.9);
+  background: rgba(100, 160, 255, 0.22);
+}
+
+/* Deselect-all floating button (bottom-center) */
+.deselect-button {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-fg);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: fade-in 0.2s ease-out;
+}
+
+.deselect-button:hover {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: var(--ui-border-hover);
+  transform: translateX(-50%) scale(1.05);
+}
+
+.deselect-button:active {
+  background: rgba(0, 0, 0, 0.6);
+  transform: translateX(-50%) scale(0.95);
+}
+
 /* Piece/group shadows for depth */
 [data-group-id] {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+}
+
+/* Selected group highlight */
+[data-group-id].selected {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35))
+          drop-shadow(0 0 8px rgba(100, 160, 255, 0.6));
 }
 
 /* Lifted shadow when a group is being dragged */
@@ -836,5 +924,18 @@ html, body {
     height: 32px;
     font-size: 0.9rem;
     line-height: 32px;
+  }
+
+  .select-tool-button {
+    top: 8px;
+    left: 8px;
+    width: 34px;
+    height: 34px;
+  }
+
+  .deselect-button {
+    bottom: 16px;
+    width: 40px;
+    height: 40px;
   }
 }

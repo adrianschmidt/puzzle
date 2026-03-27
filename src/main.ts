@@ -21,6 +21,9 @@ import {
     createInfoButton,
     createInfoModal,
 } from './ui/index.js';
+import { SelectionManager } from './interaction/selection-manager.js';
+import { createSelectToolButton } from './ui/select-tool-button.js';
+import { createDeselectButton } from './ui/deselect-button.js';
 import { getActiveTolerance } from './ui/merge-tolerance.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import { createAttributionElement, removeAttribution } from './ui/attribution.js';
@@ -110,6 +113,17 @@ let cleanupDrag: (() => void) | null = null;
 
 const renderer = new SvgDomRenderer();
 renderer.init(app);
+
+// Multi-select tool
+const selectionManager = new SelectionManager();
+
+// When selection changes, update group visuals
+selectionManager.onChange((selectedIds) => {
+    // Remove highlight from all groups, then re-apply to selected
+    for (const group of gameState?.groups ?? []) {
+        renderer.setGroupSelected(group.id, selectedIds.has(group.id));
+    }
+});
 
 /**
  * Gather all groups into a compact layout and zoom the viewport to fit.
@@ -239,6 +253,7 @@ function updateAttribution(): void {
  */
 function initGame(state: GameState): void {
     removeCompletionOverlay();
+    selectionManager.clearAll();
 
     if (cleanupDrag) {
         cleanupDrag();
@@ -259,13 +274,33 @@ function initGame(state: GameState): void {
         getState: () => gameState,
         onStateChanged: () => {
             renderer.renderState(gameState);
+            // Re-apply selection visuals after re-render (renderState may recreate elements)
+            if (selectionManager.hasSelection) {
+                for (const selectedId of selectionManager.selectedGroupIds) {
+                    renderer.setGroupSelected(selectedId, true);
+                }
+            }
             autoSave();
         },
         onDrop: (groupId: number) => {
             const result = processDrop(groupId, gameState, getActiveTolerance());
             if (result) {
+                // Prune stale group IDs from selection (absorbed groups no longer exist).
+                // The surviving group inherits selection if any merged group was selected.
+                const validIds = new Set(gameState.groups.map(g => g.id));
+                const hadSelectedAbsorbed = [...selectionManager.selectedGroupIds]
+                    .some(id => !validIds.has(id));
+                selectionManager.pruneStale(validIds);
+                if (hadSelectedAbsorbed) {
+                    selectionManager.select(result.group.id);
+                }
+
                 renderer.renderState(gameState);
                 renderer.flashMergePulse(result.group.id);
+                // Re-apply selection visuals after re-render
+                for (const selectedId of selectionManager.selectedGroupIds) {
+                    renderer.setGroupSelected(selectedId, true);
+                }
                 autoSave();
 
                 if (checkAndMarkWin(gameState)) {
@@ -279,6 +314,7 @@ function initGame(state: GameState): void {
             viewportTransform.pan(screenDelta);
             applyViewportTransform();
         },
+        selectionManager,
     });
 }
 
@@ -416,6 +452,18 @@ createGatherPiecesButton({
         renderer.renderState(gameState);
         autoSave();
     },
+});
+
+// Set up the multi-select tool button (top-left)
+createSelectToolButton({
+    container: app,
+    selectionManager,
+});
+
+// Set up the deselect-all button (bottom-center, hidden until selection exists)
+createDeselectButton({
+    container: app,
+    selectionManager,
 });
 
 // Set up the Background Colour picker

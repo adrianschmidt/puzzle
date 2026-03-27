@@ -62,6 +62,12 @@ export interface Renderer {
      */
     flashMergePulse(groupId: number): void;
 
+    /**
+     * Mark a group as selected (visual highlight for multi-select tool).
+     * Pass `false` to remove the selection highlight.
+     */
+    setGroupSelected(groupId: number, selected: boolean): void;
+
     /** Clean up all DOM/resources created by this renderer. */
     destroy(): void;
 }
