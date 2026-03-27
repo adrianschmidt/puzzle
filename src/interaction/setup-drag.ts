@@ -210,6 +210,12 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
                 }
             }
 
+            // Clear 'dragging' class from all groups that bringToFront marked
+            // (this wasn't a real drag, so no group should look "lifted")
+            for (const g of getState().groups) {
+                renderer.setGroupDragging(g.id, false);
+            }
+
             selectionManager.toggle(group.id);
             renderer.setGroupSelected(group.id, selectionManager.isSelected(group.id));
             tapCandidate = null;
