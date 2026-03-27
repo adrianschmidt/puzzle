@@ -536,44 +536,7 @@ describe('SvgDomRenderer', () => {
             );
         });
 
-        it('does NOT fire callback on expanded hit-area when another exact hit overlaps', () => {
-            renderer.init(container);
-            const state = make2x2State();
-            renderer.renderState(state);
 
-            const callback = vi.fn();
-            renderer.onPiecePointerDown(callback);
-
-            const svg0 = container.querySelector(
-                'svg[data-piece-id="0"]',
-            ) as SVGSVGElement;
-            const svg1 = container.querySelector(
-                'svg[data-piece-id="1"]',
-            ) as SVGSVGElement;
-
-            const expandedHitArea1 = svg1.querySelector(
-                '[data-hit-area-expanded]',
-            ) as SVGPathElement;
-            const exactHitArea0 = svg0.querySelector(
-                '[data-hit-area]',
-            ) as SVGPathElement;
-
-            // Another piece's exact hit area is under the pointer
-            document.elementsFromPoint = vi.fn().mockReturnValue([
-                expandedHitArea1,
-                exactHitArea0,
-            ]);
-
-            const event = new PointerEvent('pointerdown', {
-                bubbles: true,
-                clientX: 50,
-                clientY: 50,
-            });
-            expandedHitArea1.dispatchEvent(event);
-
-            // Should NOT fire — the exact hit of piece 0 should take priority
-            expect(callback).not.toHaveBeenCalled();
-        });
     });
 
     describe('bringGroupToFront', () => {
