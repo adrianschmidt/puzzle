@@ -6,7 +6,8 @@ import type { Point } from '../../model/types.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function approxPoint(p: Point, x: number, y: number, tolerance = 0.5) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function approxPoint(p: Point, x: number, y: number, _tolerance = 0.5) {
     expect(p.x).toBeCloseTo(x, 0);
     expect(p.y).toBeCloseTo(y, 0);
 }
@@ -210,14 +211,14 @@ describe('splitAt', () => {
 
     it('preserves endpoints when splitting at t=0', () => {
         const c = Curve.line({ x: 0, y: 0 }, { x: 10, y: 0 });
-        const [left, right] = c.splitAt(0);
+        const [, right] = c.splitAt(0);
         approxPoint(right.start, 0, 0);
         approxPoint(right.end, 10, 0);
     });
 
     it('preserves endpoints when splitting at t=1', () => {
         const c = Curve.line({ x: 0, y: 0 }, { x: 10, y: 0 });
-        const [left, right] = c.splitAt(1);
+        const [left] = c.splitAt(1);
         approxPoint(left.start, 0, 0);
         approxPoint(left.end, 10, 0);
     });
