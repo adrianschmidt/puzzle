@@ -89,11 +89,29 @@ export function loadColourPreference(): number {
 }
 
 /**
+ * Determine whether a hex colour is perceptually light
+ * (relative luminance > 0.4, i.e. needs dark UI chrome on top).
+ */
+export function isLightColour(hex: string): boolean {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    // Perceived luminance (ITU-R BT.709)
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+    return luminance > 0.4;
+}
+
+/**
  * Apply a background colour to the document root via CSS custom property.
- * Also updates the `<body>` background-color directly for immediate effect.
+ * Also updates the `<body>` background-color directly for immediate effect,
+ * and toggles `data-ui-scheme` so UI chrome adapts to light/dark backgrounds.
  */
 export function applyBackgroundColour(index: number): void {
     const preset = getColourPreset(index);
     document.documentElement.style.setProperty(CSS_CUSTOM_PROPERTY, preset.colour);
     document.body.style.backgroundColor = preset.colour;
+    document.documentElement.dataset.uiScheme = isLightColour(preset.colour)
+        ? 'light'
+        : 'dark';
 }

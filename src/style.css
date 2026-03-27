@@ -1,8 +1,37 @@
 :root {
   --puzzle-bg-colour: #1a1a2e;
+
+  /* UI chrome colours — dark scheme (default) */
+  --ui-fg: #e0e0e0;
+  --ui-overlay-subtle: rgba(255, 255, 255, 0.05);
+  --ui-overlay: rgba(255, 255, 255, 0.1);
+  --ui-overlay-hover: rgba(255, 255, 255, 0.18);
+  --ui-overlay-active: rgba(255, 255, 255, 0.25);
+  --ui-border-subtle: rgba(255, 255, 255, 0.1);
+  --ui-border: rgba(255, 255, 255, 0.2);
+  --ui-border-hover: rgba(255, 255, 255, 0.35);
+  --ui-muted: rgba(255, 255, 255, 0.5);
+  --ui-muted-link: rgba(255, 255, 255, 0.65);
+  --ui-muted-link-hover: rgba(255, 255, 255, 0.9);
+
   font-family: system-ui, -apple-system, sans-serif;
   color: #e0e0e0;
   background-color: var(--puzzle-bg-colour);
+}
+
+/* Light background override — switch UI chrome to dark-on-light */
+[data-ui-scheme="light"] {
+  --ui-fg: #2d2d2d;
+  --ui-overlay-subtle: rgba(0, 0, 0, 0.04);
+  --ui-overlay: rgba(0, 0, 0, 0.07);
+  --ui-overlay-hover: rgba(0, 0, 0, 0.12);
+  --ui-overlay-active: rgba(0, 0, 0, 0.18);
+  --ui-border-subtle: rgba(0, 0, 0, 0.1);
+  --ui-border: rgba(0, 0, 0, 0.18);
+  --ui-border-hover: rgba(0, 0, 0, 0.35);
+  --ui-muted: rgba(0, 0, 0, 0.4);
+  --ui-muted-link: rgba(0, 0, 0, 0.55);
+  --ui-muted-link-hover: rgba(0, 0, 0, 0.8);
 }
 
 * {
@@ -42,9 +71,9 @@ html, body {
   font-size: 0.875rem;
   font-family: inherit;
   font-weight: 500;
-  color: #e0e0e0;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ui-fg);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
   backdrop-filter: blur(8px);
@@ -56,12 +85,12 @@ html, body {
 }
 
 .new-game-button:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border-hover);
 }
 
 .new-game-button:active {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--ui-overlay-active);
 }
 
 /* Centre View button */
@@ -74,9 +103,9 @@ html, body {
   font-size: 0.875rem;
   font-family: inherit;
   font-weight: 500;
-  color: #e0e0e0;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ui-fg);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
   backdrop-filter: blur(8px);
@@ -88,12 +117,12 @@ html, body {
 }
 
 .centre-view-button:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border-hover);
 }
 
 .centre-view-button:active {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--ui-overlay-active);
 }
 
 /* Gather Pieces button */
@@ -106,9 +135,9 @@ html, body {
   font-size: 0.875rem;
   font-family: inherit;
   font-weight: 500;
-  color: #e0e0e0;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ui-fg);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
   backdrop-filter: blur(8px);
@@ -120,12 +149,12 @@ html, body {
 }
 
 .gather-pieces-button:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border-hover);
 }
 
 .gather-pieces-button:active {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--ui-overlay-active);
 }
 
 /* Piece/group shadows for depth */
@@ -222,18 +251,18 @@ html, body {
   left: 8px;
   z-index: 9999;
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--ui-muted);
   pointer-events: auto;
 }
 
 .image-attribution a {
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--ui-muted-link);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
 .image-attribution a:hover {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--ui-muted-link-hover);
   text-decoration: underline;
 }
 
@@ -244,7 +273,7 @@ html, body {
   right: 8px;
   z-index: 9999;
   font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--ui-muted);
   pointer-events: none;
 }
 
@@ -262,7 +291,7 @@ html, body {
 
 .size-picker-dialog {
   background: rgba(30, 30, 50, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
   padding: 24px;
   max-width: 360px;
@@ -276,7 +305,7 @@ html, body {
   text-align: center;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--ui-fg);
   margin-bottom: 20px;
 }
 
@@ -292,10 +321,10 @@ html, body {
   align-items: center;
   justify-content: center;
   padding: 16px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #e0e0e0;
+  background: var(--ui-overlay-subtle);
+  color: var(--ui-fg);
   cursor: pointer;
   font-family: inherit;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
@@ -305,13 +334,13 @@ html, body {
 }
 
 .size-picker-option:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border);
 }
 
 .size-picker-option:active {
   transform: scale(0.97);
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--ui-overlay-hover);
 }
 
 .size-picker-option--selected {
@@ -373,10 +402,10 @@ html, body {
   align-items: center;
   justify-content: center;
   padding: 10px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #e0e0e0;
+  background: var(--ui-overlay-subtle);
+  color: var(--ui-fg);
   cursor: pointer;
   font-family: inherit;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
@@ -386,13 +415,13 @@ html, body {
 }
 
 .cut-style-option:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border);
 }
 
 .cut-style-option:active {
   transform: scale(0.97);
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--ui-overlay-hover);
 }
 
 .cut-style-option--selected {
@@ -421,7 +450,7 @@ html, body {
 .composable-sliders {
   margin-top: 16px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--ui-overlay-subtle);
   border-radius: 12px;
 }
 
@@ -460,17 +489,17 @@ html, body {
   display: block;
   margin: 24px auto 0;
   padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ui-muted);
   font-size: 0.75rem;
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
 .info-modal-solve-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--ui-overlay-hover);
 }
 
 /* Background colour picker button */
@@ -485,9 +514,9 @@ html, body {
   font-size: 1.1rem;
   line-height: 36px;
   text-align: center;
-  color: #e0e0e0;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ui-fg);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
   backdrop-filter: blur(8px);
@@ -499,12 +528,12 @@ html, body {
 }
 
 .bg-colour-button:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border-hover);
 }
 
 .bg-colour-button:active {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--ui-overlay-active);
 }
 
 /* Background colour picker panel */
@@ -518,7 +547,7 @@ html, body {
   gap: 6px;
   padding: 8px;
   background: rgba(30, 30, 50, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 10px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -528,7 +557,7 @@ html, body {
 .bg-colour-swatch {
   width: 28px;
   height: 28px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
+  border: 2px solid var(--ui-border);
   border-radius: 50%;
   cursor: pointer;
   padding: 0;
@@ -537,7 +566,7 @@ html, body {
 }
 
 .bg-colour-swatch:hover {
-  border-color: rgba(255, 255, 255, 0.6);
+  border-color: var(--ui-muted);
   transform: scale(1.1);
 }
 
@@ -566,9 +595,9 @@ html, body {
   font-size: 1.1rem;
   line-height: 36px;
   text-align: center;
-  color: #e0e0e0;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--ui-fg);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
   backdrop-filter: blur(8px);
@@ -580,12 +609,12 @@ html, body {
 }
 
 .info-button:hover {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border-hover);
 }
 
 .info-button:active {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--ui-overlay-active);
 }
 
 /* Info modal */
@@ -602,7 +631,7 @@ html, body {
 
 .info-modal {
   background: rgba(30, 30, 50, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
   max-width: 480px;
   width: 90%;
@@ -618,20 +647,20 @@ html, body {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 
 .info-modal-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--ui-fg);
   margin: 0;
 }
 
 .info-modal-close {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ui-muted);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 4px 8px;
@@ -643,12 +672,12 @@ html, body {
 }
 
 .info-modal-close:hover {
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--ui-muted-link-hover);
+  background: var(--ui-overlay);
 }
 
 .info-modal-close:active {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--ui-overlay-hover);
 }
 
 .info-modal-content {
@@ -668,18 +697,18 @@ html, body {
 .info-section h3 {
   font-size: 1rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--ui-fg);
   margin: 0 0 8px 0;
 }
 
 .info-section p {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--ui-fg);
   line-height: 1.5;
   margin: 0 0 8px 0;
 }
 
 .info-section ul {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--ui-fg);
   line-height: 1.5;
   margin: 0;
   padding-left: 18px;
@@ -717,7 +746,7 @@ html, body {
 .info-setting-label {
   font-weight: 600;
   font-size: 0.9rem;
-  color: #e0e0e0;
+  color: var(--ui-fg);
   display: block;
   margin-bottom: 2px;
 }
@@ -740,10 +769,10 @@ html, body {
   align-items: center;
   justify-content: center;
   padding: 10px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  color: #e0e0e0;
+  background: var(--ui-overlay-subtle);
+  color: var(--ui-fg);
   cursor: pointer;
   font-family: inherit;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
@@ -753,13 +782,13 @@ html, body {
 }
 
 .tolerance-option:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border);
 }
 
 .tolerance-option:active {
   transform: scale(0.97);
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--ui-overlay-hover);
 }
 
 .tolerance-option.selected {
