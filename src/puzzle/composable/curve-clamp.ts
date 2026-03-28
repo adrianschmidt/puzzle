@@ -72,7 +72,6 @@ export function clampTabToCurve(
 
     const mx = (pLeft.x + pRight.x) / 2;
     const my = (pLeft.y + pRight.y) / 2;
-    const s = span / 2;
 
     // Step 4: Transform tab from normalized space to edge coords
     // Tab normalized space: x ∈ [0, 1], y protrudes in +Y
