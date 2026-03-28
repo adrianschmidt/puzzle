@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { buildDCEL, getFaceVertices, getFaceEdges, countFaceEdges } from './dcel.js';
+import { buildDCEL, getFaceVertices, countFaceEdges } from './dcel.js';
 import type { Face } from './dcel.js';
 import { Curve } from './curve.js';
-import type { Point } from '../../model/types.js';
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -13,11 +13,7 @@ function innerFaces(result: ReturnType<typeof buildDCEL>): Face[] {
     return result.faces.filter(f => !f.isOuter);
 }
 
-/** Check that a point is approximately at (x, y). */
-function expectNearPoint(p: Point, x: number, y: number, tol = 1) {
-    expect(p.x).toBeCloseTo(x, 0);
-    expect(p.y).toBeCloseTo(y, 0);
-}
+
 
 /** Compute the approximate area of a face using the shoelace formula. */
 function faceArea(face: Face): number {

@@ -389,7 +389,7 @@ class VertexPool {
 // Step 5: Link half-edges via angle sorting
 // ---------------------------------------------------------------------------
 
-function linkHalfEdges(vertices: Vertex[], halfEdges: HalfEdge[]): void {
+function linkHalfEdges(_vertices: Vertex[], halfEdges: HalfEdge[]): void {
     // Group outgoing half-edges by origin vertex
     const outgoingByVertex = new Map<number, HalfEdge[]>();
 
