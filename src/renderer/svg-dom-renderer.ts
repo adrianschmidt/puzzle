@@ -32,6 +32,8 @@ export class SvgDomRenderer implements Renderer {
     private pieceBaseWidth = 0;
     private pieceBaseHeight = 0;
     private currentImageUrl = '';
+    private currentPieceCount = -1;
+    private currentShapeFingerprint = '';
 
     init(container: HTMLElement): void {
         const table = document.createElement('div');
@@ -50,13 +52,20 @@ export class SvgDomRenderer implements Renderer {
     renderState(gameState: GameState): void {
         if (!this.tableEl) return;
 
-        // When the puzzle image changes (new game), invalidate all cached
-        // piece SVG elements.  Pieces reference the image via <image href>,
-        // and their shapes / dimensions may also differ if the grid size
-        // changed.  Clearing both maps forces a full re-render.
-        if (gameState.imageUrl !== this.currentImageUrl) {
+        // When the puzzle changes (new game), invalidate all cached SVG
+        // elements. Piece IDs restart at 0 each game, so stale elements
+        // would be reused with wrong shapes if not cleared.
+        // We detect a new game by checking image URL, piece count, AND
+        // the first piece's shape as a fingerprint.
+        const pieceCount = gameState.pieces.length;
+        const shapeFingerprint = gameState.pieces[0]?.shape ?? '';
+        if (gameState.imageUrl !== this.currentImageUrl ||
+            pieceCount !== this.currentPieceCount ||
+            shapeFingerprint !== this.currentShapeFingerprint) {
             this.clearAllElements();
             this.currentImageUrl = gameState.imageUrl;
+            this.currentPieceCount = pieceCount;
+            this.currentShapeFingerprint = shapeFingerprint;
         }
 
         this.imageSize = getImageDimensions(gameState);
