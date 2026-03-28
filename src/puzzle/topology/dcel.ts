@@ -62,13 +62,7 @@ export interface CutSet {
      * The builder skips intersection checks within each group.
      */
     nonIntersectingGroups?: Curve[][];
-    /**
-     * Optional: transform each segment after splitting at intersections
-     * but before building the half-edge structure. This is where tabs
-     * can be merged into edge segments — the modified curves become
-     * part of the topology, so piece clip paths include tab protrusions.
-     */
-    segmentTransform?: (segments: Curve[]) => Curve[];
+
 }
 
 /**
@@ -99,18 +93,13 @@ const VERTEX_MERGE_TOLERANCE = 3;
  * @returns The complete DCEL with vertices, half-edges, and faces
  */
 export function buildDCEL(cutSet: CutSet): DCELResult {
-    const { curves, nonIntersectingGroups, segmentTransform } = cutSet;
+    const { curves, nonIntersectingGroups } = cutSet;
 
     // Step 1: Find all intersections
     const allIntersections = findAllIntersections(curves, nonIntersectingGroups);
 
     // Step 2: Split curves at intersection points → segments
-    let segments = splitCurvesAtIntersections(curves, allIntersections);
-
-    // Step 2.5: Optional segment transform (e.g. merge tabs into segments)
-    if (segmentTransform) {
-        segments = segmentTransform(segments);
-    }
+    const segments = splitCurvesAtIntersections(curves, allIntersections);
 
     // Step 3: Build vertices with merging
     const vertexMap = new VertexPool();
