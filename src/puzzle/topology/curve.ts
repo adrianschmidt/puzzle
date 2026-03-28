@@ -1,14 +1,15 @@
 /**
  * Pluggable curve interface for the topology system.
  *
- * All curves are represented as chains of cubic Bézier segments.
- * This is the universal representation — straight lines, polylines,
- * sine waves, and actual Bézier curves all map to this.
+ * All curves are represented as chains of cubic Bézier segments,
+ * backed by bezier-js for precise intersection, projection, and
+ * arc-length computation.
  *
  * See issue #167 for the design discussion.
  */
 
 import type { Point } from '../../model/types.js';
+import { Bezier } from 'bezier-js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,6 +25,14 @@ export interface CurveIntersection {
     tSelf: number;
     /** Parameter on the second curve (0–1 over the full curve). */
     tOther: number;
+    /** Segment index on the first curve. */
+    segSelf: number;
+    /** Local t within segSelf. */
+    tLocalSelf: number;
+    /** Segment index on the second curve. */
+    segOther: number;
+    /** Local t within segOther. */
+    tLocalOther: number;
 }
 
 /**
@@ -44,17 +53,35 @@ export interface BezierSegment {
  * A curve composed of one or more cubic Bézier segments.
  *
  * Provides evaluation, splitting, intersection, tangent computation,
- * and polyline approximation.
+ * and arc-length measurement — all using exact Bézier math via bezier-js.
  */
 export class Curve {
     /** The raw segments composing this curve. */
     readonly segments: readonly BezierSegment[];
+
+    /** Cached bezier-js instances (one per segment). */
+    private _beziers?: Bezier[];
 
     constructor(segments: BezierSegment[]) {
         if (segments.length === 0) {
             throw new Error('Curve must have at least one segment');
         }
         this.segments = segments;
+    }
+
+    // -- bezier-js interop -------------------------------------------------
+
+    /** Get bezier-js instances for each segment (lazily created). */
+    private get beziers(): Bezier[] {
+        if (!this._beziers) {
+            this._beziers = this.segments.map(s => new Bezier(
+                s.p0.x, s.p0.y,
+                s.cp1.x, s.cp1.y,
+                s.cp2.x, s.cp2.y,
+                s.p3.x, s.p3.y,
+            ));
+        }
+        return this._beziers;
     }
 
     // -- Factory methods ---------------------------------------------------
@@ -69,28 +96,6 @@ export class Curve {
             cp2: lerpPoint(start, end, 2 / 3),
             p3: end,
         }]);
-    }
-
-    /**
-     * Create a curve from a polyline (array of points).
-     * Each segment of the polyline becomes a linear Bézier segment.
-     */
-    static fromPolyline(points: Point[]): Curve {
-        if (points.length < 2) {
-            throw new Error('Polyline must have at least 2 points');
-        }
-        const segments: BezierSegment[] = [];
-        for (let i = 0; i < points.length - 1; i++) {
-            const p0 = points[i];
-            const p3 = points[i + 1];
-            segments.push({
-                p0,
-                cp1: lerpPoint(p0, p3, 1 / 3),
-                cp2: lerpPoint(p0, p3, 2 / 3),
-                p3,
-            });
-        }
-        return new Curve(segments);
     }
 
     /**
@@ -147,7 +152,6 @@ export class Curve {
         const d = evalCubicDerivative(segment, localT);
         const len = Math.sqrt(d.x * d.x + d.y * d.y);
         if (len < 1e-10) {
-            // Degenerate — try nearby t values
             return { x: 1, y: 0 };
         }
         return { x: d.x / len, y: d.y / len };
@@ -161,16 +165,10 @@ export class Curve {
     splitAt(t: number): [Curve, Curve] {
         const clamped = Math.max(0, Math.min(1, t));
         if (clamped <= 1e-10) {
-            return [
-                Curve.line(this.start, this.start),
-                this,
-            ];
+            return [Curve.line(this.start, this.start), this];
         }
         if (clamped >= 1 - 1e-10) {
-            return [
-                this,
-                Curve.line(this.end, this.end),
-            ];
+            return [this, Curve.line(this.end, this.end)];
         }
 
         const { segmentIndex, localT } = this.resolveTWithIndex(clamped);
@@ -189,13 +187,159 @@ export class Curve {
         return [new Curve(beforeSegments), new Curve(afterSegments)];
     }
 
-    // -- Polyline approximation --------------------------------------------
+    /**
+     * Split the curve at a specific segment index + local t.
+     * No global t conversion — uses the exact segment and parameter.
+     */
+    splitAtSegmentLocal(segmentIndex: number, localT: number): [Curve, Curve] {
+        if (localT <= 1e-10) {
+            // Split at the start of this segment
+            if (segmentIndex === 0) {
+                return [Curve.line(this.start, this.start), this];
+            }
+            return [
+                new Curve([...this.segments.slice(0, segmentIndex)]),
+                new Curve([...this.segments.slice(segmentIndex)]),
+            ];
+        }
+        if (localT >= 1 - 1e-10) {
+            // Split at the end of this segment
+            if (segmentIndex === this.segments.length - 1) {
+                return [this, Curve.line(this.end, this.end)];
+            }
+            return [
+                new Curve([...this.segments.slice(0, segmentIndex + 1)]),
+                new Curve([...this.segments.slice(segmentIndex + 1)]),
+            ];
+        }
+
+        const [left, right] = splitCubicAt(this.segments[segmentIndex], localT);
+        return [
+            new Curve([...this.segments.slice(0, segmentIndex), left]),
+            new Curve([right, ...this.segments.slice(segmentIndex + 1)]),
+        ];
+    }
+
+    // -- Arc length --------------------------------------------------------
 
     /**
-     * Get a polyline approximation of this curve.
-     * @param pointsPerSegment - Number of sample points per Bézier segment (default 16).
+     * Arc length computed via bezier-js (Legendre-Gauss quadrature).
      */
-    toPolyline(pointsPerSegment = 16): Point[] {
+    arcLength(): number {
+        return this.beziers.reduce((sum, b) => sum + b.length(), 0);
+    }
+
+    // -- Nearest point -----------------------------------------------------
+
+    /**
+     * Find the parameter t ∈ [0, 1] where this curve is closest to a point.
+     * Uses bezier-js project() for each segment, picks the closest.
+     */
+    nearestT(point: Point): number {
+        const n = this.segments.length;
+        let bestT = 0;
+        let bestDist = Infinity;
+
+        for (let i = 0; i < n; i++) {
+            const proj = this.beziers[i].project({ x: point.x, y: point.y });
+            const d = dist(proj, point);
+            if (d < bestDist) {
+                bestDist = d;
+                // Convert segment-local t to global t
+                bestT = (i + proj.t!) / n;
+            }
+        }
+
+        return bestT;
+    }
+
+    // -- Intersection ------------------------------------------------------
+
+    /**
+     * Find all intersections with another curve.
+     *
+     * Uses bezier-js curve-curve intersection for each segment pair.
+     * Returns precise intersection points with accurate t-parameters.
+     */
+    intersect(other: Curve, tolerance = 0.5): CurveIntersection[] {
+        const results: CurveIntersection[] = [];
+        const selfN = this.segments.length;
+        const otherN = other.segments.length;
+
+        for (let i = 0; i < selfN; i++) {
+            for (let j = 0; j < otherN; j++) {
+                const segA = this.segments[i];
+                const segB = other.segments[j];
+                const aIsLinear = isLinearSegment(segA);
+                const bIsLinear = isLinearSegment(segB);
+
+                let pairs: Array<{ tA: number; tB: number; point: Point }>;
+
+                if (aIsLinear && bIsLinear) {
+                    // Line-line: use direct formula
+                    pairs = lineLineIntersect(segA, segB);
+                } else if (aIsLinear) {
+                    // Line-curve: use bezier-js lineIntersects
+                    const bz = other.beziers[j];
+                    const line = { p1: segA.p0, p2: segA.p3 };
+                    const ts = bz.lineIntersects(line);
+                    pairs = ts.map(tB => {
+                        const pt = evalCubic(segB, tB);
+                        // Find tA on the line
+                        const tA = projectOntoLine(segA.p0, segA.p3, pt);
+                        return { tA, tB, point: pt };
+                    }).filter(p => p.tA >= -0.001 && p.tA <= 1.001);
+                } else if (bIsLinear) {
+                    // Curve-line: use bezier-js lineIntersects
+                    const bz = this.beziers[i];
+                    const line = { p1: segB.p0, p2: segB.p3 };
+                    const ts = bz.lineIntersects(line);
+                    pairs = ts.map(tA => {
+                        const pt = evalCubic(segA, tA);
+                        const tB = projectOntoLine(segB.p0, segB.p3, pt);
+                        return { tA, tB, point: pt };
+                    }).filter(p => p.tB >= -0.001 && p.tB <= 1.001);
+                } else {
+                    // Curve-curve: use bezier-js intersects
+                    const rawPairs = this.beziers[i].intersects(other.beziers[j]);
+                    pairs = rawPairs.filter(p => typeof p === 'string').map(p => {
+                        const [t1str, t2str] = (p as string).split('/');
+                        const tA = parseFloat(t1str);
+                        const tB = parseFloat(t2str);
+                        return { tA, tB, point: evalCubic(segA, tA) };
+                    });
+                }
+
+                for (const { tA, tB, point } of pairs) {
+                    const clampedTA = Math.max(0, Math.min(1, tA));
+                    const clampedTB = Math.max(0, Math.min(1, tB));
+                    const tSelf = (i + clampedTA) / selfN;
+                    const tOther = (j + clampedTB) / otherN;
+
+                    const isDuplicate = results.some(
+                        r => dist(r.point, point) < tolerance,
+                    );
+                    if (!isDuplicate) {
+                        results.push({
+                            point, tSelf, tOther,
+                            segSelf: i, tLocalSelf: clampedTA,
+                            segOther: j, tLocalOther: clampedTB,
+                        });
+                    }
+                }
+            }
+        }
+
+        return results;
+    }
+
+    // -- Sampling ----------------------------------------------------------
+
+    /**
+     * Sample the curve at regular intervals for rendering or bbox computation.
+     * @param pointsPerSegment - Number of sample points per segment (default 8).
+     */
+    sample(pointsPerSegment = 8): Point[] {
         const points: Point[] = [this.start];
         for (const seg of this.segments) {
             for (let i = 1; i <= pointsPerSegment; i++) {
@@ -204,63 +348,6 @@ export class Curve {
             }
         }
         return points;
-    }
-
-    // -- Arc length --------------------------------------------------------
-
-    /**
-     * Approximate arc length via polyline sampling.
-     */
-    arcLength(): number {
-        const pts = this.toPolyline(16);
-        let len = 0;
-        for (let i = 1; i < pts.length; i++) {
-            len += dist(pts[i - 1], pts[i]);
-        }
-        return len;
-    }
-
-    // -- Intersection ------------------------------------------------------
-
-    /**
-     * Find all intersections with another curve.
-     *
-     * Uses polyline approximation with segment-segment intersection,
-     * then refines with a Newton-like binary search on the Bézier parameters.
-     */
-    intersect(other: Curve, tolerance = 0.5): CurveIntersection[] {
-        const results: CurveIntersection[] = [];
-        const selfPts = this.toPolyline(16);
-        const otherPts = other.toPolyline(16);
-        const selfTotal = selfPts.length - 1;
-        const otherTotal = otherPts.length - 1;
-
-        for (let i = 0; i < selfPts.length - 1; i++) {
-            for (let j = 0; j < otherPts.length - 1; j++) {
-                const ix = segmentIntersection(
-                    selfPts[i], selfPts[i + 1],
-                    otherPts[j], otherPts[j + 1],
-                );
-                if (ix) {
-                    const tSelf = (i + ix.tA) / selfTotal;
-                    const tOther = (j + ix.tB) / otherTotal;
-
-                    // Deduplicate: skip if too close to an existing intersection
-                    const isDuplicate = results.some(
-                        r => dist(r.point, ix.point) < tolerance,
-                    );
-                    if (!isDuplicate) {
-                        results.push({
-                            point: ix.point,
-                            tSelf,
-                            tOther,
-                        });
-                    }
-                }
-            }
-        }
-
-        return results;
     }
 
     // -- Reverse -----------------------------------------------------------
@@ -329,21 +416,14 @@ function evalCubicDerivative(seg: BezierSegment, t: number): Point {
 
 /**
  * Split a cubic Bézier segment at t using de Casteljau's algorithm.
- * Returns [left, right] halves.
  */
 function splitCubicAt(seg: BezierSegment, t: number): [BezierSegment, BezierSegment] {
     const { p0, cp1, cp2, p3 } = seg;
-
-    // Level 1
     const p01 = lerpPoint(p0, cp1, t);
     const p12 = lerpPoint(cp1, cp2, t);
     const p23 = lerpPoint(cp2, p3, t);
-
-    // Level 2
     const p012 = lerpPoint(p01, p12, t);
     const p123 = lerpPoint(p12, p23, t);
-
-    // Level 3 — the split point
     const mid = lerpPoint(p012, p123, t);
 
     return [
@@ -356,6 +436,67 @@ function splitCubicAt(seg: BezierSegment, t: number): [BezierSegment, BezierSegm
 // Geometry helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Check if a cubic Bézier segment is effectively a straight line.
+ * (Control points are close to the line from p0 to p3.)
+ */
+function isLinearSegment(seg: BezierSegment, tolerance = 0.1): boolean {
+    const dx = seg.p3.x - seg.p0.x;
+    const dy = seg.p3.y - seg.p0.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1e-6) return true;
+
+    const nx = -dy / len;
+    const ny = dx / len;
+
+    for (const p of [seg.cp1, seg.cp2]) {
+        const deviation = Math.abs((p.x - seg.p0.x) * nx + (p.y - seg.p0.y) * ny);
+        if (deviation > tolerance) return false;
+    }
+    return true;
+}
+
+/**
+ * Line-line intersection for two linear Bézier segments.
+ */
+function lineLineIntersect(
+    segA: BezierSegment,
+    segB: BezierSegment,
+): Array<{ tA: number; tB: number; point: Point }> {
+    const a1 = segA.p0, a2 = segA.p3;
+    const b1 = segB.p0, b2 = segB.p3;
+
+    const dax = a2.x - a1.x;
+    const day = a2.y - a1.y;
+    const dbx = b2.x - b1.x;
+    const dby = b2.y - b1.y;
+
+    const denom = dax * dby - day * dbx;
+    if (Math.abs(denom) < 1e-10) return [];
+
+    const tA = ((b1.x - a1.x) * dby - (b1.y - a1.y) * dbx) / denom;
+    const tB = ((b1.x - a1.x) * day - (b1.y - a1.y) * dax) / denom;
+
+    if (tA < -0.001 || tA > 1.001 || tB < -0.001 || tB > 1.001) return [];
+
+    return [{
+        tA: Math.max(0, Math.min(1, tA)),
+        tB: Math.max(0, Math.min(1, tB)),
+        point: { x: a1.x + tA * dax, y: a1.y + tA * day },
+    }];
+}
+
+/**
+ * Project a point onto a line segment, returning the t parameter (0–1).
+ */
+function projectOntoLine(a: Point, b: Point, p: Point): number {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1e-10) return 0;
+    return ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq;
+}
+
 function lerpPoint(a: Point, b: Point, t: number): Point {
     return {
         x: a.x + (b.x - a.x) * t,
@@ -363,37 +504,8 @@ function lerpPoint(a: Point, b: Point, t: number): Point {
     };
 }
 
-function dist(a: Point, b: Point): number {
+function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);
-}
-
-/**
- * Find the intersection of two line segments (a1→a2) and (b1→b2).
- * Returns the intersection point and the t parameters on each segment,
- * or null if they don't intersect.
- */
-function segmentIntersection(
-    a1: Point, a2: Point,
-    b1: Point, b2: Point,
-): { point: Point; tA: number; tB: number } | null {
-    const dax = a2.x - a1.x;
-    const day = a2.y - a1.y;
-    const dbx = b2.x - b1.x;
-    const dby = b2.y - b1.y;
-
-    const denom = dax * dby - day * dbx;
-    if (Math.abs(denom) < 1e-10) return null;
-
-    const t = ((b1.x - a1.x) * dby - (b1.y - a1.y) * dbx) / denom;
-    const u = ((b1.x - a1.x) * day - (b1.y - a1.y) * dax) / denom;
-
-    if (t < 0 || t > 1 || u < 0 || u > 1) return null;
-
-    return {
-        point: { x: a1.x + t * dax, y: a1.y + t * day },
-        tA: t,
-        tB: u,
-    };
 }

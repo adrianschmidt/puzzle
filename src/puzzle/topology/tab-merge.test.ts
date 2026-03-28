@@ -133,11 +133,11 @@ describe('mergeTabIntoCurve', () => {
         expect(latePoint.y).toBeCloseTo(0, 0);
     });
 
-    it('works with a polyline curve', () => {
-        const poly = Curve.fromPolyline([
+    it('works with a multi-segment Bézier curve', () => {
+        const poly = Curve.fromBezierPath([
             { x: 0, y: 0 },
-            { x: 50, y: 10 },
-            { x: 100, y: 0 },
+            { x: 17, y: 3 }, { x: 33, y: 7 }, { x: 50, y: 10 },
+            { x: 67, y: 7 }, { x: 83, y: 3 }, { x: 100, y: 0 },
         ]);
         const placement: TabPlacement = {
             tStart: 0.3,

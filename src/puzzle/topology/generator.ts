@@ -179,7 +179,11 @@ function generateCutCurves(
 }
 
 /**
- * Generate a sine-wave curve as a polyline Curve.
+ * Generate a sine-wave curve as a chain of cubic Bézier segments.
+ *
+ * Uses Hermite-to-Bézier conversion with 4 segments per full wave.
+ * This produces smooth, accurate curves that intersect precisely
+ * via bezier-js — no polyline sampling artifacts.
  */
 function generateSineCurve(
     start: { x: number; y: number },
@@ -192,21 +196,48 @@ function generateSineCurve(
     const dy = end.y - start.y;
     const len = Math.sqrt(dx * dx + dy * dy);
 
-    // Perpendicular unit vector
-    const px = -dy / len;
-    const py = dx / len;
+    // Unit vectors: tangent along the cut, perpendicular for displacement
+    const tx = dx / len;
+    const ty = dy / len;
+    const px = -ty;
+    const py = tx;
 
-    const numPoints = Math.max(20, Math.ceil(frequency * 16));
-    const points: { x: number; y: number }[] = [];
+    // 4 Bézier segments per wave gives excellent accuracy
+    const segmentsPerWave = 4;
+    const totalSegments = Math.max(4, Math.ceil(frequency * segmentsPerWave));
 
-    for (let i = 0; i <= numPoints; i++) {
-        const t = i / numPoints;
-        const offset = amplitude * Math.sin(2 * Math.PI * frequency * t + phase);
-        points.push({
-            x: start.x + t * dx + offset * px,
-            y: start.y + t * dy + offset * py,
-        });
+    const bezierPoints: { x: number; y: number }[] = [];
+
+    const evalSine = (t: number) => {
+        const angle = 2 * Math.PI * frequency * t + phase;
+        const s = amplitude * Math.sin(angle);
+        const ds = amplitude * 2 * Math.PI * frequency * Math.cos(angle);
+        return {
+            x: start.x + t * dx + s * px,
+            y: start.y + t * dy + s * py,
+            tx: dx + ds * px,
+            ty: dy + ds * py,
+        };
+    };
+
+    // Hermite-to-Bézier: cp1 = p0 + tangent0 * dt/3, cp2 = p1 - tangent1 * dt/3
+    for (let i = 0; i < totalSegments; i++) {
+        const t0 = i / totalSegments;
+        const t1 = (i + 1) / totalSegments;
+        const dt = t1 - t0;
+
+        const p0 = evalSine(t0);
+        const p1 = evalSine(t1);
+
+        if (i === 0) {
+            bezierPoints.push({ x: p0.x, y: p0.y });
+        }
+        bezierPoints.push(
+            { x: p0.x + p0.tx * dt / 3, y: p0.y + p0.ty * dt / 3 },
+            { x: p1.x - p1.tx * dt / 3, y: p1.y - p1.ty * dt / 3 },
+            { x: p1.x, y: p1.y },
+        );
     }
 
-    return Curve.fromPolyline(points);
+    return Curve.fromBezierPath(bezierPoints);
 }

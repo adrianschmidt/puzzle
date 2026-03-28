@@ -94,7 +94,7 @@ function computeFaceBBox(halfEdges: HalfEdge[]): BBox {
 
     for (const he of halfEdges) {
         // Sample the curve for accurate bbox (especially for curved edges)
-        const pts = he.curve.toPolyline(8);
+        const pts = he.curve.sample(8);
         for (const p of pts) {
             if (p.x < minX) minX = p.x;
             if (p.y < minY) minY = p.y;
@@ -171,7 +171,7 @@ function halfEdgeToEdgeDef(
  */
 function extractCurvePoints(he: HalfEdge, bbox: BBox): Point[] | undefined {
     // Check if the curve is essentially straight
-    const pts = he.curve.toPolyline(8);
+    const pts = he.curve.sample(8);
     if (isEssentiallyStraight(pts)) {
         return undefined;
     }
@@ -184,7 +184,7 @@ function extractCurvePoints(he: HalfEdge, bbox: BBox): Point[] | undefined {
 }
 
 /**
- * Check if a polyline is essentially a straight line.
+ * Check if a set of sampled points is essentially a straight line.
  */
 function isEssentiallyStraight(pts: Point[], tolerance = 0.5): boolean {
     if (pts.length <= 2) return true;

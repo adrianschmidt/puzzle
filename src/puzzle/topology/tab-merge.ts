@@ -251,40 +251,15 @@ function findSplitParameters(
 
 /**
  * Find the parameter t where a point lies on a curve, or null.
+ * Uses bezier-js projection for accurate results.
  */
 function findPointOnCurve(curve: Curve, point: Point): number | null {
-    const pts = curve.toPolyline(16);
-    let bestT = 0;
-    let bestDist = Infinity;
-    const totalSegments = pts.length - 1;
-
-    for (let i = 0; i < pts.length - 1; i++) {
-        const a = pts[i];
-        const b = pts[i + 1];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const lenSq = dx * dx + dy * dy;
-
-        let segT: number;
-        if (lenSq < 1e-10) {
-            segT = 0;
-        } else {
-            segT = Math.max(0, Math.min(1,
-                ((point.x - a.x) * dx + (point.y - a.y) * dy) / lenSq));
-        }
-
-        const proj = { x: a.x + segT * dx, y: a.y + segT * dy };
-        const d = Math.sqrt(
-            (proj.x - point.x) ** 2 + (proj.y - point.y) ** 2,
-        );
-
-        if (d < bestDist) {
-            bestDist = d;
-            bestT = (i + segT) / totalSegments;
-        }
-    }
-
-    return bestDist < 1.0 ? bestT : null;
+    const t = curve.nearestT(point);
+    const projected = curve.pointAt(t);
+    const dx = projected.x - point.x;
+    const dy = projected.y - point.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    return d < 1.0 ? t : null;
 }
 
 /**
