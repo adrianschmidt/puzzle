@@ -108,14 +108,29 @@ export const classicTabTemplate: TabTemplate = {
         const cp6_1 = pt(mid + neckHalfWidth * 1.5, 0);
         const cp6_2 = pt(mid + neckHalfWidth * 2.5, 0);
 
+        // Rescale so the tab shape fills [0,1] with the protrusion
+        // taking up most of the space. The neck entry/exit points are
+        // mapped to ~0.1 and ~0.9 instead of ~0.4 and ~0.6.
+        // This prevents long flat flanges when curve-clamped.
+        const neckLeft = mid - neckHalfWidth;
+        const neckRight = mid + neckHalfWidth;
+        const margin = 0.08; // small flange at each end
+        const scale = (1 - 2 * margin) / (neckRight - neckLeft);
+        const offset = margin - neckLeft * scale;
+
+        const remap = (p: Point): Point => ({
+            x: p.x * scale + offset,
+            y: p.y * scale, // scale y proportionally to maintain aspect ratio
+        });
+
         return [
-            pt(0, 0),           // Start
-            cp1_1, cp1_2, pa,   // Segment 1: start → neck entry
-            cp2_1, cp2_2, pb,   // Segment 2: neck → head left
-            cp3_1, cp3_2, pc,   // Segment 3: head left → head top
-            cp4_1, cp4_2, pd,   // Segment 4: head top → head right
-            cp5_1, cp5_2, pe,   // Segment 5: head right → neck exit
-            cp6_1, cp6_2, pt(1, 0), // Segment 6: neck exit → end
+            pt(0, 0),                                      // Start
+            remap(cp1_1), remap(cp1_2), remap(pa),         // Segment 1
+            remap(cp2_1), remap(cp2_2), remap(pb),         // Segment 2
+            remap(cp3_1), remap(cp3_2), remap(pc),         // Segment 3
+            remap(cp4_1), remap(cp4_2), remap(pd),         // Segment 4
+            remap(cp5_1), remap(cp5_2), remap(pe),         // Segment 5
+            remap(cp6_1), remap(cp6_2), pt(1, 0),          // Segment 6
         ];
     },
 };
