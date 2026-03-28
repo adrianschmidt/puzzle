@@ -1,20 +1,19 @@
 /**
  * Composable puzzle generator.
  *
- * Uses the composable architecture with separate layers for:
- *   1. Grid cuts (row/column definitions → abstract PieceDefinitions)
- *   2. Tab shapes (standalone templates in normalized space)
- *   3. Composition (placing tabs on edges using tangent/normal frame)
+ * Uses the topology-driven architecture:
+ *   1. Generate border + internal cut lines as Curves
+ *   2. Optionally merge tabs into internal cuts
+ *   3. Build DCEL → find faces → extract PieceDefinitions
+ *   4. Compose final Piece[] via the composition layer
  *
- * See issue #127 for the design, #154 for the abstract edge approach,
- * and docs/composable-reference/ for the tab-clamping reference.
+ * See issue #127 for the composable design,
+ * and #166 for the topology-driven approach.
  */
 
 import type { Piece, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
-import { generateWavyGrid, gridToPieceDefinitions } from './composable/grid-cuts.js';
-import { classicTabTemplate } from './composable/tab-shapes.js';
-import { composePuzzle } from './composable/compose.js';
+import { generateTopologyPuzzle } from './topology/generator.js';
 
 /**
  * Configuration for the composable generator.
@@ -34,7 +33,7 @@ export interface ComposableConfig {
 }
 
 /**
- * Generate a puzzle using the composable architecture.
+ * Generate a puzzle using the topology-driven composable architecture.
  */
 export function generateComposablePuzzle(
     cols: number,
@@ -45,20 +44,11 @@ export function generateComposablePuzzle(
 ): Piece[] {
     const random = createSeededRandom(seed);
 
-    // Layer 1: Grid cuts → abstract piece definitions
-    const grid = generateWavyGrid(cols, rows, imageSize, random, {
+    return generateTopologyPuzzle(cols, rows, imageSize, random, {
         horizontalAmplitude: config?.horizontalAmplitude,
         horizontalFrequency: config?.horizontalFrequency,
         verticalAmplitude: config?.verticalAmplitude,
         verticalFrequency: config?.verticalFrequency,
-    });
-    const pieceDefs = gridToPieceDefinitions(grid);
-
-    // Layer 2: Tab template
-    const template = classicTabTemplate;
-
-    // Layer 3: Composition (works with abstract edges, no grid knowledge)
-    return composePuzzle(pieceDefs, template, random, {
         disableTabs: config?.disableTabs,
     });
 }
