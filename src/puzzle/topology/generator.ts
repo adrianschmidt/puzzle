@@ -21,6 +21,11 @@ import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
 import { composePuzzle } from '../composable/compose.js';
+import {
+    mergeTabIntoCurve,
+    computeTabPlacement,
+    DEFAULT_TAB_PLACEMENT,
+} from './tab-merge.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,14 +91,31 @@ export function generateTopologyPuzzle(
         hPixelAmp, hFreq, vPixelAmp, vFreq, random,
     );
 
-    // Step 2: Build DCEL on raw cuts (no tabs yet) → faces → PieceDefinitions
-    // Tabs are applied by the composition layer to the resulting edges,
-    // not merged into the cut lines pre-DCEL.
-    const dcel = buildDCEL({ curves });
+    // Step 2: Build DCEL → faces → PieceDefinitions
+    // When tabs are enabled, merge them into edge segments BEFORE building
+    // the DCEL topology, so piece clip paths include tab protrusions.
+    const dcel = buildDCEL({
+        curves,
+        segmentTransform: disableTabs ? undefined : (segments) => {
+            return segments.map(seg => {
+                // Skip border segments (they connect border vertices)
+                // Border segments are short straight lines on the boundary.
+                if (isBorderSegment(seg, imageSize)) {
+                    return seg;
+                }
+
+                const placement = computeTabPlacement(seg, DEFAULT_TAB_PLACEMENT, random);
+                if (!placement) return seg;
+
+                return mergeTabIntoCurve(seg, placement, template, random);
+            });
+        },
+    });
     const pieceDefs = facesToPieceDefinitions(dcel);
 
-    // Step 3: Compose final pieces — composition layer applies tabs
-    return composePuzzle(pieceDefs, template, random, { disableTabs });
+    // Step 3: Compose final pieces — tabs already in the geometry,
+    // so disable tab generation in the composition layer
+    return composePuzzle(pieceDefs, template, random, { disableTabs: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -240,4 +262,21 @@ function generateSineCurve(
     }
 
     return Curve.fromBezierPath(bezierPoints);
+}
+
+/**
+ * Check if a curve segment lies on the puzzle border.
+ * Border segments have both endpoints on the boundary rectangle.
+ */
+function isBorderSegment(curve: Curve, imageSize: Size): boolean {
+    const tol = 2;
+    const { start, end } = curve;
+    const w = imageSize.width;
+    const h = imageSize.height;
+
+    const onBorder = (p: { x: number; y: number }) =>
+        p.x < tol || p.x > w - tol ||
+        p.y < tol || p.y > h - tol;
+
+    return onBorder(start) && onBorder(end);
 }
