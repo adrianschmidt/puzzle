@@ -120,12 +120,12 @@ describe('generateTopologyPuzzle', () => {
 
     it('works with both wavy cuts and tabs', () => {
         const pieces = generateTopologyPuzzle(
-            3, 2, { width: 300, height: 200 },
+            2, 2, { width: 200, height: 200 },
             seededRandom(42),
             { horizontalAmplitude: 0.1, horizontalFrequency: 1,
               verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: false },
         );
-        expect(pieces).toHaveLength(6);
+        expect(pieces).toHaveLength(4);
     });
 
     it('default config produces valid pieces', () => {
@@ -135,5 +135,67 @@ describe('generateTopologyPuzzle', () => {
             seededRandom(42),
         );
         expect(pieces).toHaveLength(4);
+    });
+
+    // -- Wavy Bézier cut tests (regression for segment-level splitting) ----
+
+    it('wavy 3×2 with freq 1 produces correct piece count', () => {
+        const pieces = generateTopologyPuzzle(
+            3, 2, { width: 300, height: 200 },
+            seededRandom(42),
+            { horizontalAmplitude: 0.1, horizontalFrequency: 1,
+              verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: true },
+        );
+        expect(pieces).toHaveLength(6);
+    });
+
+    it('wavy 2×2 with freq 10 produces at least 4 pieces', () => {
+        // High-frequency waves may create extra "island" pieces
+        // from multiple crossings — at least the base grid count
+        const pieces = generateTopologyPuzzle(
+            2, 2, { width: 200, height: 200 },
+            seededRandom(42),
+            { horizontalAmplitude: 0.15, horizontalFrequency: 10,
+              verticalAmplitude: 0.15, verticalFrequency: 10, disableTabs: true },
+        );
+        expect(pieces.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('wavy cuts produce pieces with bidirectional mates', () => {
+        const pieces = generateTopologyPuzzle(
+            3, 2, { width: 300, height: 200 },
+            seededRandom(42),
+            { horizontalAmplitude: 0.1, horizontalFrequency: 1,
+              verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: true },
+        );
+        const edgeMap = new Map<number, { pieceId: number; mateEdgeId: number; matePieceId: number }>();
+        for (const p of pieces) {
+            for (const e of p.edges) {
+                edgeMap.set(e.id, { pieceId: p.id, mateEdgeId: e.mateEdgeId, matePieceId: e.matePieceId });
+            }
+        }
+        for (const p of pieces) {
+            for (const e of p.edges) {
+                if (e.mateEdgeId === -1) continue;
+                const mate = edgeMap.get(e.mateEdgeId);
+                expect(mate).toBeDefined();
+                expect(mate!.mateEdgeId).toBe(e.id);
+                expect(mate!.matePieceId).toBe(p.id);
+            }
+        }
+    });
+
+    it('wavy cuts with tabs produce valid pieces', () => {
+        const pieces = generateTopologyPuzzle(
+            3, 2, { width: 300, height: 200 },
+            seededRandom(42),
+            { horizontalAmplitude: 0.1, horizontalFrequency: 1,
+              verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: false },
+        );
+        expect(pieces).toHaveLength(6);
+        for (const piece of pieces) {
+            expect(piece.shape).toBeTruthy();
+            expect(piece.shape.startsWith('M')).toBe(true);
+        }
     });
 });
