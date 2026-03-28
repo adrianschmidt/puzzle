@@ -79,7 +79,7 @@ export interface DCELResult {
 // ---------------------------------------------------------------------------
 
 /** Distance threshold for merging nearby vertices. */
-const VERTEX_MERGE_TOLERANCE = 0.5;
+const VERTEX_MERGE_TOLERANCE = 3;
 
 // ---------------------------------------------------------------------------
 // Public API
