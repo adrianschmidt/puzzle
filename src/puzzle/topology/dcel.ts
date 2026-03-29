@@ -62,6 +62,7 @@ export interface CutSet {
      * The builder skips intersection checks within each group.
      */
     nonIntersectingGroups?: Curve[][];
+
 }
 
 /**

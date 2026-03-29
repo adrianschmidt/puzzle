@@ -9,20 +9,23 @@ import type { BezierPath } from './tab-shapes.js';
 import { createSeededRandom } from '../seeded-random.js';
 
 describe('classicTabTemplate', () => {
-    it('generates a path starting at (0,0) and ending at (1,0)', () => {
+    it('generates a path starting and ending on y=0', () => {
         const random = createSeededRandom(42);
         const path = classicTabTemplate.generate(random);
 
-        expect(path[0]).toEqual({ x: 0, y: 0 });
-        expect(path[path.length - 1]).toEqual({ x: 1, y: 0 });
+        expect(path[0].y).toBe(0);
+        expect(path[path.length - 1].y).toBe(0);
+        // Start and end are close to the centre (short flanges)
+        expect(path[0].x).toBeGreaterThan(0.2);
+        expect(path[path.length - 1].x).toBeLessThan(0.8);
     });
 
-    it('generates 6 Bézier segments (19 points)', () => {
+    it('generates 4 Bézier segments (13 points)', () => {
         const random = createSeededRandom(42);
         const path = classicTabTemplate.generate(random);
 
-        // 1 start + 6 segments × 3 points each = 19
-        expect(path).toHaveLength(19);
+        // 1 start + 4 segments × 3 points each = 13
+        expect(path).toHaveLength(13);
     });
 
     it('tab protrudes in positive Y direction', () => {

@@ -4,13 +4,19 @@
  * Merges tab shapes into cut lines by REPLACING a segment of the cut
  * with the tab path. The tab becomes part of the cut line itself.
  *
- * Pipeline:
- * 1. For each cut line, identify where tabs should be placed
- * 2. Split the cut at the tab's start/end points
- * 3. Remove the middle segment, splice in the tab path
- * 4. Return modified curves for DCEL construction
+ * Uses the curve-clamping approach from tab-clamping-reference.md:
+ * - Bisection to find anchor points at a fixed chord distance
+ * - Tangent/normal frame from the anchor chord
+ * - Tab shape transformed and spliced into the curve
  *
- * See issue #169 for design discussion.
+ * Pipeline:
+ * 1. For each cut line, identify intersections → edge segments
+ * 2. For each internal edge segment, bisect for anchor points
+ * 3. Transform tab shape onto the anchor chord
+ * 4. Replace the curve segment between anchors with the tab
+ * 5. Reassemble modified edges back into full cut lines
+ *
+ * See issue #169 and docs/composable-reference/tab-clamping-reference.md
  */
 
 import type { Point } from '../../model/types.js';
@@ -24,34 +30,21 @@ import { mirrorBezierPathY } from '../composable/tab-shapes.js';
 // ---------------------------------------------------------------------------
 
 /**
- * Describes where a tab should be placed on a curve.
- */
-export interface TabPlacement {
-    /** Parameter along the curve where the tab starts (0–1). */
-    tStart: number;
-    /** Parameter along the curve where the tab ends (0–1). */
-    tEnd: number;
-    /** Whether this is a tab (protrudes +Y) or blank (protrudes −Y). */
-    isTab: boolean;
-}
-
-/**
  * Parameters controlling tab placement on edges.
- * All are parameterized (not hardcoded) per #130/#132 decisions.
  */
 export interface TabPlacementConfig {
-    /** Minimum edge arc length (in pixels) to receive a tab. Below this → no tab. */
+    /** Minimum edge arc length (in pixels) to receive a tab. */
     minEdgeLength: number;
-    /** Tab width as fraction of edge length (0–1). Default ~0.4. */
-    tabWidthFraction: number;
-    /** Centre position along the edge (0–1). Default 0.5. Randomized per edge. */
+    /** Fixed chord length for the tab anchor points (in pixels). */
+    tabChordLength: number;
+    /** Allowed range for tab centre position along the edge (0–1). */
     centreRange: [number, number];
 }
 
 export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
-    minEdgeLength: 20,
-    tabWidthFraction: 0.4,
-    centreRange: [0.35, 0.65],
+    minEdgeLength: 30,
+    tabChordLength: 35,
+    centreRange: [0.3, 0.7],
 };
 
 // ---------------------------------------------------------------------------
@@ -59,92 +52,84 @@ export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
 // ---------------------------------------------------------------------------
 
 /**
- * Merge a tab shape into a curve, replacing the segment between tStart and tEnd
- * with the transformed tab path.
+ * Merge a tab shape into a curve using the bisection/chord-clamping approach.
  *
- * @param curve - The original curve (cut line segment)
- * @param placement - Where on the curve to place the tab
+ * @param curve - The edge curve segment
+ * @param tCenter - Where on the curve to place the tab (0–1)
+ * @param isTab - True for protrusion, false for socket
+ * @param chordLength - Fixed chord length in pixels
  * @param template - Tab shape template
  * @param random - Seeded PRNG for shape variation
  * @returns A new Curve with the tab spliced in
  */
 export function mergeTabIntoCurve(
     curve: Curve,
-    placement: TabPlacement,
+    tCenter: number,
+    isTab: boolean,
+    chordLength: number,
     template: TabTemplate,
     random: () => number,
 ): Curve {
-    const { tStart, tEnd, isTab } = placement;
-
     // Generate tab shape in normalized space
     let normalizedPath = template.generate(random);
     if (!isTab) {
         normalizedPath = mirrorBezierPathY(normalizedPath);
     }
 
-    // Get the start and end points on the curve
-    const pStart = curve.pointAt(tStart);
-    const pEnd = curve.pointAt(tEnd);
+    // Bisect to find delta such that chord length = desired
+    const delta = bisectForChord(curve, tCenter, chordLength);
+    const tLeft = Math.max(0.001, tCenter - delta);
+    const tRight = Math.min(0.999, tCenter + delta);
+
+    // Get anchor points on the curve
+    const pLeft = curve.pointAt(tLeft);
+    const pRight = curve.pointAt(tRight);
 
     // Transform tab from normalized space to edge coordinates
-    const transformedPath = transformTabToEdge(normalizedPath, pStart, pEnd);
+    const transformedPath = transformTabToChord(normalizedPath, pLeft, pRight);
 
-    // Split the curve at tStart and tEnd
-    const [before, rest] = curve.splitAt(tStart);
-    // Remap tEnd into the remaining curve's parameter space
-    const tEndRemapped = (tEnd - tStart) / (1 - tStart);
-    const [_middle, after] = rest.splitAt(tEndRemapped);
+    // Split the curve at tLeft and tRight, replace middle with tab
+    const [before, rest] = curve.splitAt(tLeft);
+    const tRightRemapped = (tRight - tLeft) / (1 - tLeft);
+    const [_middle, after] = rest.splitAt(tRightRemapped);
 
-    // Build the spliced curve: before + tab + after
     const tabCurve = Curve.fromBezierPath(transformedPath);
-
     return joinCurves([before, tabCurve, after]);
 }
 
 /**
- * Compute tab placement for an edge (segment of a cut line between two intersections).
+ * Determine if and where to place a tab on an edge segment.
  *
- * @param edgeCurve - The edge curve segment
- * @param config - Placement configuration
- * @param random - Seeded PRNG
- * @returns TabPlacement or null if the edge is too short for a tab
+ * @returns { tCenter, isTab } or null if the edge is too short
  */
 export function computeTabPlacement(
-    edgeCurve: Curve,
+    curve: Curve,
     config: TabPlacementConfig,
     random: () => number,
-): TabPlacement | null {
-    const length = edgeCurve.arcLength();
+): { tCenter: number; isTab: boolean } | null {
+    const length = curve.arcLength();
 
     if (length < config.minEdgeLength) {
         return null;
     }
 
-    // Randomize centre position
-    const centre = lerp(config.centreRange[0], config.centreRange[1], random());
-    const halfWidth = config.tabWidthFraction / 2;
-    const tStart = Math.max(0.01, centre - halfWidth);
-    const tEnd = Math.min(0.99, centre + halfWidth);
+    // Don't place tabs if the edge is barely longer than the chord
+    if (length < config.tabChordLength * 1.5) {
+        return null;
+    }
 
-    // Random tab/blank assignment
+    const tCenter = lerp(config.centreRange[0], config.centreRange[1], random());
     const isTab = random() > 0.5;
 
-    return { tStart, tEnd, isTab };
+    return { tCenter, isTab };
 }
 
 /**
  * Merge tabs into all internal edges of a set of cut lines.
  *
- * This is the high-level function that takes raw cut lines,
- * finds intersections to identify edges, places tabs on internal edges,
+ * This is the high-level function: takes raw cuts, finds intersections
+ * to identify edge segments, places tabs on each internal segment,
  * and returns modified curves ready for DCEL construction.
- *
- * @param curves - The input cut lines (border + internal)
- * @param borderIndices - Indices of border curves (no tabs on these edges)
- * @param template - Tab shape template
- * @param config - Tab placement configuration
- * @param random - Seeded PRNG
- * @returns Modified curves with tabs merged in
  */
 export function mergeTabsIntoCuts(
     curves: Curve[],
@@ -153,32 +138,32 @@ export function mergeTabsIntoCuts(
     config: TabPlacementConfig,
     random: () => number,
 ): Curve[] {
-    // For each non-border curve, compute intersections with all other curves
-    // to find the edge segments, then place tabs on each segment.
     const result: Curve[] = [];
 
     for (let i = 0; i < curves.length; i++) {
         if (borderIndices.has(i)) {
-            // Border curves pass through unchanged
             result.push(curves[i]);
             continue;
         }
 
-        // Find all intersection t-parameters on this curve
+        // Find intersections with all other curves → split parameters
         const splitTs = findSplitParameters(curves[i], curves, i);
 
         if (splitTs.length === 0) {
-            // No intersections — single edge, place one tab
+            // Single edge, place one tab
             const placement = computeTabPlacement(curves[i], config, random);
             if (placement) {
-                result.push(mergeTabIntoCurve(curves[i], placement, template, random));
+                result.push(mergeTabIntoCurve(
+                    curves[i], placement.tCenter, placement.isTab,
+                    config.tabChordLength, template, random,
+                ));
             } else {
                 result.push(curves[i]);
             }
             continue;
         }
 
-        // Split curve into edge segments, merge tab into each, rejoin
+        // Split into edge segments, merge tab into each, rejoin
         const modifiedCurve = mergeTabsIntoSegments(
             curves[i], splitTs, config, template, random,
         );
@@ -189,33 +174,78 @@ export function mergeTabsIntoCuts(
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// Bisection solver
+// ---------------------------------------------------------------------------
+
+/**
+ * Find delta such that the chord between curve(tCenter-delta) and
+ * curve(tCenter+delta) equals the desired length.
+ */
+function bisectForChord(
+    curve: Curve,
+    tCenter: number,
+    desiredChord: number,
+): number {
+    let lo = 0;
+    let hi = 0.5;
+
+    for (let i = 0; i < 30; i++) {
+        const mid = (lo + hi) / 2;
+        const pL = curve.pointAt(Math.max(0, tCenter - mid));
+        const pR = curve.pointAt(Math.min(1, tCenter + mid));
+        const dx = pR.x - pL.x;
+        const dy = pR.y - pL.y;
+        const chord = Math.sqrt(dx * dx + dy * dy);
+        if (chord < desiredChord) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+
+    return (lo + hi) / 2;
+}
+
+// ---------------------------------------------------------------------------
+// Tab transformation
 // ---------------------------------------------------------------------------
 
 /**
  * Transform a tab BezierPath from normalized space ((0,0)→(1,0))
- * to actual edge coordinates (pStart→pEnd) using tangent/normal frame.
+ * to chord coordinates (pLeft→pRight) using tangent/normal frame.
  */
-function transformTabToEdge(
+function transformTabToChord(
     path: BezierPath,
-    pStart: Point,
-    pEnd: Point,
+    pLeft: Point,
+    pRight: Point,
 ): BezierPath {
-    const dx = pEnd.x - pStart.x;
-    const dy = pEnd.y - pStart.y;
-    // Perpendicular (90° CCW — tab protrudes left of travel direction)
+    const dx = pRight.x - pLeft.x;
+    const dy = pRight.y - pLeft.y;
+    // Perpendicular — tab protrudes left of travel direction
     const px = -dy;
     const py = dx;
 
-    return path.map(p => ({
-        x: pStart.x + p.x * dx + p.y * px,
-        y: pStart.y + p.x * dy + p.y * py,
-    }));
+    // The template may not span [0,1] — normalize to [0,1] first.
+    const xMin = path[0].x;
+    const xMax = path[path.length - 1].x;
+    const xRange = xMax - xMin || 1;
+
+    return path.map(p => {
+        const nx = (p.x - xMin) / xRange;  // normalize to [0,1]
+        const ny = p.y / xRange;            // scale y proportionally
+        return {
+            x: pLeft.x + nx * dx + ny * px,
+            y: pLeft.y + nx * dy + ny * py,
+        };
+    });
 }
+
+// ---------------------------------------------------------------------------
+// Intersection and splitting helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Find all t-parameters where other curves intersect this curve.
- * Returns sorted, deduplicated t values (excluding near 0 and 1).
  */
 function findSplitParameters(
     curve: Curve,
@@ -232,34 +262,24 @@ function findSplitParameters(
             ts.push(ix.tSelf);
         }
 
-        // Also check T-junctions (other curve endpoints on this curve)
+        // T-junctions: other curve endpoints on this curve
         for (const endpoint of [allCurves[j].start, allCurves[j].end]) {
-            const t = findPointOnCurve(curve, endpoint);
-            if (t !== null && t > 0.01 && t < 0.99) {
+            const t = curve.nearestT(endpoint);
+            const projected = curve.pointAt(t);
+            const d = Math.sqrt(
+                (projected.x - endpoint.x) ** 2 +
+                (projected.y - endpoint.y) ** 2,
+            );
+            if (d < 3 && t > 0.01 && t < 0.99) {
                 ts.push(t);
             }
         }
     }
 
     // Sort and deduplicate
-    const sorted = [...new Set(ts.map(t => Math.round(t * 1e4) / 1e4))]
+    return [...new Set(ts.map(t => Math.round(t * 1e4) / 1e4))]
         .sort((a, b) => a - b)
         .filter(t => t > 0.01 && t < 0.99);
-
-    return sorted;
-}
-
-/**
- * Find the parameter t where a point lies on a curve, or null.
- * Uses bezier-js projection for accurate results.
- */
-function findPointOnCurve(curve: Curve, point: Point): number | null {
-    const t = curve.nearestT(point);
-    const projected = curve.pointAt(t);
-    const dx = projected.x - point.x;
-    const dy = projected.y - point.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    return d < 1.0 ? t : null;
 }
 
 /**
@@ -294,25 +314,29 @@ function mergeTabsIntoSegments(
     for (const seg of segments) {
         const placement = computeTabPlacement(seg, config, random);
         if (placement) {
-            modified.push(mergeTabIntoCurve(seg, placement, template, random));
+            modified.push(mergeTabIntoCurve(
+                seg, placement.tCenter, placement.isTab,
+                config.tabChordLength, template, random,
+            ));
         } else {
             modified.push(seg);
         }
     }
 
-    // Rejoin all segments
     return joinCurves(modified);
 }
 
+// ---------------------------------------------------------------------------
+// Curve joining
+// ---------------------------------------------------------------------------
+
 /**
- * Join multiple curves into a single curve by concatenating their segments.
- * Assumes curves are end-to-start connected.
+ * Join multiple curves into a single curve by concatenating segments.
  */
 function joinCurves(curves: Curve[]): Curve {
     const allSegments: BezierSegment[] = [];
     for (const c of curves) {
         for (const seg of c.segments) {
-            // Skip degenerate zero-length segments
             const len = Math.sqrt(
                 (seg.p3.x - seg.p0.x) ** 2 + (seg.p3.y - seg.p0.y) ** 2,
             );
@@ -322,7 +346,6 @@ function joinCurves(curves: Curve[]): Curve {
     }
 
     if (allSegments.length === 0) {
-        // Fallback: return the first curve
         return curves[0];
     }
 
