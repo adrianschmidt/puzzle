@@ -8,7 +8,7 @@
  */
 
 import {
-    MERGE_TOLERANCE_PRESETS,
+    getSortedPresets,
     loadTolerancePreference,
     saveTolerancePreference,
 } from './merge-tolerance.js';
@@ -113,13 +113,13 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     const toleranceContainer = content.querySelector('.tolerance-options')!;
     const currentToleranceIndex = loadTolerancePreference();
 
-    MERGE_TOLERANCE_PRESETS.forEach((preset, index) => {
+    getSortedPresets().forEach(({ preset, storageIndex }) => {
         const button = document.createElement('button');
         button.className = 'tolerance-option';
         button.type = 'button';
         button.dataset.testid = `tolerance-${preset.label.toLowerCase()}`;
 
-        if (index === currentToleranceIndex) {
+        if (storageIndex === currentToleranceIndex) {
             button.classList.add('selected');
         }
 
@@ -129,7 +129,7 @@ export function createInfoModal(options: InfoModalOptions): () => void {
         `;
 
         button.addEventListener('click', () => {
-            saveTolerancePreference(index);
+            saveTolerancePreference(storageIndex);
 
             // Update button states
             toleranceContainer
@@ -137,7 +137,7 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 .forEach((btn) => btn.classList.remove('selected'));
             button.classList.add('selected');
 
-            onToleranceChanged?.(index);
+            onToleranceChanged?.(storageIndex);
         });
 
         toleranceContainer.appendChild(button);

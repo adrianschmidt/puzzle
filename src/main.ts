@@ -283,7 +283,12 @@ function initGame(state: GameState): void {
             autoSave();
         },
         onDrop: (groupId: number) => {
-            const result = processDrop(groupId, gameState, getActiveTolerance());
+            const tolerance = getActiveTolerance(
+                gameState.imageSize.width,
+                gameState.gridSize.cols,
+                gameState.cutStyle,
+            );
+            const result = processDrop(groupId, gameState, tolerance);
             if (result) {
                 // Prune stale group IDs from selection (absorbed groups no longer exist).
                 // The surviving group inherits selection if any merged group was selected.
