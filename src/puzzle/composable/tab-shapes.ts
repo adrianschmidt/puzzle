@@ -79,20 +79,18 @@ export const classicTabTemplate: TabTemplate = {
         const halfWidth = 0.17 * scalex;
         const neckHalfWidth = halfWidth * neckRatio;
 
-        // Helper: point in normalized space (h = along edge 0-1, v = perpendicular)
-        const pt = (h: number, v: number): Point => ({ x: h, y: v });
+        // Helper: point in normalized space (h = along edge, v = perpendicular).
+        // Shift y down so the neck entry/exit sits at y=0 — no flat flanges
+        // needed. The shape starts and ends exactly at the neck points.
+        const yShift = 0.08 * scaley;
+        const pt = (h: number, v: number): Point => ({ x: h, y: v - yShift });
 
-        // 5 key points defining the mushroom shape
-        const pa = pt(mid - neckHalfWidth, 0.08 * scaley);
+        // 4 key points (neck entry/exit are now the start/end)
         const pb = pt(mid - halfWidth * 0.9, 0.25 * scaley);
         const pc = pt(mid, 0.33 * scaley);
         const pd = pt(mid + halfWidth * 0.9, 0.25 * scaley);
-        const pe = pt(mid + neckHalfWidth, 0.08 * scaley);
 
-        // Control points for 6 Bézier segments
-        const cp1_1 = pt(mid - neckHalfWidth * 2.5, 0);
-        const cp1_2 = pt(mid - neckHalfWidth * 1.5, 0);
-
+        // Control points for 4 Bézier segments (neck → head → neck)
         const cp2_1 = pt(mid - neckHalfWidth * 0.7, 0.12 * scaley);
         const cp2_2 = pt(mid - halfWidth * 1.1, 0.20 * scaley);
 
@@ -105,17 +103,13 @@ export const classicTabTemplate: TabTemplate = {
         const cp5_1 = pt(mid + halfWidth * 1.1, 0.20 * scaley);
         const cp5_2 = pt(mid + neckHalfWidth * 0.7, 0.12 * scaley);
 
-        const cp6_1 = pt(mid + neckHalfWidth * 1.5, 0);
-        const cp6_2 = pt(mid + neckHalfWidth * 2.5, 0);
-
         return [
-            pt(0, 0),           // Start
-            cp1_1, cp1_2, pa,   // Segment 1: start → neck entry
-            cp2_1, cp2_2, pb,   // Segment 2: neck → head left
-            cp3_1, cp3_2, pc,   // Segment 3: head left → head top
-            cp4_1, cp4_2, pd,   // Segment 4: head top → head right
-            cp5_1, cp5_2, pe,   // Segment 5: head right → neck exit
-            cp6_1, cp6_2, pt(1, 0), // Segment 6: neck exit → end
+            pt(mid - neckHalfWidth, 0.08 * scaley), // Start: left neck (y=0 after shift)
+            cp2_1, cp2_2, pb,   // Segment 1: neck → head left
+            cp3_1, cp3_2, pc,   // Segment 2: head left → head top
+            cp4_1, cp4_2, pd,   // Segment 3: head top → head right
+            cp5_1, cp5_2,       // Segment 4: head right → neck exit
+            pt(mid + neckHalfWidth, 0.08 * scaley), // End: right neck (y=0 after shift)
         ];
     },
 };

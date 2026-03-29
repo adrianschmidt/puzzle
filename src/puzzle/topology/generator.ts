@@ -21,6 +21,7 @@ import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
 import { composePuzzle } from '../composable/compose.js';
+import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,7 +71,8 @@ export function generateTopologyPuzzle(
     const hFreq = config?.horizontalFrequency ?? 1.5;
     const vAmp = config?.verticalAmplitude ?? 0.15;
     const vFreq = config?.verticalFrequency ?? 1.5;
-    const disableTabs = config?.disableTabs ?? false;
+    // Tabs disabled by default until intersection reliability is resolved (#191)
+    const disableTabs = config?.disableTabs ?? true;
     const template = config?.tabTemplate ?? classicTabTemplate;
 
     const pieceWidth = imageSize.width / cols;
@@ -86,14 +88,23 @@ export function generateTopologyPuzzle(
         hPixelAmp, hFreq, vPixelAmp, vFreq, random,
     );
 
-    // Step 2: Build DCEL on raw cuts (no tabs yet) → faces → PieceDefinitions
-    // Tabs are applied by the composition layer to the resulting edges,
-    // not merged into the cut lines pre-DCEL.
-    const dcel = buildDCEL({ curves });
+    // Step 2: Merge tabs into cut lines BEFORE topology computation.
+    // This ensures piece clip paths include tab protrusions/sockets.
+    // The DCEL then sees the full tab-modified geometry.
+    let finalCurves = curves;
+    if (!disableTabs) {
+        const borderIndices = new Set([0, 1, 2, 3]);
+        finalCurves = mergeTabsIntoCuts(
+            curves, borderIndices, template, DEFAULT_TAB_PLACEMENT, random,
+        );
+    }
+
+    // Step 3: Build DCEL on (possibly tab-modified) cuts → faces → pieces
+    const dcel = buildDCEL({ curves: finalCurves });
     const pieceDefs = facesToPieceDefinitions(dcel);
 
-    // Step 3: Compose final pieces — composition layer applies tabs
-    return composePuzzle(pieceDefs, template, random, { disableTabs });
+    // Step 4: Compose final pieces — tabs are already in the geometry
+    return composePuzzle(pieceDefs, template, random, { disableTabs: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -241,3 +252,5 @@ function generateSineCurve(
 
     return Curve.fromBezierPath(bezierPoints);
 }
+
+

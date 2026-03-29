@@ -18,6 +18,7 @@ import type { Edge, Piece, Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from './types.js';
 import type { TabTemplate, BezierPath } from './tab-shapes.js';
 import { reverseBezierPath, mirrorBezierPathY } from './tab-shapes.js';
+import { clampTabToCurve } from './curve-clamp.js';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -147,14 +148,26 @@ function buildEdge(
         pathToTransform = reverseBezierPath(normalizedPath);
     }
 
-    // Transform from normalized space to edge coordinates
-    // using the tangent/normal frame approach.
-    //
-    // Normalized space: (0,0) → (1,0), tab protrudes in +Y
-    // After reversal: (1,0) → (0,0)
-    //
-    // We transform so that normalized (0,0) maps to `start`
-    // and normalized (1,0) maps to `end`.
+    // For curved edges, use curve-clamped tab placement.
+    // For straight edges, use the simple start→end transform.
+    if (edgeDef.curvePoints && edgeDef.curvePoints.length > 2) {
+        // Curved edge: clamp tab to the actual curve
+        const curvePoints = isFirstSide
+            ? edgeDef.curvePoints
+            : [...edgeDef.curvePoints].reverse();
+
+        const result = clampTabToCurve(curvePoints, pathToTransform);
+        return {
+            id,
+            mateEdgeId,
+            matePieceId,
+            path: result.svgPath,
+            start,
+            end,
+        };
+    }
+
+    // Straight edge: transform using tangent/normal frame from start→end
     const transformed = transformToEdge(pathToTransform, start, end);
 
     return {
@@ -193,10 +206,19 @@ function transformToEdge(
     const px = -dy;
     const py = dx;
 
-    return path.map(p => ({
-        x: start.x + p.x * dx + p.y * px,
-        y: start.y + p.x * dy + p.y * py,
-    }));
+    // The template may not span [0,1] — normalize first.
+    const xMin = path[0].x;
+    const xMax = path[path.length - 1].x;
+    const xRange = xMax - xMin || 1;
+
+    return path.map(p => {
+        const normX = (p.x - xMin) / xRange;
+        const normY = p.y / xRange;
+        return {
+            x: start.x + normX * dx + normY * px,
+            y: start.y + normX * dy + normY * py,
+        };
+    });
 }
 
 // ---------------------------------------------------------------------------
