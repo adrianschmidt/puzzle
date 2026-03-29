@@ -71,7 +71,8 @@ export function generateTopologyPuzzle(
     const hFreq = config?.horizontalFrequency ?? 1.5;
     const vAmp = config?.verticalAmplitude ?? 0.15;
     const vFreq = config?.verticalFrequency ?? 1.5;
-    const disableTabs = config?.disableTabs ?? false;
+    // Tabs disabled by default until intersection reliability is resolved (#191)
+    const disableTabs = config?.disableTabs ?? true;
     const template = config?.tabTemplate ?? classicTabTemplate;
 
     const pieceWidth = imageSize.width / cols;
