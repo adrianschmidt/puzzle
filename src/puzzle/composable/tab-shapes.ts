@@ -74,7 +74,7 @@ export const classicTabTemplate: TabTemplate = {
         const scalex = lerp(0.65, 1.0, random());
         const scaley = lerp(0.7, 1.1, random());
         const mid = lerp(0.38, 0.62, random());
-        const neckRatio = lerp(0.25, 0.80, random());
+        const neckRatio = lerp(0.50, 0.80, random());
 
         const halfWidth = 0.17 * scalex;
         const neckHalfWidth = halfWidth * neckRatio;
