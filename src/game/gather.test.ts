@@ -8,6 +8,7 @@ import {
     computeGatheredPositions,
     applyGatheredPositions,
     getGroupOffsetBounds,
+    getPathBounds,
 } from './gather.js';
 
 /**
@@ -122,6 +123,113 @@ describe('computeGatheredPositions', () => {
         const { positions } = computeGatheredPositions([bigGroup, smallGroup], landscapeAspect, pieces);
 
         expect(positions.size).toBe(2);
+    });
+});
+
+describe('getPathBounds', () => {
+    it('should return start point bounds for empty path', () => {
+        const bounds = getPathBounds('', { x: 10, y: 20 });
+        expect(bounds).toEqual({ minX: 10, minY: 20, maxX: 10, maxY: 20 });
+    });
+
+    it('should handle absolute line commands', () => {
+        const bounds = getPathBounds('M 0 0 L 100 50 L 50 100', { x: 0, y: 0 });
+        expect(bounds).toEqual({ minX: 0, minY: 0, maxX: 100, maxY: 100 });
+    });
+
+    it('should handle relative line commands', () => {
+        const bounds = getPathBounds('l 100 0 l 0 80', { x: 10, y: 10 });
+        expect(bounds).toEqual({ minX: 10, minY: 10, maxX: 110, maxY: 90 });
+    });
+
+    it('should include cubic bezier control points (absolute)', () => {
+        // Control points at (50, -30) and (50, 130) extend beyond endpoints
+        const bounds = getPathBounds('C 50 -30, 50 130, 100 50', { x: 0, y: 0 });
+        expect(bounds.minY).toBe(-30);
+        expect(bounds.maxY).toBe(130);
+        expect(bounds.maxX).toBe(100);
+    });
+
+    it('should include cubic bezier control points (relative)', () => {
+        const bounds = getPathBounds('c 20 -40, 80 -40, 100 0', { x: 0, y: 50 });
+        expect(bounds.minY).toBe(10); // 50 + (-40)
+        expect(bounds.maxX).toBe(100);
+    });
+
+    it('should include quadratic bezier control points', () => {
+        const bounds = getPathBounds('Q 50 -20, 100 0', { x: 0, y: 0 });
+        expect(bounds.minY).toBe(-20);
+        expect(bounds.maxX).toBe(100);
+    });
+
+    it('should handle H and V commands', () => {
+        const bounds = getPathBounds('H 200 V 150', { x: 10, y: 10 });
+        expect(bounds).toEqual({ minX: 10, minY: 10, maxX: 200, maxY: 150 });
+    });
+
+    it('should handle relative h and v commands', () => {
+        const bounds = getPathBounds('h 50 v 30', { x: 10, y: 10 });
+        expect(bounds).toEqual({ minX: 10, minY: 10, maxX: 60, maxY: 40 });
+    });
+
+    it('should handle S (smooth cubic) commands', () => {
+        const bounds = getPathBounds('S 50 -20, 100 0', { x: 0, y: 0 });
+        expect(bounds.minY).toBe(-20);
+        expect(bounds.maxX).toBe(100);
+    });
+
+    it('should handle Z command without error', () => {
+        const bounds = getPathBounds('L 100 100 Z', { x: 0, y: 0 });
+        expect(bounds.maxX).toBe(100);
+        expect(bounds.maxY).toBe(100);
+    });
+
+    it('should handle a realistic jigsaw tab path', () => {
+        // Simulates a tab that bulges outward (negative y = upward)
+        const path = 'L 30 0 C 35 -25, 65 -25, 70 0 L 100 0';
+        const bounds = getPathBounds(path, { x: 0, y: 0 });
+        expect(bounds.minY).toBe(-25);
+        expect(bounds.maxX).toBe(100);
+        expect(bounds.minX).toBe(0);
+    });
+});
+
+describe('computeGatheredPositions with tab paths', () => {
+    it('should account for tab geometry in layout spacing', () => {
+        // Create pieces with tabs that extend 30px beyond the edge
+        const pieceWithTab: Piece = {
+            id: 1,
+            edges: [
+                { id: 100, mateEdgeId: -1, matePieceId: -1, path: 'L 30 0 C 35 -30, 65 -30, 70 0 L 100 0', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
+                { id: 101, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
+                { id: 102, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
+                { id: 103, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
+            ],
+            shape: '',
+            imageOffset: { x: 0, y: 0 },
+        };
+
+        const plainPiece: Piece = {
+            id: 2,
+            edges: [
+                { id: 200, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
+                { id: 201, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
+                { id: 202, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
+                { id: 203, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
+            ],
+            shape: '',
+            imageOffset: { x: 0, y: 0 },
+        };
+
+        const groups: PieceGroup[] = [
+            { id: 1, pieces: new Map([[1, { x: 0, y: 0 }]]), position: { x: 0, y: 0 } },
+            { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]), position: { x: 200, y: 0 } },
+        ];
+
+        const { layoutBounds } = computeGatheredPositions(groups, 1.33, [pieceWithTab, plainPiece]);
+
+        // The layout should be taller than 100px to account for the 30px tab
+        expect(layoutBounds.height).toBeGreaterThan(100);
     });
 });
 
