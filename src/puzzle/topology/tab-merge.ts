@@ -35,15 +35,15 @@ import { mirrorBezierPathY } from '../composable/tab-shapes.js';
 export interface TabPlacementConfig {
     /** Minimum edge arc length (in pixels) to receive a tab. */
     minEdgeLength: number;
-    /** Fixed chord length for the tab anchor points (in pixels). */
-    tabChordLength: number;
+    /** Tab width as fraction of edge length (0–1). */
+    tabWidthFraction: number;
     /** Allowed range for tab centre position along the edge (0–1). */
     centreRange: [number, number];
 }
 
 export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
-    minEdgeLength: 30,
-    tabChordLength: 35,
+    minEdgeLength: 20,
+    tabWidthFraction: 0.15,
     centreRange: [0.3, 0.7],
 };
 
@@ -57,7 +57,7 @@ export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
  * @param curve - The edge curve segment
  * @param tCenter - Where on the curve to place the tab (0–1)
  * @param isTab - True for protrusion, false for socket
- * @param chordLength - Fixed chord length in pixels
+ * @param widthFraction - Tab width as fraction of edge length (0–1)
  * @param template - Tab shape template
  * @param random - Seeded PRNG for shape variation
  * @returns A new Curve with the tab spliced in
@@ -66,7 +66,7 @@ export function mergeTabIntoCurve(
     curve: Curve,
     tCenter: number,
     isTab: boolean,
-    chordLength: number,
+    widthFraction: number,
     template: TabTemplate,
     random: () => number,
 ): Curve {
@@ -76,10 +76,10 @@ export function mergeTabIntoCurve(
         normalizedPath = mirrorBezierPathY(normalizedPath);
     }
 
-    // Bisect to find delta such that chord length = desired
-    const delta = bisectForChord(curve, tCenter, chordLength);
-    const tLeft = Math.max(0.001, tCenter - delta);
-    const tRight = Math.min(0.999, tCenter + delta);
+    // Place tab by t-parameter fraction of the edge
+    const halfWidth = widthFraction / 2;
+    const tLeft = Math.max(0.001, tCenter - halfWidth);
+    const tRight = Math.min(0.999, tCenter + halfWidth);
 
     // Get anchor points on the curve
     const pLeft = curve.pointAt(tLeft);
@@ -155,8 +155,9 @@ export function computeTabPlacement(
         return null;
     }
 
-    // Don't place tabs if the edge is barely longer than the chord
-    if (length < config.tabChordLength * 1.5) {
+    // Don't place tabs if the edge is too short for the tab fraction
+    // (the tab itself would consume most of the edge)
+    if (length < config.minEdgeLength * 1.5) {
         return null;
     }
 
@@ -197,7 +198,7 @@ export function mergeTabsIntoCuts(
             if (placement) {
                 result.push(mergeTabIntoCurve(
                     curves[i], placement.tCenter, placement.isTab,
-                    config.tabChordLength, template, random,
+                    config.tabWidthFraction, template, random,
                 ));
             } else {
                 result.push(curves[i]);
@@ -213,39 +214,6 @@ export function mergeTabsIntoCuts(
     }
 
     return result;
-}
-
-// ---------------------------------------------------------------------------
-// Bisection solver
-// ---------------------------------------------------------------------------
-
-/**
- * Find delta such that the chord between curve(tCenter-delta) and
- * curve(tCenter+delta) equals the desired length.
- */
-function bisectForChord(
-    curve: Curve,
-    tCenter: number,
-    desiredChord: number,
-): number {
-    let lo = 0;
-    let hi = 0.5;
-
-    for (let i = 0; i < 30; i++) {
-        const mid = (lo + hi) / 2;
-        const pL = curve.pointAt(Math.max(0, tCenter - mid));
-        const pR = curve.pointAt(Math.min(1, tCenter + mid));
-        const dx = pR.x - pL.x;
-        const dy = pR.y - pL.y;
-        const chord = Math.sqrt(dx * dx + dy * dy);
-        if (chord < desiredChord) {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-    }
-
-    return (lo + hi) / 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -358,7 +326,7 @@ function mergeTabsIntoSegments(
         if (placement) {
             modified.push(mergeTabIntoCurve(
                 seg, placement.tCenter, placement.isTab,
-                config.tabChordLength, template, random,
+                config.tabWidthFraction, template, random,
             ));
         } else {
             modified.push(seg);
