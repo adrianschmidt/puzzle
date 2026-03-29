@@ -88,12 +88,54 @@ export function mergeTabIntoCurve(
     // Transform tab from normalized space to edge coordinates
     const transformedPath = transformTabToChord(normalizedPath, pLeft, pRight);
 
-    // Split the curve at tLeft and tRight, replace middle with tab
-    const [before, rest] = curve.splitAt(tLeft);
-    const tRightRemapped = (tRight - tLeft) / (1 - tLeft);
-    const [_middle, after] = rest.splitAt(tRightRemapped);
+    // Split the curve using segment-local coordinates to avoid
+    // global-t remapping precision loss. The uniform t distribution
+    // across segments breaks down after splitting because the first
+    // segment of `rest` is a partial segment with different arc length
+    // than full segments, yet pointAt/splitAt treat all segments equally.
+    const leftResolved = curve.resolveTWithIndex(tLeft);
+    const rightResolved = curve.resolveTWithIndex(tRight);
 
-    const tabCurve = Curve.fromBezierPath(transformedPath);
+    const [before, rest] = curve.splitAtSegmentLocal(
+        leftResolved.segmentIndex, leftResolved.localT,
+    );
+
+    // Compute the right split point relative to `rest`.
+    // `rest` starts with the right portion of the segment that was split.
+    // If tRight is in a different segment than tLeft, we need to adjust
+    // the segment index (subtract the segments consumed by `before`).
+    // If tRight is in the SAME segment as tLeft, we need to remap localT
+    // within the remaining portion of that segment.
+    let restSegIndex: number;
+    let restLocalT: number;
+
+    if (rightResolved.segmentIndex === leftResolved.segmentIndex) {
+        // Same segment: rest's first segment is the right portion after
+        // splitting at leftResolved.localT. Remap rightResolved.localT
+        // into [0,1] of the remaining portion.
+        restSegIndex = 0;
+        const remainingRange = 1 - leftResolved.localT;
+        restLocalT = remainingRange > 1e-10
+            ? (rightResolved.localT - leftResolved.localT) / remainingRange
+            : 0.5;
+    } else {
+        // Different segment: rest's segment 0 is the tail of the split
+        // segment, then segments follow in order. The right split point
+        // is in segment (rightResolved.segmentIndex - leftResolved.segmentIndex)
+        // of `rest`, with the same localT.
+        restSegIndex = rightResolved.segmentIndex - leftResolved.segmentIndex;
+        restLocalT = rightResolved.localT;
+    }
+
+    const [_middle, after] = rest.splitAtSegmentLocal(restSegIndex, restLocalT);
+
+    // Snap the transformed tab endpoints to the exact split points
+    // to ensure perfect continuity (no gaps between segments).
+    const snappedPath = [...transformedPath];
+    snappedPath[0] = { ...before.end };
+    snappedPath[snappedPath.length - 1] = { ...after.start };
+
+    const tabCurve = Curve.fromBezierPath(snappedPath);
     return joinCurves([before, tabCurve, after]);
 }
 

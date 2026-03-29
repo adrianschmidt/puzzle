@@ -376,7 +376,7 @@ export class Curve {
         return { segment: this.segments[segmentIndex], localT };
     }
 
-    private resolveTWithIndex(t: number): { segmentIndex: number; localT: number } {
+    resolveTWithIndex(t: number): { segmentIndex: number; localT: number } {
         const n = this.segments.length;
         const clamped = Math.max(0, Math.min(1, t));
         const scaled = clamped * n;
