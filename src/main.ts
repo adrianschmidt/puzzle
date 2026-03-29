@@ -25,6 +25,7 @@ import { SelectionManager } from './interaction/selection-manager.js';
 import { createSelectToolButton } from './ui/select-tool-button.js';
 import { createDeselectButton } from './ui/deselect-button.js';
 import { getActiveTolerance } from './ui/merge-tolerance.js';
+import { reorderGroupsAfterDrop } from './game/pile-detection.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import { createAttributionElement, removeAttribution } from './ui/attribution.js';
 import {
@@ -288,6 +289,19 @@ function initGame(state: GameState): void {
                 gameState.gridSize.cols,
                 gameState.cutStyle,
             );
+
+            // Determine all groups involved in this drop operation
+            // (primary dragged group + any selected groups in multi-select mode)
+            const droppedGroupIds = [groupId];
+            if (selectionManager.toolActive && selectionManager.isSelected(groupId)) {
+                // Add all other selected groups
+                for (const selectedId of selectionManager.selectedGroupIds) {
+                    if (selectedId !== groupId) {
+                        droppedGroupIds.push(selectedId);
+                    }
+                }
+            }
+
             const result = processDrop(groupId, gameState, tolerance);
             if (result) {
                 // Prune stale group IDs from selection (absorbed groups no longer exist).
@@ -306,12 +320,31 @@ function initGame(state: GameState): void {
                 for (const selectedId of selectionManager.selectedGroupIds) {
                     renderer.setGroupSelected(selectedId, true);
                 }
+
+                // Update the dropped groups list to use the merged result group
+                const finalDroppedGroupIds = droppedGroupIds.map(id => {
+                    // If this group was absorbed into the merged result, use the result group
+                    if (!gameState.groups.some(g => g.id === id)) {
+                        return result.group.id;
+                    }
+                    return id;
+                });
+
+                // Remove duplicates
+                const uniqueDroppedGroupIds = [...new Set(finalDroppedGroupIds)];
+
+                // Apply z-reorder after merge
+                reorderGroupsAfterDrop(uniqueDroppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
+
                 autoSave();
 
                 if (checkAndMarkWin(gameState)) {
                     showCompletionOverlay();
                     autoSave();
                 }
+            } else {
+                // No merge occurred, apply z-reorder to the original dropped groups
+                reorderGroupsAfterDrop(droppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
             }
         },
         screenDeltaToWorld: (delta) => viewportTransform.screenDeltaToWorld(delta),
