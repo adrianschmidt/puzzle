@@ -13,6 +13,7 @@ import { DragController } from './drag-controller.js';
 import type { ScreenDeltaToWorld } from './drag-controller.js';
 import { AutoPanController } from './auto-pan.js';
 import type { SelectionManager } from './selection-manager.js';
+import { loadOffsetDragPreference } from '../ui/offset-drag.js';
 
 export interface DragSetupOptions {
     /** The DOM container for the puzzle table (receives move/up events). */
@@ -172,7 +173,7 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
         const drag = controller.getActiveDrag();
         if (drag) {
             const group = findGroup(drag.groupId, getState());
-            if (group.pieces.size === 1) {
+            if (group.pieces.size === 1 && loadOffsetDragPreference()) {
                 const OFFSET_SCREEN_PX = 50;
                 const worldOffset = deltaToWorld({ x: 0, y: -OFFSET_SCREEN_PX });
                 moveGroup(group, worldOffset);

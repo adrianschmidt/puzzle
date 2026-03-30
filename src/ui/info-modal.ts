@@ -12,6 +12,10 @@ import {
     loadTolerancePreference,
     saveTolerancePreference,
 } from './merge-tolerance.js';
+import {
+    loadOffsetDragPreference,
+    saveOffsetDragPreference,
+} from './offset-drag.js';
 
 export interface InfoModalOptions {
     /** Container to append the modal to. */
@@ -88,6 +92,13 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 <p class="info-setting-description">How close pieces need to be before they snap together.</p>
                 <div class="tolerance-options" data-testid="tolerance-options"></div>
             </div>
+            <div class="info-setting">
+                <label class="info-setting-toggle">
+                    <input type="checkbox" data-testid="offset-drag-toggle" />
+                    <span class="info-setting-label">Offset drag</span>
+                </label>
+                <p class="info-setting-description">Shift single pieces upward when dragging, so your finger doesn't block the view.</p>
+            </div>
         </section>
 
         <section class="info-section">
@@ -141,6 +152,15 @@ export function createInfoModal(options: InfoModalOptions): () => void {
         });
 
         toleranceContainer.appendChild(button);
+    });
+
+    // Offset drag toggle
+    const offsetToggle = content.querySelector<HTMLInputElement>(
+        '[data-testid="offset-drag-toggle"]',
+    )!;
+    offsetToggle.checked = loadOffsetDragPreference();
+    offsetToggle.addEventListener('change', () => {
+        saveOffsetDragPreference(offsetToggle.checked);
     });
 
     // Debug: solve button at the bottom of the content
