@@ -51,6 +51,7 @@ export {
     computeGatheredPositions,
     applyGatheredPositions,
     getGroupOffsetBounds,
+    getGroupVisualBounds,
     GATHER_PADDING,
 } from './gather.js';
 export type { WorldRect } from './gather.js';
