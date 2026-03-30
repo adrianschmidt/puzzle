@@ -17,3 +17,4 @@ dist/
 
 # PWA dev
 dev-dist/
+scripts/diag-output/
