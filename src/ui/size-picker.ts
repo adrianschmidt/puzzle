@@ -10,6 +10,7 @@
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
 import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
+import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 
 /** Composable generator config passed through from sliders. */
 export interface ComposableSliderConfig {
@@ -31,8 +32,10 @@ export interface SizePickerOptions {
     savedComposableConfig?: ComposableSliderConfig;
     /** Previously saved image source preference. */
     savedImageSource?: string;
+    /** Previously saved image category preference. */
+    savedImageCategory?: string;
     /** Called when the player selects a size. */
-    onSelect: (index: number, cutStyleIndex?: number, composableConfig?: ComposableSliderConfig, imageSource?: string) => void;
+    onSelect: (index: number, cutStyleIndex?: number, composableConfig?: ComposableSliderConfig, imageSource?: string, imageCategory?: string) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
 }
@@ -149,7 +152,7 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
             const composableConfig = currentCutStyleIndex === composableCutIndex
                 ? getSliderValues()
                 : undefined;
-            onSelect(i, currentCutStyleIndex, composableConfig, imageSourceSelect.value);
+            onSelect(i, currentCutStyleIndex, composableConfig, imageSourceSelect.value, imageCategorySelect.value);
         });
 
         sizeButtons.push(btn);
@@ -201,6 +204,39 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     imageSourceSection.appendChild(imageSourceLabel);
     imageSourceSection.appendChild(imageSourceSelect);
     dialog.appendChild(imageSourceSection);
+
+    // Image category selector (only visible when image source is not 'blank')
+    const imageCategorySection = document.createElement('div');
+    imageCategorySection.className = 'composable-slider-row';
+    const imageCategoryLabel = document.createElement('label');
+    imageCategoryLabel.className = 'composable-slider-label';
+    imageCategoryLabel.textContent = 'Picture Type';
+    const imageCategorySelect = document.createElement('select');
+    imageCategorySelect.className = 'composable-slider-input';
+    for (const cat of IMAGE_CATEGORY_OPTIONS) {
+        const opt = document.createElement('option');
+        opt.value = cat.id;
+        opt.textContent = cat.label;
+        imageCategorySelect.appendChild(opt);
+    }
+    if (options.savedImageCategory) {
+        imageCategorySelect.value = options.savedImageCategory;
+    }
+    imageCategorySection.appendChild(imageCategoryLabel);
+    imageCategorySection.appendChild(imageCategorySelect);
+    dialog.appendChild(imageCategorySection);
+
+    /**
+     * Update the visibility of the image category selector
+     * based on the current image source selection.
+     */
+    function updateImageCategoryVisibility(): void {
+        imageCategorySection.style.display =
+            imageSourceSelect.value === 'blank' ? 'none' : '';
+    }
+
+    imageSourceSelect.addEventListener('change', updateImageCategoryVisibility);
+    updateImageCategoryVisibility();
 
     dialog.appendChild(grid);
 

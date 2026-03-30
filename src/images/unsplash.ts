@@ -65,11 +65,18 @@ export interface UnsplashImageResult {
  *
  * Filters for landscape orientation to match the puzzle grid aspect ratio.
  */
-export function buildRandomPhotoUrl(accessKey: string): string {
+export function buildRandomPhotoUrl(
+    accessKey: string,
+    query?: string,
+): string {
     const params = new URLSearchParams({
         orientation: 'landscape',
         client_id: accessKey,
     });
+
+    if (query) {
+        params.set('query', query);
+    }
 
     return `${UNSPLASH_RANDOM_URL}?${params.toString()}`;
 }
@@ -186,8 +193,9 @@ export function getUnsplashAccessKey(): string | undefined {
 export async function fetchRandomImage(
     accessKey: string,
     fetchFn: typeof fetch = fetch,
+    query?: string,
 ): Promise<UnsplashImageResult | undefined> {
-    const url = buildRandomPhotoUrl(accessKey);
+    const url = buildRandomPhotoUrl(accessKey, query);
 
     const response = await fetchFn(url);
 

@@ -45,6 +45,26 @@ describe('buildRandomPhotoUrl', () => {
 
         expect(url).toContain('client_id=key+with+spaces');
     });
+
+    it('includes query parameter when provided', () => {
+        const url = buildRandomPhotoUrl('test-key', 'nature landscape');
+
+        expect(url).toContain('query=nature+landscape');
+        expect(url).toContain('orientation=landscape');
+        expect(url).toContain('client_id=test-key');
+    });
+
+    it('omits query parameter when undefined', () => {
+        const url = buildRandomPhotoUrl('test-key', undefined);
+
+        expect(url).not.toContain('query=');
+    });
+
+    it('omits query parameter when empty string', () => {
+        const url = buildRandomPhotoUrl('test-key', '');
+
+        expect(url).not.toContain('query=');
+    });
 });
 
 describe('parseUnsplashResponse', () => {
@@ -192,6 +212,30 @@ describe('fetchRandomImage', () => {
 
         expect(result).toBeUndefined();
         warnSpy.mockRestore();
+    });
+
+    it('passes query parameter to the URL', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve(makeUnsplashResponse()),
+        });
+
+        await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch, 'nature landscape');
+
+        const calledUrl = mockFetch.mock.calls[0][0] as string;
+        expect(calledUrl).toContain('query=nature+landscape');
+    });
+
+    it('omits query parameter when not provided', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve(makeUnsplashResponse()),
+        });
+
+        await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch);
+
+        const calledUrl = mockFetch.mock.calls[0][0] as string;
+        expect(calledUrl).not.toContain('query=');
     });
 
     it('propagates fetch exceptions', async () => {
