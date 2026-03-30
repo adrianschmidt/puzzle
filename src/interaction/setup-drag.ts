@@ -166,8 +166,21 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
 
         controller.handlePointerDown(pieceId, event);
 
-        // Start auto-pan tracking for this drag
+        // Offset drag: shift single pieces upward so the finger doesn't
+        // block the view. The offset is in screen pixels, converted to
+        // world space so it stays consistent regardless of zoom level.
         const drag = controller.getActiveDrag();
+        if (drag) {
+            const group = findGroup(drag.groupId, getState());
+            if (group.pieces.size === 1) {
+                const OFFSET_SCREEN_PX = 50;
+                const worldOffset = deltaToWorld({ x: 0, y: -OFFSET_SCREEN_PX });
+                moveGroup(group, worldOffset);
+                onStateChanged();
+            }
+        }
+
+        // Start auto-pan tracking for this drag
         if (drag && autoPan) {
             autoPan.start(drag.groupId);
             autoPan.updatePointer({ x: event.clientX, y: event.clientY });
