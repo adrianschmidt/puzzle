@@ -80,7 +80,7 @@ describe('createSizePickerDialog', () => {
         const buttons = container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         buttons[3].click();
 
-        expect(onSelect).toHaveBeenCalledWith(3, 0, undefined, "random");
+        expect(onSelect).toHaveBeenCalledWith(3, 0, undefined, "random", "any");
     });
 
     it('removes the overlay after selection', () => {
@@ -191,7 +191,7 @@ describe('createSizePickerDialog', () => {
             container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         sizeButtons[0].click();
 
-        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random");
+        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random", "any");
     });
 
     it('updates the cut style when a different style is clicked before selecting size', () => {
@@ -213,6 +213,6 @@ describe('createSizePickerDialog', () => {
             container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         sizeButtons[0].click();
 
-        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random");
+        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random", "any");
     });
 });

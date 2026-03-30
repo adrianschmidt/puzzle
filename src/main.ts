@@ -44,6 +44,11 @@ import {
     saveImageSourcePreference,
 } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
+import {
+    loadImageCategoryPreference,
+    saveImageCategoryPreference,
+    findImageCategory,
+} from './game/image-categories.js';
 import { createSizePickerDialog } from './ui/size-picker.js';
 
 /** Fallback image used when Unsplash is unavailable. */
@@ -368,6 +373,7 @@ async function startNewGame(
     cutStyle: CutStyle = 'classic',
     composableConfig?: import('./puzzle/composable-generator.js').ComposableConfig,
     imageSource?: string,
+    imageCategory?: string,
 ): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
@@ -400,7 +406,12 @@ async function startNewGame(
 
     if (accessKey) {
         try {
-            const result = await fetchRandomImage(accessKey);
+            const category = findImageCategory(imageCategory ?? 'any');
+            const result = await fetchRandomImage(
+                accessKey,
+                fetch,
+                category.query,
+            );
 
             if (result) {
                 imageUrl = result.imageUrl;
@@ -448,13 +459,15 @@ createNewGameButton({
         const preferredCutStyleIndex = loadCutStylePreference();
         const savedComposableConfig = loadComposableConfigPreference();
         const savedImageSource = loadImageSourcePreference();
+        const savedImageCategory = loadImageCategoryPreference();
         createSizePickerDialog({
             container: app,
             selectedIndex: preferredIndex,
             selectedCutStyleIndex: preferredCutStyleIndex,
             savedComposableConfig: savedComposableConfig,
             savedImageSource: savedImageSource,
-            onSelect: (index, cutStyleIndex, composableConfig, imageSource) => {
+            savedImageCategory: savedImageCategory,
+            onSelect: (index, cutStyleIndex, composableConfig, imageSource, imageCategory) => {
                 saveSizePreference(index);
                 const resolvedCutStyleIndex = cutStyleIndex ?? preferredCutStyleIndex;
                 saveCutStylePreference(resolvedCutStyleIndex);
@@ -464,10 +477,13 @@ createNewGameButton({
                 if (imageSource) {
                     saveImageSourcePreference(imageSource);
                 }
+                if (imageCategory) {
+                    saveImageCategoryPreference(imageCategory);
+                }
                 const option = getSizeOption(index);
                 const cutStyle = getCutStyleOption(resolvedCutStyleIndex).id;
                 clearSavedState();
-                void startNewGame(toGridSize(option), cutStyle, composableConfig, imageSource);
+                void startNewGame(toGridSize(option), cutStyle, composableConfig, imageSource, imageCategory);
             },
         });
     },
