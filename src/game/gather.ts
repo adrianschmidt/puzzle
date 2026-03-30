@@ -267,7 +267,7 @@ export function getPathBounds(
  * Includes bezier control points from edge paths to account for tab
  * geometry that extends beyond the start/end corner vertices.
  */
-function getGroupVisualBounds(
+export function getGroupVisualBounds(
     group: PieceGroup,
     pieces: ReadonlyArray<Readonly<Piece>>,
 ): { minX: number; minY: number; width: number; height: number } {

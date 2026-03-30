@@ -8,6 +8,7 @@ import {
     checkAndMarkWin,
     computeGatheredPositions,
     applyGatheredPositions,
+    getGroupVisualBounds,
 } from './game/index.js';
 import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
 import {
@@ -166,6 +167,79 @@ function gatherAndZoomToFit(): void {
     applyViewportTransform();
 }
 
+/**
+ * Animate the viewport to centre and zoom-to-fit a single completed group.
+ * Unlike gatherAndZoomToFit(), this doesn't move pieces — it just smoothly
+ * animates the viewport to frame the completed puzzle nicely.
+ *
+ * @param completedGroup - The single group containing all pieces
+ * @param onComplete - Callback to run after the animation finishes
+ */
+function zoomToFitCompletedPuzzle(
+    completedGroup: import('./model/types.js').PieceGroup,
+    onComplete: () => void
+): void {
+    const screenWidth = app.clientWidth || window.innerWidth;
+    const screenHeight = app.clientHeight || window.innerHeight;
+
+    // Compute the visual bounds of the completed group in its current position
+    const groupBounds = getGroupVisualBounds(completedGroup, gameState.pieces);
+
+    // Convert to world-space bounds (group-local space + group position)
+    const worldBounds = {
+        x: completedGroup.position.x + groupBounds.minX,
+        y: completedGroup.position.y + groupBounds.minY,
+        width: groupBounds.width,
+        height: groupBounds.height,
+    };
+
+    // Calculate target scale to fit the completed puzzle with padding
+    const scaleX = screenWidth / worldBounds.width;
+    const scaleY = screenHeight / worldBounds.height;
+    const targetScale = Math.min(scaleX, scaleY) * 0.9; // 10% padding like gatherAndZoomToFit
+
+    // Calculate target offset to centre the completed puzzle
+    const worldCentreX = worldBounds.x + worldBounds.width / 2;
+    const worldCentreY = worldBounds.y + worldBounds.height / 2;
+    const targetOffset = {
+        x: screenWidth / 2 - worldCentreX * targetScale,
+        y: screenHeight / 2 - worldCentreY * targetScale,
+    };
+
+    // Enable transition before applying the new transform
+    renderer.enableViewportTransition();
+
+    // Apply the target transform on next frame to ensure transition is set
+    requestAnimationFrame(() => {
+        viewportTransform.setState({
+            scale: targetScale,
+            offset: targetOffset,
+        });
+
+        applyViewportTransform();
+
+        // Listen for the transition to complete
+        const tableEl = app.querySelector('[data-puzzle-table]') as HTMLElement;
+        if (tableEl) {
+            const handleTransitionEnd = (event: TransitionEvent) => {
+                // Make sure it's the transform property and not some other transition
+                if (event.propertyName === 'transform' && event.target === tableEl) {
+                    tableEl.removeEventListener('transitionend', handleTransitionEnd);
+                    renderer.disableViewportTransition();
+                    onComplete();
+                }
+            };
+            tableEl.addEventListener('transitionend', handleTransitionEnd);
+        } else {
+            // Fallback: disable transition and run callback after expected duration
+            setTimeout(() => {
+                renderer.disableViewportTransition();
+                onComplete();
+            }, 800);
+        }
+    });
+}
+
 // Debug helper: solve the puzzle by placing all pieces in their correct positions.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).__solvePuzzle = () => {
@@ -186,8 +260,12 @@ function gatherAndZoomToFit(): void {
 
     gameState.groups = [solvedGroup];
     gameState.completed = true;
-    gatherAndZoomToFit();
     renderer.renderState(gameState);
+
+    // Use the same animated zoom as normal completion
+    zoomToFitCompletedPuzzle(solvedGroup, () => {
+        showCompletionOverlay();
+    });
 };
 
 // Viewport transform for zoom & pan
@@ -344,7 +422,15 @@ function initGame(state: GameState): void {
                 autoSave();
 
                 if (checkAndMarkWin(gameState)) {
-                    showCompletionOverlay();
+                    // Animate zoom to fit the completed puzzle, then show overlay
+                    if (gameState.groups.length === 1) {
+                        zoomToFitCompletedPuzzle(gameState.groups[0], () => {
+                            showCompletionOverlay();
+                        });
+                    } else {
+                        // Fallback: show overlay immediately if multiple groups (shouldn't happen)
+                        showCompletionOverlay();
+                    }
                     autoSave();
                 }
             } else {
