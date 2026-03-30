@@ -855,6 +855,21 @@ html, body {
   margin: 0 0 8px;
 }
 
+.info-setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.info-setting-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--ui-fg);
+}
+
 .tolerance-options {
   display: flex;
   gap: 8px;
