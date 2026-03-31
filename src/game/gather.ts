@@ -381,19 +381,59 @@ export function computeGatheredPositions(
     // Sort by height descending for better row packing
     layouts.sort((a, b) => b.bounds.height - a.bounds.height);
 
-    // Compute ideal number of columns to match screen aspect ratio.
-    // For n groups at aspect ratio r: cols ≈ sqrt(n * r), rows ≈ n / cols
-    const n = layouts.length;
-    const aspectRatio = Math.max(0.5, Math.min(3, screenAspectRatio));
-    const idealCols = Math.max(1, Math.round(Math.sqrt(n * aspectRatio)));
+    // Find the target row width that produces a layout matching the
+    // viewport aspect ratio. We binary-search on width: pack rows at
+    // a candidate width, measure the resulting height, and adjust until
+    // width/height ≈ screenAspectRatio.
+    const aspectRatio = Math.max(0.1, screenAspectRatio);
 
-    // Compute average piece width to estimate target row width
-    let totalWidth = 0;
+    let maxGroupWidth = 0;
+    let totalGroupWidth = 0;
     for (const layout of layouts) {
-        totalWidth += layout.bounds.width;
+        maxGroupWidth = Math.max(maxGroupWidth, layout.bounds.width);
+        totalGroupWidth += layout.bounds.width + margin;
     }
-    const avgWidth = totalWidth / n;
-    const targetWidth = idealCols * (avgWidth + margin);
+
+    // Search bounds: minimum is widest group, maximum is all in one row
+    const minWidth = maxGroupWidth + margin;
+    const maxWidth = totalGroupWidth + margin;
+
+    function packHeight(tw: number): number {
+        let height = 0;
+        let rowWidth = 0;
+        let rowHeight = 0;
+        let rowCount = 0;
+        for (const layout of layouts) {
+            const w = layout.bounds.width + margin;
+            if (rowCount > 0 && rowWidth + w > tw) {
+                height += rowHeight + margin;
+                rowWidth = 0;
+                rowHeight = 0;
+                rowCount = 0;
+            }
+            rowWidth += w;
+            rowHeight = Math.max(rowHeight, layout.bounds.height);
+            rowCount++;
+        }
+        if (rowCount > 0) height += rowHeight;
+        return height;
+    }
+
+    // Binary search: ~10 iterations gives <0.1% precision
+    let lo = minWidth;
+    let hi = maxWidth;
+    for (let i = 0; i < 10; i++) {
+        const mid = (lo + hi) / 2;
+        const h = packHeight(mid);
+        if (h === 0) break;
+        const ratio = mid / h;
+        if (ratio < aspectRatio) {
+            lo = mid; // too tall → widen
+        } else {
+            hi = mid; // too wide → narrow
+        }
+    }
+    const targetWidth = (lo + hi) / 2;
 
     // Pack into rows
     const rows: Array<{ items: GroupLayout[]; rowHeight: number }> = [];
