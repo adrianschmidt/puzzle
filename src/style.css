@@ -375,6 +375,26 @@ html, body {
   pointer-events: none;
 }
 
+/*
+ * Modal internals — always use dark-scheme variables regardless of
+ * the page-level UI scheme, because modal panels have dark backgrounds.
+ */
+.size-picker-dialog,
+.info-modal,
+.bg-colour-panel {
+  --ui-fg: #e0e0e0;
+  --ui-overlay-subtle: rgba(255, 255, 255, 0.05);
+  --ui-overlay: rgba(255, 255, 255, 0.1);
+  --ui-overlay-hover: rgba(255, 255, 255, 0.18);
+  --ui-overlay-active: rgba(255, 255, 255, 0.25);
+  --ui-border-subtle: rgba(255, 255, 255, 0.1);
+  --ui-border: rgba(255, 255, 255, 0.2);
+  --ui-border-hover: rgba(255, 255, 255, 0.35);
+  --ui-muted: rgba(255, 255, 255, 0.5);
+  --ui-muted-link: rgba(255, 255, 255, 0.65);
+  --ui-muted-link-hover: rgba(255, 255, 255, 0.9);
+}
+
 /* Size picker dialog */
 .size-picker-overlay {
   position: absolute;
