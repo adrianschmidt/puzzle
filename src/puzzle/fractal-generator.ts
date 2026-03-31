@@ -154,7 +154,7 @@ class CellGrid {
     }
 
     isCellEmpty(c: { x: number; y: number }): boolean {
-        return !this.cellmap[c.y * this.nrow + c.x];
+        return !this.cellmap[c.y * (this.nrow - 1) + c.x];
     }
 
     visitTile(v: Tile): void {
@@ -166,11 +166,11 @@ class CellGrid {
     }
 
     occupyCell(c: { x: number; y: number }): void {
-        this.cellmap[c.y * this.nrow + c.x] = true;
+        this.cellmap[c.y * (this.nrow - 1) + c.x] = true;
     }
 
     liberateCell(c: { x: number; y: number }): void {
-        this.cellmap[c.y * this.nrow + c.x] = false;
+        this.cellmap[c.y * (this.nrow - 1) + c.x] = false;
     }
 }
 
@@ -605,7 +605,77 @@ function convertToStandardPieces(
         }
     }
 
-    // 3. Scale all arc coordinates to image pixel space.
+    // 3. Detect gap cells BEFORE scaling (while arc coords are in abstract space).
+    //    addArcs is a recursive tree-walk from p[0] that may miss connections
+    //    added by fillEmptyCells. A convex arc (sign=1) at tile (tx,ty)
+    //    quadrant q covers the adjacent cell:
+    //      q=0 → (tx, ty-1), q=1 → (tx-1, ty-1),
+    //      q=2 → (tx-1, ty), q=3 → (tx, ty)
+    const coveredCells = new Set<string>();
+    for (const arcs of allPieceArcs) {
+        for (const a of arcs) {
+            if (a.sign !== 1) continue;
+            const tx = Math.round((a.cx - rad - frameOffset) / (2 * rad));
+            const ty = Math.round((a.cy - rad - frameOffset) / (2 * rad));
+            let cx: number, cy: number;
+            switch (a.quad) {
+                case 0: cx = tx; cy = ty - 1; break;
+                case 1: cx = tx - 1; cy = ty - 1; break;
+                case 2: cx = tx - 1; cy = ty; break;
+                case 3: cx = tx; cy = ty; break;
+                default: continue;
+            }
+            coveredCells.add(`${cx},${cy}`);
+        }
+    }
+
+    // Build a map of piece index → gap cells to fill with diamond fillers.
+    // For ownership, find a piece that has a concave arc bordering this cell
+    // (i.e., the piece whose boundary actually touches the gap).
+    // Cell (cx,cy) is bordered by concave arcs at:
+    //   tile(cx,cy) q=3, tile(cx+1,cy) q=2, tile(cx,cy+1) q=0, tile(cx+1,cy+1) q=1
+    const concaveArcOwner = new Map<string, number>(); // "tx,ty,q" → pieceIdx
+    for (let pi = 0; pi < allPieceArcs.length; pi++) {
+        for (const a of allPieceArcs[pi]) {
+            if (a.sign !== 0) continue;
+            const tx = Math.round((a.cx - rad - frameOffset) / (2 * rad));
+            const ty = Math.round((a.cy - rad - frameOffset) / (2 * rad));
+            concaveArcOwner.set(`${tx},${ty},${a.quad}`, pi);
+        }
+    }
+
+    const gapFills = new Map<number, Array<{ cellX: number; cellY: number }>>();
+    for (let pi = 0; pi < fractalPieces.length; pi++) {
+        for (const con of fractalPieces[pi]) {
+            const key = `${con.cell.x},${con.cell.y}`;
+            if (!coveredCells.has(key)) {
+                // Find a neighboring piece that borders this cell
+                const cx = con.cell.x;
+                const cy = con.cell.y;
+                const borderArcs = [
+                    `${cx},${cy},3`,       // tile(cx,cy) q=3
+                    `${cx + 1},${cy},2`,   // tile(cx+1,cy) q=2
+                    `${cx},${cy + 1},0`,   // tile(cx,cy+1) q=0
+                    `${cx + 1},${cy + 1},1`, // tile(cx+1,cy+1) q=1
+                ];
+
+                let owner = pi; // fallback to connection owner
+                for (const arcKey of borderArcs) {
+                    const arcOwner = concaveArcOwner.get(arcKey);
+                    if (arcOwner !== undefined) {
+                        owner = arcOwner;
+                        break;
+                    }
+                }
+
+                if (!gapFills.has(owner)) gapFills.set(owner, []);
+                gapFills.get(owner)!.push({ cellX: cx, cellY: cy });
+                coveredCells.add(key); // Only fill once
+            }
+        }
+    }
+
+    // 4. Scale all arc coordinates to image pixel space.
     const puzzleWidth = gridCols * 2 * rad;
     const puzzleHeight = gridRows * 2 * rad;
     const scaleX = imageSize.width / puzzleWidth;
@@ -622,7 +692,7 @@ function convertToStandardPieces(
         }
     }
 
-    // 4. Convert each piece
+    // 5. Convert each piece
     let nextEdgeId = 0;
     const edgeIds: number[][] = allPieceArcs.map(arcs => arcs.map(() => nextEdgeId++));
 
@@ -686,6 +756,53 @@ function convertToStandardPieces(
             shapeParts.push(e.path);
         }
         shapeParts.push('Z');
+
+        // Append diamond filler sub-paths for gap cells owned by this piece.
+        // Each gap cell at (cellX, cellY) has 4 edge midpoints:
+        //   top:    ((cellX+1)*spacing, cellY*spacing + rad) — in abstract coords
+        //   right:  ((cellX+1)*spacing + rad, (cellY+1)*spacing)
+        //   bottom: ((cellX+1)*spacing, (cellY+1)*spacing + rad)
+        //   left:   (cellX*spacing + rad, (cellY+1)*spacing)
+        // where spacing = 2*rad. Connected by 4 convex quarter-circle arcs.
+        const gaps = gapFills.get(pi);
+        if (gaps) {
+            const spacing = 2 * rad;
+            for (const { cellX, cellY } of gaps) {
+                // Midpoints in pixel coords
+                const top = {
+                    x: (cellX + 1) * spacing * scaleX - minX,
+                    y: (cellY * spacing + rad) * scaleY - minY,
+                };
+                const right = {
+                    x: ((cellX + 1) * spacing + rad) * scaleX - minX,
+                    y: (cellY + 1) * spacing * scaleY - minY,
+                };
+                const bottom = {
+                    x: (cellX + 1) * spacing * scaleX - minX,
+                    y: ((cellY + 1) * spacing + rad) * scaleY - minY,
+                };
+                const left = {
+                    x: (cellX * spacing + rad) * scaleX - minX,
+                    y: (cellY + 1) * spacing * scaleY - minY,
+                };
+                const rx = rad * scaleX;
+                const ry = rad * scaleY;
+
+                // Star filler: top → right → bottom → left → close
+                // Each segment is a concave quarter-circle arc (sweep=0),
+                // curving inward to create the four-pointed star shape
+                // that matches the gap geometry.
+                shapeParts.push(
+                    `M ${fmt(top.x)} ${fmt(top.y)}`,
+                    `A ${fmt(rx)} ${fmt(ry)} 0 0,0 ${fmt(right.x)} ${fmt(right.y)}`,
+                    `A ${fmt(rx)} ${fmt(ry)} 0 0,0 ${fmt(bottom.x)} ${fmt(bottom.y)}`,
+                    `A ${fmt(rx)} ${fmt(ry)} 0 0,0 ${fmt(left.x)} ${fmt(left.y)}`,
+                    `A ${fmt(rx)} ${fmt(ry)} 0 0,0 ${fmt(top.x)} ${fmt(top.y)}`,
+                    'Z',
+                );
+            }
+        }
+
         const shape = shapeParts.join(' ');
 
         // imageOffset: piece-local (0,0) maps to (minX, minY) in image pixels
