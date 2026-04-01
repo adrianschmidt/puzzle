@@ -46,7 +46,7 @@ describe('mergeTabIntoCurve', () => {
     it('merges a tab into a straight line', () => {
         const line = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const result = mergeTabIntoCurve(
-            line, 0.5, true, 30, triangleTabTemplate, seededRandom(42),
+            line, 0.5, true, triangleTabTemplate, seededRandom(42),
         );
 
         approxEqual(result.start.x, 0);
@@ -59,7 +59,7 @@ describe('mergeTabIntoCurve', () => {
     it('tab protrudes away from the line', () => {
         const line = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const result = mergeTabIntoCurve(
-            line, 0.5, true, 30, triangleTabTemplate, seededRandom(42),
+            line, 0.5, true, triangleTabTemplate, seededRandom(42),
         );
 
         const mid = result.pointAt(0.5);
@@ -69,10 +69,10 @@ describe('mergeTabIntoCurve', () => {
     it('blank protrudes in opposite direction from tab', () => {
         const line = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const tabResult = mergeTabIntoCurve(
-            line, 0.5, true, 30, triangleTabTemplate, seededRandom(42),
+            line, 0.5, true, triangleTabTemplate, seededRandom(42),
         );
         const blankResult = mergeTabIntoCurve(
-            line, 0.5, false, 30, triangleTabTemplate, seededRandom(42),
+            line, 0.5, false, triangleTabTemplate, seededRandom(42),
         );
 
         const tabMid = tabResult.pointAt(0.5);
@@ -83,7 +83,7 @@ describe('mergeTabIntoCurve', () => {
     it('preserves the before and after segments', () => {
         const line = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const result = mergeTabIntoCurve(
-            line, 0.5, true, 30, triangleTabTemplate, seededRandom(42),
+            line, 0.5, true, triangleTabTemplate, seededRandom(42),
         );
 
         const earlyPoint = result.pointAt(0.05);
@@ -96,7 +96,7 @@ describe('mergeTabIntoCurve', () => {
     it('works with the classic tab template', () => {
         const line = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const result = mergeTabIntoCurve(
-            line, 0.5, true, 30, classicTabTemplate, seededRandom(42),
+            line, 0.5, true, classicTabTemplate, seededRandom(42),
         );
 
         expect(result.segments.length).toBeGreaterThan(3);
@@ -111,7 +111,7 @@ describe('mergeTabIntoCurve', () => {
             { x: 67, y: 7 }, { x: 83, y: 3 }, { x: 100, y: 0 },
         ]);
         const result = mergeTabIntoCurve(
-            curve, 0.5, true, 30, triangleTabTemplate, seededRandom(42),
+            curve, 0.5, true, triangleTabTemplate, seededRandom(42),
         );
 
         approxEqual(result.start.x, 0);
