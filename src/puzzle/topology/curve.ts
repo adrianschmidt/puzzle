@@ -266,8 +266,18 @@ export class Curve {
         const selfN = this.segments.length;
         const otherN = other.segments.length;
 
+        // Pre-compute bounding boxes for all segments to skip
+        // non-overlapping pairs (avoids expensive bezier-js calls).
+        const selfBoxes = this.segments.map(segmentBBox);
+        const otherBoxes = other.segments.map(segmentBBox);
+
         for (let i = 0; i < selfN; i++) {
             for (let j = 0; j < otherN; j++) {
+                // Skip pairs whose bounding boxes don't overlap
+                if (!bboxOverlap(selfBoxes[i], otherBoxes[j], tolerance)) {
+                    continue;
+                }
+
                 const segA = this.segments[i];
                 const segB = other.segments[j];
                 const aIsLinear = isLinearSegment(segA);
@@ -508,4 +518,35 @@ function dist(a: { x: number; y: number }, b: { x: number; y: number }): number 
     const dx = a.x - b.x;
     const dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);
+}
+
+// ---------------------------------------------------------------------------
+// Bounding-box helpers for intersection pre-filtering
+// ---------------------------------------------------------------------------
+
+interface BBox {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
+
+/** Compute the axis-aligned bounding box of a cubic Bézier segment. */
+function segmentBBox(seg: BezierSegment): BBox {
+    return {
+        minX: Math.min(seg.p0.x, seg.cp1.x, seg.cp2.x, seg.p3.x),
+        minY: Math.min(seg.p0.y, seg.cp1.y, seg.cp2.y, seg.p3.y),
+        maxX: Math.max(seg.p0.x, seg.cp1.x, seg.cp2.x, seg.p3.x),
+        maxY: Math.max(seg.p0.y, seg.cp1.y, seg.cp2.y, seg.p3.y),
+    };
+}
+
+/** Check if two bounding boxes overlap, with a tolerance margin. */
+function bboxOverlap(a: BBox, b: BBox, margin: number): boolean {
+    return (
+        a.minX - margin <= b.maxX &&
+        a.maxX + margin >= b.minX &&
+        a.minY - margin <= b.maxY &&
+        a.maxY + margin >= b.minY
+    );
 }
