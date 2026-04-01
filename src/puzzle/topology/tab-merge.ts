@@ -35,15 +35,12 @@ import { mirrorBezierPathY } from '../composable/tab-shapes.js';
 export interface TabPlacementConfig {
     /** Minimum edge arc length (in pixels) to receive a tab. */
     minEdgeLength: number;
-    /** Tab width as fraction of edge length (0–1). */
-    tabWidthFraction: number;
     /** Allowed range for tab centre position along the edge (0–1). */
     centreRange: [number, number];
 }
 
 export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
     minEdgeLength: 20,
-    tabWidthFraction: 0.15,
     centreRange: [0.3, 0.7],
 };
 
@@ -52,12 +49,18 @@ export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
 // ---------------------------------------------------------------------------
 
 /**
- * Merge a tab shape into a curve using the bisection/chord-clamping approach.
+ * Merge a tab shape into a curve.
+ *
+ * The template's x and y values are both fractions of edge length.
+ * The template determines the tab's width (via its x-extent) and
+ * height (via its y values) independently — no coupling between them.
+ *
+ * The curve is split at the template's start/end x-positions
+ * (relative to tCenter), and the tab replaces that segment.
  *
  * @param curve - The edge curve segment
  * @param tCenter - Where on the curve to place the tab (0–1)
  * @param isTab - True for protrusion, false for socket
- * @param widthFraction - Tab width as fraction of edge length (0–1)
  * @param template - Tab shape template
  * @param random - Seeded PRNG for shape variation
  * @returns A new Curve with the tab spliced in
@@ -66,7 +69,6 @@ export function mergeTabIntoCurve(
     curve: Curve,
     tCenter: number,
     isTab: boolean,
-    widthFraction: number,
     template: TabTemplate,
     random: () => number,
 ): Curve {
@@ -76,17 +78,28 @@ export function mergeTabIntoCurve(
         normalizedPath = mirrorBezierPathY(normalizedPath);
     }
 
-    // Place tab by t-parameter fraction of the edge
-    const halfWidth = widthFraction / 2;
-    const tLeft = Math.max(0.001, tCenter - halfWidth);
-    const tRight = Math.min(0.999, tCenter + halfWidth);
+    // The template's start/end x-values define how much of the edge
+    // the tab occupies. These are fractions of edge length.
+    const templateStartX = normalizedPath[0].x;
+    const templateEndX = normalizedPath[normalizedPath.length - 1].x;
+
+    // Place the split points based on the template's neck position
+    // relative to tCenter. The template's x values are centred around
+    // `mid` (which varies per generation), so we offset from tCenter.
+    const templateMidX = (templateStartX + templateEndX) / 2;
+    const tLeft = Math.max(0.001, tCenter + (templateStartX - templateMidX));
+    const tRight = Math.min(0.999, tCenter + (templateEndX - templateMidX));
 
     // Get anchor points on the curve
     const pLeft = curve.pointAt(tLeft);
     const pRight = curve.pointAt(tRight);
 
-    // Transform tab from normalized space to edge coordinates
-    const transformedPath = transformTabToChord(normalizedPath, pLeft, pRight);
+    // Transform tab from template space to edge coordinates.
+    // Both x and y are edge-length fractions — scale both by edge length.
+    const edgeLength = curve.arcLength();
+    const transformedPath = transformTabToEdge(
+        normalizedPath, pLeft, pRight, edgeLength,
+    );
 
     // Split the curve using segment-local coordinates to avoid
     // global-t remapping precision loss. The uniform t distribution
@@ -198,7 +211,7 @@ export function mergeTabsIntoCuts(
             if (placement) {
                 result.push(mergeTabIntoCurve(
                     curves[i], placement.tCenter, placement.isTab,
-                    config.tabWidthFraction, template, random,
+                    template, random,
                 ));
             } else {
                 result.push(curves[i]);
@@ -221,31 +234,49 @@ export function mergeTabsIntoCuts(
 // ---------------------------------------------------------------------------
 
 /**
- * Transform a tab BezierPath from normalized space ((0,0)→(1,0))
- * to chord coordinates (pLeft→pRight) using tangent/normal frame.
+ * Transform a tab BezierPath from template space to world coordinates.
+ *
+ * Template x and y are both fractions of edge length. The transform
+ * maps them onto the edge using the tangent/normal frame at the
+ * anchor chord (pLeft → pRight).
+ *
+ * x is positioned along the edge direction, y perpendicular to it.
+ * Both are scaled by edgeLength, keeping width and height independent.
  */
-function transformTabToChord(
+function transformTabToEdge(
     path: BezierPath,
     pLeft: Point,
     pRight: Point,
+    edgeLength: number,
 ): BezierPath {
     const dx = pRight.x - pLeft.x;
     const dy = pRight.y - pLeft.y;
-    // Perpendicular — tab protrudes left of travel direction
-    const px = -dy;
-    const py = dx;
+    const chordLen = Math.sqrt(dx * dx + dy * dy);
 
-    // The template may not span [0,1] — normalize to [0,1] first.
-    const xMin = path[0].x;
-    const xMax = path[path.length - 1].x;
-    const xRange = xMax - xMin || 1;
+    // Unit vectors along and perpendicular to the chord
+    const ux = dx / chordLen;
+    const uy = dy / chordLen;
+    // Perpendicular — tab protrudes left of travel direction
+    const px = -uy;
+    const py = ux;
+
+    // The template start/end x values correspond to tLeft/tRight on
+    // the edge. Map template x → position along chord proportionally.
+    const templateStartX = path[0].x;
+    const templateEndX = path[path.length - 1].x;
+    const templateXRange = templateEndX - templateStartX || 1;
 
     return path.map(p => {
-        const nx = (p.x - xMin) / xRange;  // normalize to [0,1]
-        const ny = p.y / xRange;            // scale y proportionally
+        // Map x from template space to [0, chordLen] along the chord
+        const fracAlongChord = (p.x - templateStartX) / templateXRange;
+        const alongChord = fracAlongChord * chordLen;
+
+        // y is a fraction of edge length, scaled directly
+        const perpendicular = p.y * edgeLength;
+
         return {
-            x: pLeft.x + nx * dx + ny * px,
-            y: pLeft.y + nx * dy + ny * py,
+            x: pLeft.x + alongChord * ux + perpendicular * px,
+            y: pLeft.y + alongChord * uy + perpendicular * py,
         };
     });
 }
@@ -326,7 +357,7 @@ function mergeTabsIntoSegments(
         if (placement) {
             modified.push(mergeTabIntoCurve(
                 seg, placement.tCenter, placement.isTab,
-                config.tabWidthFraction, template, random,
+                template, random,
             ));
         } else {
             modified.push(seg);
