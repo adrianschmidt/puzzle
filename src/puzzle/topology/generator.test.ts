@@ -187,7 +187,7 @@ describe('generateTopologyPuzzle', () => {
 
     it('wavy cuts with tabs produce valid pieces', () => {
         const pieces = generateTopologyPuzzle(
-            3, 2, { width: 300, height: 200 },
+            3, 2, { width: 600, height: 400 },
             seededRandom(42),
             { horizontalAmplitude: 0.1, horizontalFrequency: 1,
               verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: false },

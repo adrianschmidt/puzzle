@@ -83,12 +83,45 @@ export function mergeTabIntoCurve(
     const templateStartX = normalizedPath[0].x;
     const templateEndX = normalizedPath[normalizedPath.length - 1].x;
 
-    // Place the split points based on the template's neck position
-    // relative to tCenter. The template's x values are centred around
-    // `mid` (which varies per generation), so we offset from tCenter.
+    // All placement is done in arc-length fraction space (s ∈ [0,1]),
+    // then converted to uniform t for the actual curve splitting.
+    // This is critical for multi-segment curves where uniform t
+    // distributes across segment indices, NOT proportional to length.
+
     const templateMidX = (templateStartX + templateEndX) / 2;
-    const tLeft = Math.max(0.001, tCenter + (templateStartX - templateMidX));
-    const tRight = Math.min(0.999, tCenter + (templateEndX - templateMidX));
+
+    // Compute the FULL x-extent of the tab (including head control
+    // points that bulge beyond the neck splice points).
+    const allXs = normalizedPath.map(p => p.x);
+    const tabMinX = Math.min(...allXs);
+    const tabMaxX = Math.max(...allXs);
+
+    // Full tab extent from centre (in edge-length fractions)
+    const headOverhangLeft = templateMidX - tabMinX;
+    const headOverhangRight = tabMaxX - templateMidX;
+
+    // Enforce edge margins: the tab's full extent (including head)
+    // must stay at least `margin` from both edge endpoints.
+    const margin = 0.12;
+    const sCenterMin = margin + headOverhangLeft;
+    const sCenterMax = 1 - margin - headOverhangRight;
+
+    if (sCenterMax < sCenterMin) {
+        // Tab is too wide for this edge — skip it entirely
+        return curve;
+    }
+
+    // tCenter was generated in [0,1] as a placement hint. Treat it as
+    // an arc-length fraction and clamp to margins.
+    let sCenter = Math.max(sCenterMin, Math.min(sCenterMax, tCenter));
+
+    // Splice points in arc-length space
+    const sLeft = Math.max(0.001, sCenter + (templateStartX - templateMidX));
+    const sRight = Math.min(0.999, sCenter + (templateEndX - templateMidX));
+
+    // Convert arc-length fractions to uniform t
+    const tLeft = curve.arcLengthToT(sLeft);
+    const tRight = curve.arcLengthToT(sRight);
 
     // Get anchor points on the curve
     const pLeft = curve.pointAt(tLeft);
@@ -260,23 +293,28 @@ function transformTabToEdge(
     const px = -uy;
     const py = ux;
 
-    // The template start/end x values correspond to tLeft/tRight on
-    // the edge. Map template x → position along chord proportionally.
+    // The midpoint of the chord anchors the tab centre.
+    // Both x and y are edge-length fractions — scale both by edgeLength.
+    // x is positioned along the chord direction relative to the chord
+    // midpoint, y is perpendicular to it.
     const templateStartX = path[0].x;
     const templateEndX = path[path.length - 1].x;
-    const templateXRange = templateEndX - templateStartX || 1;
+    const templateMidX = (templateStartX + templateEndX) / 2;
+
+    // Chord midpoint in world space
+    const midX = (pLeft.x + pRight.x) / 2;
+    const midY = (pLeft.y + pRight.y) / 2;
 
     return path.map(p => {
-        // Map x from template space to [0, chordLen] along the chord
-        const fracAlongChord = (p.x - templateStartX) / templateXRange;
-        const alongChord = fracAlongChord * chordLen;
+        // x offset from template centre, scaled by edge length
+        const alongChord = (p.x - templateMidX) * edgeLength;
 
         // y is a fraction of edge length, scaled directly
         const perpendicular = p.y * edgeLength;
 
         return {
-            x: pLeft.x + alongChord * ux + perpendicular * px,
-            y: pLeft.y + alongChord * uy + perpendicular * py,
+            x: midX + alongChord * ux + perpendicular * px,
+            y: midY + alongChord * uy + perpendicular * py,
         };
     });
 }
@@ -326,6 +364,15 @@ function findSplitParameters(
 /**
  * Split a curve at the given t-parameters, merge a tab into each segment,
  * and rejoin into a single curve.
+ *
+ * Uses segment-local splitting with a backwards strategy to avoid the
+ * uniform-t error that occurs with sequential splitAt() on multi-segment
+ * curves. After any split, the resulting sub-curves have unequal segment
+ * lengths, so uniform-t no longer maps linearly to arc position.
+ *
+ * By resolving all t-parameters on the ORIGINAL curve and then splitting
+ * backwards (last split first), each split only affects segments AFTER
+ * it — leaving earlier segment indices and localT values valid.
  */
 function mergeTabsIntoSegments(
     curve: Curve,
@@ -334,25 +381,77 @@ function mergeTabsIntoSegments(
     template: TabTemplate,
     random: () => number,
 ): Curve {
-    // Split into segments
-    const segments: Curve[] = [];
-    let remaining = curve;
-    let consumed = 0;
+    // Resolve all t-parameters on the original (unsplit) curve.
+    const resolved = splitTs
+        .filter(t => t > 0.01 && t < 0.99)
+        .map(t => curve.resolveTWithIndex(t));
 
-    for (const t of splitTs) {
-        const remapped = (t - consumed) / (1 - consumed);
-        if (remapped <= 0.01 || remapped >= 0.99) continue;
-
-        const [left, right] = remaining.splitAt(remapped);
-        segments.push(left);
-        remaining = right;
-        consumed = t;
+    if (resolved.length === 0) {
+        const placement = computeTabPlacement(curve, config, random);
+        if (placement) {
+            return mergeTabIntoCurve(
+                curve, placement.tCenter, placement.isTab,
+                template, random,
+            );
+        }
+        return curve;
     }
-    segments.push(remaining);
 
-    // Merge tab into each segment
+    // Split backwards: from the last split point to the first.
+    // Each split produces [left, right]. We keep `right` as a segment
+    // and continue splitting `left` at the next (earlier) split point.
+    //
+    // When two splits land in the same Bézier segment, the earlier split
+    // (processed later in backwards order) sees a truncated segment.
+    // We must remap its localT: if segment was truncated at localT=T₁,
+    // an original localT=T₀ (where T₀ < T₁) maps to T₀/T₁ in the
+    // truncated segment.
+    const tailSegments: Curve[] = []; // collected in reverse order
+    let remaining = curve;
+
+    // Track the truncation upper bound per segment. After splitting
+    // segment S at localT=T, the left portion spans [0, T]. If we
+    // split again at T' < T, we need adjustedT = T'/T.
+    const segTruncation = new Map<number, number>();
+
+    for (let i = resolved.length - 1; i >= 0; i--) {
+        const { segmentIndex, localT } = resolved[i];
+
+        if (segmentIndex < 0 || segmentIndex >= remaining.segments.length) {
+            continue;
+        }
+
+        // Remap if this segment was already truncated by a later split
+        let adjustedLocalT = localT;
+        const truncatedAt = segTruncation.get(segmentIndex);
+        if (truncatedAt !== undefined && truncatedAt > 1e-10) {
+            adjustedLocalT = localT / truncatedAt;
+        }
+
+        const [left, right] = remaining.splitAtSegmentLocal(
+            segmentIndex, adjustedLocalT,
+        );
+        tailSegments.push(right);
+        remaining = left;
+
+        // Update truncation: this segment now spans [0, localT] of the
+        // original. Any future split in this segment needs remapping
+        // relative to localT (not the already-remapped adjustedLocalT).
+        segTruncation.set(segmentIndex, localT);
+    }
+
+    // remaining is everything before the first split point
+    tailSegments.push(remaining);
+    tailSegments.reverse();
+
+    // Now tailSegments[0] = before first split,
+    // tailSegments[1] = between split 0 and split 1, etc.
+
+    // Merge tab into each segment. We need deterministic random values
+    // per segment, so process in forward order. The random sequence is
+    // consumed in order regardless of split direction.
     const modified: Curve[] = [];
-    for (const seg of segments) {
+    for (const seg of tailSegments) {
         const placement = computeTabPlacement(seg, config, random);
         if (placement) {
             modified.push(mergeTabIntoCurve(
