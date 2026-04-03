@@ -229,6 +229,51 @@ export class Curve {
         return this.beziers.reduce((sum, b) => sum + b.length(), 0);
     }
 
+    /**
+     * Convert an arc-length fraction s ∈ [0, 1] to uniform parameter t.
+     *
+     * Finds the segment containing the target arc length, then uses
+     * bisection within that segment to find the precise local t.
+     * Returns global uniform t = (segIndex + localT) / N.
+     */
+    arcLengthToT(s: number): number {
+        const clamped = Math.max(0, Math.min(1, s));
+        if (clamped <= 1e-10) return 0;
+        if (clamped >= 1 - 1e-10) return 1;
+
+        const totalLen = this.arcLength();
+        const targetLen = clamped * totalLen;
+
+        const n = this.segments.length;
+        let accumulated = 0;
+
+        for (let i = 0; i < n; i++) {
+            const segLen = this.beziers[i].length();
+            if (accumulated + segLen >= targetLen - 1e-6) {
+                // Target is within this segment
+                const remaining = targetLen - accumulated;
+
+                // Bisect for precise localT (bezier-js arc length
+                // is nonlinear in t)
+                let lo = 0, hi = 1;
+                for (let iter = 0; iter < 20; iter++) {
+                    const mid = (lo + hi) / 2;
+                    const midLen = this.beziers[i].split(0, mid).length();
+                    if (midLen < remaining) {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+                const localT = (lo + hi) / 2;
+                return (i + localT) / n;
+            }
+            accumulated += segLen;
+        }
+
+        return 1;
+    }
+
     // -- Nearest point -----------------------------------------------------
 
     /**

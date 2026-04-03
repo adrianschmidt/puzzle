@@ -22,14 +22,17 @@ function seededRandom(seed: number): () => number {
     };
 }
 
-/** Simple triangle tab template for testing. */
+/** Simple triangle tab template for testing.
+ *  Spans x=[0.35, 0.65] — a tab occupying ~30% of edge length
+ *  centred at mid=0.5, similar to the classic template's proportions.
+ */
 const triangleTabTemplate: TabTemplate = {
     name: 'Triangle (test)',
     generate() {
         return [
-            { x: 0, y: 0 },
-            { x: 0.1, y: 0 }, { x: 0.2, y: 0.1 }, { x: 0.5, y: 0.3 },
-            { x: 0.8, y: 0.1 }, { x: 0.9, y: 0 }, { x: 1, y: 0 },
+            { x: 0.35, y: 0 },
+            { x: 0.38, y: 0 }, { x: 0.42, y: 0.1 }, { x: 0.5, y: 0.3 },
+            { x: 0.58, y: 0.1 }, { x: 0.62, y: 0 }, { x: 0.65, y: 0 },
         ];
     },
 };
