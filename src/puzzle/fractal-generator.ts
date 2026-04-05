@@ -748,29 +748,26 @@ function convertToStandardPieces(
                 default: cornerX = a.cx + rx; cornerY = a.cy + ry; break;
             }
 
-            // An arc is a true outer-border arc when one of its endpoints lands
-            // on the puzzle boundary rectangle. Interior unmatched arcs (which
-            // mark gap-filler region edges) have both endpoints in the interior
-            // and must remain curved so the gap fillers still fit correctly.
-            // NOTE: the corner check is NOT sufficient — sign=1 arcs near the
-            // boundary have corners on the boundary but both endpoints interior,
-            // which would create triangular notches if straightened.
+            // An arc is a boundary arc when its outward corner lies on the
+            // puzzle boundary rectangle. This works for both mated and unmated
+            // arcs: boundary tiles have corners at x=0, x=W, y=0, or y=H,
+            // while interior tile corners are always strictly inside.
+            // For mated boundary arcs, both sides (sign=0 and sign=1) get
+            // straightened consistently — their shared corner is on the
+            // boundary, so both pieces end up with straight edges there.
             const eps = 0.5;
-            const startOnBoundary =
-                a.sx < eps || a.sx > imageSize.width - eps ||
-                a.sy < eps || a.sy > imageSize.height - eps;
-            const endOnBoundary =
-                a.ex < eps || a.ex > imageSize.width - eps ||
-                a.ey < eps || a.ey > imageSize.height - eps;
-            const isOuterBorder = mateEdgeId === -1 && (startOnBoundary || endOnBoundary);
+            const isOuterBorder =
+                cornerX < eps || cornerX > imageSize.width - eps ||
+                cornerY < eps || cornerY > imageSize.height - eps;
+
+            const localCornerX = cornerX - minX;
+            const localCornerY = cornerY - minY;
 
             let path: string;
             if (isOuterBorder) {
                 // Replace the outward-bulging arc with two straight lines that
                 // follow the puzzle boundary rectangle: first to the boundary
                 // corner, then to the arc's original endpoint.
-                const localCornerX = cornerX - minX;
-                const localCornerY = cornerY - minY;
                 path = `L ${fmt(localCornerX)} ${fmt(localCornerY)} L ${fmt(localEx)} ${fmt(localEy)}`;
             } else {
                 path = `A ${fmt(rx)} ${fmt(ry)} 0 0,${a.sign} ${fmt(localEx)} ${fmt(localEy)}`;
@@ -783,14 +780,132 @@ function convertToStandardPieces(
                 path,
                 start: { x: localSx, y: localSy },
                 end: { x: localEx, y: localEy },
-            });
+                _isOuterBorder: isOuterBorder,
+                _localCornerX: localCornerX,
+                _localCornerY: localCornerY,
+            } as Edge & { _isOuterBorder: boolean; _localCornerX: number; _localCornerY: number });
         }
 
         // Shape: M + all arc paths + Z
+        // When consecutive boundary arcs have interior arcs between them,
+        // the path dips interior creating V-shaped notches. To produce
+        // clean straight borders, we trace only the boundary corners and
+        // skip the interior V-notch arcs between them.
+        //
+        // Strategy: identify the "interior section" of the edge loop (the
+        // longest run of consecutive non-boundary edges) and keep those
+        // as-is. Everything else is the "boundary section" where we emit
+        // only boundary corner points, skipping V-notch arcs.
+        type ExtEdge = Edge & { _isOuterBorder: boolean; _localCornerX: number; _localCornerY: number };
+        const n = edges.length;
+        const isBoundary = edges.map(e => (e as ExtEdge)._isOuterBorder);
+        const hasBoundary = isBoundary.some(b => b);
+
+        // Find the longest run of consecutive non-boundary edges.
+        // This is the interior contour that must be preserved.
+        let bestRunStart = 0;
+        let bestRunLen = 0;
+        if (hasBoundary) {
+            for (let start = 0; start < n; start++) {
+                if (isBoundary[start]) continue;
+                let len = 0;
+                while (len < n && !isBoundary[(start + len) % n]) len++;
+                if (len > bestRunLen) {
+                    bestRunLen = len;
+                    bestRunStart = start;
+                }
+            }
+        }
+
+        // Mark edges: those in the longest non-boundary run are "interior"
+        // (emit as-is); all others are "boundary section" (emit corner
+        // for boundary edges, skip non-boundary V-notch edges).
+        const inInteriorRun = new Array(n).fill(false);
+        if (hasBoundary) {
+            for (let j = 0; j < bestRunLen; j++) {
+                inInteriorRun[(bestRunStart + j) % n] = true;
+            }
+        }
+
+        // Helper: determine which side of the rectangle a corner is on.
+        // Returns 'T','R','B','L' (or two letters for exact rectangle corners).
+        const W = imageSize.width;
+        const H = imageSize.height;
+        const bEps = 1;
+        function borderSide(cx: number, cy: number): string {
+            let s = '';
+            if (cy < bEps) s += 'T';
+            if (cx > W - bEps) s += 'R';
+            if (cy > H - bEps) s += 'B';
+            if (cx < bEps) s += 'L';
+            return s;
+        }
+
+        // Rectangle corners in local coords, keyed by the two sides they join
+        const rectCorners: Record<string, {x: number, y: number}> = {
+            TL: { x: 0 - minX, y: 0 - minY },
+            TR: { x: W - minX, y: 0 - minY },
+            BR: { x: W - minX, y: H - minY },
+            BL: { x: 0 - minX, y: H - minY },
+        };
+
+        // Insert rectangle corner points when the boundary path
+        // transitions between different sides of the rectangle.
+        function addRectCornersBetween(
+            parts: string[],
+            prevAbsX: number, prevAbsY: number,
+            nextAbsX: number, nextAbsY: number,
+        ): void {
+            const s1 = borderSide(prevAbsX, prevAbsY);
+            const s2 = borderSide(nextAbsX, nextAbsY);
+            if (s1 === s2) return; // same side, no corner needed
+            // Find corners that join s1 and s2
+            const needed: string[] = [];
+            if ((s1.includes('T') && s2.includes('L')) ||
+                (s1.includes('L') && s2.includes('T')))
+                needed.push('TL');
+            if ((s1.includes('T') && s2.includes('R')) ||
+                (s1.includes('R') && s2.includes('T')))
+                needed.push('TR');
+            if ((s1.includes('B') && s2.includes('R')) ||
+                (s1.includes('R') && s2.includes('B')))
+                needed.push('BR');
+            if ((s1.includes('B') && s2.includes('L')) ||
+                (s1.includes('L') && s2.includes('B')))
+                needed.push('BL');
+            for (const key of needed) {
+                const c = rectCorners[key];
+                parts.push(`L ${fmt(c.x)} ${fmt(c.y)}`);
+            }
+        }
+
         const firstEdge = edges[0];
         const shapeParts = [`M ${fmt(firstEdge.start.x)} ${fmt(firstEdge.start.y)}`];
-        for (const e of edges) {
-            shapeParts.push(e.path);
+        let lastBorderCornerAbsX = NaN;
+        let lastBorderCornerAbsY = NaN;
+        for (let i = 0; i < n; i++) {
+            const ext = edges[i] as ExtEdge;
+            if (!hasBoundary || inInteriorRun[i]) {
+                // Interior contour edge — emit as-is
+                shapeParts.push(ext.path);
+                lastBorderCornerAbsX = NaN; // reset boundary tracking
+            } else if (ext._isOuterBorder) {
+                const absCornerX = ext._localCornerX + minX;
+                const absCornerY = ext._localCornerY + minY;
+                // If previous boundary corner was on a different side,
+                // add the rectangle corner between them.
+                if (!isNaN(lastBorderCornerAbsX)) {
+                    addRectCornersBetween(
+                        shapeParts,
+                        lastBorderCornerAbsX, lastBorderCornerAbsY,
+                        absCornerX, absCornerY,
+                    );
+                }
+                shapeParts.push(`L ${fmt(ext._localCornerX)} ${fmt(ext._localCornerY)}`);
+                lastBorderCornerAbsX = absCornerX;
+                lastBorderCornerAbsY = absCornerY;
+            }
+            // else: V-notch arc in the boundary section — skip
         }
         shapeParts.push('Z');
 
