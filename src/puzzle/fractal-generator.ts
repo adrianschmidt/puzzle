@@ -737,7 +737,26 @@ function convertToStandardPieces(
             const rx = a.r * scaleX;
             const ry = a.r * scaleY;
 
-            const path = `A ${fmt(rx)} ${fmt(ry)} 0 0,${a.sign} ${fmt(localEx)} ${fmt(localEy)}`;
+            let path: string;
+            if (mateEdgeId === -1) {
+                // Border arc: replace the outward-bulging arc with straight lines
+                // that follow the puzzle boundary rectangle. The arc curves through
+                // the "outward corner" — the puzzle-boundary corner diagonally
+                // opposite the arc center. Going to that corner then to the endpoint
+                // traces the rectangle edge instead of the arc.
+                let cornerX: number, cornerY: number;
+                switch (a.quad) {
+                    case 0: cornerX = a.cx + rx; cornerY = a.cy - ry; break;
+                    case 1: cornerX = a.cx - rx; cornerY = a.cy - ry; break;
+                    case 2: cornerX = a.cx - rx; cornerY = a.cy + ry; break;
+                    default: cornerX = a.cx + rx; cornerY = a.cy + ry; break;
+                }
+                const localCornerX = cornerX - minX;
+                const localCornerY = cornerY - minY;
+                path = `L ${fmt(localCornerX)} ${fmt(localCornerY)} L ${fmt(localEx)} ${fmt(localEy)}`;
+            } else {
+                path = `A ${fmt(rx)} ${fmt(ry)} 0 0,${a.sign} ${fmt(localEx)} ${fmt(localEy)}`;
+            }
 
             edges.push({
                 id: edgeId,
