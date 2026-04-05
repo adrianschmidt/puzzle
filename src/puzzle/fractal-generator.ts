@@ -748,15 +748,21 @@ function convertToStandardPieces(
                 default: cornerX = a.cx + rx; cornerY = a.cy + ry; break;
             }
 
-            // An arc is a true outer-border arc when its outward corner lies on
-            // the puzzle boundary rectangle. Interior unmatched arcs (which mark
-            // the edge of gap-filler regions) have their corners in the interior
+            // An arc is a true outer-border arc when one of its endpoints lands
+            // on the puzzle boundary rectangle. Interior unmatched arcs (which
+            // mark gap-filler region edges) have both endpoints in the interior
             // and must remain curved so the gap fillers still fit correctly.
+            // NOTE: the corner check is NOT sufficient — sign=1 arcs near the
+            // boundary have corners on the boundary but both endpoints interior,
+            // which would create triangular notches if straightened.
             const eps = 0.5;
-            const isOuterBorder = mateEdgeId === -1 && (
-                cornerX < eps || cornerX > imageSize.width - eps ||
-                cornerY < eps || cornerY > imageSize.height - eps
-            );
+            const startOnBoundary =
+                a.sx < eps || a.sx > imageSize.width - eps ||
+                a.sy < eps || a.sy > imageSize.height - eps;
+            const endOnBoundary =
+                a.ex < eps || a.ex > imageSize.width - eps ||
+                a.ey < eps || a.ey > imageSize.height - eps;
+            const isOuterBorder = mateEdgeId === -1 && (startOnBoundary || endOnBoundary);
 
             let path: string;
             if (isOuterBorder) {
