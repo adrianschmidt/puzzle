@@ -1,5 +1,6 @@
 :root {
   --puzzle-bg-colour: #1a1a2e;
+  --piece-opacity: 1;
 
   /* UI chrome colours — dark scheme (default) */
   --ui-fg: #e0e0e0;
@@ -242,6 +243,11 @@ html, body {
 /* Piece/group shadows for depth */
 [data-group-id] {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+}
+
+/* Debug piece opacity — controlled via the info-modal slider */
+[data-piece-id] image {
+  opacity: var(--piece-opacity);
 }
 
 /* Selected group highlight — must be clearly visible on any background */
@@ -888,6 +894,27 @@ html, body {
   margin: 0;
   cursor: pointer;
   accent-color: var(--ui-fg);
+}
+
+.info-setting-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.info-setting-slider input[type="range"] {
+  flex: 1;
+  height: 4px;
+  cursor: pointer;
+  accent-color: var(--ui-fg);
+}
+
+.info-setting-slider-value {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.2em;
+  text-align: right;
+  opacity: 0.7;
 }
 
 .tolerance-options {
