@@ -108,6 +108,13 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                     <span class="info-setting-slider-value" data-testid="piece-opacity-value">1</span>
                 </div>
             </div>
+            <div class="info-setting">
+                <label class="info-setting-toggle">
+                    <input type="checkbox" data-testid="mateless-edges-toggle" />
+                    <span class="info-setting-label">Show mateless edges</span>
+                </label>
+                <p class="info-setting-description">Highlight edges with no mate (mateEdgeId&nbsp;=&nbsp;-1) in pink (debug).</p>
+            </div>
         </section>
 
         <section class="info-section">
@@ -191,6 +198,19 @@ export function createInfoModal(options: InfoModalOptions): () => void {
         const v = opacitySlider.value;
         opacityValue.textContent = v;
         document.documentElement.style.setProperty('--piece-opacity', v);
+    });
+
+    // Mateless edges debug toggle
+    const matelessToggle = content.querySelector<HTMLInputElement>(
+        '[data-testid="mateless-edges-toggle"]',
+    )!;
+    matelessToggle.checked =
+        document.documentElement.classList.contains('show-mateless-edges');
+    matelessToggle.addEventListener('change', () => {
+        document.documentElement.classList.toggle(
+            'show-mateless-edges',
+            matelessToggle.checked,
+        );
     });
 
     // Debug: solve button at the bottom of the content
