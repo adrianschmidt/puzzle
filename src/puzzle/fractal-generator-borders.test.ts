@@ -370,7 +370,7 @@ describe('fractal border: border edges are not mated (or mate is also border)', 
 
                 // Edges on the puzzle boundary that are unmated should have -1
                 const borderEdges = collectBorderEdges(pieces, W, H);
-                for (const { piece, edge } of borderEdges) {
+                for (const { edge } of borderEdges) {
                     if (edge.matePieceId === -1) {
                         expect(edge.mateEdgeId).toBe(-1);
                     }
