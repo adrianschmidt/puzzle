@@ -99,6 +99,15 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 </label>
                 <p class="info-setting-description">Shift single pieces upward when dragging, so your finger doesn't block the view.</p>
             </div>
+            <div class="info-setting">
+                <label class="info-setting-label" for="piece-opacity-slider">Piece opacity</label>
+                <p class="info-setting-description">Adjust puzzle piece transparency (debug).</p>
+                <div class="info-setting-slider">
+                    <input type="range" id="piece-opacity-slider" data-testid="piece-opacity-slider"
+                           min="0" max="1" step="0.05" value="1" />
+                    <span class="info-setting-slider-value" data-testid="piece-opacity-value">1</span>
+                </div>
+            </div>
         </section>
 
         <section class="info-section">
@@ -161,6 +170,27 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     offsetToggle.checked = loadOffsetDragPreference();
     offsetToggle.addEventListener('change', () => {
         saveOffsetDragPreference(offsetToggle.checked);
+    });
+
+    // Piece opacity slider (debug)
+    const opacitySlider = content.querySelector<HTMLInputElement>(
+        '[data-testid="piece-opacity-slider"]',
+    )!;
+    const opacityValue = content.querySelector<HTMLSpanElement>(
+        '[data-testid="piece-opacity-value"]',
+    )!;
+    // Initialise from current CSS custom property (if previously set)
+    const current = getComputedStyle(document.documentElement)
+        .getPropertyValue('--piece-opacity')
+        .trim();
+    if (current) {
+        opacitySlider.value = current;
+        opacityValue.textContent = current;
+    }
+    opacitySlider.addEventListener('input', () => {
+        const v = opacitySlider.value;
+        opacityValue.textContent = v;
+        document.documentElement.style.setProperty('--piece-opacity', v);
     });
 
     // Debug: solve button at the bottom of the content
