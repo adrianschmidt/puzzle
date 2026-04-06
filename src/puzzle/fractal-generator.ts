@@ -879,16 +879,19 @@ function convertToStandardPieces(
             }
         }
 
-        const firstEdge = edges[0];
-        const shapeParts = [`M ${fmt(firstEdge.start.x)} ${fmt(firstEdge.start.y)}`];
+        // Start the path from the interior run so the boundary section
+        // is processed as one contiguous block (no wrap-around issues).
+        const startIdx = hasBoundary ? bestRunStart : 0;
+        const startEdge = edges[startIdx];
+        const shapeParts = [`M ${fmt(startEdge.start.x)} ${fmt(startEdge.start.y)}`];
         let lastBorderCornerAbsX = NaN;
         let lastBorderCornerAbsY = NaN;
-        for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+            const i = (startIdx + j) % n;
             const ext = edges[i] as ExtEdge;
             if (!hasBoundary || inInteriorRun[i]) {
                 // Interior contour edge — emit as-is
                 shapeParts.push(ext.path);
-                lastBorderCornerAbsX = NaN; // reset boundary tracking
             } else if (ext._isOuterBorder) {
                 const absCornerX = ext._localCornerX + minX;
                 const absCornerY = ext._localCornerY + minY;
