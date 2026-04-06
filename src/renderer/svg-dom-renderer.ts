@@ -345,6 +345,23 @@ export class SvgDomRenderer implements Renderer {
         hitArea.dataset.hitArea = 'true';
         svg.appendChild(hitArea);
 
+        // Debug overlay: mateless edge strokes (hidden by default,
+        // toggled via .show-mateless-edges on <html>).
+        for (const edge of piece.edges) {
+            if (edge.mateEdgeId !== -1) continue;
+            const edgePath = document.createElementNS(svgNS, 'path');
+            edgePath.setAttribute(
+                'd',
+                `M ${edge.start.x} ${edge.start.y} ${edge.path}`,
+            );
+            edgePath.setAttribute('fill', 'none');
+            edgePath.setAttribute('stroke', '#FF69B4');
+            edgePath.setAttribute('stroke-width', '2');
+            edgePath.setAttribute('pointer-events', 'none');
+            edgePath.dataset.matelessEdge = 'true';
+            svg.appendChild(edgePath);
+        }
+
         // Disable pointer events on the SVG container itself —
         // only the hit-area paths should respond.
         svg.style.pointerEvents = 'none';

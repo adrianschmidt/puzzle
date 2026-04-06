@@ -250,6 +250,15 @@ html, body {
   opacity: var(--piece-opacity);
 }
 
+/* Debug mateless edge overlay — hidden by default, toggled via info-modal */
+[data-mateless-edge] {
+  display: none;
+}
+
+.show-mateless-edges [data-mateless-edge] {
+  display: block;
+}
+
 /* Selected group highlight — must be clearly visible on any background */
 [data-group-id].selected {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35))
