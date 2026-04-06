@@ -22,6 +22,7 @@ import { classicTabTemplate } from '../composable/tab-shapes.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
 import { composePuzzle } from '../composable/compose.js';
 import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
+import type { CollisionOptions } from './tab-merge.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +45,8 @@ export interface TopologyGeneratorConfig {
     disableTabs?: boolean;
     /** Tab shape template. Default: classicTabTemplate */
     tabTemplate?: TabTemplate;
+    /** Collision detection and resolution options. */
+    collision?: CollisionOptions;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +99,7 @@ export function generateTopologyPuzzle(
         const borderIndices = new Set([0, 1, 2, 3]);
         finalCurves = mergeTabsIntoCuts(
             curves, borderIndices, template, DEFAULT_TAB_PLACEMENT, random,
+            config?.collision,
         );
     }
 
