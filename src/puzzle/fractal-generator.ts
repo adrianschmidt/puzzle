@@ -649,9 +649,19 @@ function convertToStandardPieces(
         for (const con of fractalPieces[pi]) {
             const key = `${con.cell.x},${con.cell.y}`;
             if (!coveredCells.has(key)) {
-                // Find a neighboring piece that borders this cell
                 const cx = con.cell.x;
                 const cy = con.cell.y;
+
+                // Skip boundary-adjacent cells: cells with any corner tile
+                // on the grid edge are visually covered by the straightened
+                // border, so diamond fillers would create extra artifacts.
+                if (cx <= 0 || cx + 1 >= gridCols - 1 ||
+                    cy <= 0 || cy + 1 >= gridRows - 1) {
+                    coveredCells.add(key);
+                    continue;
+                }
+
+                // Find a neighboring piece that borders this cell
                 const borderArcs = [
                     `${cx},${cy},3`,       // tile(cx,cy) q=3
                     `${cx + 1},${cy},2`,   // tile(cx+1,cy) q=2
@@ -907,8 +917,15 @@ function convertToStandardPieces(
                 shapeParts.push(`L ${fmt(ext._localCornerX)} ${fmt(ext._localCornerY)}`);
                 lastBorderCornerAbsX = absCornerX;
                 lastBorderCornerAbsY = absCornerY;
+            } else if (ext.mateEdgeId !== -1) {
+                // Mated non-boundary arc in the boundary section — this
+                // defines a real border with a neighboring piece and must
+                // be kept.  Emit an L to the arc's start first: previous
+                // skipped V-notch arcs may have left the cursor behind.
+                shapeParts.push(`L ${fmt(ext.start.x)} ${fmt(ext.start.y)}`);
+                shapeParts.push(ext.path);
             }
-            // else: V-notch arc in the boundary section — skip
+            // else: unmated V-notch arc in the boundary section — skip
         }
         shapeParts.push('Z');
 

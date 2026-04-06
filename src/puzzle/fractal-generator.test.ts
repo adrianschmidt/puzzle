@@ -206,3 +206,30 @@ describe('scaleFractalGrid', () => {
         }
     });
 });
+describe('boundary shape debug', () => {
+    test('outer border edges use straight lines, not arcs', () => {
+        const imageSize = { width: 400, height: 300 };
+        const W = imageSize.width, H = imageSize.height;
+        const eps = 1;
+        const pieces = generateFractalPuzzle(4, 3, imageSize, 42);
+        const violations: string[] = [];
+        for (const piece of pieces) {
+            const ox = -piece.imageOffset.x;
+            const oy = -piece.imageOffset.y;
+            for (const edge of piece.edges) {
+                const sx = edge.start.x + ox;
+                const sy = edge.start.y + oy;
+                const ex = edge.end.x + ox;
+                const ey = edge.end.y + oy;
+                const startOnBorder = sx < eps || sx > W - eps || sy < eps || sy > H - eps;
+                const endOnBorder = ex < eps || ex > W - eps || ey < eps || ey > H - eps;
+                if (startOnBorder && endOnBorder && edge.path.includes('A')) {
+                    violations.push(
+                        `Piece ${piece.id} edge ${edge.id}: border edge uses arc: ${edge.path}`,
+                    );
+                }
+            }
+        }
+        expect(violations).toEqual([]);
+    });
+});
