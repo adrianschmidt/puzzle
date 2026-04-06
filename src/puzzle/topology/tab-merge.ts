@@ -24,6 +24,11 @@ import { Curve } from './curve.js';
 import type { BezierSegment } from './curve.js';
 import type { BezierPath, TabTemplate } from '../composable/tab-shapes.js';
 import { mirrorBezierPathY } from '../composable/tab-shapes.js';
+import type { CollisionDetector, ConflictResolver } from './collision.js';
+import {
+    createTabCollisionDetector,
+    createSkipOnCollisionResolver,
+} from './collision.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,29 +54,34 @@ export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
 // ---------------------------------------------------------------------------
 
 /**
- * Merge a tab shape into a curve.
- *
- * The template's x and y values are both fractions of edge length.
- * The template determines the tab's width (via its x-extent) and
- * height (via its y values) independently — no coupling between them.
- *
- * The curve is split at the template's start/end x-positions
- * (relative to tCenter), and the tab replaces that segment.
- *
- * @param curve - The edge curve segment
- * @param tCenter - Where on the curve to place the tab (0–1)
- * @param isTab - True for protrusion, false for socket
- * @param template - Tab shape template
- * @param random - Seeded PRNG for shape variation
- * @returns A new Curve with the tab spliced in
+ * Result of preparing a tab for merging — contains the tab curve
+ * and the split pieces needed to assemble the final curve.
  */
-export function mergeTabIntoCurve(
+export interface PreparedTab {
+    /** The tab curve in world coordinates. */
+    tabCurve: Curve;
+    /** The curve segment before the tab splice point. */
+    before: Curve;
+    /** The curve segment after the tab splice point. */
+    after: Curve;
+}
+
+/**
+ * Generate and position a tab on a curve WITHOUT merging it.
+ *
+ * Returns the tab curve in world coordinates along with the before/after
+ * segments needed to assemble the final curve. Returns null if the tab
+ * is too wide for the edge.
+ *
+ * This is used by collision detection to inspect the tab before committing.
+ */
+export function prepareTab(
     curve: Curve,
     tCenter: number,
     isTab: boolean,
     template: TabTemplate,
     random: () => number,
-): Curve {
+): PreparedTab | null {
     // Generate tab shape in normalized space
     let normalizedPath = template.generate(random);
     if (!isTab) {
@@ -108,7 +118,7 @@ export function mergeTabIntoCurve(
 
     if (sCenterMax < sCenterMin) {
         // Tab is too wide for this edge — skip it entirely
-        return curve;
+        return null;
     }
 
     // tCenter was generated in [0,1] as a placement hint. Treat it as
@@ -182,7 +192,43 @@ export function mergeTabIntoCurve(
     snappedPath[snappedPath.length - 1] = { ...after.start };
 
     const tabCurve = Curve.fromBezierPath(snappedPath);
-    return joinCurves([before, tabCurve, after]);
+    return { tabCurve, before, after };
+}
+
+/**
+ * Assemble a prepared tab into a single curve.
+ */
+export function commitTab(prepared: PreparedTab): Curve {
+    return joinCurves([prepared.before, prepared.tabCurve, prepared.after]);
+}
+
+/**
+ * Merge a tab shape into a curve.
+ *
+ * The template's x and y values are both fractions of edge length.
+ * The template determines the tab's width (via its x-extent) and
+ * height (via its y values) independently — no coupling between them.
+ *
+ * The curve is split at the template's start/end x-positions
+ * (relative to tCenter), and the tab replaces that segment.
+ *
+ * @param curve - The edge curve segment
+ * @param tCenter - Where on the curve to place the tab (0–1)
+ * @param isTab - True for protrusion, false for socket
+ * @param template - Tab shape template
+ * @param random - Seeded PRNG for shape variation
+ * @returns A new Curve with the tab spliced in
+ */
+export function mergeTabIntoCurve(
+    curve: Curve,
+    tCenter: number,
+    isTab: boolean,
+    template: TabTemplate,
+    random: () => number,
+): Curve {
+    const prepared = prepareTab(curve, tCenter, isTab, template, random);
+    if (!prepared) return curve;
+    return commitTab(prepared);
 }
 
 /**
@@ -214,11 +260,25 @@ export function computeTabPlacement(
 }
 
 /**
+ * Options for collision handling during tab merging.
+ */
+export interface CollisionOptions {
+    /** Collision detector implementation. Default: tab-line detector. */
+    detector?: CollisionDetector;
+    /** Conflict resolver implementation. Default: skip on collision. */
+    resolver?: ConflictResolver;
+}
+
+/**
  * Merge tabs into all internal edges of a set of cut lines.
  *
  * This is the high-level function: takes raw cuts, finds intersections
  * to identify edge segments, places tabs on each internal segment,
  * and returns modified curves ready for DCEL construction.
+ *
+ * When collision options are provided, each tab is checked against all
+ * other curves before being committed. The resolver decides what to do
+ * on collision (by default: skip the tab).
  */
 export function mergeTabsIntoCuts(
     curves: Curve[],
@@ -226,7 +286,10 @@ export function mergeTabsIntoCuts(
     template: TabTemplate,
     config: TabPlacementConfig,
     random: () => number,
+    collision?: CollisionOptions,
 ): Curve[] {
+    const detector = collision?.detector ?? createTabCollisionDetector();
+    const resolver = collision?.resolver ?? createSkipOnCollisionResolver();
     const result: Curve[] = [];
 
     for (let i = 0; i < curves.length; i++) {
@@ -239,13 +302,14 @@ export function mergeTabsIntoCuts(
         const splitTs = findSplitParameters(curves[i], curves, i);
 
         if (splitTs.length === 0) {
-            // Single edge, place one tab
+            // Single edge, place one tab (with collision check)
             const placement = computeTabPlacement(curves[i], config, random);
             if (placement) {
-                result.push(mergeTabIntoCurve(
+                const merged = mergeTabWithCollisionCheck(
                     curves[i], placement.tCenter, placement.isTab,
-                    template, random,
-                ));
+                    template, random, result, curves, i, detector, resolver,
+                );
+                result.push(merged);
             } else {
                 result.push(curves[i]);
             }
@@ -255,11 +319,67 @@ export function mergeTabsIntoCuts(
         // Split into edge segments, merge tab into each, rejoin
         const modifiedCurve = mergeTabsIntoSegments(
             curves[i], splitTs, config, template, random,
+            result, curves, i, detector, resolver,
         );
         result.push(modifiedCurve);
     }
 
     return result;
+}
+
+/**
+ * Merge a tab into a curve with collision detection.
+ *
+ * Prepares the tab, checks for collisions against all other curves,
+ * and uses the resolver to decide whether to keep or skip it.
+ */
+function mergeTabWithCollisionCheck(
+    curve: Curve,
+    tCenter: number,
+    isTab: boolean,
+    template: TabTemplate,
+    random: () => number,
+    processedCurves: Curve[],
+    originalCurves: Curve[],
+    selfIndex: number,
+    detector: CollisionDetector,
+    resolver: ConflictResolver,
+): Curve {
+    const prepared = prepareTab(curve, tCenter, isTab, template, random);
+    if (!prepared) return curve;
+
+    // Build the list of curves to check against:
+    // - Already-processed curves (with their tabs)
+    // - Not-yet-processed curves (original form)
+    const allCurves = buildCurrentCurveState(
+        processedCurves, originalCurves,
+    );
+
+    const collides = detector.hasCollision(
+        prepared.tabCurve, allCurves, selfIndex,
+    );
+    const merged = commitTab(prepared);
+    return resolver.resolve(curve, merged, collides);
+}
+
+/**
+ * Build a snapshot of all curves in their current state for collision
+ * checking. Curves already processed use their tab-modified form;
+ * curves not yet processed use their original form.
+ */
+function buildCurrentCurveState(
+    processedCurves: Curve[],
+    originalCurves: Curve[],
+): Curve[] {
+    const state: Curve[] = [];
+    for (let j = 0; j < originalCurves.length; j++) {
+        if (j < processedCurves.length) {
+            state.push(processedCurves[j]);
+        } else {
+            state.push(originalCurves[j]);
+        }
+    }
+    return state;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +500,11 @@ function mergeTabsIntoSegments(
     config: TabPlacementConfig,
     template: TabTemplate,
     random: () => number,
+    processedCurves: Curve[],
+    originalCurves: Curve[],
+    selfIndex: number,
+    detector: CollisionDetector,
+    resolver: ConflictResolver,
 ): Curve {
     // Resolve all t-parameters on the original (unsplit) curve.
     const resolved = splitTs
@@ -389,10 +514,19 @@ function mergeTabsIntoSegments(
     if (resolved.length === 0) {
         const placement = computeTabPlacement(curve, config, random);
         if (placement) {
-            return mergeTabIntoCurve(
-                curve, placement.tCenter, placement.isTab,
-                template, random,
+            const prepared = prepareTab(
+                curve, placement.tCenter, placement.isTab, template, random,
             );
+            if (prepared) {
+                const allCurves = buildCurrentCurveState(
+                    processedCurves, originalCurves,
+                );
+                const collides = detector.hasCollision(
+                    prepared.tabCurve, allCurves, selfIndex,
+                );
+                const merged = commitTab(prepared);
+                return resolver.resolve(curve, merged, collides);
+            }
         }
         return curve;
     }
@@ -450,14 +584,25 @@ function mergeTabsIntoSegments(
     // Merge tab into each segment. We need deterministic random values
     // per segment, so process in forward order. The random sequence is
     // consumed in order regardless of split direction.
+    const allCurves = buildCurrentCurveState(
+        processedCurves, originalCurves,
+    );
     const modified: Curve[] = [];
     for (const seg of tailSegments) {
         const placement = computeTabPlacement(seg, config, random);
         if (placement) {
-            modified.push(mergeTabIntoCurve(
-                seg, placement.tCenter, placement.isTab,
-                template, random,
-            ));
+            const prepared = prepareTab(
+                seg, placement.tCenter, placement.isTab, template, random,
+            );
+            if (prepared) {
+                const collides = detector.hasCollision(
+                    prepared.tabCurve, allCurves, selfIndex,
+                );
+                const merged = commitTab(prepared);
+                modified.push(resolver.resolve(seg, merged, collides));
+            } else {
+                modified.push(seg);
+            }
         } else {
             modified.push(seg);
         }
