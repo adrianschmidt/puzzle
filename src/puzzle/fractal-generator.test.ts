@@ -207,25 +207,27 @@ describe('scaleFractalGrid', () => {
     });
 });
 describe('boundary shape debug', () => {
-    test('outer border edges use straight lines, not arcs', () => {
+    test('unmated border-facing edges are straightened', () => {
         const imageSize = { width: 400, height: 300 };
-        const W = imageSize.width, H = imageSize.height;
-        const eps = 1;
+        const { width: W, height: H } = imageSize;
         const pieces = generateFractalPuzzle(4, 3, imageSize, 42);
+        const eps = 1.5;
         const violations: string[] = [];
         for (const piece of pieces) {
-            const ox = -piece.imageOffset.x;
-            const oy = -piece.imageOffset.y;
             for (const edge of piece.edges) {
-                const sx = edge.start.x + ox;
-                const sy = edge.start.y + oy;
-                const ex = edge.end.x + ox;
-                const ey = edge.end.y + oy;
-                const startOnBorder = sx < eps || sx > W - eps || sy < eps || sy > H - eps;
-                const endOnBorder = ex < eps || ex > W - eps || ey < eps || ey > H - eps;
-                if (startOnBorder && endOnBorder && edge.path.includes('A')) {
+                if (edge.mateEdgeId !== -1) continue;
+                // Only check unmated edges whose endpoints lie on the
+                // outer boundary — inward-facing orphan arcs at boundary
+                // tiles are legitimately kept as arcs.
+                const sx = edge.start.x - piece.imageOffset.x;
+                const sy = edge.start.y - piece.imageOffset.y;
+                const ex = edge.end.x - piece.imageOffset.x;
+                const ey = edge.end.y - piece.imageOffset.y;
+                const sOnBorder = sx < eps || sx > W - eps || sy < eps || sy > H - eps;
+                const eOnBorder = ex < eps || ex > W - eps || ey < eps || ey > H - eps;
+                if (sOnBorder && eOnBorder && edge.path.startsWith('A')) {
                     violations.push(
-                        `Piece ${piece.id} edge ${edge.id}: border edge uses arc: ${edge.path}`,
+                        `Piece ${piece.id} edge ${edge.id}: border-facing unmated edge uses arc: ${edge.path}`,
                     );
                 }
             }

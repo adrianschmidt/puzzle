@@ -605,6 +605,34 @@ function convertToStandardPieces(
         }
     }
 
+    // 2.5  Identify orphan arcs at boundary tiles.
+    //       An orphan arc is the sole entry at its (cx,cy,quad) key — no other
+    //       piece has the matching arc.  When the orphan's tile sits on the grid
+    //       edge AND the arc's outward corner faces toward that edge, it is
+    //       effectively a boundary arc.  We tag these so the edge-creation step
+    //       can straighten them just like regular boundary arcs.
+    //
+    //       Quad/direction mapping (outward corner):
+    //         q0 → right+up, q1 → left+up, q2 → left+down, q3 → right+down
+    const orphanBorderArcs = new Set<string>(); // "pieceIdx,arcIdx"
+    for (const [, entries] of arcIndex) {
+        if (entries.length !== 1) continue;
+        const { pieceIdx, arcIdx } = entries[0];
+        const a = allPieceArcs[pieceIdx][arcIdx];
+        const tx = Math.round((a.cx - rad - frameOffset) / (2 * rad));
+        const ty = Math.round((a.cy - rad - frameOffset) / (2 * rad));
+        const facesLeft  = a.quad === 1 || a.quad === 2;
+        const facesRight = a.quad === 0 || a.quad === 3;
+        const facesUp    = a.quad === 0 || a.quad === 1;
+        const facesDown  = a.quad === 2 || a.quad === 3;
+        if ((tx === 0 && facesLeft) ||
+            (tx === gridCols - 1 && facesRight) ||
+            (ty === 0 && facesUp) ||
+            (ty === gridRows - 1 && facesDown)) {
+            orphanBorderArcs.add(`${pieceIdx},${arcIdx}`);
+        }
+    }
+
     // 3. Detect gap cells BEFORE scaling (while arc coords are in abstract space).
     //    addArcs is a recursive tree-walk from p[0] that may miss connections
     //    added by fillEmptyCells. A convex arc (sign=1) at tile (tx,ty)
@@ -768,7 +796,8 @@ function convertToStandardPieces(
             const eps = 0.5;
             const isOuterBorder =
                 cornerX < eps || cornerX > imageSize.width - eps ||
-                cornerY < eps || cornerY > imageSize.height - eps;
+                cornerY < eps || cornerY > imageSize.height - eps ||
+                orphanBorderArcs.has(`${pi},${ai}`);
 
             const localCornerX = cornerX - minX;
             const localCornerY = cornerY - minY;
@@ -917,15 +946,8 @@ function convertToStandardPieces(
                 shapeParts.push(`L ${fmt(ext._localCornerX)} ${fmt(ext._localCornerY)}`);
                 lastBorderCornerAbsX = absCornerX;
                 lastBorderCornerAbsY = absCornerY;
-            } else if (ext.mateEdgeId !== -1) {
-                // Mated non-boundary arc in the boundary section — this
-                // defines a real border with a neighboring piece and must
-                // be kept.  Emit an L to the arc's start first: previous
-                // skipped V-notch arcs may have left the cursor behind.
-                shapeParts.push(`L ${fmt(ext.start.x)} ${fmt(ext.start.y)}`);
-                shapeParts.push(ext.path);
             }
-            // else: unmated V-notch arc in the boundary section — skip
+            // else: V-notch arc in the boundary section — skip
         }
         shapeParts.push('Z');
 
