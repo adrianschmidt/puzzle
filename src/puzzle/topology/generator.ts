@@ -23,6 +23,11 @@ import type { TabTemplate } from '../composable/tab-shapes.js';
 import { composePuzzle } from '../composable/compose.js';
 import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
 import type { CollisionOptions } from './tab-merge.js';
+import { resolveExcessIntersections } from './collision.js';
+import type {
+    BaseCutCollisionDetector,
+    BaseCutConflictResolver,
+} from './collision.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,8 +50,12 @@ export interface TopologyGeneratorConfig {
     disableTabs?: boolean;
     /** Tab shape template. Default: classicTabTemplate */
     tabTemplate?: TabTemplate;
-    /** Collision detection and resolution options. */
+    /** Collision detection and resolution options for tabs. */
     collision?: CollisionOptions;
+    /** Custom excess intersection detector for base cuts. */
+    excessIntersectionDetector?: BaseCutCollisionDetector;
+    /** Custom excess intersection resolver for base cuts. */
+    excessIntersectionResolver?: BaseCutConflictResolver;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,14 +100,24 @@ export function generateTopologyPuzzle(
         hPixelAmp, hFreq, vPixelAmp, vFreq, random,
     );
 
+    // Step 1b: Detect and resolve excess intersections between base cuts.
+    // High-amplitude sine waves can cross more times than expected,
+    // creating tiny lens-shaped bonus pieces. This step collapses
+    // those lens regions before the DCEL sees the geometry.
+    // See issues #219 and #220.
+    let finalCurves = resolveExcessIntersections(
+        curves, 4, random,
+        config?.excessIntersectionDetector,
+        config?.excessIntersectionResolver,
+    );
+
     // Step 2: Merge tabs into cut lines BEFORE topology computation.
     // This ensures piece clip paths include tab protrusions/sockets.
     // The DCEL then sees the full tab-modified geometry.
-    let finalCurves = curves;
     if (!disableTabs) {
         const borderIndices = new Set([0, 1, 2, 3]);
         finalCurves = mergeTabsIntoCuts(
-            curves, borderIndices, template, DEFAULT_TAB_PLACEMENT, random,
+            finalCurves, borderIndices, template, DEFAULT_TAB_PLACEMENT, random,
             config?.collision,
         );
     }
