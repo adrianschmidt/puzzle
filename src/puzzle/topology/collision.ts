@@ -401,15 +401,14 @@ interface SegmentRemoval {
 
 /**
  * Apply multiple segment removals to a target curve, replacing each
- * removed segment with an arc through the lens midpoint.
+ * removed segment with the corresponding source curve's segment.
  *
  * Splits the ORIGINAL target curve at all removal boundaries at once
  * (using the backwards strategy from tab-merge.ts to preserve segment
- * indices), then replaces the appropriate chunks with smooth arcs.
- *
- * The arc for each removal curves through the midpoint of the lens
- * region (halfway between the source and target midpoints), staying
- * inside the lens and away from both curves.
+ * indices), then replaces the appropriate chunks with exact copies of
+ * the source curve's segments (split via de Casteljau). After
+ * replacement, both curves share the same path in each lens region,
+ * eliminating the island piece.
  */
 function applySegmentRemovals(
     target: Curve,
@@ -466,25 +465,19 @@ function applySegmentRemovals(
     const resultChunks: Curve[] = [];
     for (let i = 0; i < chunks.length; i++) {
         if (i % 2 === 1) {
-            // This chunk is a removal region — replace with an arc
+            // This chunk is a removal region — replace with source segment
             const removalIdx = (i - 1) / 2;
             const removal = sorted[removalIdx];
-            const targetChunk = chunks[i];
 
-            // Extract source segment for midpoint computation
+            // Extract the source curve's segment between the two
+            // intersection points. This is an exact copy (split via
+            // de Casteljau), so the two curves will share the same path
+            // in this region — no lens, no island piece.
             const sourceChunk = extractSourceSegment(
                 source, removal.tSource1, removal.tSource2,
             );
 
-            const p1 = resultChunks.length > 0
-                ? resultChunks[resultChunks.length - 1].end
-                : chunks[0].end;
-            const p2 = (i + 1 < chunks.length)
-                ? chunks[i + 1].start
-                : targetChunk.end;
-
-            const arc = buildLensArc(p1, p2, sourceChunk, targetChunk);
-            resultChunks.push(arc);
+            resultChunks.push(sourceChunk);
         } else {
             resultChunks.push(chunks[i]);
         }
@@ -526,46 +519,6 @@ function extractSourceSegment(
 
     const [sourceMiddle] = sRest.splitAtSegmentLocal(sRestSegIndex, sRestLocalT);
     return sStart <= sEnd ? sourceMiddle : sourceMiddle.reverse();
-}
-
-/**
- * Build a smooth arc through the midpoint of a lens region.
- *
- * The arc is a single cubic Bézier from P1 to P2 that passes through
- * the lens midpoint (average of source and target midpoints) at t=0.5.
- * This keeps the replacement inside the lens, away from both the
- * source and target curves, preventing new crossings or coincident
- * segments.
- */
-function buildLensArc(
-    p1: Point,
-    p2: Point,
-    sourceChunk: Curve,
-    targetChunk: Curve,
-): Curve {
-    const sourceMidPt = sourceChunk.pointAt(0.5);
-    const targetMidPt = targetChunk.pointAt(0.5);
-
-    // Lens midpoint: halfway between source and target at the middle
-    const lensMid: Point = {
-        x: (sourceMidPt.x + targetMidPt.x) / 2,
-        y: (sourceMidPt.y + targetMidPt.y) / 2,
-    };
-
-    // Compute shared control point for a Bézier passing through lensMid at t=0.5.
-    // B(0.5) = P1/8 + 3*C/4 + P2/8 when CP1 = CP2 = C
-    // C = (4/3)*lensMid - P1/6 - P2/6
-    const cp: Point = {
-        x: (4 / 3) * lensMid.x - p1.x / 6 - p2.x / 6,
-        y: (4 / 3) * lensMid.y - p1.y / 6 - p2.y / 6,
-    };
-
-    return new Curve([{
-        p0: { ...p1 },
-        cp1: { ...cp },
-        cp2: { ...cp },
-        p3: { ...p2 },
-    }]);
 }
 
 /**
