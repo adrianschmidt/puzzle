@@ -12,6 +12,7 @@ import type { Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from '../composable/types.js';
 import type { HalfEdge, Face, DCELResult } from './dcel.js';
 import { getFaceEdges } from './dcel.js';
+import { diagnostics } from './diagnostics.js';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -25,11 +26,12 @@ import { getFaceEdges } from './dcel.js';
  */
 export function facesToPieceDefinitions(
     dcel: DCELResult,
+    expectedPieceCount?: number,
 ): PieceDefinition[] {
-    // Merge degenerate lens-shaped faces (≤2 edges) into adjacent faces
+    // Merge degenerate lens-shaped and tiny tip faces into adjacent faces
     // instead of discarding them, which would leave holes. See issues
     // #219, #220.
-    mergeSmallFaces(dcel);
+    mergeSmallFaces(dcel, expectedPieceCount);
 
     const innerFaces = dcel.faces.filter(f => !f.isOuter);
 
@@ -202,26 +204,47 @@ function extractCurvePoints(he: HalfEdge, bbox: BBox): Point[] | undefined {
 }
 
 /**
- * Merge degenerate faces (≤2 edges) into an adjacent face.
+ * Merge degenerate and tiny faces into adjacent faces.
  *
- * Excess intersections between sine-wave cuts can create tiny lens-shaped
- * faces with exactly 2 edges. Previously these were filtered out, but that
- * left holes in the puzzle. Instead, we remove the shared edge between the
- * small face and a neighbor, absorbing the small face's remaining edges
- * into the neighbor's boundary.
+ * Two classes of unwanted faces arise from excess intersections between
+ * high-amplitude sine-wave cuts:
+ *
+ * 1. **Lens faces (≤2 edges)**: Created by pairwise excess intersection
+ *    resolution. These have area ≈ 0.
+ *
+ * 2. **Tip faces (3–4 edges, tiny area)**: Created where three or more
+ *    sine waves converge, forming small triangular/quad regions that
+ *    the pairwise detector can't eliminate.
+ *
+ * Both are merged into an adjacent non-outer face by removing one shared
+ * edge and splicing the remaining edges into the neighbor's boundary.
  *
  * Mutates the DCEL in-place.
  */
-function mergeSmallFaces(dcel: DCELResult): void {
+function mergeSmallFaces(dcel: DCELResult, expectedPieceCount?: number): void {
+    // A face is merged if:
+    // 1. It has ≤2 edges (degenerate lens face), OR
+    // 2. Its area is tiny relative to ALL its non-outer neighbors
+    //    (ratio < NEIGHBOR_RATIO). This catches 3+ edge "tip" faces
+    //    formed where multiple sine waves converge.
+    const NEIGHBOR_RATIO = 0.10;
+
     let changed = true;
     while (changed) {
         changed = false;
+
+        // Stop merging if we've reached the expected piece count
+        // (prevents over-merging when some grid cells fused)
+        if (expectedPieceCount !== undefined) {
+            const innerCount = dcel.faces.filter(f => !f.isOuter).length;
+            if (innerCount <= expectedPieceCount) break;
+        }
+
         for (let i = dcel.faces.length - 1; i >= 0; i--) {
             const face = dcel.faces[i];
             if (face.isOuter) continue;
 
             const edgeCount = countFaceEdges(face);
-            if (edgeCount > 2) continue;
 
             if (edgeCount <= 1) {
                 // Degenerate self-loop — just remove it
@@ -230,29 +253,38 @@ function mergeSmallFaces(dcel: DCELResult): void {
                 break;
             }
 
-            // 2-edge lens face: E1(A→B) → E2(B→A) → E1
-            const e1 = face.outerEdge;
-            const e2 = e1.next;
-            if (e2.next !== e1) continue; // sanity check
-
-            // Pick a non-outer neighbor to merge into
-            const n1 = e1.twin.face;
-            const n2 = e2.twin.face;
-
-            let removedEdge: HalfEdge;
-            let keptEdge: HalfEdge;
-            let targetFace: Face;
-
-            if (n1 && !n1.isOuter) {
-                removedEdge = e1;
-                keptEdge = e2;
-                targetFace = n1;
-            } else if (n2 && !n2.isOuter) {
-                removedEdge = e2;
-                keptEdge = e1;
-                targetFace = n2;
+            let shouldMerge: boolean;
+            if (edgeCount <= 2) {
+                shouldMerge = true;
+            } else if (expectedPieceCount !== undefined) {
+                // Only apply area-based merging when we know the expected
+                // piece count and have excess faces to merge. Without a
+                // target count, small 3+ edge faces are kept as-is.
+                shouldMerge = isTinyRelativeToNeighbors(face, NEIGHBOR_RATIO);
             } else {
-                // Both neighbors are outer — remove the face
+                shouldMerge = false;
+            }
+
+            if (!shouldMerge) continue;
+
+            diagnostics.log('merge', `Merging face ${face.id}: edges=${edgeCount}, area=${computeFaceSignedArea(face).toFixed(1)}`);
+
+            // Find a shared edge whose twin belongs to a non-outer neighbor
+            const edges = getFaceEdges(face);
+            let removedEdge: HalfEdge | null = null;
+            let targetFace: Face | null = null;
+
+            for (const he of edges) {
+                const neighbor = he.twin.face;
+                if (neighbor && !neighbor.isOuter) {
+                    removedEdge = he;
+                    targetFace = neighbor;
+                    break;
+                }
+            }
+
+            if (!removedEdge || !targetFace) {
+                // All neighbors are outer — remove the face
                 dcel.faces.splice(i, 1);
                 changed = true;
                 break;
@@ -260,25 +292,40 @@ function mergeSmallFaces(dcel: DCELResult): void {
 
             const removedTwin = removedEdge.twin;
 
-            // Splice keptEdge into targetFace's boundary, replacing removedTwin.
-            // Both keptEdge and removedTwin traverse the same vertex pair in the
-            // same direction, so the boundary winding is preserved.
-            removedTwin.prev.next = keptEdge;
-            keptEdge.prev = removedTwin.prev;
-            keptEdge.next = removedTwin.next;
-            removedTwin.next.prev = keptEdge;
+            // Collect the remaining edges (all edges except removedEdge)
+            const keptEdges: HalfEdge[] = [];
+            for (const he of edges) {
+                if (he !== removedEdge) keptEdges.push(he);
+            }
 
-            keptEdge.face = targetFace;
+            // Splice the kept edges into the target face's boundary,
+            // replacing removedTwin.
+            //
+            // removedEdge goes A→B in the small face.
+            // removedTwin goes B→A in the target face.
+            // keptEdges go B→...→A (completing the small face's boundary).
+            // So replacing removedTwin with keptEdges preserves winding.
+            const firstKept = keptEdges[0];
+            const lastKept = keptEdges[keptEdges.length - 1];
+
+            removedTwin.prev.next = firstKept;
+            firstKept.prev = removedTwin.prev;
+            lastKept.next = removedTwin.next;
+            removedTwin.next.prev = lastKept;
+
+            for (const he of keptEdges) {
+                he.face = targetFace;
+            }
 
             if (targetFace.outerEdge === removedTwin) {
-                targetFace.outerEdge = keptEdge;
+                targetFace.outerEdge = firstKept;
             }
 
             // Update vertex outgoing pointers if they referenced removed edges
             if (removedEdge.origin.outgoing === removedEdge) {
                 removedEdge.origin.outgoing =
                     dcel.halfEdges.find(h =>
-                        h.origin === removedEdge.origin &&
+                        h.origin === removedEdge!.origin &&
                         h !== removedEdge && h !== removedTwin,
                     ) ?? null;
             }
@@ -299,6 +346,53 @@ function mergeSmallFaces(dcel: DCELResult): void {
             break; // restart scan — indices changed
         }
     }
+}
+
+/**
+ * Compute the signed area of a face using the shoelace formula.
+ */
+function computeFaceSignedArea(face: Face): number {
+    let area = 0;
+    let current = face.outerEdge;
+    do {
+        const a = current.origin.position;
+        const b = current.twin.origin.position;
+        area += (a.x * b.y - b.x * a.y);
+        current = current.next;
+    } while (current !== face.outerEdge);
+    return area / 2;
+}
+
+/**
+ * Check if a face is tiny relative to its largest non-outer neighbor.
+ * Returns true if the face's area is less than `ratio` times the
+ * largest neighbor's area. Using the largest neighbor (not the
+ * smallest) handles the case where two adjacent tip faces are similar
+ * in size — as long as one large neighbor exists, the face is merged.
+ */
+function isTinyRelativeToNeighbors(face: Face, ratio: number): boolean {
+    const faceArea = Math.abs(computeFaceSignedArea(face));
+    const edges = getFaceEdges(face);
+
+    // Find the largest non-outer neighbor face
+    let maxNeighborArea = 0;
+    for (const he of edges) {
+        const neighbor = he.twin.face;
+        if (neighbor && !neighbor.isOuter && neighbor !== face) {
+            const neighborArea = Math.abs(computeFaceSignedArea(neighbor));
+            if (neighborArea > maxNeighborArea) {
+                maxNeighborArea = neighborArea;
+            }
+        }
+    }
+
+    if (maxNeighborArea === 0) return false;
+
+    if (faceArea < maxNeighborArea * ratio) {
+        diagnostics.log('merge', `Face ${face.id} is tiny: area=${faceArea.toFixed(1)}, largest neighbor=${maxNeighborArea.toFixed(1)}`);
+        return true;
+    }
+    return false;
 }
 
 function removeFromArray<T>(arr: T[], item: T): void {
