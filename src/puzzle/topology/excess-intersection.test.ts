@@ -1,27 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
     createExcessIntersectionDetector,
-    createSegmentRemovalResolver,
-    resolveExcessIntersections,
+    buildIntersectionCaps,
+    detectExcessIntersections,
 } from './collision.js';
-import type {
-    BaseCutCollisionDetector,
-    BaseCutConflictResolver,
-    BaseCutCollision,
-} from './collision.js';
+import type { BaseCutCollisionDetector } from './collision.js';
 import { Curve } from './curve.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function seededRandom(seed: number): () => number {
-    let s = seed;
-    return () => {
-        s = (s * 1664525 + 1013904223) & 0x7fffffff;
-        return s / 0x7fffffff;
-    };
-}
 
 /**
  * Generate a sine-wave curve (same algorithm as generator.ts).
@@ -147,11 +136,7 @@ describe('createExcessIntersectionDetector', () => {
 
         // Verify they actually have excess intersections
         const actualCount = countInternalIntersections(curves[4], curves[5]);
-        if (actualCount <= 1) {
-            // If these specific parameters don't produce excess, skip
-            // (intersection count depends on exact bezier-js precision)
-            return;
-        }
+        if (actualCount <= 1) return;
 
         const collisions = detector.detect(curves, 4);
         expect(collisions.length).toBeGreaterThan(0);
@@ -161,7 +146,6 @@ describe('createExcessIntersectionDetector', () => {
         expect(collision.curveIndexB).toBe(5);
         expect(collision.excessPairs.length).toBeGreaterThan(0);
 
-        // Each excess pair should have valid parameters
         for (const pair of collision.excessPairs) {
             expect(pair.tA1).toBeGreaterThan(0);
             expect(pair.tA1).toBeLessThan(1);
@@ -171,32 +155,26 @@ describe('createExcessIntersectionDetector', () => {
     });
 
     it('detects excess intersections between parallel sine waves', () => {
-        // Two horizontal sine waves with high amplitude — should not
-        // intersect at all, but might with offset phases and high amplitude
         const curves = [
             Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
             Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
             Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
             Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
-            // Two horizontal cuts close together with opposite phases
             generateSineCurve({ x: 0, y: 180 }, { x: 400, y: 180 }, 40, 2, 0),
             generateSineCurve({ x: 0, y: 220 }, { x: 400, y: 220 }, 40, 2, Math.PI),
         ];
 
         const actualCount = countInternalIntersections(curves[4], curves[5]);
-        if (actualCount === 0) return; // Skip if no intersections at these params
+        if (actualCount === 0) return;
 
         const collisions = detector.detect(curves, 4);
         expect(collisions.length).toBeGreaterThan(0);
 
-        // For parallel cuts, expected count is 0, so ALL intersections are excess
         const totalExcess = collisions[0].excessPairs.length;
         expect(totalExcess * 2).toBe(actualCount);
     });
 
     it('skips border curves', () => {
-        // Even if borders somehow intersect internal cuts many times,
-        // the detector should not report them
         const curves = [
             Curve.line({ x: 0, y: 0 }, { x: 300, y: 0 }),
             Curve.line({ x: 300, y: 0 }, { x: 300, y: 300 }),
@@ -229,134 +207,47 @@ describe('createExcessIntersectionDetector', () => {
 });
 
 // ---------------------------------------------------------------------------
-// createSegmentRemovalResolver
+// buildIntersectionCaps
 // ---------------------------------------------------------------------------
 
-describe('createSegmentRemovalResolver', () => {
-    const resolver = createSegmentRemovalResolver();
-
-    it('returns curves unchanged when there are no collisions', () => {
+describe('buildIntersectionCaps', () => {
+    it('returns one cap per collision', () => {
+        // Two perpendicular lines that cross once (expected = 1)
         const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 }),
-            Curve.line({ x: 50, y: -50 }, { x: 50, y: 50 }),
+            Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 }),     // border
+            Curve.line({ x: 100, y: 0 }, { x: 100, y: 100 }), // border
+            Curve.line({ x: 100, y: 100 }, { x: 0, y: 100 }), // border
+            Curve.line({ x: 0, y: 100 }, { x: 0, y: 0 }),     // border
+            Curve.line({ x: 0, y: 50 }, { x: 100, y: 50 }),   // horizontal
+            Curve.line({ x: 50, y: 0 }, { x: 50, y: 100 }),   // vertical
         ];
 
-        const result = resolver.resolve(curves, [], seededRandom(42));
-        expect(result).toHaveLength(2);
-        expect(result[0]).toBe(curves[0]);
-        expect(result[1]).toBe(curves[1]);
-    });
+        const caps = buildIntersectionCaps(curves, [{
+            curveIndexA: 4,
+            curveIndexB: 5,
+            excessPairs: [{
+                point1: { x: 40, y: 50 },
+                point2: { x: 60, y: 50 },
+                tA1: 0.4, tA2: 0.6, tB1: 0.4, tB2: 0.6,
+            }],
+        }]);
 
-    it('modifies one curve per collision', () => {
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
-            Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
-            Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
-            Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
-            generateSineCurve({ x: 0, y: 180 }, { x: 400, y: 180 }, 40, 2, 0),
-            generateSineCurve({ x: 0, y: 220 }, { x: 400, y: 220 }, 40, 2, Math.PI),
-        ];
-
-        const detector = createExcessIntersectionDetector();
-        const collisions = detector.detect(curves, 4);
-        if (collisions.length === 0) return;
-
-        const result = resolver.resolve(curves, collisions, seededRandom(42));
-        expect(result).toHaveLength(curves.length);
-
-        // Borders should be untouched
-        for (let i = 0; i < 4; i++) {
-            expect(result[i]).toBe(curves[i]);
-        }
-
-        // At least one internal curve should have been modified
-        const curve4Changed = result[4] !== curves[4];
-        const curve5Changed = result[5] !== curves[5];
-        expect(curve4Changed || curve5Changed).toBe(true);
-        // Only one should change (per collision, one curve is modified)
-        expect(curve4Changed && curve5Changed).toBe(false);
-    });
-
-    it('preserves curve endpoints after resolution', () => {
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
-            Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
-            Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
-            Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
-            generateSineCurve({ x: 0, y: 180 }, { x: 400, y: 180 }, 40, 2, 0),
-            generateSineCurve({ x: 0, y: 220 }, { x: 400, y: 220 }, 40, 2, Math.PI),
-        ];
-
-        const detector = createExcessIntersectionDetector();
-        const collisions = detector.detect(curves, 4);
-        if (collisions.length === 0) return;
-
-        const result = resolver.resolve(curves, collisions, seededRandom(42));
-
-        // All curves should preserve their start/end points
-        for (let i = 0; i < curves.length; i++) {
-            expect(result[i].start.x).toBeCloseTo(curves[i].start.x, 0);
-            expect(result[i].start.y).toBeCloseTo(curves[i].start.y, 0);
-            expect(result[i].end.x).toBeCloseTo(curves[i].end.x, 0);
-            expect(result[i].end.y).toBeCloseTo(curves[i].end.y, 0);
-        }
-    });
-
-    it('replacement arcs stay inside the lens regions', () => {
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
-            Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
-            Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
-            Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
-            generateSineCurve({ x: 0, y: 180 }, { x: 400, y: 180 }, 40, 2, 0),
-            generateSineCurve({ x: 0, y: 220 }, { x: 400, y: 220 }, 40, 2, Math.PI),
-        ];
-
-        const detector = createExcessIntersectionDetector();
-        const collisions = detector.detect(curves, 4);
-        if (collisions.length === 0) return;
-
-        const result = resolver.resolve(curves, collisions, seededRandom(42));
-
-        // The modified curve should have different segment count
-        const modifiedIdx = result[4] !== curves[4] ? 4 : 5;
-        expect(result[modifiedIdx].segments.length).not.toBe(
-            curves[modifiedIdx].segments.length,
-        );
-
-        // Sample the modified curve — its midpoint in replacement regions
-        // should be between the original source and target curves' midpoints
-        for (const pair of collisions[0].excessPairs) {
-            const tMid = (pair.tA1 + pair.tA2) / 2;
-            const origA = curves[4].pointAt(tMid);
-            const origB = curves[5].pointAt(
-                (pair.tB1 + pair.tB2) / 2,
-            );
-
-            // The replacement should produce a curve that at the midpoint
-            // is between the two original curves' y-values
-            const modifiedPt = result[modifiedIdx].pointAt(
-                result[modifiedIdx].segments.length > curves[modifiedIdx].segments.length
-                    ? 0.5 // approximate — the arc is in the middle region
-                    : tMid,
-            );
-
-            const minY = Math.min(origA.y, origB.y);
-            const maxY = Math.max(origA.y, origB.y);
-            // The modified point should be roughly between the two curves
-            // (with some tolerance for the arc shape)
-            expect(modifiedPt.y).toBeGreaterThan(minY - 10);
-            expect(modifiedPt.y).toBeLessThan(maxY + 10);
-        }
+        expect(caps).toHaveLength(1);
+        expect(caps[0].curveIndexA).toBe(4);
+        expect(caps[0].curveIndexB).toBe(5);
+        expect(caps[0].expectedCount).toBe(1); // baselines cross once
+        expect(caps[0].expectedPoints).toHaveLength(1);
+        expect(caps[0].expectedPoints[0].x).toBeCloseTo(50, 0);
+        expect(caps[0].expectedPoints[0].y).toBeCloseTo(50, 0);
     });
 });
 
 // ---------------------------------------------------------------------------
-// resolveExcessIntersections (pipeline helper)
+// detectExcessIntersections (pipeline helper)
 // ---------------------------------------------------------------------------
 
-describe('resolveExcessIntersections', () => {
-    it('returns curves unchanged when no excess intersections exist', () => {
+describe('detectExcessIntersections', () => {
+    it('returns empty when no excess intersections exist', () => {
         const curves = [
             Curve.line({ x: 0, y: 0 }, { x: 300, y: 0 }),
             Curve.line({ x: 300, y: 0 }, { x: 300, y: 300 }),
@@ -366,11 +257,11 @@ describe('resolveExcessIntersections', () => {
             Curve.line({ x: 150, y: 0 }, { x: 150, y: 300 }),
         ];
 
-        const result = resolveExcessIntersections(curves, 4, seededRandom(42));
-        expect(result).toBe(curves); // Same reference — no changes
+        const skips = detectExcessIntersections(curves, 4);
+        expect(skips).toHaveLength(0);
     });
 
-    it('resolves excess intersections in a full pipeline call', () => {
+    it('returns skip points when excess intersections exist', () => {
         const curves = [
             Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
             Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
@@ -383,100 +274,37 @@ describe('resolveExcessIntersections', () => {
         const beforeCount = countInternalIntersections(curves[4], curves[5]);
         if (beforeCount === 0) return;
 
-        const result = resolveExcessIntersections(curves, 4, seededRandom(42));
-        expect(result).toHaveLength(curves.length);
-
-        // At least one curve should be modified
-        const modified = result[4] !== curves[4] || result[5] !== curves[5];
-        expect(modified).toBe(true);
-
-        // Borders should be untouched
-        for (let i = 0; i < 4; i++) {
-            expect(result[i]).toBe(curves[i]);
+        const skips = detectExcessIntersections(curves, 4);
+        expect(skips.length).toBeGreaterThan(0);
+        // Each skip should reference valid curve indices
+        for (const skip of skips) {
+            expect(skip.curveIndexA).toBeGreaterThanOrEqual(4);
+            expect(skip.curveIndexB).toBeGreaterThanOrEqual(4);
         }
-
-        // Modified curve should have a valid structure
-        const modIdx = result[4] !== curves[4] ? 4 : 5;
-        expect(result[modIdx].segments.length).toBeGreaterThan(0);
     });
 
-    it('uses custom detector and resolver when provided', () => {
+    it('uses custom detector when provided', () => {
         const curves = [
             Curve.line({ x: 0, y: 0 }, { x: 300, y: 0 }),
             Curve.line({ x: 300, y: 0 }, { x: 300, y: 300 }),
             Curve.line({ x: 300, y: 300 }, { x: 0, y: 300 }),
             Curve.line({ x: 0, y: 300 }, { x: 0, y: 0 }),
             Curve.line({ x: 0, y: 150 }, { x: 300, y: 150 }),
-            Curve.line({ x: 150, y: 0 }, { x: 150, y: 300 }),
         ];
 
         let detectCalled = false;
-        let resolveCalled = false;
-
         const customDetector: BaseCutCollisionDetector = {
             detect() {
                 detectCalled = true;
                 return [];
             },
         };
-        const customResolver: BaseCutConflictResolver = {
-            resolve(c) {
-                resolveCalled = true;
-                return c;
-            },
-        };
 
-        resolveExcessIntersections(
-            curves, 4, seededRandom(42), customDetector, customResolver,
-        );
-
+        detectExcessIntersections(curves, 4, customDetector);
         expect(detectCalled).toBe(true);
-        // Resolver not called because detector returned no collisions
-        expect(resolveCalled).toBe(false);
     });
 
-    it('calls resolver when detector finds collisions', () => {
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 300, y: 0 }),
-            Curve.line({ x: 300, y: 0 }, { x: 300, y: 300 }),
-            Curve.line({ x: 300, y: 300 }, { x: 0, y: 300 }),
-            Curve.line({ x: 0, y: 300 }, { x: 0, y: 0 }),
-            Curve.line({ x: 0, y: 150 }, { x: 300, y: 150 }),
-        ];
-
-        let resolveCalled = false;
-
-        const fakeCollision: BaseCutCollision = {
-            curveIndexA: 4,
-            curveIndexB: 4,
-            excessPairs: [{
-                point1: { x: 100, y: 150 },
-                point2: { x: 200, y: 150 },
-                tA1: 0.33,
-                tA2: 0.66,
-                tB1: 0.33,
-                tB2: 0.66,
-            }],
-        };
-
-        const customDetector: BaseCutCollisionDetector = {
-            detect: () => [fakeCollision],
-        };
-        const customResolver: BaseCutConflictResolver = {
-            resolve(c) {
-                resolveCalled = true;
-                return c;
-            },
-        };
-
-        resolveExcessIntersections(
-            curves, 4, seededRandom(42), customDetector, customResolver,
-        );
-
-        expect(resolveCalled).toBe(true);
-    });
-
-    it('produces deterministic results with same seed', () => {
+    it('produces deterministic results', () => {
         const curves = [
             Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
             Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
@@ -486,19 +314,19 @@ describe('resolveExcessIntersections', () => {
             generateSineCurve({ x: 0, y: 220 }, { x: 400, y: 220 }, 40, 2, Math.PI),
         ];
 
-        const beforeCount = countInternalIntersections(curves[4], curves[5]);
-        if (beforeCount === 0) return;
+        const result1 = detectExcessIntersections(curves, 4);
+        const result2 = detectExcessIntersections(curves, 4);
 
-        const result1 = resolveExcessIntersections(curves, 4, seededRandom(42));
-        const result2 = resolveExcessIntersections(curves, 4, seededRandom(42));
-
-        // Same seed → same results
+        expect(result1.length).toBe(result2.length);
         for (let i = 0; i < result1.length; i++) {
-            expect(result1[i].start.x).toBeCloseTo(result2[i].start.x, 6);
-            expect(result1[i].start.y).toBeCloseTo(result2[i].start.y, 6);
-            expect(result1[i].end.x).toBeCloseTo(result2[i].end.x, 6);
-            expect(result1[i].end.y).toBeCloseTo(result2[i].end.y, 6);
-            expect(result1[i].segments.length).toBe(result2[i].segments.length);
+            expect(result1[i].curveIndexA).toBe(result2[i].curveIndexA);
+            expect(result1[i].curveIndexB).toBe(result2[i].curveIndexB);
+            expect(result1[i].expectedCount).toBe(result2[i].expectedCount);
+            expect(result1[i].expectedPoints.length).toBe(result2[i].expectedPoints.length);
+            for (let j = 0; j < result1[i].expectedPoints.length; j++) {
+                expect(result1[i].expectedPoints[j].x).toBeCloseTo(result2[i].expectedPoints[j].x, 6);
+                expect(result1[i].expectedPoints[j].y).toBeCloseTo(result2[i].expectedPoints[j].y, 6);
+            }
         }
     });
 });
@@ -537,17 +365,5 @@ describe('excess intersection edge cases', () => {
         const detector = createExcessIntersectionDetector();
         const collisions = detector.detect([], 0);
         expect(collisions).toHaveLength(0);
-    });
-
-    it('resolver preserves array length', () => {
-        const resolver = createSegmentRemovalResolver();
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 }),
-            Curve.line({ x: 0, y: 50 }, { x: 100, y: 50 }),
-            Curve.line({ x: 0, y: 100 }, { x: 100, y: 100 }),
-        ];
-
-        const result = resolver.resolve(curves, [], seededRandom(42));
-        expect(result).toHaveLength(3);
     });
 });

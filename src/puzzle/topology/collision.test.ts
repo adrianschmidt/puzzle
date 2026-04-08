@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
     createTabCollisionDetector,
     createSkipOnCollisionResolver,
-    createSegmentRemovalResolver,
-    resolveExcessIntersections,
+    detectExcessIntersections,
 } from './collision.js';
-import type { CollisionDetector, BaseCutCollision } from './collision.js';
+import type { CollisionDetector } from './collision.js';
 import { Curve } from './curve.js';
+import { generateTopologyPuzzle } from './generator.js';
 import {
     mergeTabsIntoCuts,
     prepareTab,
@@ -340,211 +340,117 @@ describe('mergeTabsIntoCuts with collision detection', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Excess intersection resolver (createSegmentRemovalResolver)
+// Reproduction: 6x4 grid with high-amplitude sine waves (#219/#220)
 // ---------------------------------------------------------------------------
 
-describe('createSegmentRemovalResolver', () => {
-    /**
-     * Helper: create two crossing curves that form a lens shape.
-     * curveA bows upward, curveB bows downward — they cross twice,
-     * creating a lens between the crossing points.
-     */
-    /**
-     * Build collision data from two curves by running intersection
-     * detection, filtering endpoints, and returning everything
-     * needed by the resolver.
-     */
-    function buildCollision(
-        curveA: Curve,
-        curveB: Curve,
-        idxA: number,
-        idxB: number,
-    ): { collision: BaseCutCollision; sorted: { tSelf: number; tOther: number; point: { x: number; y: number } }[] } {
-        const intersections = curveA.intersect(curveB);
-        const epTol = 3;
-        const endpoints = [curveA.start, curveA.end, curveB.start, curveB.end];
-        const filtered = intersections.filter(ix => {
-            for (const ep of endpoints) {
-                const d = Math.sqrt(
-                    (ix.point.x - ep.x) ** 2 + (ix.point.y - ep.y) ** 2,
-                );
-                if (d < epTol) return false;
-            }
-            return true;
-        });
-        const sorted = [...filtered].sort((a, b) => a.tSelf - b.tSelf);
-        const collision: BaseCutCollision = {
-            curveIndexA: idxA,
-            curveIndexB: idxB,
-            excessPairs: [{
-                point1: sorted[0].point,
-                point2: sorted[1].point,
-                tA1: sorted[0].tSelf,
-                tA2: sorted[1].tSelf,
-                tB1: sorted[0].tOther,
-                tB2: sorted[1].tOther,
-            }],
-        };
-        return { collision, sorted };
-    }
+describe('excess intersection resolution - 6x4 high-amplitude reproduction', () => {
+    const cols = 6;
+    const rows = 4;
+    const imageSize = { width: 600, height: 400 };
+    const hAmp = 0.38;
+    const hFreq = 7.6;
+    const vAmp = 0.38;
+    const vFreq = 7.7;
 
-    function makeCrossingCurves() {
-        // Two multi-segment curves that clearly cross twice.
-        // Curve A: horizontal line at y=100 (two segments for robustness)
-        const curveA = Curve.line({ x: 0, y: 100 }, { x: 300, y: 100 });
+    it('generates exactly 24 pieces with no island slivers', () => {
+        // Try multiple seeds — all should produce exactly 24 pieces
+        const seeds = [1, 42, 123, 999];
+        for (const seed of seeds) {
+            const random = seededRandom(seed);
+            const pieces = generateTopologyPuzzle(cols, rows, imageSize, random, {
+                horizontalAmplitude: hAmp,
+                horizontalFrequency: hFreq,
+                verticalAmplitude: vAmp,
+                verticalFrequency: vFreq,
+                disableTabs: true,
+            });
 
-        // Curve B: starts below, crosses above, then crosses back below.
-        // A sine-like shape using two Bézier segments.
-        const curveB = new Curve([
-            {
-                p0: { x: 0, y: 150 },
-                cp1: { x: 50, y: 150 },
-                cp2: { x: 100, y: 30 },
-                p3: { x: 150, y: 50 },
-            },
-            {
-                p0: { x: 150, y: 50 },
-                cp1: { x: 200, y: 70 },
-                cp2: { x: 250, y: 170 },
-                p3: { x: 300, y: 150 },
-            },
-        ]);
-
-        return { curveA, curveB };
-    }
-
-    it('replaces target segment with source segment (not an arc)', () => {
-        const { curveA, curveB } = makeCrossingCurves();
-        const { collision } = buildCollision(curveA, curveB, 2, 3);
-
-        const resolver = createSegmentRemovalResolver();
-
-        // Force modifyA (random > 0.5) — curveA's segment replaced with curveB's
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 300, y: 0 }),   // border 0
-            Curve.line({ x: 0, y: 200 }, { x: 300, y: 200 }), // border 1
-            curveA,
-            curveB,
-        ];
-
-        const result = resolver.resolve(curves, [collision], () => 0.9);
-
-        // curveA was modified, curveB unchanged
-        expect(result[3]).toBe(curveB);
-        const modifiedA = result[2];
-
-        // The modified curve should still have the same endpoints
-        expect(modifiedA.start.x).toBeCloseTo(curveA.start.x, 0);
-        expect(modifiedA.start.y).toBeCloseTo(curveA.start.y, 0);
-        expect(modifiedA.end.x).toBeCloseTo(curveA.end.x, 0);
-        expect(modifiedA.end.y).toBeCloseTo(curveA.end.y, 0);
-
-        // The replacement region should follow curveB's path.
-        // curveA is a straight line at y=100. curveB dips above y=100
-        // in the middle. After replacing curveA's middle segment with
-        // curveB's, the modified curve should deviate from y=100.
-        const midPt = modifiedA.pointAt(0.5);
-        expect(midPt.y).not.toBeCloseTo(100, 0);
+            expect(pieces.length).toBe(24);
+        }
     });
 
-    it('modifying curveB when random <= 0.5', () => {
-        const { curveA, curveB } = makeCrossingCurves();
-        const { collision } = buildCollision(curveA, curveB, 2, 3);
+    it('detects excess intersections for these parameters', () => {
+        const skips = detectExcessIntersections(
+            buildReproCurves(seededRandom(1)), 4,
+        );
+        // Should find excess intersections with these high-amplitude settings
+        expect(skips.length).toBeGreaterThan(0);
+    });
+});
 
-        const resolver = createSegmentRemovalResolver();
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 300, y: 0 }),
-            Curve.line({ x: 0, y: 200 }, { x: 300, y: 200 }),
-            curveA,
-            curveB,
-        ];
+/** Build the 12-curve set matching the 6x4 reproduction scenario. */
+function buildReproCurves(random: () => number): Curve[] {
+    const cols = 6, rows = 4;
+    const width = 600, height = 400;
+    const pieceWidth = width / cols;
+    const pieceHeight = height / rows;
+    const hPixelAmp = (0.38 * pieceHeight) / 2;
+    const vPixelAmp = (0.38 * pieceWidth) / 2;
+    const hFreq = 7.6, vFreq = 7.7;
 
-        // Force modifyB (random <= 0.5)
-        const result = resolver.resolve(curves, [collision], () => 0.1);
+    const curves: Curve[] = [
+        Curve.line({ x: 0, y: 0 }, { x: width, y: 0 }),
+        Curve.line({ x: width, y: 0 }, { x: width, y: height }),
+        Curve.line({ x: width, y: height }, { x: 0, y: height }),
+        Curve.line({ x: 0, y: height }, { x: 0, y: 0 }),
+    ];
 
-        // curveA unchanged, curveB modified
-        expect(result[2]).toBe(curveA);
-        const modifiedB = result[3];
+    const rowPhases: number[] = [];
+    for (let r = 0; r <= rows; r++) rowPhases.push(random() * Math.PI * 2);
+    const colPhases: number[] = [];
+    for (let c = 0; c <= cols; c++) colPhases.push(random() * Math.PI * 2);
 
-        expect(modifiedB.start.x).toBeCloseTo(curveB.start.x, 0);
-        expect(modifiedB.start.y).toBeCloseTo(curveB.start.y, 0);
-        expect(modifiedB.end.x).toBeCloseTo(curveB.end.x, 0);
-        expect(modifiedB.end.y).toBeCloseTo(curveB.end.y, 0);
+    function sineCurve(
+        start: { x: number; y: number },
+        end: { x: number; y: number },
+        amplitude: number,
+        frequency: number,
+        phase: number,
+    ): Curve {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const tx = dx / len, ty = dy / len;
+        const px = -ty, py = tx;
+        const totalSeg = Math.max(4, Math.ceil(frequency * 4));
 
-        // Modified B's replacement region should follow curveA (y=100)
-        // between the intersection points — it should be flatter there
-        // than the original curveB.
-        // Sample several points and check they're closer to y=100
-        // than the original curveB at the same t.
-        for (const tSample of [0.4, 0.5, 0.6]) {
-            const origPt = curveB.pointAt(tSample);
-            const modPt = modifiedB.pointAt(tSample);
-            expect(Math.abs(modPt.y - 100)).toBeLessThanOrEqual(
-                Math.abs(origPt.y - 100) + 1,
+        const evalSine = (t: number) => {
+            const angle = 2 * Math.PI * frequency * t + phase;
+            const s = amplitude * Math.sin(angle);
+            const ds = amplitude * 2 * Math.PI * frequency * Math.cos(angle);
+            return {
+                x: start.x + t * dx + s * px,
+                y: start.y + t * dy + s * py,
+                tx: dx + ds * px,
+                ty: dy + ds * py,
+            };
+        };
+
+        const pts: { x: number; y: number }[] = [];
+        for (let i = 0; i < totalSeg; i++) {
+            const t0 = i / totalSeg;
+            const t1 = (i + 1) / totalSeg;
+            const dt = t1 - t0;
+            const p0 = evalSine(t0);
+            const p1 = evalSine(t1);
+            if (i === 0) pts.push({ x: p0.x, y: p0.y });
+            pts.push(
+                { x: p0.x + p0.tx * dt / 3, y: p0.y + p0.ty * dt / 3 },
+                { x: p1.x - p1.tx * dt / 3, y: p1.y - p1.ty * dt / 3 },
+                { x: p1.x, y: p1.y },
             );
         }
-    });
+        return Curve.fromBezierPath(pts);
+    }
 
-    it('after resolution, modified curve samples match source in replaced region', () => {
-        const { curveA, curveB } = makeCrossingCurves();
-        const { collision, sorted } = buildCollision(curveA, curveB, 2, 3);
+    for (let r = 1; r < rows; r++) {
+        const y = r * pieceHeight;
+        curves.push(sineCurve({ x: 0, y }, { x: width, y }, hPixelAmp, hFreq, rowPhases[r]));
+    }
+    for (let c = 1; c < cols; c++) {
+        const x = c * pieceWidth;
+        curves.push(sineCurve({ x, y: 0 }, { x, y: height }, vPixelAmp, vFreq, colPhases[c]));
+    }
 
-        const resolver = createSegmentRemovalResolver();
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 300, y: 0 }),
-            Curve.line({ x: 0, y: 200 }, { x: 300, y: 200 }),
-            curveA,
-            curveB,
-        ];
-
-        const result = resolver.resolve(curves, [collision], () => 0.9);
-        const modifiedA = result[2];
-
-        // In the replaced region, sample points of modifiedA should
-        // lie very close to curveB's path (not a midpoint arc).
-        // The replaced region is between the two intersection x-coords.
-        const xLow = Math.min(sorted[0].point.x, sorted[1].point.x);
-        const xHigh = Math.max(sorted[0].point.x, sorted[1].point.x);
-        const xMid = (xLow + xHigh) / 2;
-
-        // Find the t on modifiedA and curveB that's near xMid
-        // by sampling densely
-        let bestModT = 0.5;
-        let bestModDist = Infinity;
-        let bestSrcT = 0.5;
-        let bestSrcDist = Infinity;
-        for (let t = 0; t <= 1; t += 0.005) {
-            const mp = modifiedA.pointAt(t);
-            const sp = curveB.pointAt(t);
-            if (Math.abs(mp.x - xMid) < bestModDist) {
-                bestModDist = Math.abs(mp.x - xMid);
-                bestModT = t;
-            }
-            if (Math.abs(sp.x - xMid) < bestSrcDist) {
-                bestSrcDist = Math.abs(sp.x - xMid);
-                bestSrcT = t;
-            }
-        }
-        const modMidPt = modifiedA.pointAt(bestModT);
-        const srcMidPt = curveB.pointAt(bestSrcT);
-
-        // The y-values should be very close (exact segment copy)
-        expect(modMidPt.y).toBeCloseTo(srcMidPt.y, 0);
-    });
-});
-
-// ---------------------------------------------------------------------------
-// resolveExcessIntersections (integration)
-// ---------------------------------------------------------------------------
-
-describe('resolveExcessIntersections', () => {
-    it('returns curves unchanged when there are no excess intersections', () => {
-        const curves = [
-            Curve.line({ x: 0, y: 0 }, { x: 200, y: 0 }),     // border
-            Curve.line({ x: 200, y: 0 }, { x: 200, y: 200 }), // border
-            Curve.line({ x: 0, y: 100 }, { x: 200, y: 100 }), // internal
-        ];
-        const result = resolveExcessIntersections(curves, 2, seededRandom(42));
-        expect(result).toBe(curves);
-    });
-});
+    return curves;
+}

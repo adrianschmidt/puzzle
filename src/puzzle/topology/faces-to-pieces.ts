@@ -10,7 +10,7 @@
 
 import type { Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from '../composable/types.js';
-import type { HalfEdge, DCELResult } from './dcel.js';
+import type { HalfEdge, Face, DCELResult } from './dcel.js';
 import { getFaceEdges } from './dcel.js';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,14 @@ import { getFaceEdges } from './dcel.js';
 export function facesToPieceDefinitions(
     dcel: DCELResult,
 ): PieceDefinition[] {
-    const innerFaces = dcel.faces.filter(f => !f.isOuter);
+    const innerFaces = dcel.faces.filter(f => {
+        if (f.isOuter) return false;
+        // Filter out degenerate lens-shaped faces created by excess
+        // intersections between sine-wave cuts. These have exactly 2
+        // edges and near-zero area. See issues #219, #220.
+        const edgeCount = countFaceEdges(f);
+        return edgeCount > 2;
+    });
 
     // Assign piece IDs: face ID → piece ID mapping
     const faceIdToPieceId = new Map<number, number>();
@@ -75,6 +82,19 @@ export function facesToPieceDefinitions(
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Count the number of edges (half-edges) bounding a face.
+ */
+function countFaceEdges(face: Face): number {
+    let count = 0;
+    let he = face.outerEdge;
+    do {
+        count++;
+        he = he.next;
+    } while (he !== face.outerEdge);
+    return count;
+}
 
 interface BBox {
     minX: number;
