@@ -24,10 +24,6 @@ import { composePuzzle } from '../composable/compose.js';
 import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
 import type { CollisionOptions } from './tab-merge.js';
 import { resolveExcessIntersections } from './collision.js';
-import type {
-    BaseCutCollisionDetector,
-    BaseCutConflictResolver,
-} from './collision.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,10 +48,6 @@ export interface TopologyGeneratorConfig {
     tabTemplate?: TabTemplate;
     /** Collision detection and resolution options for tabs. */
     collision?: CollisionOptions;
-    /** Custom excess intersection detector for base cuts. */
-    excessIntersectionDetector?: BaseCutCollisionDetector;
-    /** Custom excess intersection resolver for base cuts. */
-    excessIntersectionResolver?: BaseCutConflictResolver;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,16 +92,13 @@ export function generateTopologyPuzzle(
         hPixelAmp, hFreq, vPixelAmp, vFreq, random,
     );
 
-    // Step 1b: Detect and resolve excess intersections between base cuts.
+    // Step 1b: Resolve excess intersections between base cuts.
     // High-amplitude sine waves can cross more times than expected,
-    // creating tiny lens-shaped bonus pieces. This step collapses
-    // those lens regions before the DCEL sees the geometry.
-    // See issues #219 and #220.
-    let finalCurves = resolveExcessIntersections(
-        curves, 4, random,
-        config?.excessIntersectionDetector,
-        config?.excessIntersectionResolver,
-    );
+    // creating tiny lens-shaped regions. We splice out the lens
+    // segment from one curve so the other curve is the sole path
+    // through that region. This avoids near-coincident paths that
+    // cause phantom intersections. (See issues #219, #220.)
+    let finalCurves = resolveExcessIntersections(curves, 4);
 
     // Step 2: Merge tabs into cut lines BEFORE topology computation.
     // This ensures piece clip paths include tab protrusions/sockets.

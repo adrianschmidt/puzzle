@@ -62,7 +62,6 @@ export interface CutSet {
      * The builder skips intersection checks within each group.
      */
     nonIntersectingGroups?: Curve[][];
-
 }
 
 /**
@@ -96,7 +95,9 @@ export function buildDCEL(cutSet: CutSet): DCELResult {
     const { curves, nonIntersectingGroups } = cutSet;
 
     // Step 1: Find all intersections
-    const allIntersections = findAllIntersections(curves, nonIntersectingGroups);
+    const allIntersections = findAllIntersections(
+        curves, nonIntersectingGroups,
+    );
 
     // Step 2: Split curves at intersection points → segments
     const segments = splitCurvesAtIntersections(curves, allIntersections);
@@ -190,7 +191,6 @@ function findAllIntersections(
         for (let j = i + 1; j < curves.length; j++) {
             if (skipPairs.has(`${i},${j}`)) continue;
 
-            // Standard crossing intersections
             const intersections = curves[i].intersect(curves[j]);
             for (const ix of intersections) {
                 results.push({
@@ -625,3 +625,4 @@ function pointDist(a: Point, b: Point): number {
     const dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);
 }
+

@@ -22,6 +22,7 @@
 
 import type { Point } from '../../model/types.js';
 import { Curve } from './curve.js';
+import type { BezierSegment } from './curve.js';
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -176,25 +177,6 @@ export interface BaseCutCollisionDetector {
 }
 
 /**
- * Resolves excess intersections by modifying curves.
- */
-export interface BaseCutConflictResolver {
-    /**
-     * Resolve all excess intersections by modifying the affected curves.
-     *
-     * @param curves - All curves (will not be mutated)
-     * @param collisions - Detected excess intersections
-     * @param random - Seeded PRNG for random choices
-     * @returns New array of curves with excess intersections resolved
-     */
-    resolve(
-        curves: Curve[],
-        collisions: BaseCutCollision[],
-        random: () => number,
-    ): Curve[];
-}
-
-/**
  * Create a detector that finds excess intersections between base cuts.
  *
  * For each pair of non-border curves, computes the expected number of
@@ -333,243 +315,250 @@ function findExcessPairs(
 }
 
 // ---------------------------------------------------------------------------
-// Segment removal resolver (issue #220)
+// Skip-point collector (issue #220)
 // ---------------------------------------------------------------------------
 
 /**
- * Create a resolver that removes path segments to eliminate excess
- * intersections.
- *
- * For each excess pair, one of the two lens-bounding path segments is
- * replaced with the other curve's segment between the same two points.
- * Which segment to remove is chosen randomly, so the lens region
- * attaches to either adjacent piece with equal probability.
- *
- * All pairs within a single collision modify the same curve (chosen
- * randomly per collision) to avoid t-parameter invalidation across
- * interleaved modifications.
+ * Per-pair cap telling the DCEL how many intersections to keep.
+ * Any intersections beyond this count are excess (lens-forming)
+ * and should be discarded.
  */
-export function createSegmentRemovalResolver(): BaseCutConflictResolver {
-    return {
-        resolve(curves, collisions, random) {
-            const result = [...curves];
+export interface IntersectionCap {
+    curveIndexA: number;
+    curveIndexB: number;
+    /** Maximum number of interior intersections to keep. */
+    expectedCount: number;
+    /** Baseline crossing points — used to rank which intersections to keep. */
+    expectedPoints: Point[];
+}
 
-            for (const collision of collisions) {
-                const { curveIndexA, curveIndexB, excessPairs } = collision;
-                const modifyA = random() > 0.5;
+/**
+ * Build per-pair intersection caps from the detected collisions.
+ *
+ * For each pair of curves with excess intersections, computes the
+ * expected intersection count (from baseline straight-line crossings)
+ * and the expected crossing locations. The DCEL uses these to keep
+ * only the N closest intersections to the baseline crossings, discarding
+ * the rest.
+ *
+ * This avoids modifying curve geometry, sidestepping the
+ * near-coincident-segment problem (bezier-js reports spurious crossings
+ * when two curves overlap).
+ */
+export function buildIntersectionCaps(
+    curves: Curve[],
+    collisions: BaseCutCollision[],
+    endpointTolerance = 3,
+): IntersectionCap[] {
+    const caps: IntersectionCap[] = [];
+    for (const { curveIndexA, curveIndexB } of collisions) {
+        const curveA = curves[curveIndexA];
+        const curveB = curves[curveIndexB];
 
-                if (modifyA) {
-                    result[curveIndexA] = applySegmentRemovals(
-                        result[curveIndexA],
-                        result[curveIndexB],
-                        excessPairs.map(p => ({
-                            tTarget1: p.tA1,
-                            tTarget2: p.tA2,
-                            tSource1: p.tB1,
-                            tSource2: p.tB2,
-                        })),
+        // Compute expected crossing points from baselines
+        const baseA = Curve.line(curveA.start, curveA.end);
+        const baseB = Curve.line(curveB.start, curveB.end);
+        const baseIx = baseA.intersect(baseB);
+        const endpoints = [curveA.start, curveA.end, curveB.start, curveB.end];
+        const expectedPoints = baseIx
+            .filter(ix => {
+                for (const ep of endpoints) {
+                    const d = Math.sqrt(
+                        (ix.point.x - ep.x) ** 2 + (ix.point.y - ep.y) ** 2,
                     );
-                } else {
-                    result[curveIndexB] = applySegmentRemovals(
-                        result[curveIndexB],
-                        result[curveIndexA],
-                        excessPairs.map(p => ({
-                            tTarget1: Math.min(p.tB1, p.tB2),
-                            tTarget2: Math.max(p.tB1, p.tB2),
-                            tSource1: p.tB1 <= p.tB2 ? p.tA1 : p.tA2,
-                            tSource2: p.tB1 <= p.tB2 ? p.tA2 : p.tA1,
-                        })),
-                    );
+                    if (d < endpointTolerance) return false;
                 }
-            }
+                return true;
+            })
+            .map(ix => ix.point);
 
-            return result;
-        },
-    };
-}
-
-interface SegmentRemoval {
-    /** Start parameter on the target curve (tTarget1 < tTarget2). */
-    tTarget1: number;
-    /** End parameter on the target curve. */
-    tTarget2: number;
-    /** Start parameter on the source curve (corresponds to tTarget1's point). */
-    tSource1: number;
-    /** End parameter on the source curve (corresponds to tTarget2's point). */
-    tSource2: number;
-}
-
-/**
- * Apply multiple segment removals to a target curve, replacing each
- * removed segment with the corresponding source curve's segment.
- *
- * Splits the ORIGINAL target curve at all removal boundaries at once
- * (using the backwards strategy from tab-merge.ts to preserve segment
- * indices), then replaces the appropriate chunks with exact copies of
- * the source curve's segments (split via de Casteljau). After
- * replacement, both curves share the same path in each lens region,
- * eliminating the island piece.
- */
-function applySegmentRemovals(
-    target: Curve,
-    source: Curve,
-    removals: SegmentRemoval[],
-): Curve {
-    if (removals.length === 0) return target;
-
-    // Sort removals by tTarget1 ascending
-    const sorted = [...removals].sort((a, b) => a.tTarget1 - b.tTarget1);
-
-    // Collect all split t-values: [start1, end1, start2, end2, ...]
-    const allTs: number[] = [];
-    for (const r of sorted) {
-        allTs.push(r.tTarget1, r.tTarget2);
+        caps.push({
+            curveIndexA,
+            curveIndexB,
+            expectedCount: expectedPoints.length,
+            expectedPoints,
+        });
     }
-
-    // Resolve all t-values on the ORIGINAL (unsplit) curve
-    const resolved = allTs
-        .filter(t => t > 0.001 && t < 0.999)
-        .map(t => ({ t, ...target.resolveTWithIndex(t) }));
-
-    // Split backwards to preserve earlier segment indices
-    const chunks: Curve[] = [];
-    let remaining = target;
-    const segTruncation = new Map<number, number>();
-
-    for (let i = resolved.length - 1; i >= 0; i--) {
-        const { segmentIndex, localT } = resolved[i];
-
-        let adjustedLocalT = localT;
-        const truncatedAt = segTruncation.get(segmentIndex);
-        if (truncatedAt !== undefined && truncatedAt > 1e-10) {
-            adjustedLocalT = localT / truncatedAt;
-        }
-
-        if (segmentIndex < 0 || segmentIndex >= remaining.segments.length) {
-            continue;
-        }
-
-        const [left, right] = remaining.splitAtSegmentLocal(
-            segmentIndex, adjustedLocalT,
-        );
-        chunks.push(right);
-        remaining = left;
-        segTruncation.set(segmentIndex, localT);
-    }
-    chunks.push(remaining);
-    chunks.reverse();
-
-    // chunks layout: [before_start1, start1→end1, end1→start2, start2→end2, ..., after_endN]
-    // Odd-indexed chunks (1, 3, 5, ...) are the removal regions
-
-    const resultChunks: Curve[] = [];
-    for (let i = 0; i < chunks.length; i++) {
-        if (i % 2 === 1) {
-            // This chunk is a removal region — replace with source segment
-            const removalIdx = (i - 1) / 2;
-            const removal = sorted[removalIdx];
-
-            // Extract the source curve's segment between the two
-            // intersection points. This is an exact copy (split via
-            // de Casteljau), so the two curves will share the same path
-            // in this region — no lens, no island piece.
-            const sourceChunk = extractSourceSegment(
-                source, removal.tSource1, removal.tSource2,
-            );
-
-            resultChunks.push(sourceChunk);
-        } else {
-            resultChunks.push(chunks[i]);
-        }
-    }
-
-    return joinResolvedCurves(resultChunks);
-}
-
-/**
- * Extract a segment from a curve between two t-parameters.
- */
-function extractSourceSegment(
-    source: Curve,
-    sStart: number,
-    sEnd: number,
-): Curve {
-    const sLow = Math.min(sStart, sEnd);
-    const sHigh = Math.max(sStart, sEnd);
-
-    const sLowResolved = source.resolveTWithIndex(sLow);
-    const sHighResolved = source.resolveTWithIndex(sHigh);
-
-    const [, sRest] = source.splitAtSegmentLocal(
-        sLowResolved.segmentIndex, sLowResolved.localT,
-    );
-
-    let sRestSegIndex: number;
-    let sRestLocalT: number;
-    if (sHighResolved.segmentIndex === sLowResolved.segmentIndex) {
-        sRestSegIndex = 0;
-        const remainingRange = 1 - sLowResolved.localT;
-        sRestLocalT = remainingRange > 1e-10
-            ? (sHighResolved.localT - sLowResolved.localT) / remainingRange
-            : 0.5;
-    } else {
-        sRestSegIndex = sHighResolved.segmentIndex - sLowResolved.segmentIndex;
-        sRestLocalT = sHighResolved.localT;
-    }
-
-    const [sourceMiddle] = sRest.splitAtSegmentLocal(sRestSegIndex, sRestLocalT);
-    return sStart <= sEnd ? sourceMiddle : sourceMiddle.reverse();
-}
-
-/**
- * Join multiple curves, snapping endpoints and filtering degenerates.
- */
-function joinResolvedCurves(curves: Curve[]): Curve {
-    const allSegments: { p0: Point; cp1: Point; cp2: Point; p3: Point }[] = [];
-
-    for (const c of curves) {
-        for (const seg of c.segments) {
-            const len = Math.sqrt(
-                (seg.p3.x - seg.p0.x) ** 2 + (seg.p3.y - seg.p0.y) ** 2,
-            );
-            if (len > 1e-6) {
-                allSegments.push({ ...seg });
-            }
-        }
-    }
-
-    // Snap consecutive segment endpoints for continuity
-    for (let i = 1; i < allSegments.length; i++) {
-        allSegments[i].p0 = { ...allSegments[i - 1].p3 };
-    }
-
-    if (allSegments.length === 0) return curves[0];
-    return new Curve(allSegments);
+    return caps;
 }
 
 // ---------------------------------------------------------------------------
-// Pipeline helper
+// Pipeline helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Detect and resolve excess intersections between base cuts.
+ * Detect excess intersections between base cuts and return per-pair
+ * intersection caps for diagnostics.
+ */
+export function detectExcessIntersections(
+    curves: Curve[],
+    borderCount: number,
+    detector?: BaseCutCollisionDetector,
+): IntersectionCap[] {
+    const det = detector ?? createExcessIntersectionDetector();
+    const collisions = det.detect(curves, borderCount);
+    if (collisions.length === 0) return [];
+    return buildIntersectionCaps(curves, collisions);
+}
+
+/**
+ * Resolve excess intersections by splicing out lens segments.
  *
- * This is the high-level function to call in the generator pipeline
- * after base cuts are generated but before tabs are merged or the
- * DCEL is built.
+ * For each excess intersection pair (A, B) between two curves, removes
+ * one curve's segment between A and B. The other curve's segment
+ * remains as the sole path through that region. The spliced curve
+ * becomes two (or more) sub-curves.
+ *
+ * This avoids near-coincident paths that cause phantom intersections
+ * in bezier-js. The DCEL naturally handles the resulting T-junctions
+ * (sub-curve endpoints lying on the other curve).
+ *
+ * @param curves - All curves (borders + internal cuts)
+ * @param borderCount - Number of leading border curves (not modified)
+ * @param detector - Optional custom detector
+ * @returns New curves array with lens segments removed
  */
 export function resolveExcessIntersections(
     curves: Curve[],
     borderCount: number,
-    random: () => number,
     detector?: BaseCutCollisionDetector,
-    resolver?: BaseCutConflictResolver,
 ): Curve[] {
     const det = detector ?? createExcessIntersectionDetector();
-    const res = resolver ?? createSegmentRemovalResolver();
-
     const collisions = det.detect(curves, borderCount);
     if (collisions.length === 0) return curves;
 
-    return res.resolve(curves, collisions, random);
+    // Collect all removal intervals per curve index.
+    // For each excess pair, we remove the segment from curveA.
+    const removalsByIndex = new Map<number, { t1: number; t2: number }[]>();
+    for (const collision of collisions) {
+        const idx = collision.curveIndexA;
+        if (!removalsByIndex.has(idx)) removalsByIndex.set(idx, []);
+        for (const pair of collision.excessPairs) {
+            const t1 = Math.min(pair.tA1, pair.tA2);
+            const t2 = Math.max(pair.tA1, pair.tA2);
+            removalsByIndex.get(idx)!.push({ t1, t2 });
+        }
+    }
+
+    // Process each curve: extract sub-curves that skip removal intervals
+    const result: Curve[] = [];
+    for (let i = 0; i < curves.length; i++) {
+        const removals = removalsByIndex.get(i);
+        if (!removals || removals.length === 0) {
+            result.push(curves[i]);
+            continue;
+        }
+
+        // Sort removals by t1 and merge overlapping intervals
+        removals.sort((a, b) => a.t1 - b.t1);
+        const merged: { t1: number; t2: number }[] = [removals[0]];
+        for (let k = 1; k < removals.length; k++) {
+            const last = merged[merged.length - 1];
+            if (removals[k].t1 <= last.t2) {
+                last.t2 = Math.max(last.t2, removals[k].t2);
+            } else {
+                merged.push(removals[k]);
+            }
+        }
+
+        // Extract sub-curves for kept intervals using segment-level splitting.
+        // Kept intervals: [0, r0.t1], [r0.t2, r1.t1], ..., [rN.t2, 1]
+        const keptIntervals: { t1: number; t2: number }[] = [];
+        let prevEnd = 0;
+        for (const r of merged) {
+            if (r.t1 > prevEnd + 1e-10) {
+                keptIntervals.push({ t1: prevEnd, t2: r.t1 });
+            }
+            prevEnd = r.t2;
+        }
+        if (prevEnd < 1 - 1e-10) {
+            keptIntervals.push({ t1: prevEnd, t2: 1 });
+        }
+
+        for (const interval of keptIntervals) {
+            const sub = extractSubCurve(curves[i], interval.t1, interval.t2);
+            if (sub !== null) {
+                result.push(sub);
+            }
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Extract a sub-curve from a Curve between two global t parameters.
+ * Works at the segment level to avoid parameter space drift.
+ */
+function extractSubCurve(curve: Curve, t1: number, t2: number): Curve | null {
+    if (t2 - t1 < 1e-10) return null;
+
+    const r1 = curve.resolveTWithIndex(Math.max(0, t1));
+    const r2 = curve.resolveTWithIndex(Math.min(1, t2));
+
+    if (r1.segmentIndex === r2.segmentIndex) {
+        // Both endpoints within the same segment — extract sub-segment
+        const seg = curve.segments[r1.segmentIndex];
+        const [, right] = splitCubicBezier(seg, r1.localT);
+        const range = 1 - r1.localT;
+        if (range < 1e-10) return null;
+        const adjT2 = (r2.localT - r1.localT) / range;
+        const [sub] = splitCubicBezier(right, Math.min(1, adjT2));
+        return new Curve([sub]);
+    }
+
+    // Multiple segments — assemble from parts
+    const segments: BezierSegment[] = [];
+
+    // First partial segment
+    if (r1.localT > 1e-10) {
+        const [, right] = splitCubicBezier(curve.segments[r1.segmentIndex], r1.localT);
+        segments.push(right);
+    } else {
+        segments.push(curve.segments[r1.segmentIndex]);
+    }
+
+    // Full middle segments
+    for (let s = r1.segmentIndex + 1; s < r2.segmentIndex; s++) {
+        segments.push(curve.segments[s]);
+    }
+
+    // Last partial segment
+    if (r2.segmentIndex > r1.segmentIndex) {
+        if (r2.localT < 1 - 1e-10) {
+            const [left] = splitCubicBezier(curve.segments[r2.segmentIndex], r2.localT);
+            segments.push(left);
+        } else {
+            segments.push(curve.segments[r2.segmentIndex]);
+        }
+    }
+
+    if (segments.length === 0) return null;
+    return new Curve(segments);
+}
+
+/**
+ * Split a cubic Bézier segment at parameter t using de Casteljau.
+ */
+function splitCubicBezier(
+    seg: BezierSegment,
+    t: number,
+): [BezierSegment, BezierSegment] {
+    const { p0, cp1, cp2, p3 } = seg;
+
+    const a = lerp(p0, cp1, t);
+    const b = lerp(cp1, cp2, t);
+    const c = lerp(cp2, p3, t);
+    const d = lerp(a, b, t);
+    const e = lerp(b, c, t);
+    const f = lerp(d, e, t);
+
+    return [
+        { p0, cp1: a, cp2: d, p3: f },
+        { p0: f, cp1: e, cp2: c, p3 },
+    ];
+}
+
+function lerp(a: Point, b: Point, t: number): Point {
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
