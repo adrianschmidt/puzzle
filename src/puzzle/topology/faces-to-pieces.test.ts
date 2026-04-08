@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import { buildDCEL } from './dcel.js';
 import { Curve } from './curve.js';
+import { resolveExcessIntersections } from './collision.js';
 import type { PieceDefinition } from '../composable/types.js';
 
 // ---------------------------------------------------------------------------
@@ -260,5 +261,157 @@ describe('facesToPieceDefinitions: curvePoints', () => {
                 expect(edge.curvePoints).toBeUndefined();
             }
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Lens-face merging (issue #219/#220 — no holes from small faces)
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a sine-wave curve (same algorithm as generator.ts).
+ */
+function generateSineCurve(
+    start: { x: number; y: number },
+    end: { x: number; y: number },
+    amplitude: number,
+    frequency: number,
+    phase: number,
+): Curve {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const tx = dx / len;
+    const ty = dy / len;
+    const px = -ty;
+    const py = tx;
+
+    const segmentsPerWave = 4;
+    const totalSegments = Math.max(4, Math.ceil(frequency * segmentsPerWave));
+
+    const bezierPoints: { x: number; y: number }[] = [];
+
+    const evalSine = (t: number) => {
+        const angle = 2 * Math.PI * frequency * t + phase;
+        const s = amplitude * Math.sin(angle);
+        const ds = amplitude * 2 * Math.PI * frequency * Math.cos(angle);
+        return {
+            x: start.x + t * dx + s * px,
+            y: start.y + t * dy + s * py,
+            tx: dx + ds * px,
+            ty: dy + ds * py,
+        };
+    };
+
+    for (let i = 0; i < totalSegments; i++) {
+        const t0 = i / totalSegments;
+        const t1 = (i + 1) / totalSegments;
+        const dt = t1 - t0;
+
+        const p0 = evalSine(t0);
+        const p1 = evalSine(t1);
+
+        if (i === 0) {
+            bezierPoints.push({ x: p0.x, y: p0.y });
+        }
+        bezierPoints.push(
+            { x: p0.x + p0.tx * dt / 3, y: p0.y + p0.ty * dt / 3 },
+            { x: p1.x - p1.tx * dt / 3, y: p1.y - p1.ty * dt / 3 },
+            { x: p1.x, y: p1.y },
+        );
+    }
+
+    return Curve.fromBezierPath(bezierPoints);
+}
+
+describe('facesToPieceDefinitions: lens-face merging', () => {
+    it('merges 2-edge lens faces instead of creating holes', () => {
+        // Two close parallel sine waves with opposite phase — creates lenses
+        const curves = [
+            Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
+            Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
+            Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
+            Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
+            generateSineCurve({ x: 0, y: 180 }, { x: 400, y: 180 }, 40, 2, 0),
+            generateSineCurve({ x: 0, y: 220 }, { x: 400, y: 220 }, 40, 2, Math.PI),
+        ];
+
+        // Run through excess-intersection resolver (may or may not splice)
+        const resolved = resolveExcessIntersections(curves, 4);
+        const dcel = buildDCEL({ curves: resolved });
+        const pieces = facesToPieceDefinitions(dcel);
+
+        // Every non-border shared edge must have a valid mate piece
+        for (const piece of pieces) {
+            for (const edge of piece.edges) {
+                if (edge.matePieceId !== -1) {
+                    const matePiece = pieces.find(p => p.id === edge.matePieceId);
+                    expect(matePiece).toBeDefined();
+                    const mateEdge = matePiece!.edges.find(e => e.id === edge.mateEdgeId);
+                    expect(mateEdge).toBeDefined();
+                    expect(mateEdge!.matePieceId).toBe(piece.id);
+                }
+            }
+        }
+    });
+
+    it('no mate references point to non-existent pieces (no holes)', () => {
+        // Extreme settings: 6x4 grid, high amplitude, high frequency
+        const w = 600;
+        const h = 400;
+        const cols = 6;
+        const rows = 4;
+        const amp = 0.5;
+        const freq = 12;
+        const pieceW = w / cols;
+        const pieceH = h / rows;
+        const hPixelAmp = (amp * pieceH) / 2;
+        const vPixelAmp = (amp * pieceW) / 2;
+
+        const curves: Curve[] = [
+            Curve.line({ x: 0, y: 0 }, { x: w, y: 0 }),
+            Curve.line({ x: w, y: 0 }, { x: w, y: h }),
+            Curve.line({ x: w, y: h }, { x: 0, y: h }),
+            Curve.line({ x: 0, y: h }, { x: 0, y: 0 }),
+        ];
+
+        // Seeded phases for reproducibility
+        let seed = 42;
+        const rng = () => {
+            seed = (seed * 16807) % 2147483647;
+            return (seed - 1) / 2147483646;
+        };
+
+        for (let r = 1; r < rows; r++) {
+            const y = r * pieceH;
+            curves.push(generateSineCurve(
+                { x: 0, y }, { x: w, y }, hPixelAmp, freq, rng() * Math.PI * 2,
+            ));
+        }
+        for (let c = 1; c < cols; c++) {
+            const x = c * pieceW;
+            curves.push(generateSineCurve(
+                { x, y: 0 }, { x, y: h }, vPixelAmp, freq, rng() * Math.PI * 2,
+            ));
+        }
+
+        const resolved = resolveExcessIntersections(curves, 4);
+        const dcel = buildDCEL({ curves: resolved });
+        const pieces = facesToPieceDefinitions(dcel);
+
+        const pieceIds = new Set(pieces.map(p => p.id));
+
+        // Every mate reference must point to a piece that exists
+        for (const piece of pieces) {
+            for (const edge of piece.edges) {
+                if (edge.matePieceId !== -1) {
+                    expect(pieceIds.has(edge.matePieceId)).toBe(true);
+                }
+            }
+        }
+
+        // Should produce at least cols*rows pieces (may be more due to
+        // extra intersections, but never fewer — no holes)
+        expect(pieces.length).toBeGreaterThanOrEqual(cols * rows);
     });
 });

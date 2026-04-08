@@ -26,14 +26,12 @@ import { getFaceEdges } from './dcel.js';
 export function facesToPieceDefinitions(
     dcel: DCELResult,
 ): PieceDefinition[] {
-    const innerFaces = dcel.faces.filter(f => {
-        if (f.isOuter) return false;
-        // Filter out degenerate lens-shaped faces created by excess
-        // intersections between sine-wave cuts. These have exactly 2
-        // edges and near-zero area. See issues #219, #220.
-        const edgeCount = countFaceEdges(f);
-        return edgeCount > 2;
-    });
+    // Merge degenerate lens-shaped faces (≤2 edges) into adjacent faces
+    // instead of discarding them, which would leave holes. See issues
+    // #219, #220.
+    mergeSmallFaces(dcel);
+
+    const innerFaces = dcel.faces.filter(f => !f.isOuter);
 
     // Assign piece IDs: face ID → piece ID mapping
     const faceIdToPieceId = new Map<number, number>();
@@ -201,6 +199,111 @@ function extractCurvePoints(he: HalfEdge, bbox: BBox): Point[] | undefined {
         x: p.x - bbox.minX,
         y: p.y - bbox.minY,
     }));
+}
+
+/**
+ * Merge degenerate faces (≤2 edges) into an adjacent face.
+ *
+ * Excess intersections between sine-wave cuts can create tiny lens-shaped
+ * faces with exactly 2 edges. Previously these were filtered out, but that
+ * left holes in the puzzle. Instead, we remove the shared edge between the
+ * small face and a neighbor, absorbing the small face's remaining edges
+ * into the neighbor's boundary.
+ *
+ * Mutates the DCEL in-place.
+ */
+function mergeSmallFaces(dcel: DCELResult): void {
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (let i = dcel.faces.length - 1; i >= 0; i--) {
+            const face = dcel.faces[i];
+            if (face.isOuter) continue;
+
+            const edgeCount = countFaceEdges(face);
+            if (edgeCount > 2) continue;
+
+            if (edgeCount <= 1) {
+                // Degenerate self-loop — just remove it
+                dcel.faces.splice(i, 1);
+                changed = true;
+                break;
+            }
+
+            // 2-edge lens face: E1(A→B) → E2(B→A) → E1
+            const e1 = face.outerEdge;
+            const e2 = e1.next;
+            if (e2.next !== e1) continue; // sanity check
+
+            // Pick a non-outer neighbor to merge into
+            const n1 = e1.twin.face;
+            const n2 = e2.twin.face;
+
+            let removedEdge: HalfEdge;
+            let keptEdge: HalfEdge;
+            let targetFace: Face;
+
+            if (n1 && !n1.isOuter) {
+                removedEdge = e1;
+                keptEdge = e2;
+                targetFace = n1;
+            } else if (n2 && !n2.isOuter) {
+                removedEdge = e2;
+                keptEdge = e1;
+                targetFace = n2;
+            } else {
+                // Both neighbors are outer — remove the face
+                dcel.faces.splice(i, 1);
+                changed = true;
+                break;
+            }
+
+            const removedTwin = removedEdge.twin;
+
+            // Splice keptEdge into targetFace's boundary, replacing removedTwin.
+            // Both keptEdge and removedTwin traverse the same vertex pair in the
+            // same direction, so the boundary winding is preserved.
+            removedTwin.prev.next = keptEdge;
+            keptEdge.prev = removedTwin.prev;
+            keptEdge.next = removedTwin.next;
+            removedTwin.next.prev = keptEdge;
+
+            keptEdge.face = targetFace;
+
+            if (targetFace.outerEdge === removedTwin) {
+                targetFace.outerEdge = keptEdge;
+            }
+
+            // Update vertex outgoing pointers if they referenced removed edges
+            if (removedEdge.origin.outgoing === removedEdge) {
+                removedEdge.origin.outgoing =
+                    dcel.halfEdges.find(h =>
+                        h.origin === removedEdge.origin &&
+                        h !== removedEdge && h !== removedTwin,
+                    ) ?? null;
+            }
+            if (removedTwin.origin.outgoing === removedTwin) {
+                removedTwin.origin.outgoing =
+                    dcel.halfEdges.find(h =>
+                        h.origin === removedTwin.origin &&
+                        h !== removedEdge && h !== removedTwin,
+                    ) ?? null;
+            }
+
+            // Remove face and edges
+            dcel.faces.splice(i, 1);
+            removeFromArray(dcel.halfEdges, removedEdge);
+            removeFromArray(dcel.halfEdges, removedTwin);
+
+            changed = true;
+            break; // restart scan — indices changed
+        }
+    }
+}
+
+function removeFromArray<T>(arr: T[], item: T): void {
+    const idx = arr.indexOf(item);
+    if (idx >= 0) arr.splice(idx, 1);
 }
 
 /**
