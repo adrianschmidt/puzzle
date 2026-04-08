@@ -23,6 +23,7 @@
 import type { Point } from '../../model/types.js';
 import { Curve } from './curve.js';
 import type { BezierSegment } from './curve.js';
+import { diagnostics } from './diagnostics.js';
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -255,6 +256,10 @@ function findExcessPairs(
         return true;
     }).length;
 
+    diagnostics.log('excess-pairs', `CurveA↔CurveB: actual=${filtered.length}, expected=${expectedCount}, raw=${actual.length}`, {
+        filteredPoints: filtered.map(ix => ({ x: ix.point.x.toFixed(1), y: ix.point.y.toFixed(1), tSelf: ix.tSelf, tOther: ix.tOther })),
+    });
+
     if (filtered.length <= expectedCount) return [];
 
     // Sort by tSelf (parameter on curve A)
@@ -425,6 +430,21 @@ export function resolveExcessIntersections(
 ): Curve[] {
     const det = detector ?? createExcessIntersectionDetector();
     const collisions = det.detect(curves, borderCount);
+
+    diagnostics.log('excess-detect', `Detected ${collisions.length} excess collision pairs`, {
+        collisions: collisions.map(c => ({
+            curveA: c.curveIndexA,
+            curveB: c.curveIndexB,
+            pairs: c.excessPairs.length,
+            details: c.excessPairs.map(p => ({
+                p1: p.point1,
+                p2: p.point2,
+                tA: [p.tA1, p.tA2],
+                tB: [p.tB1, p.tB2],
+            })),
+        })),
+    });
+
     if (collisions.length === 0) return curves;
 
     // Collect all removal intervals per curve index.

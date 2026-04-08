@@ -17,6 +17,7 @@
 import type { Piece, Size } from '../../model/types.js';
 import { Curve } from './curve.js';
 import { buildDCEL } from './dcel.js';
+import type { HalfEdge, Face } from './dcel.js';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
@@ -24,6 +25,7 @@ import { composePuzzle } from '../composable/compose.js';
 import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
 import type { CollisionOptions } from './tab-merge.js';
 import { resolveExcessIntersections } from './collision.js';
+import { diagnostics, logFaceDetails } from './diagnostics.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,6 +94,15 @@ export function generateTopologyPuzzle(
         hPixelAmp, hFreq, vPixelAmp, vFreq, random,
     );
 
+    diagnostics.log('cuts', `Generated ${curves.length} curves (4 border + ${curves.length - 4} internal)`, {
+        curveSegments: curves.map((c, i) => ({
+            index: i,
+            segments: c.segments.length,
+            start: c.start,
+            end: c.end,
+        })),
+    });
+
     // Step 1b: Resolve excess intersections between base cuts.
     // High-amplitude sine waves can cross more times than expected,
     // creating tiny lens-shaped regions. We splice out the lens
@@ -99,6 +110,15 @@ export function generateTopologyPuzzle(
     // through that region. This avoids near-coincident paths that
     // cause phantom intersections. (See issues #219, #220.)
     let finalCurves = resolveExcessIntersections(curves, 4);
+
+    diagnostics.log('splice', `After splice: ${finalCurves.length} curves (was ${curves.length})`, {
+        curveSegments: finalCurves.map((c, i) => ({
+            index: i,
+            segments: c.segments.length,
+            start: c.start,
+            end: c.end,
+        })),
+    });
 
     // Step 2: Merge tabs into cut lines BEFORE topology computation.
     // This ensures piece clip paths include tab protrusions/sockets.
@@ -113,7 +133,26 @@ export function generateTopologyPuzzle(
 
     // Step 3: Build DCEL on (possibly tab-modified) cuts → faces → pieces
     const dcel = buildDCEL({ curves: finalCurves });
-    const pieceDefs = facesToPieceDefinitions(dcel);
+
+    // Log DCEL state before face merging
+    const computeArea = (face: { outerEdge: HalfEdge }) => {
+        let area = 0;
+        let current = face.outerEdge;
+        do {
+            const a = current.origin.position;
+            const b = current.twin.origin.position;
+            area += (a.x * b.y - b.x * a.y);
+            current = current.next;
+        } while (current !== face.outerEdge);
+        return area / 2;
+    };
+    logFaceDetails('dcel-pre-merge', dcel.faces, computeArea as (face: Face) => number);
+
+    const expectedPieceCount = cols * rows;
+    const pieceDefs = facesToPieceDefinitions(dcel, expectedPieceCount);
+
+    logFaceDetails('dcel-post-merge', dcel.faces, computeArea as (face: Face) => number);
+    diagnostics.log('pieces', `Generated ${pieceDefs.length} piece definitions`);
 
     // Step 4: Compose final pieces — tabs are already in the geometry
     return composePuzzle(pieceDefs, template, random, { disableTabs: true });
