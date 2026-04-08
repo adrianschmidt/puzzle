@@ -3,7 +3,6 @@ import {
     createTabCollisionDetector,
     createSkipOnCollisionResolver,
     createSegmentRemovalResolver,
-    createExcessIntersectionDetector,
     resolveExcessIntersections,
 } from './collision.js';
 import type { CollisionDetector, BaseCutCollision } from './collision.js';
