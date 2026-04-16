@@ -570,17 +570,29 @@ function fillEmptyCells(
  */
 function convertToStandardPieces(
     fractalPieces: DiagonalConnection[][],
+    orphanTiles: Tile[],
     rad: number,
     frameOffset: number,
     imageSize: Size,
     gridCols: number,
     gridRows: number,
 ): Piece[] {
-    // 1. Build all arc sequences for all pieces
+    // 1. Build all arc sequences for all pieces. Multi-tile pieces use the
+    //    addArcs tree-walk; each orphan tile becomes a single-tile disc
+    //    whose boundary is the four concave arcs at the tile centre.
     const allPieceArcs: ArcData[][] = [];
     for (const p of fractalPieces) {
         const arcs: ArcData[] = [];
         addArcs(p[0], p, arcs, rad, frameOffset, true);
+        allPieceArcs.push(arcs);
+    }
+    for (const tile of orphanTiles) {
+        const arcs: ArcData[] = [];
+        // Order q=0,1,2,3 with sign=0 chains the arcs right→top→left→
+        // bottom→right into a closed disc.
+        for (let q = 0; q < 4; q++) {
+            arcs.push(makeArc(tile, rad, frameOffset, q, 0));
+        }
         allPieceArcs.push(arcs);
     }
 
@@ -829,9 +841,11 @@ function fmt(n: number): string {
 
 /**
  * Average number of tiles consumed per piece in the fractal generator.
- * Empirically measured across many seeds with default piece-size params.
+ * Empirically measured across many seeds with default piece-size params,
+ * including single-tile disc pieces generated for isolated tiles that no
+ * adoption path can reach (issue #224).
  */
-const TILES_PER_PIECE = 4.9;
+const TILES_PER_PIECE = 3.7;
 
 /**
  * Compute tile-grid dimensions that produce approximately `targetPieces`
@@ -934,6 +948,28 @@ export function generateFractalPuzzle(
     // Fill any remaining empty cells (star-shaped holes)
     fillEmptyCells(grid, pieces, cols, rows);
 
+    // Any tile still not attached to a piece — because all of its
+    // diagonal cells are already occupied and no adoption path exists —
+    // becomes its own single-tile disc piece. Without this, the tile's
+    // circular region is left uncovered in the puzzle (a literal hole).
+    const attached = new Set<string>();
+    for (const p of pieces) {
+        for (const c of p) {
+            attached.add(`${c.p1.x},${c.p1.y}`);
+            attached.add(`${c.p2.x},${c.p2.y}`);
+        }
+    }
+    const orphanTiles: Tile[] = [];
+    for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+            if (!attached.has(`${x},${y}`)) {
+                orphanTiles.push(makeTile(x, y));
+            }
+        }
+    }
+
     // Convert to standard Piece[] format
-    return convertToStandardPieces(pieces, rad, frameOffset, imageSize, cols, rows);
+    return convertToStandardPieces(
+        pieces, orphanTiles, rad, frameOffset, imageSize, cols, rows,
+    );
 }
