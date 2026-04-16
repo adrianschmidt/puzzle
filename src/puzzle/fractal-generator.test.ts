@@ -192,6 +192,48 @@ describe('generateFractalPuzzle', () => {
         // this test is not silently passing on all-main-contour puzzles.
         expect(totalDiamondEdges).toBeGreaterThan(0);
     });
+
+    test('every mateless edge sits on the puzzle outer border (issue #224)', () => {
+        // After #214 + #224, the invariant that mateEdgeId === -1 iff the
+        // edge lies on the puzzle rectangle should hold. Each fractal
+        // border arc has at least one endpoint on x=0, x=width, y=0, or
+        // y=height; any mateless arc entirely in the interior indicates a
+        // regression.
+        const cases: Array<[number, number, number]> = [
+            [4, 4, 1], [4, 4, 7], [4, 4, 11],
+            [6, 4, 42], [6, 6, 99],
+        ];
+        const EPS = 0.01;
+
+        for (const [cols, rows, seed] of cases) {
+            const pieces = generateFractalPuzzle(cols, rows, imageSize, seed);
+
+            for (const piece of pieces) {
+                for (const edge of piece.edges) {
+                    if (edge.mateEdgeId !== -1) continue;
+
+                    const startX = edge.start.x - piece.imageOffset.x;
+                    const startY = edge.start.y - piece.imageOffset.y;
+                    const endX = edge.end.x - piece.imageOffset.x;
+                    const endY = edge.end.y - piece.imageOffset.y;
+
+                    const onBoundary = (x: number, y: number) =>
+                        Math.abs(x) < EPS
+                        || Math.abs(x - imageSize.width) < EPS
+                        || Math.abs(y) < EPS
+                        || Math.abs(y - imageSize.height) < EPS;
+
+                    expect(
+                        onBoundary(startX, startY) || onBoundary(endX, endY),
+                        `Interior mateless edge in piece ${piece.id} at `
+                        + `(${startX.toFixed(2)},${startY.toFixed(2)}) → `
+                        + `(${endX.toFixed(2)},${endY.toFixed(2)}) `
+                        + `[cols=${cols} rows=${rows} seed=${seed}]`,
+                    ).toBe(true);
+                }
+            }
+        }
+    });
 });
 
 describe('scaleFractalGrid', () => {
