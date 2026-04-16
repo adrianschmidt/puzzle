@@ -584,28 +584,7 @@ function convertToStandardPieces(
         allPieceArcs.push(arcs);
     }
 
-    // 2. Build an index of arcs by (cx, cy, quad) for mate lookup
-    //    Must be done BEFORE scaling, using original abstract coordinates.
-    //    Also store each arc's key so we can look it up after scaling.
-    const arcIndex = new Map<string, Array<{ pieceIdx: number; arcIdx: number }>>();
-    const arcKeys: string[][] = [];
-    for (let pi = 0; pi < allPieceArcs.length; pi++) {
-        const arcs = allPieceArcs[pi];
-        arcKeys[pi] = [];
-        for (let ai = 0; ai < arcs.length; ai++) {
-            const a = arcs[ai];
-            const key = `${a.cx},${a.cy},${a.quad}`;
-            arcKeys[pi][ai] = key;
-            let list = arcIndex.get(key);
-            if (!list) {
-                list = [];
-                arcIndex.set(key, list);
-            }
-            list.push({ pieceIdx: pi, arcIdx: ai });
-        }
-    }
-
-    // 3. Detect gap cells BEFORE scaling (while arc coords are in abstract space).
+    // 2. Detect gap cells BEFORE scaling (while arc coords are in abstract space).
     //    addArcs is a recursive tree-walk from p[0] that may miss connections
     //    added by fillEmptyCells. A convex arc (sign=1) at tile (tx,ty)
     //    quadrant q covers the adjacent cell:
@@ -675,7 +654,58 @@ function convertToStandardPieces(
         }
     }
 
-    // 4. Scale all arc coordinates to image pixel space.
+    // 3. Record the main-contour arc count per piece before appending any
+    //    diamond-filler arcs. Shape construction later uses this to emit
+    //    each diamond as its own closed sub-path (M…Z).
+    const mainArcCount = allPieceArcs.map(arcs => arcs.length);
+
+    // 4. Append four arcs per gap cell to the owner piece. Each diamond side
+    //    is generated with sign=1 so it traverses the same geometric arc as
+    //    the neighboring concave arc but in the opposite direction (and with
+    //    the opposite sweep flag). That matches the start↔end invariant the
+    //    merge-detection code expects of a mate pair. The sides are ordered
+    //    so their endpoints chain into a closed loop:
+    //      right → top → left → bottom → right.
+    for (const [owner, gaps] of gapFills) {
+        for (const { cellX, cellY } of gaps) {
+            const sides: Array<{ tile: Tile; quad: number }> = [
+                { tile: makeTile(cellX + 1, cellY), quad: 2 },     // right → top
+                { tile: makeTile(cellX, cellY), quad: 3 },         // top → left
+                { tile: makeTile(cellX, cellY + 1), quad: 0 },     // left → bottom
+                { tile: makeTile(cellX + 1, cellY + 1), quad: 1 }, // bottom → right
+            ];
+            for (const { tile, quad } of sides) {
+                allPieceArcs[owner].push(
+                    makeArc(tile, rad, frameOffset, quad, 1),
+                );
+            }
+        }
+    }
+
+    // 5. Build an index of arcs by (cx, cy, quad) for mate lookup
+    //    Must be done BEFORE scaling, using original abstract coordinates.
+    //    Also store each arc's key so we can look it up after scaling.
+    //    Runs after the diamond arcs are appended so their keys — which match
+    //    the corresponding concave arcs' keys — participate in mate lookup.
+    const arcIndex = new Map<string, Array<{ pieceIdx: number; arcIdx: number }>>();
+    const arcKeys: string[][] = [];
+    for (let pi = 0; pi < allPieceArcs.length; pi++) {
+        const arcs = allPieceArcs[pi];
+        arcKeys[pi] = [];
+        for (let ai = 0; ai < arcs.length; ai++) {
+            const a = arcs[ai];
+            const key = `${a.cx},${a.cy},${a.quad}`;
+            arcKeys[pi][ai] = key;
+            let list = arcIndex.get(key);
+            if (!list) {
+                list = [];
+                arcIndex.set(key, list);
+            }
+            list.push({ pieceIdx: pi, arcIdx: ai });
+        }
+    }
+
+    // 6. Scale all arc coordinates to image pixel space.
     const puzzleWidth = gridCols * 2 * rad;
     const puzzleHeight = gridRows * 2 * rad;
     const scaleX = imageSize.width / puzzleWidth;
@@ -692,7 +722,7 @@ function convertToStandardPieces(
         }
     }
 
-    // 5. Convert each piece
+    // 7. Convert each piece
     let nextEdgeId = 0;
     const edgeIds: number[][] = allPieceArcs.map(arcs => arcs.map(() => nextEdgeId++));
 
@@ -702,7 +732,8 @@ function convertToStandardPieces(
         const arcs = allPieceArcs[pi];
         if (arcs.length === 0) continue;
 
-        // Find bounding box of the piece in pixel-space
+        // Bounding box spans both the main-contour arcs and any diamond-
+        // filler arcs, so the piece's image region covers the whole shape.
         let minX = Infinity, minY = Infinity;
         for (const a of arcs) {
             minX = Math.min(minX, a.sx, a.ex);
@@ -715,18 +746,19 @@ function convertToStandardPieces(
             const a = arcs[ai];
             const edgeId = edgeIds[pi][ai];
 
-            // Find mate: same (cx, cy, quad) in a different piece
-            // Use the pre-scale key stored before coordinate scaling
+            // Find mate: another arc with the same (cx, cy, quad) key, on
+            // any piece. We skip only the exact same arc entry — intra-
+            // piece mates are legitimate for a diamond filler whose owner
+            // piece also holds the bordering concave arc.
             const key = arcKeys[pi][ai];
             const candidates = arcIndex.get(key) || [];
             let mateEdgeId = -1;
             let matePieceId = -1;
             for (const c of candidates) {
-                if (c.pieceIdx !== pi) {
-                    mateEdgeId = edgeIds[c.pieceIdx][c.arcIdx];
-                    matePieceId = c.pieceIdx;
-                    break;
-                }
+                if (c.pieceIdx === pi && c.arcIdx === ai) continue;
+                mateEdgeId = edgeIds[c.pieceIdx][c.arcIdx];
+                matePieceId = c.pieceIdx;
+                break;
             }
 
             // Convert to piece-local coordinates (subtract bounding box origin)
@@ -749,58 +781,23 @@ function convertToStandardPieces(
             });
         }
 
-        // Shape: M + all arc paths + Z
-        const firstEdge = edges[0];
-        const shapeParts = [`M ${fmt(firstEdge.start.x)} ${fmt(firstEdge.start.y)}`];
-        for (const e of edges) {
-            shapeParts.push(e.path);
-        }
-        shapeParts.push('Z');
-
-        // Append diamond filler sub-paths for gap cells owned by this piece.
-        // Each gap cell at (cellX, cellY) has 4 edge midpoints:
-        //   top:    ((cellX+1)*spacing, cellY*spacing + rad) — in abstract coords
-        //   right:  ((cellX+1)*spacing + rad, (cellY+1)*spacing)
-        //   bottom: ((cellX+1)*spacing, (cellY+1)*spacing + rad)
-        //   left:   (cellX*spacing + rad, (cellY+1)*spacing)
-        // where spacing = 2*rad. Connected by 4 convex quarter-circle arcs.
-        const gaps = gapFills.get(pi);
-        if (gaps) {
-            const spacing = 2 * rad;
-            for (const { cellX, cellY } of gaps) {
-                // Midpoints in pixel coords
-                const top = {
-                    x: (cellX + 1) * spacing * scaleX - minX,
-                    y: (cellY * spacing + rad) * scaleY - minY,
-                };
-                const right = {
-                    x: ((cellX + 1) * spacing + rad) * scaleX - minX,
-                    y: (cellY + 1) * spacing * scaleY - minY,
-                };
-                const bottom = {
-                    x: (cellX + 1) * spacing * scaleX - minX,
-                    y: ((cellY + 1) * spacing + rad) * scaleY - minY,
-                };
-                const left = {
-                    x: (cellX * spacing + rad) * scaleX - minX,
-                    y: (cellY + 1) * spacing * scaleY - minY,
-                };
-                const rx = rad * scaleX;
-                const ry = rad * scaleY;
-
-                // Star filler: top → right → bottom → left → close
-                // Each segment is a concave quarter-circle arc (sweep=0),
-                // curving inward to create the four-pointed star shape
-                // that matches the gap geometry.
-                shapeParts.push(
-                    `M ${fmt(top.x)} ${fmt(top.y)}`,
-                    `A ${fmt(rx)} ${fmt(ry)} 0 0,0 ${fmt(right.x)} ${fmt(right.y)}`,
-                    `A ${fmt(rx)} ${fmt(ry)} 0 0,0 ${fmt(bottom.x)} ${fmt(bottom.y)}`,
-                    `A ${fmt(rx)} ${fmt(ry)} 0 0,0 ${fmt(left.x)} ${fmt(left.y)}`,
-                    `A ${fmt(rx)} ${fmt(ry)} 0 0,0 ${fmt(top.x)} ${fmt(top.y)}`,
-                    'Z',
-                );
+        // Shape: main contour (M … Z), then one closed sub-path per diamond
+        // filler (each sub-path is 4 consecutive diamond edges).
+        const mainCount = mainArcCount[pi];
+        const shapeParts: string[] = [];
+        if (mainCount > 0) {
+            shapeParts.push(`M ${fmt(edges[0].start.x)} ${fmt(edges[0].start.y)}`);
+            for (let i = 0; i < mainCount; i++) {
+                shapeParts.push(edges[i].path);
             }
+            shapeParts.push('Z');
+        }
+        for (let i = mainCount; i < edges.length; i += 4) {
+            shapeParts.push(`M ${fmt(edges[i].start.x)} ${fmt(edges[i].start.y)}`);
+            for (let j = 0; j < 4; j++) {
+                shapeParts.push(edges[i + j].path);
+            }
+            shapeParts.push('Z');
         }
 
         const shape = shapeParts.join(' ');
