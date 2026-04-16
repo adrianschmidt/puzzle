@@ -140,6 +140,58 @@ describe('generateFractalPuzzle', () => {
         const uniqueIds = new Set(edgeIds);
         expect(uniqueIds.size).toBe(edgeIds.length);
     });
+
+    test('gap-filler diamonds register as mated edges (issue #214)', () => {
+        // Gap-filler diamonds used to be raw SVG sub-paths with no Edge
+        // objects, so every concave arc bordering a gap cell stayed at
+        // mateEdgeId === -1. The fix adds four Edge objects per diamond
+        // and pairs each with the neighbouring concave arc it coincides
+        // with.
+        //
+        // A piece's shape now consists of a main-contour sub-path plus
+        // one extra closed sub-path per diamond filler — so the number of
+        // "M " commands in the path tells us how many diamonds the piece
+        // owns. Diamond edges are always the trailing four-edge blocks.
+        const cases: Array<[number, number, number]> = [
+            [4, 4, 1], [4, 4, 2], [4, 4, 3],
+            [6, 4, 42], [8, 6, 7], [6, 6, 99],
+        ];
+
+        let totalDiamondEdges = 0;
+
+        for (const [cols, rows, seed] of cases) {
+            const pieces = generateFractalPuzzle(cols, rows, imageSize, seed);
+
+            for (const piece of pieces) {
+                const subPathCount = (piece.shape.match(/M /g) ?? []).length;
+                const diamondCount = subPathCount - 1;
+                if (diamondCount <= 0) continue;
+
+                const expectedDiamondEdges = diamondCount * 4;
+                expect(
+                    piece.edges.length,
+                    `piece ${piece.id} (cols=${cols} rows=${rows} seed=${seed}) `
+                    + `has ${subPathCount} sub-paths but only `
+                    + `${piece.edges.length} edges`,
+                ).toBeGreaterThanOrEqual(expectedDiamondEdges);
+
+                const diamondEdges = piece.edges.slice(-expectedDiamondEdges);
+                for (const edge of diamondEdges) {
+                    expect(
+                        edge.mateEdgeId,
+                        `diamond edge ${edge.id} on piece ${piece.id} `
+                        + `(cols=${cols} rows=${rows} seed=${seed}) is mateless`,
+                    ).not.toBe(-1);
+                    expect(edge.matePieceId).not.toBe(-1);
+                }
+                totalDiamondEdges += expectedDiamondEdges;
+            }
+        }
+
+        // Make sure at least one case actually produced a gap filler, so
+        // this test is not silently passing on all-main-contour puzzles.
+        expect(totalDiamondEdges).toBeGreaterThan(0);
+    });
 });
 
 describe('scaleFractalGrid', () => {
