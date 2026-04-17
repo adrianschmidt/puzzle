@@ -570,29 +570,18 @@ function fillEmptyCells(
  */
 function convertToStandardPieces(
     fractalPieces: DiagonalConnection[][],
-    orphanTiles: Tile[],
+    orphanDiscs: Array<{ tile: Tile; ownerPieceIdx: number }>,
     rad: number,
     frameOffset: number,
     imageSize: Size,
     gridCols: number,
     gridRows: number,
 ): Piece[] {
-    // 1. Build all arc sequences for all pieces. Multi-tile pieces use the
-    //    addArcs tree-walk; each orphan tile becomes a single-tile disc
-    //    whose boundary is the four concave arcs at the tile centre.
+    // 1. Build main-contour arcs for each piece via the addArcs tree-walk.
     const allPieceArcs: ArcData[][] = [];
     for (const p of fractalPieces) {
         const arcs: ArcData[] = [];
         addArcs(p[0], p, arcs, rad, frameOffset, true);
-        allPieceArcs.push(arcs);
-    }
-    for (const tile of orphanTiles) {
-        const arcs: ArcData[] = [];
-        // Order q=0,1,2,3 with sign=0 chains the arcs right→top→left→
-        // bottom→right into a closed disc.
-        for (let q = 0; q < 4; q++) {
-            arcs.push(makeArc(tile, rad, frameOffset, q, 0));
-        }
         allPieceArcs.push(arcs);
     }
 
@@ -694,11 +683,30 @@ function convertToStandardPieces(
         }
     }
 
-    // 5. Build an index of arcs by (cx, cy, quad) for mate lookup
+    // 5. Append four concave arcs per orphan disc to its owner piece.
+    //    The orphan tile has no diagonal to or from it, so addArcs never
+    //    visits it; instead the owner piece (a neighbour whose diagonal
+    //    occupies an adjacent cell) gets the disc as an extra closed
+    //    sub-path. Ordering q=0,1,2,3 with sign=0 chains the four arcs
+    //    right→top→left→bottom→right into a closed loop. Mates resolve
+    //    through the arc index below — 1 or 2 arcs mate with convex arcs
+    //    on the owner piece itself (intra-piece self-mates, filtered on
+    //    exact identity only), and the remaining arcs sit on the puzzle
+    //    outer border with mateEdgeId === -1.
+    for (const { tile, ownerPieceIdx } of orphanDiscs) {
+        for (let q = 0; q < 4; q++) {
+            allPieceArcs[ownerPieceIdx].push(
+                makeArc(tile, rad, frameOffset, q, 0),
+            );
+        }
+    }
+
+    // 6. Build an index of arcs by (cx, cy, quad) for mate lookup
     //    Must be done BEFORE scaling, using original abstract coordinates.
     //    Also store each arc's key so we can look it up after scaling.
-    //    Runs after the diamond arcs are appended so their keys — which match
-    //    the corresponding concave arcs' keys — participate in mate lookup.
+    //    Runs after the diamond and disc arcs are appended so their keys —
+    //    which match the corresponding concave arcs' keys — participate in
+    //    mate lookup.
     const arcIndex = new Map<string, Array<{ pieceIdx: number; arcIdx: number }>>();
     const arcKeys: string[][] = [];
     for (let pi = 0; pi < allPieceArcs.length; pi++) {
@@ -717,7 +725,7 @@ function convertToStandardPieces(
         }
     }
 
-    // 6. Scale all arc coordinates to image pixel space.
+    // 7. Scale all arc coordinates to image pixel space.
     const puzzleWidth = gridCols * 2 * rad;
     const puzzleHeight = gridRows * 2 * rad;
     const scaleX = imageSize.width / puzzleWidth;
@@ -734,7 +742,7 @@ function convertToStandardPieces(
         }
     }
 
-    // 7. Convert each piece
+    // 8. Convert each piece
     let nextEdgeId = 0;
     const edgeIds: number[][] = allPieceArcs.map(arcs => arcs.map(() => nextEdgeId++));
 
@@ -793,8 +801,9 @@ function convertToStandardPieces(
             });
         }
 
-        // Shape: main contour (M … Z), then one closed sub-path per diamond
-        // filler (each sub-path is 4 consecutive diamond edges).
+        // Shape: main contour (M … Z), then one closed sub-path per extra
+        // 4-arc block — gap-filler diamonds and orphan-tile discs. Each
+        // extra is exactly 4 consecutive edges.
         const mainCount = mainArcCount[pi];
         const shapeParts: string[] = [];
         if (mainCount > 0) {
@@ -841,11 +850,11 @@ function fmt(n: number): string {
 
 /**
  * Average number of tiles consumed per piece in the fractal generator.
- * Empirically measured across many seeds with default piece-size params,
- * including single-tile disc pieces generated for isolated tiles that no
- * adoption path can reach (issue #224).
+ * Empirically measured across many seeds with default piece-size params.
+ * Orphan tiles (issue #224) are absorbed as disc sub-paths on an adjacent
+ * piece, so they do not add to the piece count.
  */
-const TILES_PER_PIECE = 3.7;
+const TILES_PER_PIECE = 4.9;
 
 /**
  * Compute tile-grid dimensions that produce approximately `targetPieces`
@@ -950,8 +959,11 @@ export function generateFractalPuzzle(
 
     // Any tile still not attached to a piece — because all of its
     // diagonal cells are already occupied and no adoption path exists —
-    // becomes its own single-tile disc piece. Without this, the tile's
-    // circular region is left uncovered in the puzzle (a literal hole).
+    // becomes a disc sub-path on an adjacent piece. Without this, the
+    // tile's circular region is left uncovered in the puzzle (a literal
+    // hole). The owner is the piece holding a diagonal in any adjacent
+    // cell; empirically (>4000 discs sampled) every orphan's surrounding
+    // diagonals belong to exactly one piece.
     const attached = new Set<string>();
     for (const p of pieces) {
         for (const c of p) {
@@ -959,17 +971,53 @@ export function generateFractalPuzzle(
             attached.add(`${c.p2.x},${c.p2.y}`);
         }
     }
-    const orphanTiles: Tile[] = [];
+    const orphanDiscs: Array<{ tile: Tile; ownerPieceIdx: number }> = [];
     for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
-            if (!attached.has(`${x},${y}`)) {
-                orphanTiles.push(makeTile(x, y));
+            if (attached.has(`${x},${y}`)) continue;
+
+            const ownerPieceIdx = findDiagonalOwner(pieces, x, y, cols, rows);
+            if (ownerPieceIdx === -1) {
+                console.warn(
+                    `[fractal] Orphan tile (${x},${y}) has no adjacent`
+                    + ' piece; disc cannot be attached',
+                );
+                continue;
             }
+            orphanDiscs.push({ tile: makeTile(x, y), ownerPieceIdx });
         }
     }
 
     // Convert to standard Piece[] format
     return convertToStandardPieces(
-        pieces, orphanTiles, rad, frameOffset, imageSize, cols, rows,
+        pieces, orphanDiscs, rad, frameOffset, imageSize, cols, rows,
     );
+}
+
+/**
+ * Find the piece that owns any diagonal in a cell adjacent to (x,y).
+ * Returns -1 if no adjacent cell contains a diagonal (shouldn't happen
+ * for a true orphan — every orphan tile is boxed in by occupied cells).
+ */
+function findDiagonalOwner(
+    pieces: DiagonalConnection[][],
+    x: number, y: number,
+    cols: number, rows: number,
+): number {
+    const adjCells = [
+        { cx: x - 1, cy: y - 1 },
+        { cx: x, cy: y - 1 },
+        { cx: x - 1, cy: y },
+        { cx: x, cy: y },
+    ];
+    for (const { cx, cy } of adjCells) {
+        if (cx < 0 || cx >= cols - 1 || cy < 0 || cy >= rows - 1) continue;
+        for (let pi = 0; pi < pieces.length; pi++) {
+            if (pieces[pi].some(c => c.cell.x === cx && c.cell.y === cy)) {
+                return pi;
+            }
+        }
+    }
+
+    return -1;
 }
