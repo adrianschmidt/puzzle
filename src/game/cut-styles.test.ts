@@ -12,12 +12,15 @@ import {
     DEFAULT_CUT_STYLE_INDEX,
     CUT_STYLE_PREFERENCE_KEY,
     COMPOSABLE_CONFIG_KEY,
+    FRACTAL_CONFIG_KEY,
     getCutStyleOption,
     findCutStyleIndex,
     saveCutStylePreference,
     loadCutStylePreference,
     saveComposableConfigPreference,
     loadComposableConfigPreference,
+    saveFractalConfigPreference,
+    loadFractalConfigPreference,
 } from './cut-styles.js';
 
 describe('CUT_STYLE_OPTIONS', () => {
@@ -132,5 +135,43 @@ describe('saveComposableConfigPreference / loadComposableConfigPreference', () =
         const loaded = loadComposableConfigPreference();
         expect(loaded?.horizontalAmplitude).toBe(0.2);
         expect(typeof loaded?.horizontalAmplitude).toBe('number');
+    });
+});
+
+describe('saveFractalConfigPreference / loadFractalConfigPreference', () => {
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('returns undefined when nothing is saved', () => {
+        expect(loadFractalConfigPreference()).toBeUndefined();
+    });
+
+    it('round-trips a saved config', () => {
+        saveFractalConfigPreference({ borderless: true });
+        expect(loadFractalConfigPreference()).toEqual({ borderless: true });
+    });
+
+    it('round-trips borderless: false', () => {
+        saveFractalConfigPreference({ borderless: false });
+        expect(loadFractalConfigPreference()).toEqual({ borderless: false });
+    });
+
+    it('returns undefined for invalid JSON', () => {
+        localStorage.setItem(FRACTAL_CONFIG_KEY, 'not-json');
+        expect(loadFractalConfigPreference()).toBeUndefined();
+    });
+
+    it('returns undefined for JSON missing borderless field', () => {
+        localStorage.setItem(FRACTAL_CONFIG_KEY, JSON.stringify({ other: true }));
+        expect(loadFractalConfigPreference()).toBeUndefined();
+    });
+
+    it('coerces truthy non-boolean values to true', () => {
+        localStorage.setItem(
+            FRACTAL_CONFIG_KEY,
+            JSON.stringify({ borderless: 1 }),
+        );
+        expect(loadFractalConfigPreference()).toEqual({ borderless: true });
     });
 });

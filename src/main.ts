@@ -41,6 +41,8 @@ import {
     getCutStyleOption,
     loadComposableConfigPreference,
     saveComposableConfigPreference,
+    loadFractalConfigPreference,
+    saveFractalConfigPreference,
     loadImageSourcePreference,
     saveImageSourcePreference,
 } from './game/cut-styles.js';
@@ -460,6 +462,7 @@ async function startNewGame(
     composableConfig?: import('./puzzle/composable-generator.js').ComposableConfig,
     imageSource?: string,
     imageCategory?: string,
+    fractalConfig?: import('./puzzle/fractal-generator.js').FractalConfig,
 ): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
@@ -522,7 +525,7 @@ async function startNewGame(
         }
     }
 
-    const state = createNewGame(imageUrl, imageSize, viewport, gridSize, { cutStyle, composableConfig });
+    const state = createNewGame(imageUrl, imageSize, viewport, gridSize, { cutStyle, composableConfig, fractalConfig });
 
     if (attribution) {
         state.attribution = attribution;
@@ -544,6 +547,7 @@ createNewGameButton({
         const preferredIndex = loadSizePreference();
         const preferredCutStyleIndex = loadCutStylePreference();
         const savedComposableConfig = loadComposableConfigPreference();
+        const savedFractalConfig = loadFractalConfigPreference();
         const savedImageSource = loadImageSourcePreference();
         const savedImageCategory = loadImageCategoryPreference();
         createSizePickerDialog({
@@ -551,14 +555,18 @@ createNewGameButton({
             selectedIndex: preferredIndex,
             selectedCutStyleIndex: preferredCutStyleIndex,
             savedComposableConfig: savedComposableConfig,
+            savedFractalConfig: savedFractalConfig,
             savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
-            onSelect: (index, cutStyleIndex, composableConfig, imageSource, imageCategory) => {
+            onSelect: (index, cutStyleIndex, composableConfig, imageSource, imageCategory, fractalConfig) => {
                 saveSizePreference(index);
                 const resolvedCutStyleIndex = cutStyleIndex ?? preferredCutStyleIndex;
                 saveCutStylePreference(resolvedCutStyleIndex);
                 if (composableConfig) {
                     saveComposableConfigPreference(composableConfig);
+                }
+                if (fractalConfig) {
+                    saveFractalConfigPreference(fractalConfig);
                 }
                 if (imageSource) {
                     saveImageSourcePreference(imageSource);
@@ -569,7 +577,14 @@ createNewGameButton({
                 const option = getSizeOption(index);
                 const cutStyle = getCutStyleOption(resolvedCutStyleIndex).id;
                 clearSavedState();
-                void startNewGame(toGridSize(option), cutStyle, composableConfig, imageSource, imageCategory);
+                void startNewGame(
+                    toGridSize(option),
+                    cutStyle,
+                    composableConfig,
+                    imageSource,
+                    imageCategory,
+                    fractalConfig,
+                );
             },
         });
     },

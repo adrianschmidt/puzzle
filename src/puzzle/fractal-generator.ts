@@ -576,6 +576,7 @@ function convertToStandardPieces(
     imageSize: Size,
     gridCols: number,
     gridRows: number,
+    borderless: boolean,
 ): Piece[] {
     // 1. Build main-contour arcs for each piece via the addArcs tree-walk.
     const allPieceArcs: ArcData[][] = [];
@@ -737,25 +738,32 @@ function convertToStandardPieces(
         }),
     );
 
-    // 7. Scale and translate arcs so the TRIMMED puzzle rectangle — the
-    //    original puzzle shrunk by `rad` on each side, i.e. aligned with
-    //    the outer-row tiles' centre lines — fills the requested image.
-    //    Mateless arcs live entirely in that `rad`-wide outer strip and
-    //    will be replaced below with straight lines along the new border,
-    //    giving pieces the "flat edge, no bumps" look.
-    const puzzleWidth = (gridCols - 1) * 2 * rad;
-    const puzzleHeight = (gridRows - 1) * 2 * rad;
+    // 7. Scale and translate arcs so the puzzle fills the requested image.
+    //    Non-borderless: fit the TRIMMED rectangle (shrunk by `rad` on each
+    //    side, aligned with outer-row tile centres) to the image; mateless
+    //    arcs live in the outer `rad`-wide strip and get replaced below
+    //    with straight lines along the new border, giving pieces the "flat
+    //    edge, no bumps" look. Borderless: fit the FULL puzzle bounds
+    //    (`gridCols * 2 * rad`) to the image so the outer-row arcs sit at
+    //    the image edges — pieces on the border keep their organic curves.
+    const shift = borderless ? 0 : rad;
+    const puzzleWidth = borderless
+        ? gridCols * 2 * rad
+        : (gridCols - 1) * 2 * rad;
+    const puzzleHeight = borderless
+        ? gridRows * 2 * rad
+        : (gridRows - 1) * 2 * rad;
     const scaleX = imageSize.width / puzzleWidth;
     const scaleY = imageSize.height / puzzleHeight;
 
     for (const arcs of allPieceArcs) {
         for (const a of arcs) {
-            a.sx = (a.sx - rad) * scaleX;
-            a.ex = (a.ex - rad) * scaleX;
-            a.cx = (a.cx - rad) * scaleX;
-            a.sy = (a.sy - rad) * scaleY;
-            a.ey = (a.ey - rad) * scaleY;
-            a.cy = (a.cy - rad) * scaleY;
+            a.sx = (a.sx - shift) * scaleX;
+            a.ex = (a.ex - shift) * scaleX;
+            a.cx = (a.cx - shift) * scaleX;
+            a.sy = (a.sy - shift) * scaleY;
+            a.ey = (a.ey - shift) * scaleY;
+            a.cy = (a.cy - shift) * scaleY;
         }
     }
 
@@ -789,6 +797,18 @@ function convertToStandardPieces(
 
         for (const [spStart, spEnd] of ranges) {
             const n = spEnd - spStart;
+
+            if (borderless) {
+                // Keep every arc — outer-border arcs stay curved, so
+                // pieces on the border are indistinguishable from interior
+                // pieces by shape alone.
+                const subOps: Op[] = [];
+                for (let i = 0; i < n; i++) {
+                    subOps.push({ type: 'arc', pieceIdx: pi, arcIdx: spStart + i });
+                }
+                pieceSubPaths[pi].push(subOps);
+                continue;
+            }
 
             // Rotate so the first arc in the sub-path is non-mateless.
             // Without this, a run that wraps around the sub-path's seam
@@ -1048,6 +1068,12 @@ export interface FractalConfig {
     minPieceSize?: number;
     /** Maximum number of tiles per piece (default: 8). */
     maxPieceSize?: number;
+    /**
+     * Borderless mode: keep curved outer edges and do not attach orphan-tile
+     * discs to neighbour pieces. Makes the puzzle harder because no piece is
+     * clearly identifiable as a border piece. Default: false.
+     */
+    borderless?: boolean;
 }
 
 /**
@@ -1070,6 +1096,7 @@ export function generateFractalPuzzle(
     const random = createSeededRandom(seed);
     const minPieceSize = config?.minPieceSize ?? 2;
     const maxPieceSize = config?.maxPieceSize ?? 8;
+    const borderless = config?.borderless ?? false;
 
     // Tile radius in abstract units. The actual pixel size is
     // determined by scaling in convertToStandardPieces.
@@ -1124,25 +1151,27 @@ export function generateFractalPuzzle(
         }
     }
     const orphanDiscs: Array<{ tile: Tile; ownerPieceIdx: number }> = [];
-    for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-            if (attached.has(`${x},${y}`)) continue;
+    if (!borderless) {
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                if (attached.has(`${x},${y}`)) continue;
 
-            const ownerPieceIdx = findDiagonalOwner(pieces, x, y, cols, rows);
-            if (ownerPieceIdx === -1) {
-                console.warn(
-                    `[fractal] Orphan tile (${x},${y}) has no adjacent`
-                    + ' piece; disc cannot be attached',
-                );
-                continue;
+                const ownerPieceIdx = findDiagonalOwner(pieces, x, y, cols, rows);
+                if (ownerPieceIdx === -1) {
+                    console.warn(
+                        `[fractal] Orphan tile (${x},${y}) has no adjacent`
+                        + ' piece; disc cannot be attached',
+                    );
+                    continue;
+                }
+                orphanDiscs.push({ tile: makeTile(x, y), ownerPieceIdx });
             }
-            orphanDiscs.push({ tile: makeTile(x, y), ownerPieceIdx });
         }
     }
 
     // Convert to standard Piece[] format
     return convertToStandardPieces(
-        pieces, orphanDiscs, rad, frameOffset, imageSize, cols, rows,
+        pieces, orphanDiscs, rad, frameOffset, imageSize, cols, rows, borderless,
     );
 }
 
