@@ -55,6 +55,9 @@ import {
     loadImageCategoryPreference,
     saveImageCategoryPreference,
     findImageCategory,
+    loadVibrantPreference,
+    saveVibrantPreference,
+    buildImageQuery,
 } from './game/image-categories.js';
 import { createSizePickerDialog, type FractalDialogConfig } from './ui/size-picker.js';
 
@@ -505,6 +508,7 @@ async function startNewGame(
     imageSource?: string,
     imageCategory?: string,
     fractalConfig?: FractalDialogConfig,
+    vibrant: boolean = false,
 ): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
@@ -538,11 +542,8 @@ async function startNewGame(
     if (accessKey) {
         try {
             const category = findImageCategory(imageCategory ?? 'any');
-            const result = await fetchRandomImage(
-                accessKey,
-                fetch,
-                category.query,
-            );
+            const query = buildImageQuery(category.query, vibrant);
+            const result = await fetchRandomImage(accessKey, fetch, query);
 
             if (result) {
                 imageUrl = result.imageUrl;
@@ -606,6 +607,7 @@ createNewGameButton({
         const savedFractalConfig = loadFractalConfigPreference();
         const savedImageSource = loadImageSourcePreference();
         const savedImageCategory = loadImageCategoryPreference();
+        const savedVibrant = loadVibrantPreference();
         createSizePickerDialog({
             container: app,
             selectedIndex: preferredIndex,
@@ -614,7 +616,8 @@ createNewGameButton({
             savedFractalConfig: savedFractalConfig,
             savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
-            onSelect: (index, cutStyleIndex, composableConfig, imageSource, imageCategory, fractalConfig) => {
+            savedVibrant: savedVibrant,
+            onSelect: (index, cutStyleIndex, composableConfig, imageSource, imageCategory, fractalConfig, vibrant) => {
                 saveSizePreference(index);
                 const resolvedCutStyleIndex = cutStyleIndex ?? preferredCutStyleIndex;
                 saveCutStylePreference(resolvedCutStyleIndex);
@@ -630,6 +633,7 @@ createNewGameButton({
                 if (imageCategory) {
                     saveImageCategoryPreference(imageCategory);
                 }
+                saveVibrantPreference(vibrant ?? false);
                 const option = getSizeOption(index);
                 const cutStyle = getCutStyleOption(resolvedCutStyleIndex).id;
                 clearSavedState();
@@ -640,6 +644,7 @@ createNewGameButton({
                     imageSource,
                     imageCategory,
                     fractalConfig,
+                    vibrant ?? false,
                 );
             },
         });
