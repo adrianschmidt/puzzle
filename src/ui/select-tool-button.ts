@@ -47,13 +47,15 @@ export function createSelectToolButton(
 
     function handleClick(): void {
         selectionManager.toggleTool();
-        updateVisuals();
     }
 
     button.addEventListener('click', handleClick);
+    const unsubscribe = selectionManager.onToolActiveChange(updateVisuals);
+    updateVisuals();
     container.appendChild(button);
 
     return () => {
+        unsubscribe();
         button.removeEventListener('click', handleClick);
         button.remove();
     };

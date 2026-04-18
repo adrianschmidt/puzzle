@@ -378,6 +378,9 @@ function updateAttribution(): void {
 function initGame(state: GameState): void {
     removeCompletionOverlay();
     selectionManager.clearAll();
+    // Rotation requires selecting groups before the rotate buttons engage;
+    // turn the multi-select tool on by default so this path is discoverable.
+    selectionManager.toolActive = state.rotationMode === 'quarter-turn';
 
     if (cleanupDrag) {
         cleanupDrag();

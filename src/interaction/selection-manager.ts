@@ -10,10 +10,12 @@
  */
 
 export type SelectionChangeCallback = (selectedGroupIds: ReadonlySet<number>) => void;
+export type ToolActiveChangeCallback = (toolActive: boolean) => void;
 
 export class SelectionManager {
     private selected = new Set<number>();
     private listeners: SelectionChangeCallback[] = [];
+    private toolActiveListeners: ToolActiveChangeCallback[] = [];
 
     /** Whether the multi-select tool is currently active. */
     private _toolActive = false;
@@ -23,9 +25,13 @@ export class SelectionManager {
     }
 
     set toolActive(active: boolean) {
+        if (this._toolActive === active) return;
         this._toolActive = active;
         if (!active) {
             this.clearAll();
+        }
+        for (const listener of this.toolActiveListeners) {
+            listener(active);
         }
     }
 
@@ -33,6 +39,15 @@ export class SelectionManager {
     toggleTool(): boolean {
         this.toolActive = !this._toolActive;
         return this._toolActive;
+    }
+
+    /** Register a listener for tool-active changes. */
+    onToolActiveChange(callback: ToolActiveChangeCallback): () => void {
+        this.toolActiveListeners.push(callback);
+        return () => {
+            const idx = this.toolActiveListeners.indexOf(callback);
+            if (idx >= 0) this.toolActiveListeners.splice(idx, 1);
+        };
     }
 
     /** The set of currently selected group IDs. */

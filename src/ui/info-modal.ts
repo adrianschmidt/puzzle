@@ -77,11 +77,27 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 <li><strong>Pan on empty space</strong> to move around</li>
                 <li><strong>Use the buttons</strong> for convenience:</li>
                 <ul>
-                    <li>🎮 <strong>New Game</strong> — Start fresh with a random image</li>
+                    <li>🎮 <strong>New Game</strong> — Start fresh with a random image; pick puzzle size, cut style and image source in the dialog</li>
                     <li>📍 <strong>Centre View</strong> — Reset zoom and pan</li>
                     <li>🔄 <strong>Gather Pieces</strong> — Organize all pieces in a compact grid</li>
                     <li>🎨 <strong>Background</strong> — Change table colour</li>
+                    <li>⬚ <strong>Multi-select</strong> (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all.</li>
+                    <li>↺ ↻ <strong>Rotate</strong> (bottom-left, fractal only) — Rotate every selected group 90° counter-clockwise or clockwise</li>
                 </ul>
+            </ul>
+        </section>
+
+        <section class="info-section">
+            <h3>Cut Styles</h3>
+            <ul>
+                <li><strong>Classic</strong> — Traditional jigsaw tabs on a rectangular grid</li>
+                <li><strong>Fractal</strong> — Organic circle-packing cuts. Options:
+                    <ul>
+                        <li><strong>Borderless</strong> — Pieces run all the way to the image edge instead of leaving a frame</li>
+                        <li><strong>Enable rotation</strong> — Pieces start at random 90° rotations; solve orientation as well as position. Multi-select is turned on by default so you can pick the pieces to rotate, then use the ↺ / ↻ buttons.</li>
+                    </ul>
+                </li>
+                <li><strong>Composable</strong> (experimental) — Customizable cuts with sliders in the new-game dialog</li>
             </ul>
         </section>
 
