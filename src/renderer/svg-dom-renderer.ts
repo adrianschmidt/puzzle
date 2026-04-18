@@ -18,9 +18,6 @@ import type { PiecePointerDownCallback, Renderer } from './types.js';
 import {
     PIECE_PADDING,
     HIT_AREA_EXPANSION_PX,
-    getImageDimensions,
-    getGridCols,
-    getGridRows,
 } from './svg-dom-utils.js';
 
 export class SvgDomRenderer implements Renderer {
@@ -68,9 +65,9 @@ export class SvgDomRenderer implements Renderer {
             this.currentShapeFingerprint = shapeFingerprint;
         }
 
-        this.imageSize = getImageDimensions(gameState);
-        this.pieceBaseWidth = this.imageSize.width / getGridCols(gameState);
-        this.pieceBaseHeight = this.imageSize.height / getGridRows(gameState);
+        this.imageSize = gameState.imageSize;
+        this.pieceBaseWidth = this.imageSize.width / gameState.gridSize.cols;
+        this.pieceBaseHeight = this.imageSize.height / gameState.gridSize.rows;
 
         const pieceLookup = new Map<number, Piece>();
         for (const piece of gameState.pieces) {
