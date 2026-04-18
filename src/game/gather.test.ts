@@ -8,6 +8,8 @@ import {
     computeGatheredPositions,
     applyGatheredPositions,
     getGroupOffsetBounds,
+    getGroupLocalBounds,
+    getGroupVisualBounds,
     getPathBounds,
 } from './gather.js';
 
@@ -250,5 +252,64 @@ describe('applyGatheredPositions', () => {
         applyGatheredPositions(groups, new Map([[1, { x: 50, y: 60 }]]));
         expect(groups[0].position).toEqual({ x: 50, y: 60 });
         expect(groups[1].position).toEqual({ x: 300, y: 400 });
+    });
+});
+
+describe('getGroupLocalBounds', () => {
+    it('ignores rotation and returns un-rotated bounds', () => {
+        const piece = makePiece(1, 100, 40);
+        const group = makeGroup(1, 0, 0);
+        group.rotation = 1; // CW 90°
+
+        expect(getGroupLocalBounds(group, [piece])).toEqual({
+            minX: 0,
+            minY: 0,
+            width: 100,
+            height: 40,
+        });
+    });
+});
+
+describe('getGroupVisualBounds', () => {
+    it('matches local bounds at rotation 0', () => {
+        const piece = makePiece(1, 100, 40);
+        const group = makeGroup(1, 0, 0);
+
+        expect(getGroupVisualBounds(group, [piece])).toEqual(
+            getGroupLocalBounds(group, [piece]),
+        );
+    });
+
+    it('swaps width and height at rotation 1 (90° CW)', () => {
+        const piece = makePiece(1, 100, 40);
+        const group = makeGroup(1, 0, 0);
+        group.rotation = 1;
+
+        const bounds = getGroupVisualBounds(group, [piece]);
+
+        expect(bounds.width).toBeCloseTo(40);
+        expect(bounds.height).toBeCloseTo(100);
+    });
+
+    it('swaps width and height at rotation 3 (270° CW)', () => {
+        const piece = makePiece(1, 100, 40);
+        const group = makeGroup(1, 0, 0);
+        group.rotation = 3;
+
+        const bounds = getGroupVisualBounds(group, [piece]);
+
+        expect(bounds.width).toBeCloseTo(40);
+        expect(bounds.height).toBeCloseTo(100);
+    });
+
+    it('keeps width and height at rotation 2 (180°)', () => {
+        const piece = makePiece(1, 100, 40);
+        const group = makeGroup(1, 0, 0);
+        group.rotation = 2;
+
+        const bounds = getGroupVisualBounds(group, [piece]);
+
+        expect(bounds.width).toBeCloseTo(100);
+        expect(bounds.height).toBeCloseTo(40);
     });
 });

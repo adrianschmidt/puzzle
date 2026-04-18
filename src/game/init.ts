@@ -37,6 +37,14 @@ export interface InitOptions {
     composableConfig?: ComposableConfig;
     /** Configuration for the fractal generator (only used when cutStyle is 'fractal'). */
     fractalConfig?: FractalConfig;
+    /**
+     * Rotation mode for this puzzle. Defaults to `'none'`.
+     *
+     * When set to `'quarter-turn'`, each initial single-piece group gets a
+     * random rotation in {0,1,2,3} so the player must solve orientation
+     * as well as position.
+     */
+    rotationMode?: 'none' | 'quarter-turn';
 }
 
 /**
@@ -57,6 +65,7 @@ export function createNewGame(
 ): GameState {
     const seed = options.seed ?? generateSeed();
     const cutStyle = options.cutStyle ?? 'classic';
+    const rotationMode = options.rotationMode ?? 'none';
 
     // For fractal puzzles, scale the tile grid to produce approximately
     // the target piece count. The gridSize cols×rows for classic puzzles
@@ -88,6 +97,7 @@ export function createNewGame(
         completed: false,
         seed,
         cutStyle,
+        rotationMode,
     };
 }
 
@@ -125,11 +135,16 @@ export function createInitialGroups(
         random,
     );
 
+    const pickInitialRotation: () => 0 | 1 | 2 | 3 =
+        options.rotationMode === 'quarter-turn'
+            ? () => Math.floor(random() * 4) as 0 | 1 | 2 | 3
+            : () => 0;
+
     return pieces.map((piece, index) => ({
         id: piece.id,
         pieces: new Map([[piece.id, { x: 0, y: 0 }]]),
         position: positions[index],
-        rotation: 0,
+        rotation: pickInitialRotation(),
     }));
 }
 

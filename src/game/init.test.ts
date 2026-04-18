@@ -142,6 +142,36 @@ describe('createInitialGroups', () => {
     });
 });
 
+describe('rotationMode', () => {
+    it('defaults to "none" and leaves every group at rotation 0', () => {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom([0.5]),
+        });
+
+        expect(state.rotationMode).toBe('none');
+        for (const group of state.groups) {
+            expect(group.rotation).toBe(0);
+        }
+    });
+
+    it('assigns random quarter-turn rotations when rotationMode is "quarter-turn"', () => {
+        // random returns values <1 that map to floor(v*4) in {0,1,2,3}
+        const values = [0.1, 0.3, 0.6, 0.9];
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom([...values, 0.5]),
+            rotationMode: 'quarter-turn',
+        });
+
+        expect(state.rotationMode).toBe('quarter-turn');
+        // At least one group should have a non-zero rotation given varied inputs
+        expect(state.groups.some((g) => g.rotation !== 0)).toBe(true);
+        // And every rotation should be a valid quarter-turn
+        for (const group of state.groups) {
+            expect([0, 1, 2, 3]).toContain(group.rotation);
+        }
+    });
+});
+
 describe('randomizePositions', () => {
     const pieceWidth = 100;
     const pieceHeight = 100;

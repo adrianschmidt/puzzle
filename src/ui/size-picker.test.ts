@@ -191,7 +191,7 @@ describe('createSizePickerDialog', () => {
             container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         sizeButtons[0].click();
 
-        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random", "any", { borderless: false });
+        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random", "any", { borderless: false, rotationEnabled: false });
     });
 
     it('updates the cut style when a different style is clicked before selecting size', () => {
@@ -213,6 +213,6 @@ describe('createSizePickerDialog', () => {
             container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         sizeButtons[0].click();
 
-        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random", "any", { borderless: false });
+        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random", "any", { borderless: false, rotationEnabled: false });
     });
 });

@@ -125,4 +125,14 @@ export interface GameState {
     seed?: number;
     /** Cut style used for this puzzle. Defaults to 'classic' when absent. */
     cutStyle?: string;
+    /**
+     * How (or whether) groups in this puzzle can be rotated by the player.
+     *
+     * - `'none'`: rotation is disabled; all groups stay at rotation 0.
+     * - `'quarter-turn'`: 90° snapped rotation via toolbar buttons.
+     *
+     * Future modes (e.g. `'free'` for arbitrary angles) slot in here without
+     * a schema break. Defaults to `'none'` when absent.
+     */
+    rotationMode?: 'none' | 'quarter-turn';
 }

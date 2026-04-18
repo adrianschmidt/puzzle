@@ -53,6 +53,12 @@ export interface SerializedGameState {
     attribution?: ImageAttribution;
     seed?: number;
     cutStyle?: string;
+    /**
+     * Rotation mode for this puzzle. Missing on early v6 saves written before
+     * the rotation-mode field was added — those are migrated on load based on
+     * cut style.
+     */
+    rotationMode?: 'none' | 'quarter-turn';
 }
 
 /**
@@ -81,6 +87,10 @@ export function serializeState(state: GameState): SerializedGameState {
 
     if (state.cutStyle) {
         serialized.cutStyle = state.cutStyle;
+    }
+
+    if (state.rotationMode) {
+        serialized.rotationMode = state.rotationMode;
     }
 
     return serialized;
@@ -131,7 +141,38 @@ export function deserializeState(data: SerializedGameState): GameState {
         state.cutStyle = data.cutStyle;
     }
 
+    state.rotationMode = resolveRotationMode(data, groups);
+
     return state;
+}
+
+/**
+ * Determine the rotationMode for a loaded save.
+ *
+ * - If the save explicitly records one, honour it.
+ * - Otherwise, infer from the data: any non-zero group rotation implies the
+ *   player was using quarter-turn mode, so preserve that. Fractal saves
+ *   written before rotationMode existed also get quarter-turn so their
+ *   behaviour matches what the player saw.
+ * - Everything else defaults to 'none'.
+ */
+function resolveRotationMode(
+    data: SerializedGameState,
+    groups: PieceGroup[],
+): 'none' | 'quarter-turn' {
+    if (data.rotationMode === 'quarter-turn' || data.rotationMode === 'none') {
+        return data.rotationMode;
+    }
+
+    if (groups.some((g) => g.rotation !== 0)) {
+        return 'quarter-turn';
+    }
+
+    if (data.cutStyle === 'fractal') {
+        return 'quarter-turn';
+    }
+
+    return 'none';
 }
 
 /**

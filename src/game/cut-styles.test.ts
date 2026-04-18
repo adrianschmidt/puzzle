@@ -148,13 +148,19 @@ describe('saveFractalConfigPreference / loadFractalConfigPreference', () => {
     });
 
     it('round-trips a saved config', () => {
-        saveFractalConfigPreference({ borderless: true });
-        expect(loadFractalConfigPreference()).toEqual({ borderless: true });
+        saveFractalConfigPreference({ borderless: true, rotationEnabled: true });
+        expect(loadFractalConfigPreference()).toEqual({
+            borderless: true,
+            rotationEnabled: true,
+        });
     });
 
     it('round-trips borderless: false', () => {
-        saveFractalConfigPreference({ borderless: false });
-        expect(loadFractalConfigPreference()).toEqual({ borderless: false });
+        saveFractalConfigPreference({ borderless: false, rotationEnabled: false });
+        expect(loadFractalConfigPreference()).toEqual({
+            borderless: false,
+            rotationEnabled: false,
+        });
     });
 
     it('returns undefined for invalid JSON', () => {
@@ -170,8 +176,22 @@ describe('saveFractalConfigPreference / loadFractalConfigPreference', () => {
     it('coerces truthy non-boolean values to true', () => {
         localStorage.setItem(
             FRACTAL_CONFIG_KEY,
-            JSON.stringify({ borderless: 1 }),
+            JSON.stringify({ borderless: 1, rotationEnabled: 1 }),
         );
-        expect(loadFractalConfigPreference()).toEqual({ borderless: true });
+        expect(loadFractalConfigPreference()).toEqual({
+            borderless: true,
+            rotationEnabled: true,
+        });
+    });
+
+    it('defaults rotationEnabled to false for pre-rotation saves', () => {
+        localStorage.setItem(
+            FRACTAL_CONFIG_KEY,
+            JSON.stringify({ borderless: true }),
+        );
+        expect(loadFractalConfigPreference()).toEqual({
+            borderless: true,
+            rotationEnabled: false,
+        });
     });
 });

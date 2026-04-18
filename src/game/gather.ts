@@ -9,6 +9,7 @@
  */
 
 import type { Point, Piece, PieceGroup } from '../model/types.js';
+import { rotatePoint } from '../model/helpers.js';
 
 /** Padding between groups when distributing in the gather layout. */
 export const GATHER_PADDING = 50;
@@ -260,14 +261,17 @@ export function getPathBounds(
 }
 
 /**
- * Compute the visual bounding box of a group by examining the actual
- * SVG shape geometry of its pieces. This gives accurate dimensions
- * for both classic (rectangular + tabs) and fractal (organic arcs) pieces.
+ * Compute the bounding box of a group in its un-rotated local space by
+ * examining the actual SVG shape geometry of its pieces. Piece offsets
+ * live in un-rotated local coordinates, and so do the bounds this returns.
  *
  * Includes bezier control points from edge paths to account for tab
  * geometry that extends beyond the start/end corner vertices.
+ *
+ * Use this (not `getGroupVisualBounds`) when doing rotation pivot math or
+ * anywhere else you need rotation-invariant bounds.
  */
-export function getGroupVisualBounds(
+export function getGroupLocalBounds(
     group: PieceGroup,
     pieces: ReadonlyArray<Readonly<Piece>>,
 ): { minX: number; minY: number; width: number; height: number } {
@@ -313,6 +317,52 @@ export function getGroupVisualBounds(
 
     if (!isFinite(minX)) {
         return { minX: 0, minY: 0, width: 0, height: 0 };
+    }
+
+    return { minX, minY, width: maxX - minX, height: maxY - minY };
+}
+
+/**
+ * Compute the bounding box of a group as it actually renders, accounting
+ * for `group.rotation`. Returned coordinates are offsets from the group's
+ * `position` (pre-translation) in rotated local space, so
+ * `group.position.x + bounds.minX` is the world-space left edge.
+ *
+ * Use this for layout, gather packing, or anywhere the rendered footprint
+ * matters. For rotation pivot math use `getGroupLocalBounds` instead.
+ */
+export function getGroupVisualBounds(
+    group: PieceGroup,
+    pieces: ReadonlyArray<Readonly<Piece>>,
+): { minX: number; minY: number; width: number; height: number } {
+    const local = getGroupLocalBounds(group, pieces);
+
+    if (group.rotation === 0) {
+        return local;
+    }
+
+    if (local.width === 0 && local.height === 0) {
+        return local;
+    }
+
+    // Rotate the four local-space corners and recompute the AABB.
+    const corners: Point[] = [
+        { x: local.minX, y: local.minY },
+        { x: local.minX + local.width, y: local.minY },
+        { x: local.minX + local.width, y: local.minY + local.height },
+        { x: local.minX, y: local.minY + local.height },
+    ];
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const c of corners) {
+        const r = rotatePoint(c, group.rotation);
+        if (r.x < minX) minX = r.x;
+        if (r.y < minY) minY = r.y;
+        if (r.x > maxX) maxX = r.x;
+        if (r.y > maxY) maxY = r.y;
     }
 
     return { minX, minY, width: maxX - minX, height: maxY - minY };

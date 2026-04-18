@@ -381,6 +381,92 @@ describe('deserializeState', () => {
         );
     });
 
+    it('round-trips rotationMode', () => {
+        const original = makeGameState({
+            cutStyle: 'fractal',
+            rotationMode: 'quarter-turn',
+        });
+
+        const serialized = serializeState(original);
+        expect(serialized.rotationMode).toBe('quarter-turn');
+
+        const restored = deserializeState(
+            JSON.parse(JSON.stringify(serialized)) as SerializedGameState,
+        );
+        expect(restored.rotationMode).toBe('quarter-turn');
+    });
+
+    it('infers rotationMode = "quarter-turn" from non-zero group rotations (missing field)', () => {
+        const v6WithoutMode: SerializedGameState = {
+            version: 6,
+            pieces: [makePiece(0), makePiece(1)],
+            groups: [
+                {
+                    id: 0,
+                    pieces: [[0, { x: 0, y: 0 }]],
+                    position: { x: 0, y: 0 },
+                    rotation: 2,
+                },
+                {
+                    id: 1,
+                    pieces: [[1, { x: 0, y: 0 }]],
+                    position: { x: 100, y: 0 },
+                    rotation: 0,
+                },
+            ],
+            imageUrl: 'v6-image.jpg',
+            imageSize: { width: 800, height: 600 },
+            completed: false,
+        };
+
+        const restored = deserializeState(v6WithoutMode);
+        expect(restored.rotationMode).toBe('quarter-turn');
+    });
+
+    it('infers rotationMode = "quarter-turn" for pre-field fractal saves', () => {
+        const fractalNoMode: SerializedGameState = {
+            version: 6,
+            pieces: [makePiece(0)],
+            groups: [
+                {
+                    id: 0,
+                    pieces: [[0, { x: 0, y: 0 }]],
+                    position: { x: 0, y: 0 },
+                    rotation: 0,
+                },
+            ],
+            imageUrl: 'frac.jpg',
+            imageSize: { width: 800, height: 600 },
+            completed: false,
+            cutStyle: 'fractal',
+        };
+
+        const restored = deserializeState(fractalNoMode);
+        expect(restored.rotationMode).toBe('quarter-turn');
+    });
+
+    it('defaults rotationMode to "none" for classic saves without the field', () => {
+        const classicNoMode: SerializedGameState = {
+            version: 6,
+            pieces: [makePiece(0)],
+            groups: [
+                {
+                    id: 0,
+                    pieces: [[0, { x: 0, y: 0 }]],
+                    position: { x: 0, y: 0 },
+                    rotation: 0,
+                },
+            ],
+            imageUrl: 'classic.jpg',
+            imageSize: { width: 800, height: 600 },
+            completed: false,
+            cutStyle: 'classic',
+        };
+
+        const restored = deserializeState(classicNoMode);
+        expect(restored.rotationMode).toBe('none');
+    });
+
     it('throws on group with no pieces', () => {
         const serialized: SerializedGameState = {
             version: STATE_VERSION,

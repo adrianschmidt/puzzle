@@ -8,6 +8,7 @@ import {
     checkAndMarkWin,
     computeGatheredPositions,
     applyGatheredPositions,
+    getGroupLocalBounds,
     getGroupVisualBounds,
 } from './game/index.js';
 import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
@@ -55,7 +56,7 @@ import {
     saveImageCategoryPreference,
     findImageCategory,
 } from './game/image-categories.js';
-import { createSizePickerDialog } from './ui/size-picker.js';
+import { createSizePickerDialog, type FractalDialogConfig } from './ui/size-picker.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -192,7 +193,7 @@ function zoomToFitCompletedPuzzle(
     // visual bbox centre in world space so the animation stays smooth.
     let groupTransitionCleanup: (() => void) | null = null;
     if (completedGroup.rotation !== 0) {
-        const localBounds = getGroupVisualBounds(completedGroup, gameState.pieces);
+        const localBounds = getGroupLocalBounds(completedGroup, gameState.pieces);
         const centreLocal = {
             x: localBounds.minX + localBounds.width / 2,
             y: localBounds.minY + localBounds.height / 2,
@@ -500,7 +501,7 @@ async function startNewGame(
     composableConfig?: import('./puzzle/composable-generator.js').ComposableConfig,
     imageSource?: string,
     imageCategory?: string,
-    fractalConfig?: import('./puzzle/fractal-generator.js').FractalConfig,
+    fractalConfig?: FractalDialogConfig,
 ): Promise<void> {
     // Reset viewport transform so pieces are randomized in unzoomed coordinates
     viewportTransform.reset();
@@ -563,7 +564,21 @@ async function startNewGame(
         }
     }
 
-    const state = createNewGame(imageUrl, imageSize, viewport, gridSize, { cutStyle, composableConfig, fractalConfig });
+    const rotationMode: 'none' | 'quarter-turn' =
+        cutStyle === 'fractal' && fractalConfig?.rotationEnabled
+            ? 'quarter-turn'
+            : 'none';
+
+    const generatorFractalConfig = fractalConfig
+        ? { borderless: fractalConfig.borderless }
+        : undefined;
+
+    const state = createNewGame(imageUrl, imageSize, viewport, gridSize, {
+        cutStyle,
+        composableConfig,
+        fractalConfig: generatorFractalConfig,
+        rotationMode,
+    });
 
     if (attribution) {
         state.attribution = attribution;
@@ -683,7 +698,7 @@ const rotateButtons = createRotateButtons({
 });
 
 function updateRotateButtonsVisibility(): void {
-    if (gameState?.cutStyle === 'fractal') {
+    if (gameState?.rotationMode === 'quarter-turn') {
         rotateButtons.show();
     } else {
         rotateButtons.hide();
@@ -727,5 +742,13 @@ if (savedState) {
     const preferredIndex = loadSizePreference();
     const option = getSizeOption(preferredIndex);
     const preferredCutStyle = getCutStyleOption(loadCutStylePreference()).id;
-    void startNewGame(toGridSize(option), preferredCutStyle);
+    const preferredFractalConfig = loadFractalConfigPreference();
+    void startNewGame(
+        toGridSize(option),
+        preferredCutStyle,
+        undefined,
+        undefined,
+        undefined,
+        preferredFractalConfig,
+    );
 }
