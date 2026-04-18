@@ -74,6 +74,37 @@ describe('createNewGame', () => {
         expect(state.gridSize).toEqual(DEFAULT_GRID);
     });
 
+    it('inscribes the fractal puzzle inside the image so arcs stay circular', () => {
+        // 16:9 image (1.778) cannot be matched exactly by a small integer
+        // tile grid. The stored puzzle imageSize must fit inside the
+        // original image bounds (so the image covers the puzzle with some
+        // crop) rather than extend beyond them (which would show blank).
+        const imageSize: Size = { width: 1920, height: 1080 };
+        const state = createNewGame('test.jpg', imageSize, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom([0.5]),
+            cutStyle: 'fractal',
+            seed: 42,
+        });
+        expect(state.imageSize.width).toBeLessThanOrEqual(imageSize.width + 1e-9);
+        expect(state.imageSize.height).toBeLessThanOrEqual(imageSize.height + 1e-9);
+        // And at least one axis must match the image exactly (the puzzle
+        // is inscribed, touching the image on one pair of edges).
+        const matchesWidth = Math.abs(state.imageSize.width - imageSize.width) < 1e-6;
+        const matchesHeight = Math.abs(state.imageSize.height - imageSize.height) < 1e-6;
+        expect(matchesWidth || matchesHeight).toBe(true);
+    });
+
+    it('leaves imageSize unchanged when grid aspect matches image aspect', () => {
+        // Classic puzzle with 8×6 grid on 4:3 image — grid aspect and image
+        // aspect are 1.333 → no inscribing needed.
+        const imageSize: Size = { width: 800, height: 600 };
+        const state = createNewGame('test.jpg', imageSize, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom([0.5]),
+            cutStyle: 'classic',
+        });
+        expect(state.imageSize).toEqual(imageSize);
+    });
+
     it('respects custom grid size', () => {
         const customGrid: GridSize = { cols: 6, rows: 4 };
         const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, customGrid, {
