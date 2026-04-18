@@ -74,6 +74,7 @@ export function createNewGame(
         ? scaleFractalGrid(
             gridSize.cols * gridSize.rows,
             imageSize.width / imageSize.height,
+            options.fractalConfig?.borderless ?? false,
         )
         : undefined;
 

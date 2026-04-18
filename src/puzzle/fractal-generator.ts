@@ -1032,28 +1032,65 @@ const TILES_PER_PIECE = 4.9;
  * Compute tile-grid dimensions that produce approximately `targetPieces`
  * fractal pieces while matching the aspect ratio of the puzzle image.
  *
+ * The grid aspect must match the image aspect closely, otherwise the
+ * generator's per-axis scaling turns the circular tile arcs into ellipses
+ * (visibly "squashed" discs). The effective aspect is:
+ *   - `cols / rows` for borderless puzzles
+ *   - `(cols-1) / (rows-1)` for framed puzzles (the trimmed rectangle)
+ *
+ * The search minimises a weighted sum of aspect error and piece-count
+ * error; aspect is weighted 10× since even small ovalness is perceptible
+ * while piece-count drift of ±20% is not.
+ *
  * @param targetPieces - Desired number of pieces (e.g. 24, 48, 96, 192)
  * @param imageAspect  - Image width / height (e.g. 4/3 ≈ 1.333)
+ * @param borderless   - Whether the puzzle uses borderless (curved-edge) fitting
  * @returns `{ cols, rows }` for the tile grid
  */
 export function scaleFractalGrid(
     targetPieces: number,
     imageAspect: number,
+    borderless: boolean = false,
 ): { cols: number; rows: number } {
-    // Total tiles needed ≈ targetPieces × tilesPerPiece
     const totalTiles = targetPieces * TILES_PER_PIECE;
 
-    // Solve cols × rows = totalTiles with cols/rows = imageAspect
-    //   cols = sqrt(totalTiles × imageAspect)
-    //   rows = totalTiles / cols
-    const rawCols = Math.sqrt(totalTiles * imageAspect);
-    const rawRows = totalTiles / rawCols;
+    // Iterate rows over a generous range; for each, pick the cols values
+    // around the ideal (for perfect aspect match) and score each candidate.
+    const idealRows = Math.sqrt(totalTiles / imageAspect);
+    const rowsSpan = Math.max(20, Math.ceil(idealRows * 2));
 
-    // Round to even numbers (≥ 4) for symmetric grids
-    const cols = Math.max(4, 2 * Math.round(rawCols / 2));
-    const rows = Math.max(4, 2 * Math.round(rawRows / 2));
+    let best = { cols: 3, rows: 3, score: Infinity };
 
-    return { cols, rows };
+    for (let rows = 3; rows <= rowsSpan; rows++) {
+        const idealCols = borderless
+            ? rows * imageAspect
+            : (rows - 1) * imageAspect + 1;
+
+        // Try floor and ceil to cover both sides of the ideal.
+        const candidates = new Set([
+            Math.floor(idealCols),
+            Math.ceil(idealCols),
+        ]);
+
+        for (const cols of candidates) {
+            if (cols < 3) continue;
+
+            const actualAspect = borderless
+                ? cols / rows
+                : (cols - 1) / (rows - 1);
+            const aspectError = Math.abs(actualAspect - imageAspect) / imageAspect;
+
+            const pieceCount = (cols * rows) / TILES_PER_PIECE;
+            const pieceCountError = Math.abs(pieceCount - targetPieces) / targetPieces;
+
+            const score = aspectError * 10 + pieceCountError;
+            if (score < best.score) {
+                best = { cols, rows, score };
+            }
+        }
+    }
+
+    return { cols: best.cols, rows: best.rows };
 }
 
 // ---------------------------------------------------------------------------

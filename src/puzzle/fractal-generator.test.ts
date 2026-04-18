@@ -288,13 +288,11 @@ describe('generateFractalPuzzle', () => {
 describe('scaleFractalGrid', () => {
     const LANDSCAPE_ASPECT = 4 / 3; // 800×600
 
-    test('returns cols and rows as even numbers ≥ 4', () => {
+    test('returns cols and rows ≥ 3', () => {
         for (const target of [24, 48, 96, 192]) {
             const { cols, rows } = scaleFractalGrid(target, LANDSCAPE_ASPECT);
-            expect(cols).toBeGreaterThanOrEqual(4);
-            expect(rows).toBeGreaterThanOrEqual(4);
-            expect(cols % 2).toBe(0);
-            expect(rows % 2).toBe(0);
+            expect(cols).toBeGreaterThanOrEqual(3);
+            expect(rows).toBeGreaterThanOrEqual(3);
         }
     });
 
@@ -322,6 +320,30 @@ describe('scaleFractalGrid', () => {
     test('square aspect ratio produces roughly equal cols and rows', () => {
         const { cols, rows } = scaleFractalGrid(96, 1.0);
         expect(Math.abs(cols - rows)).toBeLessThanOrEqual(2);
+    });
+
+    test('framed grid effective aspect (cols-1)/(rows-1) matches image aspect closely', () => {
+        // The framed generator scales the trimmed rectangle (cols-1)×(rows-1)
+        // to the image, so that aspect ratio drives the disc circularity.
+        for (const target of [24, 48, 96, 192]) {
+            for (const imageAspect of [1.0, 4 / 3, 3 / 2, 16 / 9, 2 / 3]) {
+                const { cols, rows } = scaleFractalGrid(target, imageAspect, false);
+                const actualAspect = (cols - 1) / (rows - 1);
+                const relErr = Math.abs(actualAspect - imageAspect) / imageAspect;
+                expect(relErr).toBeLessThan(0.05); // <5% ovalness
+            }
+        }
+    });
+
+    test('borderless grid aspect cols/rows matches image aspect closely', () => {
+        for (const target of [24, 48, 96, 192]) {
+            for (const imageAspect of [1.0, 4 / 3, 3 / 2, 16 / 9, 2 / 3]) {
+                const { cols, rows } = scaleFractalGrid(target, imageAspect, true);
+                const actualAspect = cols / rows;
+                const relErr = Math.abs(actualAspect - imageAspect) / imageAspect;
+                expect(relErr).toBeLessThan(0.05);
+            }
+        }
     });
 
     test('scaled grid produces approximately target piece count', () => {
