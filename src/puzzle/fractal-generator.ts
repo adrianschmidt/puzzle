@@ -20,7 +20,7 @@
  * data model, with proper edge mate relationships for merge detection.
  */
 
-import type { Edge, Piece, Point, Size } from '../model/types.js';
+import type { Edge, Piece, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
 
 // ---------------------------------------------------------------------------
@@ -725,119 +725,271 @@ function convertToStandardPieces(
         }
     }
 
-    // 7. Scale all arc coordinates to image pixel space.
-    const puzzleWidth = gridCols * 2 * rad;
-    const puzzleHeight = gridRows * 2 * rad;
+    // 6b. Precompute mateless status for each arc. A mateless arc is one
+    //     whose (cx,cy,quad) key has no other arc referring to the same
+    //     geometric location — i.e., the arc sits on the puzzle's outer
+    //     border with no neighbouring tile across it. These are the arcs
+    //     that must be trimmed away to produce a rectangular puzzle.
+    const isMateless: boolean[][] = allPieceArcs.map((arcs, pi) =>
+        arcs.map((_, ai) => {
+            const candidates = arcIndex.get(arcKeys[pi][ai]) ?? [];
+            return candidates.length === 1;
+        }),
+    );
+
+    // 7. Scale and translate arcs so the TRIMMED puzzle rectangle — the
+    //    original puzzle shrunk by `rad` on each side, i.e. aligned with
+    //    the outer-row tiles' centre lines — fills the requested image.
+    //    Mateless arcs live entirely in that `rad`-wide outer strip and
+    //    will be replaced below with straight lines along the new border,
+    //    giving pieces the "flat edge, no bumps" look.
+    const puzzleWidth = (gridCols - 1) * 2 * rad;
+    const puzzleHeight = (gridRows - 1) * 2 * rad;
     const scaleX = imageSize.width / puzzleWidth;
     const scaleY = imageSize.height / puzzleHeight;
 
     for (const arcs of allPieceArcs) {
         for (const a of arcs) {
-            a.sx *= scaleX;
-            a.ex *= scaleX;
-            a.cx *= scaleX;
-            a.sy *= scaleY;
-            a.ey *= scaleY;
-            a.cy *= scaleY;
+            a.sx = (a.sx - rad) * scaleX;
+            a.ex = (a.ex - rad) * scaleX;
+            a.cx = (a.cx - rad) * scaleX;
+            a.sy = (a.sy - rad) * scaleY;
+            a.ey = (a.ey - rad) * scaleY;
+            a.cy = (a.cy - rad) * scaleY;
         }
     }
 
-    // 8. Convert each piece
-    let nextEdgeId = 0;
-    const edgeIds: number[][] = allPieceArcs.map(arcs => arcs.map(() => nextEdgeId++));
+    // 8. Build edge ops for each sub-path, collapsing runs of consecutive
+    //    mateless arcs into straight lines along the trimmed-rectangle
+    //    border. For sub-paths on a puzzle corner the run may cross two
+    //    adjacent border sides, in which case two line segments meet at
+    //    the corner vertex.
+    const rectBorder = {
+        xMin: 0, yMin: 0,
+        xMax: imageSize.width, yMax: imageSize.height,
+    };
 
-    const pieces: Piece[] = [];
+    interface ArcOp { type: 'arc'; pieceIdx: number; arcIdx: number }
+    interface LineOp { type: 'line'; sx: number; sy: number; ex: number; ey: number }
+    type Op = ArcOp | LineOp;
+
+    const pieceSubPaths: Op[][][] = allPieceArcs.map(() => []);
 
     for (let pi = 0; pi < allPieceArcs.length; pi++) {
         const arcs = allPieceArcs[pi];
         if (arcs.length === 0) continue;
 
-        // Bounding box spans both the main-contour arcs and any diamond-
-        // filler arcs, so the piece's image region covers the whole shape.
+        // Sub-path ranges: main contour first, then each 4-arc extra
+        // (diamond filler or orphan disc).
+        const ranges: Array<[number, number]> = [];
+        if (mainArcCount[pi] > 0) ranges.push([0, mainArcCount[pi]]);
+        for (let k = mainArcCount[pi]; k < arcs.length; k += 4) {
+            ranges.push([k, k + 4]);
+        }
+
+        for (const [spStart, spEnd] of ranges) {
+            const n = spEnd - spStart;
+
+            // Rotate so the first arc in the sub-path is non-mateless.
+            // Without this, a run that wraps around the sub-path's seam
+            // would be split in two — and the leading line segment would
+            // start outside the trimmed rectangle.
+            let rot = 0;
+            while (rot < n && isMateless[pi][spStart + rot]) rot++;
+            if (rot === n) continue; // fully outside trimmed rectangle
+
+            const subOps: Op[] = [];
+            let i = 0;
+            while (i < n) {
+                const ai = spStart + ((i + rot) % n);
+                if (!isMateless[pi][ai]) {
+                    subOps.push({ type: 'arc', pieceIdx: pi, arcIdx: ai });
+                    i++;
+                    continue;
+                }
+                // Walk to end of run.
+                let j = i;
+                while (j < n && isMateless[pi][spStart + ((j + rot) % n)]) j++;
+                const firstAi = spStart + ((i + rot) % n);
+                const lastAi = spStart + ((j - 1 + rot) % n);
+                const runStart = allPieceArcs[pi][firstAi];
+                const runEnd = allPieceArcs[pi][lastAi];
+                for (const ln of borderPathBetween(
+                    runStart.sx, runStart.sy, runEnd.ex, runEnd.ey, rectBorder,
+                )) {
+                    subOps.push({ type: 'line', ...ln });
+                }
+                i = j;
+            }
+
+            pieceSubPaths[pi].push(subOps);
+        }
+    }
+
+    // 9. Allocate edge IDs in sub-path order per piece, and build a map
+    //    from original (pi, ai) to the new edge ID so arc-to-arc mate
+    //    relationships carry over.
+    let nextEdgeId = 0;
+    const arcToEdgeId = new Map<string, number>();
+    const subPathEdgeIds: number[][][] = pieceSubPaths.map(sps =>
+        sps.map(ops => ops.map(op => {
+            const edgeId = nextEdgeId++;
+            if (op.type === 'arc') {
+                arcToEdgeId.set(`${op.pieceIdx},${op.arcIdx}`, edgeId);
+            }
+            return edgeId;
+        })),
+    );
+
+    // 10. Build each Piece.
+    const pieces: Piece[] = [];
+    for (let pi = 0; pi < pieceSubPaths.length; pi++) {
+        const subPaths = pieceSubPaths[pi];
+        if (subPaths.length === 0) continue;
+
+        // Bounding box covers every op across every sub-path.
         let minX = Infinity, minY = Infinity;
-        for (const a of arcs) {
-            minX = Math.min(minX, a.sx, a.ex);
-            minY = Math.min(minY, a.sy, a.ey);
+        for (const sp of subPaths) {
+            for (const op of sp) {
+                if (op.type === 'arc') {
+                    const a = allPieceArcs[op.pieceIdx][op.arcIdx];
+                    minX = Math.min(minX, a.sx, a.ex);
+                    minY = Math.min(minY, a.sy, a.ey);
+                } else {
+                    minX = Math.min(minX, op.sx, op.ex);
+                    minY = Math.min(minY, op.sy, op.ey);
+                }
+            }
         }
 
-        // Each arc becomes one Edge
         const edges: Edge[] = [];
-        for (let ai = 0; ai < arcs.length; ai++) {
-            const a = arcs[ai];
-            const edgeId = edgeIds[pi][ai];
-
-            // Find mate: another arc with the same (cx, cy, quad) key, on
-            // any piece. We skip only the exact same arc entry — intra-
-            // piece mates are legitimate for a diamond filler whose owner
-            // piece also holds the bordering concave arc.
-            const key = arcKeys[pi][ai];
-            const candidates = arcIndex.get(key) || [];
-            let mateEdgeId = -1;
-            let matePieceId = -1;
-            for (const c of candidates) {
-                if (c.pieceIdx === pi && c.arcIdx === ai) continue;
-                mateEdgeId = edgeIds[c.pieceIdx][c.arcIdx];
-                matePieceId = c.pieceIdx;
-                break;
-            }
-
-            // Convert to piece-local coordinates (subtract bounding box origin)
-            const localSx = a.sx - minX;
-            const localSy = a.sy - minY;
-            const localEx = a.ex - minX;
-            const localEy = a.ey - minY;
-            const rx = a.r * scaleX;
-            const ry = a.r * scaleY;
-
-            const path = `A ${fmt(rx)} ${fmt(ry)} 0 0,${a.sign} ${fmt(localEx)} ${fmt(localEy)}`;
-
-            edges.push({
-                id: edgeId,
-                mateEdgeId,
-                matePieceId,
-                path,
-                start: { x: localSx, y: localSy },
-                end: { x: localEx, y: localEy },
-            });
-        }
-
-        // Shape: main contour (M … Z), then one closed sub-path per extra
-        // 4-arc block — gap-filler diamonds and orphan-tile discs. Each
-        // extra is exactly 4 consecutive edges.
-        const mainCount = mainArcCount[pi];
         const shapeParts: string[] = [];
-        if (mainCount > 0) {
-            shapeParts.push(`M ${fmt(edges[0].start.x)} ${fmt(edges[0].start.y)}`);
-            for (let i = 0; i < mainCount; i++) {
-                shapeParts.push(edges[i].path);
-            }
-            shapeParts.push('Z');
-        }
-        for (let i = mainCount; i < edges.length; i += 4) {
-            shapeParts.push(`M ${fmt(edges[i].start.x)} ${fmt(edges[i].start.y)}`);
-            for (let j = 0; j < 4; j++) {
-                shapeParts.push(edges[i + j].path);
-            }
-            shapeParts.push('Z');
-        }
 
-        const shape = shapeParts.join(' ');
+        for (let spi = 0; spi < subPaths.length; spi++) {
+            const sp = subPaths[spi];
+            const edgeIds = subPathEdgeIds[pi][spi];
 
-        // imageOffset: piece-local (0,0) maps to (minX, minY) in image pixels
-        const imageOffset: Point = {
-            x: -minX,
-            y: -minY,
-        };
+            for (let oi = 0; oi < sp.length; oi++) {
+                const op = sp[oi];
+                const edgeId = edgeIds[oi];
+                let sx: number, sy: number, ex: number, ey: number;
+                let path: string;
+                let mateEdgeId = -1;
+                let matePieceId = -1;
+
+                if (op.type === 'arc') {
+                    const a = allPieceArcs[op.pieceIdx][op.arcIdx];
+                    sx = a.sx; sy = a.sy; ex = a.ex; ey = a.ey;
+                    const rx = a.r * scaleX;
+                    const ry = a.r * scaleY;
+                    path = `A ${fmt(rx)} ${fmt(ry)} 0 0,${a.sign} ${fmt(ex - minX)} ${fmt(ey - minY)}`;
+
+                    const key = arcKeys[op.pieceIdx][op.arcIdx];
+                    const candidates = arcIndex.get(key) ?? [];
+                    for (const c of candidates) {
+                        if (c.pieceIdx === op.pieceIdx && c.arcIdx === op.arcIdx) continue;
+                        const mateId = arcToEdgeId.get(`${c.pieceIdx},${c.arcIdx}`);
+                        if (mateId !== undefined) {
+                            mateEdgeId = mateId;
+                            matePieceId = c.pieceIdx;
+                            break;
+                        }
+                    }
+                } else {
+                    sx = op.sx; sy = op.sy; ex = op.ex; ey = op.ey;
+                    path = `L ${fmt(ex - minX)} ${fmt(ey - minY)}`;
+                }
+
+                if (oi === 0) {
+                    shapeParts.push(`M ${fmt(sx - minX)} ${fmt(sy - minY)}`);
+                }
+                shapeParts.push(path);
+                if (oi === sp.length - 1) {
+                    shapeParts.push('Z');
+                }
+
+                edges.push({
+                    id: edgeId,
+                    mateEdgeId,
+                    matePieceId,
+                    path,
+                    start: { x: sx - minX, y: sy - minY },
+                    end: { x: ex - minX, y: ey - minY },
+                });
+            }
+        }
 
         pieces.push({
             id: pi,
             edges,
-            shape,
-            imageOffset,
+            shape: shapeParts.join(' '),
+            imageOffset: { x: -minX, y: -minY },
         });
     }
 
     return pieces;
+}
+
+/**
+ * Walk the rectangle boundary from (px,py) to (qx,qy). Both points must
+ * already lie on the boundary. Returns one line segment when they share
+ * a side, or two (through the shared corner) when they don't. Used to
+ * replace runs of mateless arcs in a trimmed sub-path.
+ */
+function borderPathBetween(
+    px: number, py: number, qx: number, qy: number,
+    rect: { xMin: number; yMin: number; xMax: number; yMax: number },
+): Array<{ sx: number; sy: number; ex: number; ey: number }> {
+    const eps = 1e-6;
+    const onTop = (_x: number, y: number) => Math.abs(y - rect.yMin) < eps;
+    const onBottom = (_x: number, y: number) => Math.abs(y - rect.yMax) < eps;
+    const onLeft = (x: number, _y: number) => Math.abs(x - rect.xMin) < eps;
+    const onRight = (x: number, _y: number) => Math.abs(x - rect.xMax) < eps;
+
+    // Determine which border side each endpoint lies on. When a point
+    // sits exactly on a corner it's on two sides — pick the one that
+    // matches the other point's side, falling through to the corner-
+    // bridging branch when neither does.
+    const pSides = [
+        ...(onTop(px, py) ? ['top'] : []),
+        ...(onBottom(px, py) ? ['bottom'] : []),
+        ...(onLeft(px, py) ? ['left'] : []),
+        ...(onRight(px, py) ? ['right'] : []),
+    ];
+    const qSides = [
+        ...(onTop(qx, qy) ? ['top'] : []),
+        ...(onBottom(qx, qy) ? ['bottom'] : []),
+        ...(onLeft(qx, qy) ? ['left'] : []),
+        ...(onRight(qx, qy) ? ['right'] : []),
+    ];
+
+    const shared = pSides.find(s => qSides.includes(s));
+    if (shared) {
+        return [{ sx: px, sy: py, ex: qx, ey: qy }];
+    }
+
+    const corners: Array<[string, string, number, number]> = [
+        ['top', 'left', rect.xMin, rect.yMin],
+        ['top', 'right', rect.xMax, rect.yMin],
+        ['bottom', 'left', rect.xMin, rect.yMax],
+        ['bottom', 'right', rect.xMax, rect.yMax],
+    ];
+    for (const [s1, s2, cx, cy] of corners) {
+        const match =
+            (pSides.includes(s1) && qSides.includes(s2))
+            || (pSides.includes(s2) && qSides.includes(s1));
+        if (match) {
+            return [
+                { sx: px, sy: py, ex: cx, ey: cy },
+                { sx: cx, sy: cy, ex: qx, ey: qy },
+            ];
+        }
+    }
+
+    // Fallback: endpoints are on opposite sides or not on the boundary.
+    // This shouldn't happen for well-formed trimmed sub-paths, but draw
+    // a direct line rather than failing outright.
+    return [{ sx: px, sy: py, ex: qx, ey: qy }];
 }
 
 function fmt(n: number): string {

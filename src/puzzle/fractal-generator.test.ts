@@ -141,55 +141,52 @@ describe('generateFractalPuzzle', () => {
         expect(uniqueIds.size).toBe(edgeIds.length);
     });
 
-    test('extra sub-paths produce matching Edge objects (issue #214)', () => {
+    test('every drawable sub-path op has a matching Edge object (issues #214, #211)', () => {
         // Gap-filler diamonds used to be raw SVG sub-paths with no Edge
         // objects, so every concave arc bordering a gap cell stayed at
-        // mateEdgeId === -1. The fix adds four Edge objects per extra
-        // sub-path (diamond fillers, plus orphan discs since #237).
-        //
-        // A piece's shape consists of a main-contour sub-path plus one
-        // extra closed sub-path per diamond filler or orphan disc — so
-        // the number of "M " commands in the path tells us how many
-        // extras the piece owns, and each must contribute exactly 4
-        // Edge objects.
+        // mateEdgeId === -1 (#214). Orphan-disc fillers joined them in
+        // #237, and the #211 border trim inserted L-segments along the
+        // outer rectangle. In every case, each drawable op in the shape
+        // string (A or L) must correspond to exactly one Edge — otherwise
+        // part of the boundary has no mate lookup and can't merge.
         const cases: Array<[number, number, number]> = [
             [4, 4, 1], [4, 4, 2], [4, 4, 3],
             [6, 4, 42], [8, 6, 7], [6, 6, 99],
         ];
 
-        let totalExtraEdges = 0;
+        let totalExtras = 0;
 
         for (const [cols, rows, seed] of cases) {
             const pieces = generateFractalPuzzle(cols, rows, imageSize, seed);
 
             for (const piece of pieces) {
-                const subPathCount = (piece.shape.match(/M /g) ?? []).length;
-                const extraCount = subPathCount - 1;
-                if (extraCount <= 0) continue;
-
-                const expectedExtraEdges = extraCount * 4;
+                const drawableOpCount =
+                    (piece.shape.match(/[AL] /g) ?? []).length;
                 expect(
                     piece.edges.length,
                     `piece ${piece.id} (cols=${cols} rows=${rows} seed=${seed}) `
-                    + `has ${subPathCount} sub-paths but only `
+                    + `has ${drawableOpCount} drawable ops but `
                     + `${piece.edges.length} edges`,
-                ).toBeGreaterThanOrEqual(expectedExtraEdges);
+                ).toBe(drawableOpCount);
 
-                totalExtraEdges += expectedExtraEdges;
+                const subPathCount = (piece.shape.match(/M /g) ?? []).length;
+                totalExtras += subPathCount - 1;
             }
         }
 
         // Make sure at least one case actually produced an extra sub-path,
         // so this test is not silently passing on all-main-contour puzzles.
-        expect(totalExtraEdges).toBeGreaterThan(0);
+        expect(totalExtras).toBeGreaterThan(0);
     });
 
-    test('every mateless edge sits on the puzzle outer border (issue #224)', () => {
-        // After #214 + #224, the invariant that mateEdgeId === -1 iff the
-        // edge lies on the puzzle rectangle should hold. Each fractal
-        // border arc has at least one endpoint on x=0, x=width, y=0, or
-        // y=height; any mateless arc entirely in the interior indicates a
-        // regression.
+    test('every mateless edge is a straight line on the puzzle outer border (issue #211)', () => {
+        // After #211, the outer border is made flat by trimming the puzzle
+        // by `rad` on each side and replacing runs of mateless arcs with
+        // straight line segments along the new rectangle edge. So every
+        // mateless edge must be a line (path starts with "L") with BOTH
+        // endpoints on the puzzle outer rectangle — a weaker single-endpoint
+        // check (the pre-#211 invariant from #224) would still pass for
+        // interior arcs that happen to touch the border at a vertex.
         const cases: Array<[number, number, number]> = [
             [4, 4, 1], [4, 4, 7], [4, 4, 11],
             [6, 4, 42], [6, 6, 99],
@@ -215,9 +212,15 @@ describe('generateFractalPuzzle', () => {
                         || Math.abs(y - imageSize.height) < EPS;
 
                     expect(
-                        onBoundary(startX, startY) || onBoundary(endX, endY),
-                        `Interior mateless edge in piece ${piece.id} at `
-                        + `(${startX.toFixed(2)},${startY.toFixed(2)}) → `
+                        edge.path.trim().startsWith('L'),
+                        `Mateless edge in piece ${piece.id} is not a line: `
+                        + `"${edge.path}" [cols=${cols} rows=${rows} seed=${seed}]`,
+                    ).toBe(true);
+
+                    expect(
+                        onBoundary(startX, startY) && onBoundary(endX, endY),
+                        `Mateless edge in piece ${piece.id} does not sit on the `
+                        + `outer rectangle: (${startX.toFixed(2)},${startY.toFixed(2)}) → `
                         + `(${endX.toFixed(2)},${endY.toFixed(2)}) `
                         + `[cols=${cols} rows=${rows} seed=${seed}]`,
                     ).toBe(true);
