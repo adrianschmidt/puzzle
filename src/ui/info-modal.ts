@@ -93,7 +93,7 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 <li><strong>Classic</strong> — Traditional jigsaw tabs on a rectangular grid</li>
                 <li><strong>Fractal</strong> — Organic circle-packing cuts. Options:
                     <ul>
-                        <li><strong>Borderless</strong> — Pieces run all the way to the image edge instead of leaving a frame</li>
+                        <li><strong>Borderless</strong> — No pieces with flat edges, so it's not obvious which pieces make up the frame of the puzzle</li>
                         <li><strong>Enable rotation</strong> — Pieces start at random 90° rotations; solve orientation as well as position. Multi-select is turned on by default so you can pick the pieces to rotate, then use the ↺ / ↻ buttons.</li>
                     </ul>
                 </li>
@@ -115,22 +115,6 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 </label>
                 <p class="info-setting-description">Shift single pieces upward when dragging, so your finger doesn't block the view.</p>
             </div>
-            <div class="info-setting">
-                <label class="info-setting-label" for="piece-opacity-slider">Piece opacity</label>
-                <p class="info-setting-description">Adjust puzzle piece transparency (debug).</p>
-                <div class="info-setting-slider">
-                    <input type="range" id="piece-opacity-slider" data-testid="piece-opacity-slider"
-                           min="0" max="1" step="0.05" value="1" />
-                    <span class="info-setting-slider-value" data-testid="piece-opacity-value">1</span>
-                </div>
-            </div>
-            <div class="info-setting">
-                <label class="info-setting-toggle">
-                    <input type="checkbox" data-testid="mateless-edges-toggle" />
-                    <span class="info-setting-label">Show mateless edges</span>
-                </label>
-                <p class="info-setting-description">Highlight edges with no mate (mateEdgeId&nbsp;=&nbsp;-1) in pink (debug).</p>
-            </div>
         </section>
 
         <section class="info-section">
@@ -149,6 +133,26 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 <li><strong>License:</strong> MIT</li>
                 <li><strong>Images:</strong> <a href="https://unsplash.com" target="_blank" rel="noopener">Unsplash</a> (photographer credited per image)</li>
             </ul>
+        </section>
+
+        <section class="info-section info-section--debug" data-testid="debug-section">
+            <h3>Debug</h3>
+            <div class="info-setting">
+                <label class="info-setting-label" for="piece-opacity-slider">Piece opacity</label>
+                <p class="info-setting-description">Adjust puzzle piece transparency.</p>
+                <div class="info-setting-slider">
+                    <input type="range" id="piece-opacity-slider" data-testid="piece-opacity-slider"
+                           min="0" max="1" step="0.05" value="1" />
+                    <span class="info-setting-slider-value" data-testid="piece-opacity-value">1</span>
+                </div>
+            </div>
+            <div class="info-setting">
+                <label class="info-setting-toggle">
+                    <input type="checkbox" data-testid="mateless-edges-toggle" />
+                    <span class="info-setting-label">Show mateless edges</span>
+                </label>
+                <p class="info-setting-description">Highlight edges with no mate (mateEdgeId&nbsp;=&nbsp;-1) in pink.</p>
+            </div>
         </section>
     `;
 
@@ -229,17 +233,20 @@ export function createInfoModal(options: InfoModalOptions): () => void {
         );
     });
 
-    // Debug: solve button at the bottom of the content
+    // Debug: solve button sits inside the Debug section so all debug tools stay together.
     if (options.onSolve) {
+        const debugSection = content.querySelector<HTMLElement>(
+            '[data-testid="debug-section"]',
+        )!;
         const solveBtn = document.createElement('button');
         solveBtn.className = 'info-modal-solve-btn';
-        solveBtn.textContent = '🧩 Solve Puzzle (debug)';
+        solveBtn.textContent = '🧩 Solve Puzzle';
         solveBtn.type = 'button';
         solveBtn.addEventListener('click', () => {
             dismiss();
             options.onSolve!();
         });
-        content.appendChild(solveBtn);
+        debugSection.appendChild(solveBtn);
     }
 
     modal.appendChild(header);
