@@ -21,6 +21,11 @@ export interface ComposableSliderConfig {
     disableTabs: boolean;
 }
 
+/** Fractal generator config passed through from the dialog. */
+export interface FractalDialogConfig {
+    borderless: boolean;
+}
+
 export interface SizePickerOptions {
     /** Container to append the dialog to. */
     container: HTMLElement;
@@ -30,12 +35,21 @@ export interface SizePickerOptions {
     selectedCutStyleIndex?: number;
     /** Previously saved composable slider config (used to pre-populate sliders). */
     savedComposableConfig?: ComposableSliderConfig;
+    /** Previously saved fractal config (used to pre-populate controls). */
+    savedFractalConfig?: FractalDialogConfig;
     /** Previously saved image source preference. */
     savedImageSource?: string;
     /** Previously saved image category preference. */
     savedImageCategory?: string;
     /** Called when the player selects a size. */
-    onSelect: (index: number, cutStyleIndex?: number, composableConfig?: ComposableSliderConfig, imageSource?: string, imageCategory?: string) => void;
+    onSelect: (
+        index: number,
+        cutStyleIndex?: number,
+        composableConfig?: ComposableSliderConfig,
+        imageSource?: string,
+        imageCategory?: string,
+        fractalConfig?: FractalDialogConfig,
+    ) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
 }
@@ -152,7 +166,17 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
             const composableConfig = currentCutStyleIndex === composableCutIndex
                 ? getSliderValues()
                 : undefined;
-            onSelect(i, currentCutStyleIndex, composableConfig, imageSourceSelect.value, imageCategorySelect.value);
+            const fractalConfig = currentCutStyleIndex === fractalCutIndex
+                ? { borderless: fractalBorderlessCheckbox.checked }
+                : undefined;
+            onSelect(
+                i,
+                currentCutStyleIndex,
+                composableConfig,
+                imageSourceSelect.value,
+                imageCategorySelect.value,
+                fractalConfig,
+            );
         });
 
         sizeButtons.push(btn);
@@ -164,12 +188,19 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
 
     // Composable sliders container (populated below, visibility toggled here)
     const composableCutIndex = CUT_STYLE_OPTIONS.findIndex(o => o.id === 'composable');
+    const fractalCutIndex = CUT_STYLE_OPTIONS.findIndex(o => o.id === 'fractal');
     const slidersSection = document.createElement('div');
     slidersSection.className = 'composable-sliders';
     slidersSection.style.display = 'none';
 
+    // Fractal options container (populated below)
+    const fractalSection = document.createElement('div');
+    fractalSection.className = 'fractal-options';
+    fractalSection.style.display = 'none';
+
     function updateSlidersVisibility(): void {
         slidersSection.style.display = currentCutStyleIndex === composableCutIndex ? 'block' : 'none';
+        fractalSection.style.display = currentCutStyleIndex === fractalCutIndex ? 'block' : 'none';
     }
 
     // Cut style picker section (insert before size grid)
@@ -183,6 +214,20 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     });
 
     dialog.appendChild(cutStyleSection);
+
+    // Fractal borderless checkbox
+    const fractalBorderlessRow = document.createElement('div');
+    fractalBorderlessRow.className = 'composable-slider-row';
+    const fractalBorderlessLabel = document.createElement('label');
+    fractalBorderlessLabel.className = 'composable-slider-label';
+    fractalBorderlessLabel.textContent = 'Borderless';
+    const fractalBorderlessCheckbox = document.createElement('input');
+    fractalBorderlessCheckbox.type = 'checkbox';
+    fractalBorderlessCheckbox.checked = options.savedFractalConfig?.borderless ?? false;
+    fractalBorderlessRow.appendChild(fractalBorderlessLabel);
+    fractalBorderlessRow.appendChild(fractalBorderlessCheckbox);
+    fractalSection.appendChild(fractalBorderlessRow);
+    dialog.appendChild(fractalSection);
 
     // Image source selector
     const imageSourceSection = document.createElement('div');

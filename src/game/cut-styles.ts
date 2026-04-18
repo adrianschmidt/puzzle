@@ -162,6 +162,57 @@ export function loadComposableConfigPreference():
     }
 }
 
+/** localStorage key for the saved fractal config. */
+export const FRACTAL_CONFIG_KEY = 'puzzle-fractal-config';
+
+/**
+ * Shape of the fractal config stored in preferences.
+ */
+export interface FractalConfigPreference {
+    borderless: boolean;
+}
+
+/**
+ * Save the fractal config to localStorage.
+ */
+export function saveFractalConfigPreference(
+    config: FractalConfigPreference,
+): void {
+    localStorage.setItem(FRACTAL_CONFIG_KEY, JSON.stringify(config));
+}
+
+/**
+ * Load the fractal config from localStorage.
+ * Returns undefined if nothing is saved or the value is invalid.
+ */
+export function loadFractalConfigPreference():
+    | FractalConfigPreference
+    | undefined {
+    try {
+        const raw = localStorage.getItem(FRACTAL_CONFIG_KEY);
+        if (raw === null) {
+            return undefined;
+        }
+
+        const parsed: unknown = JSON.parse(raw);
+        if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            'borderless' in parsed
+        ) {
+            return {
+                borderless: Boolean(
+                    (parsed as Record<string, unknown>).borderless,
+                ),
+            };
+        }
+
+        return undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 /** localStorage key for the saved image source preference. */
 const IMAGE_SOURCE_PREFERENCE_KEY = 'puzzle-image-source';
 

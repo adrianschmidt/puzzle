@@ -179,6 +179,61 @@ describe('generateFractalPuzzle', () => {
         expect(totalExtras).toBeGreaterThan(0);
     });
 
+    test('borderless mode keeps curved outer edges (no straight L segments for mateless edges)', () => {
+        // In borderless mode, PR #227's straight-line collapse is disabled
+        // so mateless outer-border edges remain curved arcs. This removes
+        // the visual "border pieces look different" cue and increases
+        // puzzle difficulty.
+        const cases: Array<[number, number, number]> = [
+            [4, 4, 1], [4, 4, 7], [6, 4, 42], [6, 6, 99],
+        ];
+
+        for (const [cols, rows, seed] of cases) {
+            const pieces = generateFractalPuzzle(
+                cols, rows, imageSize, seed, { borderless: true },
+            );
+
+            let matelessSeen = 0;
+            for (const piece of pieces) {
+                for (const edge of piece.edges) {
+                    if (edge.mateEdgeId !== -1) continue;
+                    matelessSeen++;
+                    expect(
+                        edge.path.trim().startsWith('A'),
+                        `Mateless edge in piece ${piece.id} should be an arc in borderless mode, got: "${edge.path}" [cols=${cols} rows=${rows} seed=${seed}]`,
+                    ).toBe(true);
+                }
+            }
+            expect(
+                matelessSeen,
+                `Expected some mateless edges for cols=${cols} rows=${rows} seed=${seed}`,
+            ).toBeGreaterThan(0);
+        }
+    });
+
+    test('borderless mode omits orphan-disc sub-paths for known orphan seed', () => {
+        // Seed (cols=4, rows=4, seed=1) produces orphan tiles that default
+        // mode attaches as disc sub-paths (per PR #225/#226). In borderless
+        // mode that attachment is skipped — the orphan tile simply isn't
+        // covered by any piece. Verify by counting shape sub-paths.
+        const cols = 4, rows = 4, seed = 1;
+
+        const defaultPieces = generateFractalPuzzle(cols, rows, imageSize, seed);
+        const borderlessPieces = generateFractalPuzzle(
+            cols, rows, imageSize, seed, { borderless: true },
+        );
+
+        const countSubPaths = (pieces: ReturnType<typeof generateFractalPuzzle>) =>
+            pieces.reduce(
+                (sum, p) => sum + (p.shape.match(/M /g) ?? []).length,
+                0,
+            );
+
+        expect(countSubPaths(defaultPieces)).toBeGreaterThan(
+            countSubPaths(borderlessPieces),
+        );
+    });
+
     test('every mateless edge is a straight line on the puzzle outer border (issue #211)', () => {
         // After #211, the outer border is made flat by trimming the puzzle
         // by `rad` on each side and replacing runs of mateless arcs with
