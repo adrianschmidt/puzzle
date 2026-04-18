@@ -43,11 +43,13 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 50, y: 50 },
+            rotation: 0,
         },
         {
             id: 2,
             pieces: new Map([[2, { x: 0, y: 0 }]]),
             position: { x: 300, y: 200 },
+            rotation: 0,
         },
     ];
 
@@ -230,6 +232,62 @@ describe('deserializeState', () => {
         const restored = deserializeState(v2Serialized);
 
         expect(restored.gridSize).toEqual({ cols: 8, rows: 6 });
+    });
+
+    it('defaults rotation to 0 when missing (v5 → v6 migration)', () => {
+        // Simulate a v5 saved state (has cutStyle but no rotation on groups)
+        const v5Serialized: SerializedGameState = {
+            version: 5,
+            pieces: [makePiece(0), makePiece(1)],
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
+                { id: 1, pieces: [[1, { x: 0, y: 0 }]], position: { x: 100, y: 0 } },
+            ],
+            imageUrl: 'v5-image.jpg',
+            imageSize: { width: 800, height: 600 },
+            completed: false,
+        };
+
+        const restored = deserializeState(v5Serialized);
+
+        expect(restored.groups[0].rotation).toBe(0);
+        expect(restored.groups[1].rotation).toBe(0);
+    });
+
+    it('round-trips non-zero rotation values', () => {
+        const original = makeGameState();
+        original.groups[0].rotation = 2;
+        original.groups[1].rotation = 3;
+
+        const serialized = serializeState(original);
+        const json = JSON.stringify(serialized);
+        const parsed = JSON.parse(json) as SerializedGameState;
+        const restored = deserializeState(parsed);
+
+        expect(restored.groups[0].rotation).toBe(2);
+        expect(restored.groups[1].rotation).toBe(3);
+    });
+
+    it('coerces out-of-range rotation values to 0', () => {
+        const bad: SerializedGameState = {
+            version: STATE_VERSION,
+            pieces: [makePiece(0)],
+            groups: [
+                {
+                    id: 0,
+                    pieces: [[0, { x: 0, y: 0 }]],
+                    position: { x: 0, y: 0 },
+                    rotation: 7,
+                },
+            ],
+            imageUrl: 'test.jpg',
+            imageSize: { width: 800, height: 600 },
+            gridSize: { cols: 8, rows: 6 },
+            completed: false,
+        };
+
+        const restored = deserializeState(bad);
+        expect(restored.groups[0].rotation).toBe(0);
     });
 
     it('preserves gridSize in v3 round-trip', () => {

@@ -202,6 +202,47 @@ html, body {
   background: rgba(100, 160, 255, 0.22);
 }
 
+/* Rotate CW/CCW buttons (bottom-left, fractal-only) */
+.rotate-button {
+  position: absolute;
+  bottom: 24px;
+  z-index: 9999;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-fg);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.rotate-button--ccw { left: 12px; }
+.rotate-button--cw { left: 64px; }
+
+.rotate-button:hover:not(:disabled) {
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border-hover);
+}
+
+.rotate-button:active:not(:disabled) {
+  background: var(--ui-overlay-active);
+}
+
+.rotate-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* Deselect-all floating button (bottom-center) */
 .deselect-button {
   position: absolute;
@@ -1019,4 +1060,13 @@ html, body {
     width: 40px;
     height: 40px;
   }
+
+  .rotate-button {
+    bottom: 16px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .rotate-button--ccw { left: 8px; }
+  .rotate-button--cw { left: 50px; }
 }

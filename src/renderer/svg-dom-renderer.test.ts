@@ -60,6 +60,7 @@ function makeGroup(id: number, pieceIds: number[], x = 0, y = 0): PieceGroup {
         id,
         pieces: new Map(pieceIds.map((pid, i) => [pid, { x: i * 100, y: 0 }])),
         position: { x, y },
+        rotation: 0,
     };
 }
 
@@ -168,7 +169,7 @@ describe('SvgDomRenderer', () => {
                 '[data-group-id="0"]',
             ) as HTMLElement;
 
-            expect(groupEl.style.transform).toBe('translate(50px, 50px)');
+            expect(groupEl.style.transform).toBe('translate(50px, 50px) rotate(0deg)');
         });
 
         it('each piece SVG has a clip-path in its defs', () => {
@@ -232,6 +233,7 @@ describe('SvgDomRenderer', () => {
                     [1, { x: 100, y: 0 }],
                 ]),
                 position: { x: 50, y: 50 },
+                rotation: 0,
             };
 
             const newState: GameState = {
@@ -372,7 +374,7 @@ describe('SvgDomRenderer', () => {
             const groupEl = container.querySelector(
                 '[data-group-id="0"]',
             ) as HTMLElement;
-            expect(groupEl.style.transform).toBe('translate(300px, 400px)');
+            expect(groupEl.style.transform).toBe('translate(300px, 400px) rotate(0deg)');
         });
 
         it('does nothing if init was not called', () => {

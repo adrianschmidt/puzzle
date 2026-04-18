@@ -4,6 +4,8 @@ import {
     findGroupForPiece,
     moveGroup,
     getBorderEdges,
+    normaliseQuarterTurns,
+    rotatePoint,
 } from './helpers.js';
 import type { Piece, PieceGroup, Edge } from './types.js';
 
@@ -36,7 +38,7 @@ function piece(id: number, edges: Edge[]): Piece {
 /** Create a group with given piece IDs. */
 function group(id: number, pieceIds: number[]): PieceGroup {
     const pieces = new Map(pieceIds.map((pid) => [pid, { x: 0, y: 0 }]));
-    return { id, pieces, position: { x: 0, y: 0 } };
+    return { id, pieces, position: { x: 0, y: 0 }, rotation: 0 };
 }
 
 describe('getMateEdge', () => {
@@ -191,5 +193,58 @@ describe('getBorderEdges', () => {
 
         expect(borders).toHaveLength(2);
         expect(borders.map((b) => b.piece.id).sort()).toEqual([0, 1]);
+    });
+});
+
+describe('rotatePoint', () => {
+    it('returns the point unchanged at 0 quarter-turns', () => {
+        expect(rotatePoint({ x: 3, y: 7 }, 0)).toEqual({ x: 3, y: 7 });
+    });
+
+    it('rotates 90° clockwise', () => {
+        // (10, 0) -> (0, 10) under clockwise rotation in screen coords (y-down)
+        const r = rotatePoint({ x: 10, y: 0 }, 1);
+        expect(r.x).toBeCloseTo(0);
+        expect(r.y).toBeCloseTo(10);
+    });
+
+    it('rotates 180°', () => {
+        const r = rotatePoint({ x: 3, y: 7 }, 2);
+        expect(r.x).toBeCloseTo(-3);
+        expect(r.y).toBeCloseTo(-7);
+    });
+
+    it('rotates 270° (= 90° CCW)', () => {
+        const r = rotatePoint({ x: 10, y: 0 }, 3);
+        expect(r.x).toBeCloseTo(0);
+        expect(r.y).toBeCloseTo(-10);
+    });
+
+    it('is its own inverse at 4 quarter-turns', () => {
+        const p = { x: 11, y: -4 };
+        let r = p;
+        for (let i = 0; i < 4; i++) r = rotatePoint(r, 1);
+        expect(r.x).toBeCloseTo(p.x);
+        expect(r.y).toBeCloseTo(p.y);
+    });
+});
+
+describe('normaliseQuarterTurns', () => {
+    it('leaves in-range values alone', () => {
+        expect(normaliseQuarterTurns(0)).toBe(0);
+        expect(normaliseQuarterTurns(1)).toBe(1);
+        expect(normaliseQuarterTurns(2)).toBe(2);
+        expect(normaliseQuarterTurns(3)).toBe(3);
+    });
+
+    it('wraps values above 3', () => {
+        expect(normaliseQuarterTurns(4)).toBe(0);
+        expect(normaliseQuarterTurns(7)).toBe(3);
+    });
+
+    it('wraps negative values', () => {
+        expect(normaliseQuarterTurns(-1)).toBe(3);
+        expect(normaliseQuarterTurns(-4)).toBe(0);
+        expect(normaliseQuarterTurns(-5)).toBe(3);
     });
 });

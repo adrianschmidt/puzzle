@@ -18,7 +18,7 @@ import { getImageDimensions } from '../renderer/svg-dom-utils.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 /**
  * Supported schema versions.
@@ -28,14 +28,17 @@ export const STATE_VERSION = 5;
  * - v3: adds gridSize (cols × rows)
  * - v4: adds seed for procedural cut generation
  * - v5: adds cutStyle ('classic' | 'fractal')
+ * - v6: adds rotation (0-3 quarter-turns) per group
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
     id: number;
     pieces: Array<[number, Point]>;
     position: Point;
+    /** Quarter-turns clockwise (0-3). Missing on v5 and earlier saves. */
+    rotation?: number;
 }
 
 /** JSON-safe representation of a full game state, with a version tag. */
@@ -156,6 +159,7 @@ function serializeGroup(group: PieceGroup): SerializedPieceGroup {
         id: group.id,
         pieces: Array.from(group.pieces.entries()),
         position: group.position,
+        rotation: group.rotation,
     };
 }
 
@@ -164,7 +168,16 @@ function deserializeGroup(group: SerializedPieceGroup): PieceGroup {
         id: group.id,
         pieces: new Map(group.pieces),
         position: group.position,
+        rotation: normaliseStoredRotation(group.rotation),
     };
+}
+
+/** v5 and earlier saves have no rotation; coerce unknown values to 0. */
+function normaliseStoredRotation(value: unknown): 0 | 1 | 2 | 3 {
+    if (value === 1 || value === 2 || value === 3) {
+        return value;
+    }
+    return 0;
 }
 
 /**

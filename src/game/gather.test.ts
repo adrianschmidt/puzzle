@@ -29,7 +29,7 @@ function makePiece(id: number, width: number, height: number): Piece {
 }
 
 function makeGroup(id: number, x: number, y: number): PieceGroup {
-    return { id, pieces: new Map([[id, { x: 0, y: 0 }]]), position: { x, y } };
+    return { id, pieces: new Map([[id, { x: 0, y: 0 }]]), position: { x, y }, rotation: 0 };
 }
 
 function makeMultiGroup(
@@ -37,7 +37,7 @@ function makeMultiGroup(
     position: { x: number; y: number },
     pieceOffsets: Array<[number, { x: number; y: number }]>,
 ): PieceGroup {
-    return { id, pieces: new Map(pieceOffsets), position };
+    return { id, pieces: new Map(pieceOffsets), position, rotation: 0 };
 }
 
 const landscapeAspect = 800 / 600; // 1.33
@@ -222,8 +222,8 @@ describe('computeGatheredPositions with tab paths', () => {
         };
 
         const groups: PieceGroup[] = [
-            { id: 1, pieces: new Map([[1, { x: 0, y: 0 }]]), position: { x: 0, y: 0 } },
-            { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]), position: { x: 200, y: 0 } },
+            { id: 1, pieces: new Map([[1, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 },
+            { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]), position: { x: 200, y: 0 }, rotation: 0 },
         ];
 
         const { layoutBounds } = computeGatheredPositions(groups, 1.33, [pieceWithTab, plainPiece]);

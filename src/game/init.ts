@@ -129,6 +129,7 @@ export function createInitialGroups(
         id: piece.id,
         pieces: new Map([[piece.id, { x: 0, y: 0 }]]),
         position: positions[index],
+        rotation: 0,
     }));
 }
 

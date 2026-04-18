@@ -35,7 +35,7 @@ function makeGroup(
         pieces.set(pid, { x: 0, y: 0 });
     }
 
-    return { id, pieces, position };
+    return { id, pieces, position, rotation: 0 };
 }
 
 describe('DragController', () => {

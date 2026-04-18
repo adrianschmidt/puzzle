@@ -70,6 +70,17 @@ export interface PieceGroup {
     pieces: Map<number, Point>;
     /** The group's position in world (table) coordinates. */
     position: Point;
+    /**
+     * Rotation in quarter-turns clockwise (0, 1, 2, 3).
+     *
+     * Applied to the group's local-space geometry at render time
+     * and during world-position lookups. Piece offsets and edge
+     * endpoints stay in un-rotated local coordinates.
+     *
+     * Only surfaces in the UI for puzzle styles that enable it
+     * (currently Fractal); classic-style groups always have 0.
+     */
+    rotation: 0 | 1 | 2 | 3;
 }
 
 /**
