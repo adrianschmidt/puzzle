@@ -43,6 +43,8 @@ export interface SizePickerOptions {
     savedImageSource?: string;
     /** Previously saved image category preference. */
     savedImageCategory?: string;
+    /** Previously saved "vibrant images" preference. */
+    savedVibrant?: boolean;
     /** Called when the player selects a size. */
     onSelect: (
         index: number,
@@ -51,6 +53,7 @@ export interface SizePickerOptions {
         imageSource?: string,
         imageCategory?: string,
         fractalConfig?: FractalDialogConfig,
+        vibrant?: boolean,
     ) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
@@ -181,6 +184,7 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
                 imageSourceSelect.value,
                 imageCategorySelect.value,
                 fractalConfig,
+                vibrantCheckbox.checked,
             );
         });
 
@@ -290,13 +294,29 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     imageCategorySection.appendChild(imageCategorySelect);
     dialog.appendChild(imageCategorySection);
 
+    // Vibrant-colours toggle — appends keywords like "vibrant colorful"
+    // to the Unsplash query to bias results toward saturated photos.
+    const vibrantSection = document.createElement('div');
+    vibrantSection.className = 'composable-slider-row';
+    const vibrantLabel = document.createElement('label');
+    vibrantLabel.className = 'composable-slider-label';
+    vibrantLabel.textContent = 'Vibrant colours';
+    const vibrantCheckbox = document.createElement('input');
+    vibrantCheckbox.type = 'checkbox';
+    vibrantCheckbox.checked = options.savedVibrant ?? false;
+    vibrantSection.appendChild(vibrantLabel);
+    vibrantSection.appendChild(vibrantCheckbox);
+    dialog.appendChild(vibrantSection);
+
     /**
-     * Update the visibility of the image category selector
-     * based on the current image source selection.
+     * Update the visibility of the image category selector and vibrant
+     * toggle based on the current image source selection. Both are
+     * irrelevant when the source is the blank white image.
      */
     function updateImageCategoryVisibility(): void {
-        imageCategorySection.style.display =
-            imageSourceSelect.value === 'blank' ? 'none' : '';
+        const hidden = imageSourceSelect.value === 'blank';
+        imageCategorySection.style.display = hidden ? 'none' : '';
+        vibrantSection.style.display = hidden ? 'none' : '';
     }
 
     imageSourceSelect.addEventListener('change', updateImageCategoryVisibility);

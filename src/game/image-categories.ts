@@ -92,6 +92,36 @@ export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
 /** localStorage key for the saved image category preference. */
 export const IMAGE_CATEGORY_PREFERENCE_KEY = 'puzzle-image-category';
 
+/** localStorage key for the saved "vibrant images" toggle. */
+export const VIBRANT_PREFERENCE_KEY = 'puzzle-image-vibrant';
+
+/**
+ * Keywords appended to the Unsplash query when the player wants
+ * vibrant/colourful photos. Unsplash has no saturation/HDR filter,
+ * so we bias the search via descriptive tags photographers use.
+ */
+export const VIBRANT_QUERY_TERMS = 'vibrant colorful';
+
+/**
+ * Compose the final Unsplash `query` string from a category's query
+ * and the vibrant toggle. Returns `undefined` when no query should
+ * be sent (any category with vibrant off).
+ */
+export function buildImageQuery(
+    categoryQuery: string | undefined,
+    vibrant: boolean,
+): string | undefined {
+    if (!vibrant) {
+        return categoryQuery;
+    }
+
+    if (!categoryQuery) {
+        return VIBRANT_QUERY_TERMS;
+    }
+
+    return `${categoryQuery} ${VIBRANT_QUERY_TERMS}`;
+}
+
 /**
  * Find an image category option by its id.
  * Returns the first option ('any') if not found.
@@ -128,5 +158,25 @@ export function loadImageCategoryPreference(): string {
         return found ? raw : 'any';
     } catch {
         return 'any';
+    }
+}
+
+/**
+ * Save the "vibrant images" preference to localStorage.
+ */
+export function saveVibrantPreference(vibrant: boolean): void {
+    localStorage.setItem(VIBRANT_PREFERENCE_KEY, vibrant ? 'true' : 'false');
+}
+
+/**
+ * Load the "vibrant images" preference from localStorage.
+ * Returns `false` when nothing is saved or the stored value is invalid.
+ */
+export function loadVibrantPreference(): boolean {
+    try {
+        const raw = localStorage.getItem(VIBRANT_PREFERENCE_KEY);
+        return raw === 'true';
+    } catch {
+        return false;
     }
 }

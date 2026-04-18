@@ -10,9 +10,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
     IMAGE_CATEGORY_OPTIONS,
     IMAGE_CATEGORY_PREFERENCE_KEY,
+    VIBRANT_PREFERENCE_KEY,
+    buildImageQuery,
     findImageCategory,
-    saveImageCategoryPreference,
     loadImageCategoryPreference,
+    loadVibrantPreference,
+    saveImageCategoryPreference,
+    saveVibrantPreference,
 } from './image-categories.js';
 
 describe('IMAGE_CATEGORY_OPTIONS', () => {
@@ -88,5 +92,60 @@ describe('image category preference persistence', () => {
         saveImageCategoryPreference('nature');
         saveImageCategoryPreference('travel');
         expect(loadImageCategoryPreference()).toBe('travel');
+    });
+});
+
+describe('vibrant preference persistence', () => {
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('defaults to false when nothing is saved', () => {
+        expect(loadVibrantPreference()).toBe(false);
+    });
+
+    it('saves and loads true', () => {
+        saveVibrantPreference(true);
+        expect(loadVibrantPreference()).toBe(true);
+    });
+
+    it('saves and loads false', () => {
+        saveVibrantPreference(true);
+        saveVibrantPreference(false);
+        expect(loadVibrantPreference()).toBe(false);
+    });
+
+    it('uses the documented localStorage key', () => {
+        saveVibrantPreference(true);
+        expect(localStorage.getItem(VIBRANT_PREFERENCE_KEY)).toBe('true');
+    });
+
+    it('returns false for a garbage saved value', () => {
+        localStorage.setItem(VIBRANT_PREFERENCE_KEY, 'not-a-boolean');
+        expect(loadVibrantPreference()).toBe(false);
+    });
+});
+
+describe('buildImageQuery', () => {
+    it('returns undefined when no category query and vibrant is off', () => {
+        expect(buildImageQuery(undefined, false)).toBeUndefined();
+    });
+
+    it('returns the category query unchanged when vibrant is off', () => {
+        expect(buildImageQuery('nature landscape', false)).toBe(
+            'nature landscape',
+        );
+    });
+
+    it('returns vibrant keywords when no category query and vibrant is on', () => {
+        const result = buildImageQuery(undefined, true);
+        expect(result).toBeDefined();
+        expect(result).toMatch(/vibrant/);
+    });
+
+    it('appends vibrant keywords to the category query when vibrant is on', () => {
+        const result = buildImageQuery('nature landscape', true);
+        expect(result).toMatch(/^nature landscape/);
+        expect(result).toMatch(/vibrant/);
     });
 });

@@ -77,7 +77,7 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 <li><strong>Pan on empty space</strong> to move around</li>
                 <li><strong>Use the buttons</strong> for convenience:</li>
                 <ul>
-                    <li>🎮 <strong>New Game</strong> — Start fresh with a random image; pick puzzle size, cut style and image source in the dialog</li>
+                    <li>🎮 <strong>New Game</strong> — Start fresh with a random image; pick puzzle size, cut style, image source and picture type in the dialog. Tick <strong>Vibrant colours</strong> for more saturated photos.</li>
                     <li>📍 <strong>Centre View</strong> — Reset zoom and pan</li>
                     <li>🔄 <strong>Gather Pieces</strong> — Organize all pieces in a compact grid</li>
                     <li>🎨 <strong>Background</strong> — Change table colour</li>
