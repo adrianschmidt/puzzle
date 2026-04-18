@@ -6,6 +6,7 @@ import {
     processDrop,
 } from './group-merging.js';
 import type { MergeCandidate } from './merge-detection.js';
+import { getWorldPosition } from './merge-detection.js';
 
 // --- Test helpers ---
 
@@ -28,6 +29,7 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
         id,
         pieces: new Map([[pieceId, { x: 0, y: 0 }]]),
         position,
+        rotation: 0,
     };
 }
 
@@ -130,11 +132,13 @@ describe('mergeGroups', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 100, y: 0 },
+            rotation: 0,
         };
         const targetGroup: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 200, y: 0 },
+            rotation: 0,
         };
 
         const result = mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
@@ -151,12 +155,14 @@ describe('mergeGroups', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 100, y: 50 },
+            rotation: 0,
         };
         // Target group at (300, 50) with piece at offset (0,0)
         const targetGroup: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 300, y: 50 },
+            rotation: 0,
         };
 
         mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
@@ -174,11 +180,13 @@ describe('mergeGroups', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 105, y: 0 },
+            rotation: 0,
         };
         const targetGroup: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 200, y: 0 },
+            rotation: 0,
         };
 
         // Snap delta: move moved group -5px in x to align
@@ -200,11 +208,13 @@ describe('mergeGroups', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 50, y: 50 },
+            rotation: 0,
         };
         const targetGroup: PieceGroup = {
             id: 2,
             pieces: new Map([[2, { x: 0, y: 0 }]]),
             position: { x: 250, y: 50 },
+            rotation: 0,
         };
 
         mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
@@ -238,11 +248,13 @@ describe('mergeGroups', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 108, y: -5 },
+            rotation: 0,
         };
         const targetGroup: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 200, y: 0 },
+            rotation: 0,
         };
 
         // Snap delta corrects to (100, 0) → dx=-8, dy=5
@@ -253,6 +265,44 @@ describe('mergeGroups', () => {
         expect(offset0.x).toBeCloseTo(-100);
         expect(offset0.y).toBeCloseTo(0);
     });
+
+    it.each([0, 1, 2, 3] as const)(
+        'preserves each piece’s world position at rotation=%i',
+        (rotation) => {
+            // Moved: two pieces whose world positions we want to pin after merge.
+            // Piece 0 at offset (0,0), piece 1 at offset (100,0).
+            const movedGroup: PieceGroup = {
+                id: 0,
+                pieces: new Map([
+                    [0, { x: 0, y: 0 }],
+                    [1, { x: 100, y: 0 }],
+                ]),
+                position: { x: 50, y: 20 },
+                rotation,
+            };
+            const targetGroup: PieceGroup = {
+                id: 2,
+                pieces: new Map([[2, { x: 0, y: 0 }]]),
+                position: { x: 300, y: 80 },
+                rotation,
+            };
+
+            // Capture world positions before merge
+            const worldBefore = new Map<number, { x: number; y: number }>();
+            for (const id of [0, 1]) {
+                worldBefore.set(id, getWorldPosition({ x: 0, y: 0 }, id, movedGroup));
+            }
+            worldBefore.set(2, getWorldPosition({ x: 0, y: 0 }, 2, targetGroup));
+
+            mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
+
+            for (const [id, expected] of worldBefore) {
+                const after = getWorldPosition({ x: 0, y: 0 }, id, targetGroup);
+                expect(after.x).toBeCloseTo(expected.x);
+                expect(after.y).toBeCloseTo(expected.y);
+            }
+        },
+    );
 });
 
 describe('selectBestCandidate', () => {
@@ -438,6 +488,7 @@ describe('processDrop', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 0, y: 0 },
+            rotation: 0,
         };
         const state = makeGameState([piece0, piece1], [group]);
 
@@ -457,6 +508,7 @@ describe('processDrop', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 0, y: 0 },
+            rotation: 0,
         };
         const groupB = makeGroup(2, 2, { x: 200, y: 0 });
 

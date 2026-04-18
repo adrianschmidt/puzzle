@@ -47,11 +47,13 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 50, y: 50 },
+            rotation: 0,
         },
         {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 200, y: 100 },
+            rotation: 0,
         },
     ];
 

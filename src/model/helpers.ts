@@ -79,6 +79,28 @@ export function moveGroup(
 }
 
 /**
+ * Rotate a point by `quarterTurns` 90°-clockwise steps around the origin.
+ *
+ * Used for converting between a group's un-rotated local space and
+ * its rotated world projection. `quarterTurns` must be 0, 1, 2, or 3.
+ */
+export function rotatePoint(point: Point, quarterTurns: 0 | 1 | 2 | 3): Point {
+    switch (quarterTurns) {
+        case 0: return { x: point.x, y: point.y };
+        case 1: return { x: -point.y, y: point.x };
+        case 2: return { x: -point.x, y: -point.y };
+        case 3: return { x: point.y, y: -point.x };
+    }
+}
+
+/**
+ * Normalise a signed/unbounded quarter-turn count into the range 0..3.
+ */
+export function normaliseQuarterTurns(q: number): 0 | 1 | 2 | 3 {
+    return (((q % 4) + 4) % 4) as 0 | 1 | 2 | 3;
+}
+
+/**
  * Get all border edges of a group — edges whose mates
  * are in a different group.
  *

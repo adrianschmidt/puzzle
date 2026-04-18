@@ -36,6 +36,7 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
         id,
         pieces: new Map([[pieceId, { x: 0, y: 0 }]]),
         position,
+        rotation: 0,
     };
 }
 
@@ -86,6 +87,7 @@ describe('getWorldPosition', () => {
             id: 1,
             pieces: new Map([[5, { x: 10, y: 20 }]]),
             position: { x: 100, y: 200 },
+            rotation: 0,
         };
 
         const result = getWorldPosition({ x: 30, y: 40 }, 5, group);
@@ -101,6 +103,33 @@ describe('getWorldPosition', () => {
     it('throws if piece is not in the group', () => {
         const group = makeGroup(1, 5, { x: 0, y: 0 });
         expect(() => getWorldPosition({ x: 0, y: 0 }, 99, group)).toThrow();
+    });
+
+    it('applies rotation to the local point before translating', () => {
+        // Group at world (100, 200), rotated 90° CW, single piece at local (0,0)
+        const group: PieceGroup = {
+            id: 1,
+            pieces: new Map([[5, { x: 0, y: 0 }]]),
+            position: { x: 100, y: 200 },
+            rotation: 1,
+        };
+
+        // Local point (10, 0) rotated 90° CW → (0, 10); then + position
+        const result = getWorldPosition({ x: 10, y: 0 }, 5, group);
+        expect(result).toEqual({ x: 100, y: 210 });
+    });
+
+    it('applies rotation with a non-zero piece offset', () => {
+        // Offset + point = local (10, 0); rotated 180° → (-10, 0)
+        const group: PieceGroup = {
+            id: 1,
+            pieces: new Map([[5, { x: 10, y: 0 }]]),
+            position: { x: 50, y: 50 },
+            rotation: 2,
+        };
+
+        const result = getWorldPosition({ x: 0, y: 0 }, 5, group);
+        expect(result).toEqual({ x: 40, y: 50 });
     });
 });
 
@@ -190,6 +219,66 @@ describe('checkEdgeAlignment', () => {
         expect(result.snapDelta.y).toBeCloseTo(10);
     });
 
+    it('rejects when the two groups have different rotations', () => {
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+
+        // Groups in identical world positions, but one is rotated.
+        // Without the rotation gate, endpoint distances at certain
+        // symmetry points could falsely register as aligned.
+        const group0 = makeGroup(0, 0, { x: 0, y: 0 });
+        const group1: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 100, y: 0 },
+            rotation: 1,
+        };
+
+        const result = checkEdgeAlignment(
+            piece0, rightEdge, group0,
+            piece1, leftEdge, group1,
+        );
+
+        expect(result.aligned).toBe(false);
+    });
+
+    it('accepts alignment when both groups share the same non-zero rotation', () => {
+        // Both pieces are rotated 90° CW around their group origins.
+        // Piece 0's right edge starts at (100,0) → world (0,100).
+        // Piece 0's right edge ends at (100,100) → world (-100,100).
+        // Piece 1's left edge (start (0,100), end (0,0)) with piece 1's
+        // rotation=1 around group 1's origin gives:
+        //   start (0,100) → (-100, 0)
+        //   end   (0,0)   → (0, 0)
+        // To mate piece 0's right with piece 1's left, target_end must
+        // coincide with moved_start, and target_start with moved_end.
+        // So place group 1 at world (0, 100): piece 1's end goes to (0,100),
+        // and its start goes to (-100, 100). That matches piece 0's (0,100)
+        // and (-100,100). Aligned.
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+
+        const group0: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 0 },
+            rotation: 1,
+        };
+        const group1: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 100 },
+            rotation: 1,
+        };
+
+        const result = checkEdgeAlignment(
+            piece0, rightEdge, group0,
+            piece1, leftEdge, group1,
+        );
+
+        expect(result.aligned).toBe(true);
+        expect(result.snapDelta.x).toBeCloseTo(0);
+        expect(result.snapDelta.y).toBeCloseTo(0);
+    });
+
     it('uses custom tolerance when provided', () => {
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
 
@@ -276,6 +365,7 @@ describe('detectMerges', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 0, y: 0 },
+            rotation: 0,
         };
 
         const state = makeGameState([piece0, piece1], [group]);

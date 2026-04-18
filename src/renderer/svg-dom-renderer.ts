@@ -235,8 +235,10 @@ export class SvgDomRenderer implements Renderer {
             this.groupElements.set(group.id, groupEl);
         }
 
+        const rotateDeg = group.rotation * 90;
+        groupEl.style.transformOrigin = '0 0';
         groupEl.style.transform =
-            `translate(${group.position.x}px, ${group.position.y}px)`;
+            `translate(${group.position.x}px, ${group.position.y}px) rotate(${rotateDeg}deg)`;
 
         // Track which pieces should be in this group
         const expectedPieceIds = new Set(group.pieces.keys());

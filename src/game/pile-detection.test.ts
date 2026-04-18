@@ -31,6 +31,7 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
         id,
         pieces: new Map([[pieceId, { x: 0, y: 0 }]]),
         position,
+        rotation: 0,
     };
 }
 
@@ -115,6 +116,7 @@ describe('getGroupBounds', () => {
                 [1, { x: 100, y: 0 }], // piece 1 is to the right
             ]),
             position: { x: 10, y: 20 },
+            rotation: 0,
         };
 
         const bounds = getGroupBounds(group, [piece0, piece1]);
@@ -143,6 +145,7 @@ describe('getGroupBounds', () => {
             id: 0,
             pieces: new Map([[0, { x: 50, y: 25 }]]),
             position: { x: 100, y: 100 },
+            rotation: 0,
         };
 
         const bounds = getGroupBounds(group, [piece]);
@@ -307,6 +310,7 @@ describe('shouldSuppressMerge', () => {
                 [1, { x: 100, y: 0 }],
             ]),
             position: { x: 50, y: 50 },
+            rotation: 0,
         };
 
         // Pile of non-mates
@@ -550,6 +554,7 @@ describe('reorderGroupsAfterDrop', () => {
                 [3, { x: 200, y: 0 }],   // piece 3 covers 200-400 x 0-200
             ]),
             position: { x: 0, y: 0 },
+            rotation: 0,
         }; // Combined covers 0-400 x 0-200
 
         // Small covered groups positioned inside the large group
@@ -605,6 +610,7 @@ describe('reorderGroupsAfterDrop', () => {
                 [0, { x: 0, y: 0 }],
             ]),
             position: { x: 50, y: 50 }, // Covers 50-150 x 50-150
+            rotation: 0,
         };
 
         // Small group that extends beyond the large group's bounds
@@ -677,7 +683,8 @@ describe('reorderGroupsAfterDrop', () => {
                 [4, { x: 0, y: 300 }],
                 [5, { x: 300, y: 0 }],
             ]),
-            position: { x: 0, y: 0 }
+            position: { x: 0, y: 0 },
+            rotation: 0,
         }; // Covers 0-450 x 0-450 (large enough to contain both smaller groups)
 
         // Medium group (2 pieces)
@@ -688,6 +695,7 @@ describe('reorderGroupsAfterDrop', () => {
                 [2, { x: 0, y: 50 }],
             ]),
             position: { x: 50, y: 50 }, // Covers 50-100 x 50-150
+            rotation: 0,
         };
 
         // Small group (1 piece)
@@ -762,7 +770,8 @@ describe('reorderGroupsAfterDrop', () => {
                 [0, { x: 0, y: 0 }],
                 [4, { x: 0, y: 150 }],
             ]),
-            position: { x: 0, y: 0 }
+            position: { x: 0, y: 0 },
+            rotation: 0,
         }; // Covers 0-150 x 0-300
 
         const droppedGroup2: PieceGroup = {
@@ -771,7 +780,8 @@ describe('reorderGroupsAfterDrop', () => {
                 [1, { x: 0, y: 0 }],
                 [5, { x: 0, y: 150 }],
             ]),
-            position: { x: 200, y: 0 }
+            position: { x: 200, y: 0 },
+            rotation: 0,
         }; // Covers 200-350 x 0-300
 
         // Two smaller groups, each covered by one of the dropped groups
@@ -842,7 +852,8 @@ describe('reorderGroupsAfterDrop', () => {
                 [0, { x: 0, y: 0 }],
                 [4, { x: 0, y: 150 }],
             ]),
-            position: { x: 0, y: 0 }
+            position: { x: 0, y: 0 },
+            rotation: 0,
         }; // Covers 0-150 x 0-300
 
         const droppedGroup2: PieceGroup = {
@@ -851,7 +862,8 @@ describe('reorderGroupsAfterDrop', () => {
                 [1, { x: 0, y: 0 }],
                 [5, { x: 0, y: 150 }],
             ]),
-            position: { x: 50, y: 50 }
+            position: { x: 50, y: 50 },
+            rotation: 0,
         }; // Covers 50-200 x 50-350
 
         // Small group in the overlapping area (covers 75-125 x 75-125, inside both dropped groups)

@@ -8,7 +8,7 @@
  */
 
 import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
-import { getBorderEdges } from '../model/helpers.js';
+import { getBorderEdges, rotatePoint } from '../model/helpers.js';
 
 /**
  * Tolerance in pixels for edge alignment.
@@ -43,7 +43,10 @@ export interface MergeCandidate {
 /**
  * Compute the world position of a point on a piece.
  *
- * World position = group.position + piece's offset in group + point in piece-local coords.
+ * Piece offsets and edge endpoints live in the group's un-rotated local
+ * space. When the group carries a non-zero rotation, the local point is
+ * rotated around the group's own origin before being translated by the
+ * group's world position.
  */
 export function getWorldPosition(
     point: Point,
@@ -55,9 +58,12 @@ export function getWorldPosition(
         throw new Error(`Piece ${pieceId} not found in group ${group.id}`);
     }
 
+    const local = { x: offset.x + point.x, y: offset.y + point.y };
+    const rotated = rotatePoint(local, group.rotation);
+
     return {
-        x: group.position.x + offset.x + point.x,
-        y: group.position.y + offset.y + point.y,
+        x: group.position.x + rotated.x,
+        y: group.position.y + rotated.y,
     };
 }
 
@@ -90,6 +96,14 @@ export function checkEdgeAlignment(
     targetGroup: PieceGroup,
     tolerance: number = MERGE_TOLERANCE_PX,
 ): { aligned: boolean; snapDelta: Point } {
+    // Two groups can only mate when rotated by the same amount.
+    // Without this gate, a 90°-rotated piece's edge endpoints happen to
+    // coincide with its unrotated neighbour's at symmetry points, which
+    // would let visibly mis-oriented pieces snap.
+    if (movedGroup.rotation !== targetGroup.rotation) {
+        return { aligned: false, snapDelta: { x: 0, y: 0 } };
+    }
+
     // World positions of the moved edge endpoints
     const movedStart = getWorldPosition(movedEdge.start, movedPiece.id, movedGroup);
     const movedEnd = getWorldPosition(movedEdge.end, movedPiece.id, movedGroup);

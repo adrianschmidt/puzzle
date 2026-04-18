@@ -25,6 +25,9 @@ import {
 import { SelectionManager } from './interaction/selection-manager.js';
 import { createSelectToolButton } from './ui/select-tool-button.js';
 import { createDeselectButton } from './ui/deselect-button.js';
+import { createRotateButtons } from './ui/rotate-buttons.js';
+import { rotateGroup } from './game/rotate-group.js';
+import { rotatePoint } from './model/helpers.js';
 import { getActiveTolerance } from './ui/merge-tolerance.js';
 import { reorderGroupsAfterDrop } from './game/pile-detection.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
@@ -184,6 +187,37 @@ function zoomToFitCompletedPuzzle(
     const screenWidth = app.clientWidth || window.innerWidth;
     const screenHeight = app.clientHeight || window.innerHeight;
 
+    // If the puzzle was completed at a non-zero rotation, rotate the group
+    // back to 0° in parallel with the viewport zoom. Preserve the group's
+    // visual bbox centre in world space so the animation stays smooth.
+    let groupTransitionCleanup: (() => void) | null = null;
+    if (completedGroup.rotation !== 0) {
+        const localBounds = getGroupVisualBounds(completedGroup, gameState.pieces);
+        const centreLocal = {
+            x: localBounds.minX + localBounds.width / 2,
+            y: localBounds.minY + localBounds.height / 2,
+        };
+        const rotatedCentre = rotatePoint(centreLocal, completedGroup.rotation);
+
+        completedGroup.position = {
+            x: completedGroup.position.x + rotatedCentre.x - centreLocal.x,
+            y: completedGroup.position.y + rotatedCentre.y - centreLocal.y,
+        };
+        completedGroup.rotation = 0;
+
+        const groupEl = app.querySelector(
+            `[data-group-id="${completedGroup.id}"]`,
+        ) as HTMLElement | null;
+        if (groupEl) {
+            groupEl.style.transition = 'transform 0.8s ease-in-out';
+            groupTransitionCleanup = () => {
+                groupEl.style.transition = '';
+            };
+        }
+
+        renderer.renderState(gameState);
+    }
+
     // Compute the visual bounds of the completed group in its current position
     const groupBounds = getGroupVisualBounds(completedGroup, gameState.pieces);
 
@@ -228,6 +262,7 @@ function zoomToFitCompletedPuzzle(
                 if (event.propertyName === 'transform' && event.target === tableEl) {
                     tableEl.removeEventListener('transitionend', handleTransitionEnd);
                     renderer.disableViewportTransition();
+                    groupTransitionCleanup?.();
                     onComplete();
                 }
             };
@@ -236,6 +271,7 @@ function zoomToFitCompletedPuzzle(
             // Fallback: disable transition and run callback after expected duration
             setTimeout(() => {
                 renderer.disableViewportTransition();
+                groupTransitionCleanup?.();
                 onComplete();
             }, 800);
         }
@@ -251,6 +287,7 @@ function zoomToFitCompletedPuzzle(
         id: 0,
         pieces: new Map(),
         position: { x: 0, y: 0 },
+        rotation: 0,
     };
 
     for (const piece of gameState.pieces) {
@@ -349,6 +386,7 @@ function initGame(state: GameState): void {
     gameState = state;
     renderer.renderState(gameState);
     updateAttribution();
+    updateRotateButtonsVisibility();
 
     if (gameState.completed) {
         showCompletionOverlay();
@@ -620,6 +658,37 @@ createDeselectButton({
     container: app,
     selectionManager,
 });
+
+// Set up the rotate buttons (bottom-left, fractal-only).
+// Visibility is updated whenever initGame() runs.
+const rotateButtons = createRotateButtons({
+    container: app,
+    selectionManager,
+    onRotate: (direction) => {
+        if (!gameState || !selectionManager.hasSelection) return;
+
+        for (const groupId of selectionManager.selectedGroupIds) {
+            const group = gameState.groups.find(g => g.id === groupId);
+            if (group) {
+                rotateGroup(group, gameState.pieces, direction);
+            }
+        }
+
+        renderer.renderState(gameState);
+        for (const selectedId of selectionManager.selectedGroupIds) {
+            renderer.setGroupSelected(selectedId, true);
+        }
+        autoSave();
+    },
+});
+
+function updateRotateButtonsVisibility(): void {
+    if (gameState?.cutStyle === 'fractal') {
+        rotateButtons.show();
+    } else {
+        rotateButtons.hide();
+    }
+}
 
 // Set up the Background Colour picker
 const initialColourIndex = loadColourPreference();

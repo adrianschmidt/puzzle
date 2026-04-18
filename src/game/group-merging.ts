@@ -8,7 +8,7 @@
  */
 
 import type { GameState, PieceGroup, Point } from '../model/types.js';
-import { moveGroup } from '../model/helpers.js';
+import { moveGroup, normaliseQuarterTurns, rotatePoint } from '../model/helpers.js';
 import { detectMerges, type MergeCandidate } from './merge-detection.js';
 import { shouldSuppressMerge } from './pile-detection.js';
 
@@ -45,18 +45,21 @@ export function mergeGroups(
     // First, snap the moved group into perfect alignment
     moveGroup(movedGroup, snapDelta);
 
-    // Calculate the position difference between the two groups.
-    // Each piece's world position = group.position + piece offset.
-    // When we move pieces from movedGroup to targetGroup, we need to
-    // adjust their offsets to preserve their world positions.
-    const dx = movedGroup.position.x - targetGroup.position.x;
-    const dy = movedGroup.position.y - targetGroup.position.y;
+    // Both groups share the same rotation (the mate gate ensures this),
+    // so their piece offsets are in the same un-rotated local space.
+    // The raw position diff is in world space; inverse-rotate it so the
+    // offsets we add to each piece are in that same local space.
+    const rawDiff: Point = {
+        x: movedGroup.position.x - targetGroup.position.x,
+        y: movedGroup.position.y - targetGroup.position.y,
+    };
+    const inverseTurns = normaliseQuarterTurns(4 - targetGroup.rotation);
+    const localDelta = rotatePoint(rawDiff, inverseTurns);
 
-    // Transfer all pieces from moved group to target group
     for (const [pieceId, offset] of movedGroup.pieces) {
         targetGroup.pieces.set(pieceId, {
-            x: offset.x + dx,
-            y: offset.y + dy,
+            x: offset.x + localDelta.x,
+            y: offset.y + localDelta.y,
         });
     }
 
