@@ -301,13 +301,18 @@ export class SvgDomRenderer implements Renderer {
         defs.appendChild(clipPath);
         svg.appendChild(defs);
 
-        // Image element clipped to the piece shape
+        // Image element clipped to the piece shape. `slice` makes the
+        // raster cover the puzzle rect with excess cropped, so when the
+        // puzzle's aspect ratio doesn't match the image file's aspect
+        // ratio (fractal tile grid), the image is uniformly cropped to
+        // fit rather than stretched — arcs stay circular.
         const image = document.createElementNS(svgNS, 'image');
         image.setAttributeNS(xlinkNS, 'href', imageUrl);
         image.setAttribute('width', String(this.imageSize.width));
         image.setAttribute('height', String(this.imageSize.height));
         image.setAttribute('x', String(piece.imageOffset.x));
         image.setAttribute('y', String(piece.imageOffset.y));
+        image.setAttribute('preserveAspectRatio', 'xMidYMid slice');
         image.setAttribute(
             'clip-path',
             `url(#clip-piece-${piece.id})`,

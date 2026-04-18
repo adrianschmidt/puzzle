@@ -78,28 +78,57 @@ export function createNewGame(
         )
         : undefined;
 
+    // Fractal arcs must scale uniformly to stay circular. We inscribe a
+    // rectangle of the grid's aspect ratio inside the image; the renderer
+    // covers this puzzle rectangle with the image via SVG `slice`, cropping
+    // what sticks out. For non-fractal cuts the puzzle fills the image as
+    // before.
+    const puzzleSize = cutStyle === 'fractal' && fractalGrid
+        ? inscribeToGridAspect(
+            imageSize,
+            options.fractalConfig?.borderless ?? false
+                ? fractalGrid.cols / fractalGrid.rows
+                : (fractalGrid.cols - 1) / (fractalGrid.rows - 1),
+        )
+        : imageSize;
+
     let pieces: Piece[];
     if (cutStyle === 'fractal') {
-        pieces = generateFractalPuzzle(fractalGrid!.cols, fractalGrid!.rows, imageSize, seed, options.fractalConfig);
+        pieces = generateFractalPuzzle(fractalGrid!.cols, fractalGrid!.rows, puzzleSize, seed, options.fractalConfig);
     } else if (cutStyle === 'composable') {
-        pieces = generateComposablePuzzle(gridSize.cols, gridSize.rows, imageSize, seed, options.composableConfig);
+        pieces = generateComposablePuzzle(gridSize.cols, gridSize.rows, puzzleSize, seed, options.composableConfig);
     } else {
-        pieces = generateProceduralPuzzle(gridSize.cols, gridSize.rows, imageSize, seed);
+        pieces = generateProceduralPuzzle(gridSize.cols, gridSize.rows, puzzleSize, seed);
     }
 
-    const groups = createInitialGroups(pieces, imageSize, viewport, gridSize, options);
+    const groups = createInitialGroups(pieces, puzzleSize, viewport, gridSize, options);
 
     return {
         pieces,
         groups,
         imageUrl,
-        imageSize,
+        imageSize: puzzleSize,
         gridSize,
         completed: false,
         seed,
         cutStyle,
         rotationMode,
     };
+}
+
+/**
+ * Return the largest rectangle of `gridAspect` that fits inside `imageSize`,
+ * centred. Used for fractal puzzles so the tile grid scales uniformly
+ * (arcs stay circular) and the image is cropped to cover the puzzle rect.
+ */
+function inscribeToGridAspect(imageSize: Size, gridAspect: number): Size {
+    const imageAspect = imageSize.width / imageSize.height;
+    if (gridAspect >= imageAspect) {
+        // Grid wider than image — match image width, shrink height.
+        return { width: imageSize.width, height: imageSize.width / gridAspect };
+    }
+    // Grid taller than image — match image height, shrink width.
+    return { width: imageSize.height * gridAspect, height: imageSize.height };
 }
 
 /**
