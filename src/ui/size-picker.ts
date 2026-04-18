@@ -24,6 +24,8 @@ export interface ComposableSliderConfig {
 /** Fractal generator config passed through from the dialog. */
 export interface FractalDialogConfig {
     borderless: boolean;
+    /** Player opted into 90°-snap rotation (fractal only). */
+    rotationEnabled: boolean;
 }
 
 export interface SizePickerOptions {
@@ -167,7 +169,10 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
                 ? getSliderValues()
                 : undefined;
             const fractalConfig = currentCutStyleIndex === fractalCutIndex
-                ? { borderless: fractalBorderlessCheckbox.checked }
+                ? {
+                    borderless: fractalBorderlessCheckbox.checked,
+                    rotationEnabled: fractalRotationCheckbox.checked,
+                }
                 : undefined;
             onSelect(
                 i,
@@ -227,6 +232,20 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     fractalBorderlessRow.appendChild(fractalBorderlessLabel);
     fractalBorderlessRow.appendChild(fractalBorderlessCheckbox);
     fractalSection.appendChild(fractalBorderlessRow);
+
+    // Fractal rotation checkbox
+    const fractalRotationRow = document.createElement('div');
+    fractalRotationRow.className = 'composable-slider-row';
+    const fractalRotationLabel = document.createElement('label');
+    fractalRotationLabel.className = 'composable-slider-label';
+    fractalRotationLabel.textContent = 'Enable rotation';
+    const fractalRotationCheckbox = document.createElement('input');
+    fractalRotationCheckbox.type = 'checkbox';
+    fractalRotationCheckbox.checked = options.savedFractalConfig?.rotationEnabled ?? false;
+    fractalRotationRow.appendChild(fractalRotationLabel);
+    fractalRotationRow.appendChild(fractalRotationCheckbox);
+    fractalSection.appendChild(fractalRotationRow);
+
     dialog.appendChild(fractalSection);
 
     // Image source selector

@@ -9,7 +9,7 @@
 
 import type { Piece, PieceGroup } from '../model/types.js';
 import { normaliseQuarterTurns, rotatePoint } from '../model/helpers.js';
-import { getGroupVisualBounds } from './gather.js';
+import { getGroupLocalBounds } from './gather.js';
 
 export type RotationDirection = 'cw' | 'ccw';
 
@@ -28,7 +28,7 @@ export function rotateGroup(
     const oldRotation = group.rotation;
     const newRotation = normaliseQuarterTurns(oldRotation + delta);
 
-    const bounds = getGroupVisualBounds(group, pieces);
+    const bounds = getGroupLocalBounds(group, pieces);
     const centreLocal = {
         x: bounds.minX + bounds.width / 2,
         y: bounds.minY + bounds.height / 2,

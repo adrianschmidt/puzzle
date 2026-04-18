@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Edge, Piece, PieceGroup } from '../model/types.js';
 import { rotateGroup } from './rotate-group.js';
-import { getGroupVisualBounds } from './gather.js';
+import { getGroupLocalBounds } from './gather.js';
 
 function makeEdge(id: number, sx: number, sy: number, ex: number, ey: number): Edge {
     return {
@@ -65,7 +65,7 @@ describe('rotateGroup', () => {
             rotation: 0,
         };
 
-        const bounds = getGroupVisualBounds(group, [piece]);
+        const bounds = getGroupLocalBounds(group, [piece]);
         const worldCentreBefore = {
             x: group.position.x + bounds.minX + bounds.width / 2,
             y: group.position.y + bounds.minY + bounds.height / 2,
@@ -141,7 +141,7 @@ describe('rotateGroup', () => {
             rotation: 0,
         };
 
-        const boundsBefore = getGroupVisualBounds(group, [p0, p1]);
+        const boundsBefore = getGroupLocalBounds(group, [p0, p1]);
         const worldCentreBefore = {
             x: group.position.x + boundsBefore.minX + boundsBefore.width / 2,
             y: group.position.y + boundsBefore.minY + boundsBefore.height / 2,

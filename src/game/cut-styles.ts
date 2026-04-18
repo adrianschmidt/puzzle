@@ -170,6 +170,11 @@ export const FRACTAL_CONFIG_KEY = 'puzzle-fractal-config';
  */
 export interface FractalConfigPreference {
     borderless: boolean;
+    /**
+     * Whether the player opted into 90°-snap rotation for a fractal puzzle.
+     * When true, groups start at a random rotation and rotate-buttons appear.
+     */
+    rotationEnabled: boolean;
 }
 
 /**
@@ -200,10 +205,11 @@ export function loadFractalConfigPreference():
             parsed !== null &&
             'borderless' in parsed
         ) {
+            const config = parsed as Record<string, unknown>;
+
             return {
-                borderless: Boolean(
-                    (parsed as Record<string, unknown>).borderless,
-                ),
+                borderless: Boolean(config.borderless),
+                rotationEnabled: Boolean(config.rotationEnabled),
             };
         }
 

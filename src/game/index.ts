@@ -51,6 +51,7 @@ export {
     computeGatheredPositions,
     applyGatheredPositions,
     getGroupOffsetBounds,
+    getGroupLocalBounds,
     getGroupVisualBounds,
     GATHER_PADDING,
 } from './gather.js';
