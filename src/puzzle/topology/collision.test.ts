@@ -114,17 +114,43 @@ describe('createTabCollisionDetector', () => {
         expect(collides).toBe(false);
     });
 
-    it('skips self curve when checking collisions', () => {
+    it('does not flag the parent curve for the expected splice-point joins', () => {
+        // The tab naturally touches its parent curve at exactly two points
+        // (its start and end). A straight edge with a tab on one side has
+        // no other crossings, so the endpoint filter should suppress both
+        // tangent touches and report no collision.
         const edge = Curve.line({ x: 0, y: 100 }, { x: 200, y: 100 });
         const prepared = prepareTab(
             edge, 0.5, true, triangleTabTemplate, seededRandom(42),
         );
         expect(prepared).not.toBeNull();
 
-        // Only curve is self — should never collide
         const otherCurves = [edge];
         const collides = detector.hasCollision(prepared!.tabCurve, otherCurves, 0);
         expect(collides).toBe(false);
+    });
+
+    it('detects a tab that crosses a different part of its parent curve', () => {
+        // Parent curve: a U-shape encoded as a single multi-segment curve.
+        // Left arm at x=0 (y=100→0), bottom at y=0 (x=0→100), right arm
+        // at x=100 (y=0→100). A tab placed on the left arm that bulges
+        // rightward past x=100 self-collides with the right arm.
+        const parentCurve = Curve.fromBezierPath([
+            { x: 0, y: 100 }, { x: 0, y: 67 }, { x: 0, y: 33 }, { x: 0, y: 0 },
+            { x: 33, y: 0 }, { x: 67, y: 0 }, { x: 100, y: 0 },
+            { x: 100, y: 33 }, { x: 100, y: 67 }, { x: 100, y: 100 },
+        ]);
+
+        // Tab: cubic Bézier starting at (0,70) and ending at (0,30) — both
+        // on the left arm — with control points at x=200 so the curve bulges
+        // to a peak of x=150 and crosses the right arm (x=100) twice.
+        const tabCurve = Curve.fromBezierPath([
+            { x: 0, y: 70 }, { x: 200, y: 70 },
+            { x: 200, y: 30 }, { x: 0, y: 30 },
+        ]);
+
+        const collides = detector.hasCollision(tabCurve, [parentCurve], 0);
+        expect(collides).toBe(true);
     });
 });
 

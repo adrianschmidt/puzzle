@@ -38,8 +38,12 @@ export interface CollisionDetector {
      *
      * @param proposed - The tab curve in world coordinates (not yet merged)
      * @param existing - All cut curves in the puzzle
-     * @param selfIndex - Index of the curve the tab is being added to
-     *                    (excluded from collision checks)
+     * @param selfIndex - Index of the curve the tab is being added to.
+     *                    The parent curve is still checked (so a tab that
+     *                    loops back across another part of its own cut
+     *                    line is caught); implementations rely on endpoint
+     *                    filtering to ignore the two expected splice-point
+     *                    joins.
      * @returns true if a collision is detected
      */
     hasCollision(
@@ -77,24 +81,27 @@ export interface ConflictResolver {
  * Default collision detector: any intersection between the proposed tab
  * and another curve counts as a collision.
  *
- * Endpoint proximity (within `endpointTolerance` pixels) is ignored,
- * since cut lines naturally meet at grid intersections.
+ * The parent curve (at `selfIndex`) is checked too, so a tab that loops
+ * back across another part of its own cut line is caught. The tab joins
+ * its parent curve at exactly two splice points (its start and end);
+ * those tangent touches, like any cut-line endpoint meeting, are filtered
+ * out by `endpointTolerance`.
  */
 export function createTabCollisionDetector(
     endpointTolerance = 2,
 ): CollisionDetector {
     return {
-        hasCollision(proposed, existing, selfIndex) {
+        hasCollision(proposed, existing, _selfIndex) {
             const propStart = proposed.start;
             const propEnd = proposed.end;
 
             for (let i = 0; i < existing.length; i++) {
-                if (i === selfIndex) continue;
-
                 const intersections = proposed.intersect(existing[i]);
 
                 // Filter out intersections near the tab's own endpoints,
-                // which are expected where the tab rejoins its cut line.
+                // which are expected where the tab rejoins its cut line
+                // (both for other curves that meet at grid corners and for
+                // the parent curve's own splice points).
                 const real = intersections.filter(ix => {
                     const dx1 = ix.point.x - propStart.x;
                     const dy1 = ix.point.y - propStart.y;
