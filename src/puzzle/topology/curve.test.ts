@@ -320,6 +320,65 @@ describe('nearestT', () => {
 // reverse
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// minDistanceFrom
+// ---------------------------------------------------------------------------
+
+describe('minDistanceFrom', () => {
+    it('returns 0 when the point lies on the curve', () => {
+        const c = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
+        expect(c.minDistanceFrom({ x: 50, y: 0 })).toBeLessThan(0.01);
+    });
+
+    it('returns the perpendicular distance for a point off a straight line', () => {
+        const c = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
+        expectClose(c.minDistanceFrom({ x: 50, y: 7 }), 7, 0.01);
+    });
+
+    it('returns the distance to the nearest endpoint for a point past the end', () => {
+        const c = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
+        // Point well beyond the right end — closest point is (100, 0).
+        expectClose(
+            c.minDistanceFrom({ x: 110, y: 0 }),
+            10,
+            0.1,
+        );
+    });
+
+    it('agrees with nearestT on a curved path', () => {
+        const c = Curve.fromBezierPath([
+            { x: 0, y: 0 },
+            { x: 0, y: 30 },
+            { x: 30, y: 30 },
+            { x: 30, y: 0 },
+        ]);
+        const probe = { x: 40, y: 10 };
+        const naive = (() => {
+            const t = c.nearestT(probe);
+            const q = c.pointAt(t);
+            return Math.hypot(q.x - probe.x, q.y - probe.y);
+        })();
+        expectClose(c.minDistanceFrom(probe), naive, 0.1);
+    });
+
+    it('returns a value >= bail when the curve is farther than bail', () => {
+        // Straight line at y=0, point at (50, 100). True distance = 100.
+        // With bail=5, the method is free to return anything >= 5.
+        const c = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
+        expect(c.minDistanceFrom({ x: 50, y: 100 }, 5)).toBeGreaterThanOrEqual(5);
+    });
+
+    it('returns the true distance when the curve is closer than bail', () => {
+        // Straight line at y=0, point at (50, 3). True distance = 3 < bail=5.
+        const c = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
+        expectClose(c.minDistanceFrom({ x: 50, y: 3 }, 5), 3, 0.01);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// reverse
+// ---------------------------------------------------------------------------
+
 describe('reverse', () => {
     it('swaps start and end for a line', () => {
         const c = Curve.line({ x: 0, y: 0 }, { x: 10, y: 5 });

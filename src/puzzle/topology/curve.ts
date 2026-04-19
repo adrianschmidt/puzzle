@@ -45,6 +45,14 @@ export interface BezierSegment {
     p3: Point;
 }
 
+/** Axis-aligned bounding box. */
+export interface BBox {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
+
 // ---------------------------------------------------------------------------
 // Curve class
 // ---------------------------------------------------------------------------
@@ -62,11 +70,37 @@ export class Curve {
     /** Cached bezier-js instances (one per segment). */
     private _beziers?: Bezier[];
 
+    /** Cached per-segment bounding boxes. */
+    private _segmentBBoxes?: BBox[];
+
     constructor(segments: BezierSegment[]) {
         if (segments.length === 0) {
             throw new Error('Curve must have at least one segment');
         }
         this.segments = segments;
+    }
+
+    /** Per-segment bounding boxes, lazily computed and cached. */
+    private get segmentBBoxes(): BBox[] {
+        if (!this._segmentBBoxes) {
+            this._segmentBBoxes = this.segments.map(segmentBBox);
+        }
+        return this._segmentBBoxes;
+    }
+
+    /** Axis-aligned bounding box covering every segment. */
+    get bbox(): BBox {
+        const boxes = this.segmentBBoxes;
+        let minX = boxes[0].minX, minY = boxes[0].minY;
+        let maxX = boxes[0].maxX, maxY = boxes[0].maxY;
+        for (let i = 1; i < boxes.length; i++) {
+            const b = boxes[i];
+            if (b.minX < minX) minX = b.minX;
+            if (b.minY < minY) minY = b.minY;
+            if (b.maxX > maxX) maxX = b.maxX;
+            if (b.maxY > maxY) maxY = b.maxY;
+        }
+        return { minX, minY, maxX, maxY };
     }
 
     // -- bezier-js interop -------------------------------------------------
@@ -298,6 +332,39 @@ export class Curve {
         return bestT;
     }
 
+    /**
+     * Minimum distance from `point` to any point on this curve.
+     *
+     * Uses per-segment bounding-box prefiltering to skip bezier-js
+     * projection on segments whose bbox is already farther than the
+     * best distance found so far. When `bail` is provided, segments
+     * whose bbox is further than `bail` are skipped outright and the
+     * search short-circuits as soon as a distance below `bail` is
+     * found — so the return value is only accurate when it is
+     * smaller than `bail` (callers that only care about a threshold
+     * comparison can rely on `result < bail`).
+     */
+    minDistanceFrom(point: Point, bail?: number): number {
+        const boxes = this.segmentBBoxes;
+        let best = Infinity;
+
+        for (let i = 0; i < this.segments.length; i++) {
+            const b = boxes[i];
+            const dx = Math.max(b.minX - point.x, 0, point.x - b.maxX);
+            const dy = Math.max(b.minY - point.y, 0, point.y - b.maxY);
+            const bboxDist = Math.sqrt(dx * dx + dy * dy);
+            if (bboxDist >= best) continue;
+            if (bail !== undefined && bboxDist >= bail) continue;
+
+            const proj = this.beziers[i].project({ x: point.x, y: point.y });
+            const d = dist(proj, point);
+            if (d < best) best = d;
+            if (bail !== undefined && best < bail) return best;
+        }
+
+        return best;
+    }
+
     // -- Intersection ------------------------------------------------------
 
     /**
@@ -313,8 +380,8 @@ export class Curve {
 
         // Pre-compute bounding boxes for all segments to skip
         // non-overlapping pairs (avoids expensive bezier-js calls).
-        const selfBoxes = this.segments.map(segmentBBox);
-        const otherBoxes = other.segments.map(segmentBBox);
+        const selfBoxes = this.segmentBBoxes;
+        const otherBoxes = other.segmentBBoxes;
 
         for (let i = 0; i < selfN; i++) {
             for (let j = 0; j < otherN; j++) {
@@ -568,13 +635,6 @@ function dist(a: { x: number; y: number }, b: { x: number; y: number }): number 
 // ---------------------------------------------------------------------------
 // Bounding-box helpers for intersection pre-filtering
 // ---------------------------------------------------------------------------
-
-interface BBox {
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-}
 
 /** Compute the axis-aligned bounding box of a cubic Bézier segment. */
 function segmentBBox(seg: BezierSegment): BBox {

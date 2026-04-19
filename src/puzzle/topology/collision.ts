@@ -146,16 +146,35 @@ export function createProximityCollisionDetector(
     return {
         hasCollision(proposed, existing, selfIndex) {
             const samples = proposed.sample(samplesPerSegment);
+            const propBox = proposed.bbox;
 
             for (let i = 0; i < existing.length; i++) {
                 if (i === selfIndex) continue;
                 const other = existing[i];
 
+                // Whole-curve bbox prefilter: if the two curves' boxes are
+                // further apart than `minDistance`, no sample can possibly
+                // be within range — skip this curve entirely. This is the
+                // big win; most existing curves are nowhere near the tab.
+                const otherBox = other.bbox;
+                const gapX = Math.max(
+                    propBox.minX - otherBox.maxX,
+                    0,
+                    otherBox.minX - propBox.maxX,
+                );
+                const gapY = Math.max(
+                    propBox.minY - otherBox.maxY,
+                    0,
+                    otherBox.minY - propBox.maxY,
+                );
+                if (Math.sqrt(gapX * gapX + gapY * gapY) >= minDistance) {
+                    continue;
+                }
+
                 for (const p of samples) {
-                    const tOther = other.nearestT(p);
-                    const q = other.pointAt(tOther);
-                    const d = Math.hypot(p.x - q.x, p.y - q.y);
-                    if (d < minDistance) return true;
+                    if (other.minDistanceFrom(p, minDistance) < minDistance) {
+                        return true;
+                    }
                 }
             }
             return false;
