@@ -138,23 +138,13 @@ export function createTabCollisionDetector(
  * check against it would fire unconditionally. Self-crossings elsewhere on
  * the parent are still covered by the default tab collision detector
  * (issue #222).
- *
- * Samples whose closest point on the other curve lies within
- * `endpointTolerance` of either proposed endpoint are skipped. This
- * handles shared grid-corner joins, where one of the tab's splice points
- * happens to sit on a neighbouring cut line: samples along the tab's body
- * project straight back to that corner, and we don't want every one of
- * them to register as a zero-distance proximity hit.
  */
 export function createProximityCollisionDetector(
     minDistance: number,
-    endpointTolerance = 2,
     samplesPerSegment = 16,
 ): CollisionDetector {
     return {
         hasCollision(proposed, existing, selfIndex) {
-            const propStart = proposed.start;
-            const propEnd = proposed.end;
             const samples = proposed.sample(samplesPerSegment);
 
             for (let i = 0; i < existing.length; i++) {
@@ -164,18 +154,6 @@ export function createProximityCollisionDetector(
                 for (const p of samples) {
                     const tOther = other.nearestT(p);
                     const q = other.pointAt(tOther);
-
-                    const qDistStart = Math.hypot(
-                        q.x - propStart.x, q.y - propStart.y,
-                    );
-                    const qDistEnd = Math.hypot(
-                        q.x - propEnd.x, q.y - propEnd.y,
-                    );
-                    if (qDistStart <= endpointTolerance
-                        || qDistEnd <= endpointTolerance) {
-                        continue;
-                    }
-
                     const d = Math.hypot(p.x - q.x, p.y - q.y);
                     if (d < minDistance) return true;
                 }

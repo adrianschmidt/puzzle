@@ -230,18 +230,6 @@ describe('createProximityCollisionDetector', () => {
             detector.hasCollision(prepared!.tabCurve, [edge], 0),
         ).toBe(false);
     });
-
-    it('ignores samples near the tab endpoints (shared corner joins)', () => {
-        // A short vertical stub that shares its bottom endpoint with
-        // a horizontal cut (common grid-corner scenario). Without the
-        // endpoint filter, samples right at the corner would register
-        // a zero-distance proximity hit against the horizontal line.
-        const proposed = Curve.line({ x: 100, y: 50 }, { x: 100, y: 100 });
-        const neighbour = Curve.line({ x: 0, y: 100 }, { x: 200, y: 100 });
-
-        const detector = createProximityCollisionDetector(5);
-        expect(detector.hasCollision(proposed, [neighbour], -1)).toBe(false);
-    });
 });
 
 // ---------------------------------------------------------------------------
