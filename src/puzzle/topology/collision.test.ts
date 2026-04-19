@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     createTabCollisionDetector,
     createProximityCollisionDetector,
+    createCompositeCollisionDetector,
     createSkipOnCollisionResolver,
     detectExcessIntersections,
 } from './collision.js';
@@ -229,6 +230,41 @@ describe('createProximityCollisionDetector', () => {
         expect(
             detector.hasCollision(prepared!.tabCurve, [edge], 0),
         ).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// createCompositeCollisionDetector
+// ---------------------------------------------------------------------------
+
+describe('createCompositeCollisionDetector', () => {
+    const noColl: CollisionDetector = { hasCollision: () => false };
+    const yesColl: CollisionDetector = { hasCollision: () => true };
+    const dummyCurve = Curve.line({ x: 0, y: 0 }, { x: 1, y: 1 });
+
+    it('returns false when every detector reports no collision', () => {
+        const composite = createCompositeCollisionDetector([noColl, noColl]);
+        expect(composite.hasCollision(dummyCurve, [], -1)).toBe(false);
+    });
+
+    it('returns true when any detector reports a collision', () => {
+        const composite = createCompositeCollisionDetector([noColl, yesColl]);
+        expect(composite.hasCollision(dummyCurve, [], -1)).toBe(true);
+    });
+
+    it('short-circuits after the first true result', () => {
+        let secondCalled = false;
+        const tracker: CollisionDetector = {
+            hasCollision() { secondCalled = true; return false; },
+        };
+        const composite = createCompositeCollisionDetector([yesColl, tracker]);
+        composite.hasCollision(dummyCurve, [], -1);
+        expect(secondCalled).toBe(false);
+    });
+
+    it('returns false for an empty detector list', () => {
+        const composite = createCompositeCollisionDetector([]);
+        expect(composite.hasCollision(dummyCurve, [], -1)).toBe(false);
     });
 });
 

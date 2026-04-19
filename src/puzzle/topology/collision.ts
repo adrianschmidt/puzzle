@@ -164,6 +164,25 @@ export function createProximityCollisionDetector(
 }
 
 /**
+ * Combine multiple collision detectors into one. The composite reports a
+ * collision as soon as any wrapped detector does and short-circuits the
+ * rest. Useful when different detectors catch different classes of problem
+ * (e.g. intersection + proximity).
+ */
+export function createCompositeCollisionDetector(
+    detectors: CollisionDetector[],
+): CollisionDetector {
+    return {
+        hasCollision(proposed, existing, selfIndex) {
+            for (const d of detectors) {
+                if (d.hasCollision(proposed, existing, selfIndex)) return true;
+            }
+            return false;
+        },
+    };
+}
+
+/**
  * Default conflict resolver: skip the tab when a collision is detected.
  * The original (flat) segment is kept instead.
  */
