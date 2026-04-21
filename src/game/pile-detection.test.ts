@@ -413,43 +413,47 @@ describe('shouldSuppressMerge', () => {
         expect(shouldSuppressMerge(0, state)).toBe(true);
     });
 
-    it('does not suppress when non-mates equal mates', () => {
-        // When non-mate count equals mate count, it's ambiguous —
-        // we give the benefit of the doubt and allow the merge.
+    // Issue #237: mate groups must never count as conflicts, no matter how
+    // many pieces they contain or how much of the drop area they span.
+    // Before the fix, the pile filter treated every overlapping group
+    // symmetrically (mates vs non-mates by count), so edges of the
+    // assembled section the player was snapping into could contribute to
+    // the "conflict" side and block a clean placement.
+    it('ignores mate groups even when their bbox dominates the drop area', () => {
+        // Moved piece (dropped single) — mate is piece 1 in the big group.
         const piece0 = makeSquarePiece(0, {
             right: { pieceId: 1, edgeId: 5 },
-            bottom: { pieceId: 2, edgeId: 9 },
-            left: { pieceId: 3, edgeId: 13 },
         });
+
+        // Big assembled group contains pieces 1..4.
         const piece1 = makeSquarePiece(1, {
             left: { pieceId: 0, edgeId: 1 },
         });
-        const piece2 = makeSquarePiece(2, {
-            top: { pieceId: 0, edgeId: 2 },
-        });
-        const piece3 = makeSquarePiece(3, {
-            right: { pieceId: 0, edgeId: 3 },
-        });
-
-        // 3 non-mates
+        const piece2 = makeSquarePiece(2);
+        const piece3 = makeSquarePiece(3);
         const piece4 = makeSquarePiece(4);
-        const piece5 = makeSquarePiece(5);
-        const piece6 = makeSquarePiece(6);
 
-        const group0 = makeGroup(0, 0, { x: 100, y: 100 });
-        const group1 = makeGroup(1, 1, { x: 200, y: 100 }); // mate
-        const group2 = makeGroup(2, 2, { x: 100, y: 200 }); // mate
-        const group3 = makeGroup(3, 3, { x: 0, y: 100 });   // mate
-        const group4 = makeGroup(4, 4, { x: 105, y: 105 }); // non-mate
-        const group5 = makeGroup(5, 5, { x: 110, y: 110 }); // non-mate
-        const group6 = makeGroup(6, 6, { x: 115, y: 115 }); // non-mate
+        const movedGroup = makeGroup(0, 0, { x: 100, y: 100 });
+
+        // Large assembled mate group whose bbox spans the drop area.
+        const assembledGroup: PieceGroup = {
+            id: 1,
+            pieces: new Map([
+                [1, { x: 0, y: 0 }],
+                [2, { x: 100, y: 0 }],
+                [3, { x: 0, y: 100 }],
+                [4, { x: 100, y: 100 }],
+            ]),
+            position: { x: 200, y: 100 },
+            rotation: 0,
+        };
 
         const state = makeGameState(
-            [piece0, piece1, piece2, piece3, piece4, piece5, piece6],
-            [group0, group1, group2, group3, group4, group5, group6],
+            [piece0, piece1, piece2, piece3, piece4],
+            [movedGroup, assembledGroup],
         );
 
-        // 3 non-mates = 3 mates, non-mates do NOT outnumber mates → allow merge
+        // Mate group is filtered out of the conflict count entirely.
         expect(shouldSuppressMerge(0, state)).toBe(false);
     });
 });

@@ -30,8 +30,9 @@ export interface BoundingRect {
 
 /**
  * If this many or more non-matching groups overlap the dropped group,
- * and their count exceeds the matching count by this ratio,
- * suppress the merge.
+ * suppress the merge. Mate groups (groups containing edge-mates of any
+ * piece in the dropped group) are filtered out of the count entirely —
+ * their edges are part of the intended assembly, not a pile.
  */
 export const PILE_OVERLAP_THRESHOLD = 3;
 
@@ -145,15 +146,16 @@ function getMateGroupIds(
  * The heuristic:
  * 1. Compute the bounding rect of the dropped group (with padding).
  * 2. Find all other groups that overlap this rect.
- * 3. Separate overlapping groups into "mates" (have matching edges
- *    with the dropped group) and "non-mates" (unrelated pieces
- *    that just happen to be nearby).
- * 4. If non-mate overlap count >= PILE_OVERLAP_THRESHOLD and
- *    non-mates outnumber mates, it's a pile — suppress merge.
+ * 3. Skip the moved group itself, and skip any mate group (a group
+ *    containing a piece that mates with some edge of the moved group).
+ *    Those aren't "conflicts" — they're the intended assembly.
+ * 4. If the remaining (non-mate, overlapping) group count reaches
+ *    PILE_OVERLAP_THRESHOLD, it's a pile — suppress merge.
  *
- * This allows intentional placement into a gap in an assembled section:
- * there, the overlapping groups are mostly mates (large assembled
- * sections), so the ratio check passes.
+ * Filtering out the mate group is what keeps snapping responsive when
+ * the player drops a single piece next to a partially-built section:
+ * edges of the section itself never count as conflicts, even when the
+ * section is physically large enough to overlap the drop area heavily.
  *
  * @param movedGroupId - The group that was just dropped
  * @param state - Current game state
@@ -178,28 +180,20 @@ export function shouldSuppressMerge(
     // Which groups have matching edges with pieces in the moved group?
     const mateGroupIds = getMateGroupIds(movedGroup, state.pieces, state.groups);
 
-    let mateOverlapCount = 0;
     let nonMateOverlapCount = 0;
 
     for (const otherGroup of state.groups) {
         if (otherGroup.id === movedGroupId) continue;
+        // Mate groups are part of the intended assembly, not conflicts.
+        if (mateGroupIds.has(otherGroup.id)) continue;
 
         const otherBounds = getGroupBounds(otherGroup, state.pieces);
         if (!rectsOverlap(movedBounds, otherBounds)) continue;
 
-        if (mateGroupIds.has(otherGroup.id)) {
-            mateOverlapCount++;
-        } else {
-            nonMateOverlapCount++;
-        }
+        nonMateOverlapCount++;
     }
 
-    // Suppress only when there are enough non-matching groups nearby
-    // AND they outnumber the matching groups.
-    // This ensures we don't block placement into gaps in assembled
-    // sections where matching groups are expected to overlap.
-    return nonMateOverlapCount >= PILE_OVERLAP_THRESHOLD &&
-           nonMateOverlapCount > mateOverlapCount;
+    return nonMateOverlapCount >= PILE_OVERLAP_THRESHOLD;
 }
 
 /**
