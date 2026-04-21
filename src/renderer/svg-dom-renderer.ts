@@ -366,6 +366,12 @@ export class SvgDomRenderer implements Renderer {
             svg.appendChild(edgePath);
         }
 
+        // Debug overlay: white-fill / black-outline piece shape, a stable
+        // piece-ID label, and an arrow marking piece-local "up" (so a
+        // player can see how a rotated group was originally oriented).
+        // All hidden by default; toggled together via .show-debug-pieces.
+        this.appendDebugPieceOverlay(svg, piece);
+
         // Disable pointer events on the SVG container itself —
         // only the hit-area paths should respond.
         svg.style.pointerEvents = 'none';
@@ -385,5 +391,75 @@ export class SvgDomRenderer implements Renderer {
     private positionPiece(svgEl: SVGSVGElement, offset: Point): void {
         svgEl.style.left = `${offset.x - PIECE_PADDING}px`;
         svgEl.style.top = `${offset.y - PIECE_PADDING}px`;
+    }
+
+    /**
+     * Append the debug piece-view elements (fill, ID label, up arrow).
+     *
+     * They're always in the DOM so the toggle can flip them instantly
+     * without re-rendering. Defaults to hidden via CSS.
+     */
+    private appendDebugPieceOverlay(svg: SVGSVGElement, piece: Piece): void {
+        const svgNS = 'http://www.w3.org/2000/svg';
+
+        const fillPath = document.createElementNS(svgNS, 'path');
+        fillPath.setAttribute('d', piece.shape);
+        fillPath.setAttribute('fill', 'white');
+        fillPath.setAttribute('stroke', 'black');
+        fillPath.setAttribute('stroke-width', '1');
+        fillPath.setAttribute('pointer-events', 'none');
+        fillPath.dataset.pieceFill = 'true';
+        svg.appendChild(fillPath);
+
+        // Piece-local bbox from edge endpoints — works for any shape the
+        // generators produce (including fractal arcs whose start/end points
+        // approximate the overall silhouette well enough for a label).
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (const edge of piece.edges) {
+            for (const point of [edge.start, edge.end]) {
+                if (point.x < minX) minX = point.x;
+                if (point.x > maxX) maxX = point.x;
+                if (point.y < minY) minY = point.y;
+                if (point.y > maxY) maxY = point.y;
+            }
+        }
+
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+
+        const label = document.createElementNS(svgNS, 'text');
+        label.setAttribute('x', String(centerX));
+        label.setAttribute('y', String(centerY));
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('dominant-baseline', 'middle');
+        label.setAttribute('font-size', '14');
+        label.setAttribute('font-family', 'ui-monospace, Menlo, monospace');
+        label.setAttribute('fill', 'black');
+        label.setAttribute('pointer-events', 'none');
+        label.textContent = String(piece.id);
+        label.dataset.pieceLabel = 'true';
+        svg.appendChild(label);
+
+        // Upward-pointing triangle near the top of the piece's bbox.
+        // Drawn in piece-local space, so group rotation carries it along —
+        // it always points toward what was originally "up".
+        const arrowHalf = 5;
+        const arrowHeight = 7;
+        const arrowTipY = minY + 4;
+        const arrowBaseY = arrowTipY + arrowHeight;
+        const arrow = document.createElementNS(svgNS, 'path');
+        arrow.setAttribute(
+            'd',
+            `M ${centerX} ${arrowTipY}` +
+                ` L ${centerX - arrowHalf} ${arrowBaseY}` +
+                ` L ${centerX + arrowHalf} ${arrowBaseY} Z`,
+        );
+        arrow.setAttribute('fill', 'black');
+        arrow.setAttribute('pointer-events', 'none');
+        arrow.dataset.pieceUp = 'true';
+        svg.appendChild(arrow);
     }
 }
