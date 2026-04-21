@@ -7,6 +7,7 @@
  * and configurable game settings.
  */
 
+import type { GameState } from '../model/types.js';
 import {
     getSortedPresets,
     loadTolerancePreference,
@@ -26,6 +27,29 @@ export interface InfoModalOptions {
     onToleranceChanged?: (index: number) => void;
     /** Called when the solve button is pressed (debug). */
     onSolve?: () => void;
+    /**
+     * Returns the current game state — used by the Debug panel to show the
+     * parameters needed to reproduce the puzzle. Optional: when absent the
+     * repro block is omitted.
+     */
+    getState?: () => GameState | null | undefined;
+}
+
+/** HTML class toggled on <html> to switch pieces into debug (white) view. */
+const DEBUG_PIECES_CLASS = 'show-debug-pieces';
+
+/**
+ * Fields required to reproduce a puzzle from its seed.
+ * Kept minimal so a screenshot of the block is easy to read.
+ */
+function buildReproParams(state: GameState): Record<string, unknown> {
+    const params: Record<string, unknown> = {};
+    if (state.seed !== undefined) params.seed = state.seed;
+    if (state.cutStyle) params.cutStyle = state.cutStyle;
+    if (state.gridSize) params.gridSize = state.gridSize;
+    if (state.rotationMode) params.rotationMode = state.rotationMode;
+    if (state.generatorConfig) params.generatorConfig = state.generatorConfig;
+    return params;
 }
 
 /**
@@ -34,7 +58,7 @@ export interface InfoModalOptions {
  * Returns a cleanup function that removes the modal from the DOM.
  */
 export function createInfoModal(options: InfoModalOptions): () => void {
-    const { container, onDismiss, onToleranceChanged } = options;
+    const { container, onDismiss, onToleranceChanged, getState } = options;
 
     // Build overlay
     const overlay = document.createElement('div');
@@ -135,8 +159,13 @@ export function createInfoModal(options: InfoModalOptions): () => void {
             </ul>
         </section>
 
-        <section class="info-section info-section--debug" data-testid="debug-section">
-            <h3>Debug</h3>
+        <details class="info-section info-section--debug" data-testid="debug-section">
+            <summary class="info-section-summary">Debug</summary>
+            <div class="info-setting" data-testid="repro-params-setting">
+                <label class="info-setting-label">Reproduction parameters</label>
+                <p class="info-setting-description">Parameters needed to regenerate this exact puzzle. Include in bug reports.</p>
+                <pre class="info-repro-block" data-testid="repro-params"></pre>
+            </div>
             <div class="info-setting">
                 <label class="info-setting-label" for="piece-opacity-slider">Piece opacity</label>
                 <p class="info-setting-description">Adjust puzzle piece transparency.</p>
@@ -153,7 +182,14 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                 </label>
                 <p class="info-setting-description">Highlight edges with no mate (mateEdgeId&nbsp;=&nbsp;-1) in pink.</p>
             </div>
-        </section>
+            <div class="info-setting">
+                <label class="info-setting-toggle">
+                    <input type="checkbox" data-testid="debug-pieces-toggle" />
+                    <span class="info-setting-label">Debug piece view</span>
+                </label>
+                <p class="info-setting-description">Show pieces as white outlines with their piece IDs and an arrow indicating each piece's original "up" direction.</p>
+            </div>
+        </details>
     `;
 
     // Build tolerance option buttons
@@ -232,6 +268,39 @@ export function createInfoModal(options: InfoModalOptions): () => void {
             matelessToggle.checked,
         );
     });
+
+    // Debug piece-view toggle — swaps pieces for white outlines with IDs.
+    const debugPiecesToggle = content.querySelector<HTMLInputElement>(
+        '[data-testid="debug-pieces-toggle"]',
+    )!;
+    debugPiecesToggle.checked =
+        document.documentElement.classList.contains(DEBUG_PIECES_CLASS);
+    debugPiecesToggle.addEventListener('change', () => {
+        document.documentElement.classList.toggle(
+            DEBUG_PIECES_CLASS,
+            debugPiecesToggle.checked,
+        );
+    });
+
+    // Reproduction parameters code block. Only fill in when a state source
+    // was provided — the modal otherwise hides the row rather than showing
+    // an empty box.
+    const reproBlock = content.querySelector<HTMLPreElement>(
+        '[data-testid="repro-params"]',
+    )!;
+    const reproSetting = content.querySelector<HTMLElement>(
+        '[data-testid="repro-params-setting"]',
+    )!;
+    const state = getState?.();
+    if (state) {
+        reproBlock.textContent = JSON.stringify(
+            buildReproParams(state),
+            null,
+            2,
+        );
+    } else {
+        reproSetting.style.display = 'none';
+    }
 
     // Debug: solve button sits inside the Debug section so all debug tools stay together.
     if (options.onSolve) {

@@ -135,4 +135,15 @@ export interface GameState {
      * a schema break. Defaults to `'none'` when absent.
      */
     rotationMode?: 'none' | 'quarter-turn';
+    /**
+     * Generator-specific configuration that produced this puzzle.
+     *
+     * Shape depends on `cutStyle`: `FractalConfig` for fractal,
+     * `ComposableConfig` for composable, absent for classic. Stored as an
+     * opaque record so `model/types.ts` stays free of generator imports.
+     *
+     * Needed to reproduce a puzzle from its seed — displayed in the Debug
+     * panel for bug reports.
+     */
+    generatorConfig?: Record<string, unknown>;
 }

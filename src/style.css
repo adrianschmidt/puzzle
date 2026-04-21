@@ -300,6 +300,23 @@ html, body {
   display: block;
 }
 
+/* Debug piece view — hidden by default, toggled via info-modal */
+[data-piece-fill],
+[data-piece-label],
+[data-piece-up] {
+  display: none;
+}
+
+.show-debug-pieces [data-piece-id] image {
+  display: none;
+}
+
+.show-debug-pieces [data-piece-fill],
+.show-debug-pieces [data-piece-label],
+.show-debug-pieces [data-piece-up] {
+  display: block;
+}
+
 /* Selected group highlight — must be clearly visible on any background */
 [data-group-id].selected {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35))
@@ -873,6 +890,36 @@ html, body {
   font-weight: 600;
   color: var(--ui-fg);
   margin: 0 0 8px 0;
+}
+
+/* Debug section is a <details>; style the summary to look like an h3. */
+.info-section-summary {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ui-fg);
+  cursor: pointer;
+  user-select: none;
+  list-style: revert;
+  margin: 0 0 8px 0;
+}
+
+details.info-section[open] > .info-section-summary {
+  margin-bottom: 8px;
+}
+
+/* Reproduction params block — copy/screenshot target in bug reports. */
+.info-repro-block {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--ui-fg);
+  background: var(--ui-overlay-bg, rgba(0, 0, 0, 0.25));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+  user-select: text;
 }
 
 .info-section p {

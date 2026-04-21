@@ -93,17 +93,24 @@ export function createNewGame(
         : imageSize;
 
     let pieces: Piece[];
+    let generatorConfig: Record<string, unknown> | undefined;
     if (cutStyle === 'fractal') {
         pieces = generateFractalPuzzle(fractalGrid!.cols, fractalGrid!.rows, puzzleSize, seed, options.fractalConfig);
+        if (options.fractalConfig) {
+            generatorConfig = { ...options.fractalConfig };
+        }
     } else if (cutStyle === 'composable') {
         pieces = generateComposablePuzzle(gridSize.cols, gridSize.rows, puzzleSize, seed, options.composableConfig);
+        if (options.composableConfig) {
+            generatorConfig = { ...options.composableConfig };
+        }
     } else {
         pieces = generateProceduralPuzzle(gridSize.cols, gridSize.rows, puzzleSize, seed);
     }
 
     const groups = createInitialGroups(pieces, puzzleSize, viewport, gridSize, options);
 
-    return {
+    const state: GameState = {
         pieces,
         groups,
         imageUrl,
@@ -114,6 +121,12 @@ export function createNewGame(
         cutStyle,
         rotationMode,
     };
+
+    if (generatorConfig) {
+        state.generatorConfig = generatorConfig;
+    }
+
+    return state;
 }
 
 /**

@@ -135,6 +135,39 @@ describe('serializeState', () => {
 
         expect(serialized.attribution).toBeUndefined();
     });
+
+    it('includes generatorConfig when present', () => {
+        const state = makeGameState({
+            generatorConfig: { borderless: true },
+        });
+        const serialized = serializeState(state);
+
+        expect(serialized.generatorConfig).toEqual({ borderless: true });
+    });
+
+    it('omits generatorConfig when not present', () => {
+        const state = makeGameState();
+        const serialized = serializeState(state);
+
+        expect(serialized.generatorConfig).toBeUndefined();
+    });
+
+    it('round-trips generatorConfig through serialization', () => {
+        const state = makeGameState({
+            generatorConfig: {
+                horizontalAmplitude: 0.15,
+                verticalFrequency: 2,
+                disableTabs: false,
+            },
+        });
+        const restored = deserializeState(serializeState(state));
+
+        expect(restored.generatorConfig).toEqual({
+            horizontalAmplitude: 0.15,
+            verticalFrequency: 2,
+            disableTabs: false,
+        });
+    });
 });
 
 describe('deserializeState', () => {

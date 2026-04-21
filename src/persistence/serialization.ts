@@ -18,7 +18,7 @@ import { getImageDimensions } from '../renderer/svg-dom-utils.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 /**
  * Supported schema versions.
@@ -29,8 +29,9 @@ export const STATE_VERSION = 6;
  * - v4: adds seed for procedural cut generation
  * - v5: adds cutStyle ('classic' | 'fractal')
  * - v6: adds rotation (0-3 quarter-turns) per group
+ * - v7: adds generatorConfig (fractal/composable params) for reproducibility
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
@@ -59,6 +60,8 @@ export interface SerializedGameState {
      * cut style.
      */
     rotationMode?: 'none' | 'quarter-turn';
+    /** Generator config that produced this puzzle. v7+. */
+    generatorConfig?: Record<string, unknown>;
 }
 
 /**
@@ -91,6 +94,10 @@ export function serializeState(state: GameState): SerializedGameState {
 
     if (state.rotationMode) {
         serialized.rotationMode = state.rotationMode;
+    }
+
+    if (state.generatorConfig) {
+        serialized.generatorConfig = state.generatorConfig;
     }
 
     return serialized;
@@ -142,6 +149,10 @@ export function deserializeState(data: SerializedGameState): GameState {
     }
 
     state.rotationMode = resolveRotationMode(data, groups);
+
+    if (data.generatorConfig) {
+        state.generatorConfig = data.generatorConfig;
+    }
 
     return state;
 }
