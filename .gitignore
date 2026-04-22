@@ -21,3 +21,6 @@ scripts/diag-output/
 
 # Git worktrees
 .worktrees/
+
+# Debug artefacts
+debug-*.png

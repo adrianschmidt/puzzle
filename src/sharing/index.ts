@@ -1,5 +1,6 @@
 export {
     type SharePayload,
+    type EncodeOptions,
     encodePayload,
     decodePayload,
     buildShareUrl,
