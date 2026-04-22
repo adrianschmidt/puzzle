@@ -1139,3 +1139,30 @@ details.info-section[open] > .info-section-summary {
   from { opacity: 0; transform: translate(-50%, 12px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
+
+.share-section .share-primary-btn {
+  margin-top: 12px;
+  padding: 10px 18px;
+  background: rgba(80, 140, 255, 0.22);
+  border: 1px solid rgba(80, 140, 255, 0.45);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.share-section .share-primary-btn:hover {
+  background: rgba(80, 140, 255, 0.32);
+}
+.share-section .share-url-preview {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 11px;
+  word-break: break-all;
+  max-height: 96px;
+  overflow-y: auto;
+  user-select: all;
+  color: #ddd;
+}
