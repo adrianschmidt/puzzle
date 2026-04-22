@@ -101,3 +101,15 @@ function isTuple2Number(x: unknown): x is [number, number] {
     return Array.isArray(x) && x.length === 2
         && typeof x[0] === 'number' && typeof x[1] === 'number';
 }
+
+export function buildShareUrl(baseUrl: string, payload: SharePayload): string {
+    const withoutHash = baseUrl.split('#')[0];
+    return `${withoutHash}#p=${encodePayload(payload)}`;
+}
+
+export function parseLocationHash(hash: string): SharePayload | null {
+    if (!hash.startsWith('#p=')) return null;
+    const body = hash.slice(3);
+    if (!body) return null;
+    return decodePayload(body);
+}
