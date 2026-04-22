@@ -28,6 +28,20 @@ describe('computeMergedOffsets', () => {
         expect(off4.y).toBeCloseTo(100, 3);
     });
 
+    it('traverses a three-piece horizontal chain via BFS', () => {
+        const pieces = generateProceduralPuzzle(4, 3, { width: 400, height: 300 }, 123);
+        // Pieces 0, 1, 2 form a chain along the top row. Piece 2 is only
+        // reachable from the anchor (0) via piece 1 — a BFS that stopped
+        // after processing the anchor's direct neighbours would fail.
+        const offsets = computeMergedOffsets(pieces, [0, 1, 2]);
+        expect(offsets).not.toBeNull();
+        expect(offsets!.get(0)).toEqual({ x: 0, y: 0 });
+        expect(offsets!.get(1)!.x).toBeCloseTo(100, 3);
+        expect(offsets!.get(1)!.y).toBeCloseTo(0, 3);
+        expect(offsets!.get(2)!.x).toBeCloseTo(200, 3);
+        expect(offsets!.get(2)!.y).toBeCloseTo(0, 3);
+    });
+
     it('returns null for a disconnected piece set', () => {
         const pieces = generateProceduralPuzzle(4, 3, { width: 400, height: 300 }, 123);
         // Piece 0 and piece 2 are not adjacent.
