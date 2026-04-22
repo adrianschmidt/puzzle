@@ -4,8 +4,11 @@ import {
     decodePayload,
     buildShareUrl,
     parseLocationHash,
+    gameStateToPayload,
+    hasShareableProgress,
     type SharePayload,
 } from './share-link.js';
+import type { GameState } from '../model/types.js';
 
 describe('share-link codec — minimal round-trip', () => {
     it('round-trips a minimal starting payload (no attribution, no progress)', () => {
@@ -168,3 +171,147 @@ function encodeRaw(obj: unknown): string {
     for (const b of bytes) binary += String.fromCharCode(b);
     return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
+
+function buildState(partial: Partial<GameState>): GameState {
+    return {
+        pieces: [],
+        groups: [],
+        imageUrl: 'blank',
+        imageSize: { width: 1080, height: 720 },
+        gridSize: { cols: 4, rows: 3 },
+        completed: false,
+        seed: 42,
+        cutStyle: 'classic',
+        rotationMode: 'none',
+        ...partial,
+    };
+}
+
+describe('gameStateToPayload', () => {
+    it('maps a starting classic puzzle to a minimal payload', () => {
+        const state = buildState({});
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload).toEqual({
+            v: 1, i: 'blank', is: [1080, 720], g: [4, 3],
+            c: 'classic', s: 42, r: 'none',
+        });
+    });
+
+    it('includes attribution when present', () => {
+        const state = buildState({
+            attribution: {
+                photographerName: 'Ada',
+                photographerUrl: 'https://u',
+                photoUrl: 'https://p',
+            },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.a).toEqual({ n: 'Ada', u: 'https://u', p: 'https://p' });
+    });
+
+    it('includes fractalConfig with rotation mode', () => {
+        const state = buildState({
+            cutStyle: 'fractal',
+            rotationMode: 'quarter-turn',
+            fractalConfig: { borderless: true },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.c).toBe('fractal');
+        expect(payload.r).toBe('quarter-turn');
+        expect(payload.ff).toEqual({ bl: true });
+    });
+
+    it('includes composableConfig', () => {
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {
+                horizontalAmplitude: 0.2, horizontalFrequency: 1,
+                verticalAmplitude: 0.3, verticalFrequency: 2, disableTabs: false,
+            },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.cf).toEqual({ ha: 0.2, hf: 1, va: 0.3, vf: 2, dt: false });
+    });
+
+    it('omits progress when includeProgress is false', () => {
+        const state = buildState({
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+                { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.pr).toBeUndefined();
+    });
+
+    it('captures merged-group piece IDs when includeProgress is true', () => {
+        const state = buildState({
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+                { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: true });
+        expect(payload.pr?.m).toEqual([[0, 1]]);
+        expect(payload.pr?.mr).toBeUndefined();
+        expect(payload.pr?.sr).toBeUndefined();
+    });
+
+    it('captures rotation fidelity in quarter-turn mode', () => {
+        const state = buildState({
+            rotationMode: 'quarter-turn',
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 2 },
+                { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 1 },
+                { id: 3, pieces: new Map([[3, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: true });
+        expect(payload.pr?.m).toEqual([[0, 1]]);
+        expect(payload.pr?.mr).toEqual([2]);
+        // Solo rotations: only non-zero ones are encoded.
+        expect(payload.pr?.sr).toEqual([2, 1]);
+    });
+});
+
+describe('hasShareableProgress', () => {
+    it('is false when the puzzle has no merged groups', () => {
+        const state = buildState({
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+        });
+        expect(hasShareableProgress(state)).toBe(false);
+    });
+
+    it('is false when the puzzle is complete', () => {
+        const state = buildState({
+            completed: true,
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+        });
+        expect(hasShareableProgress(state)).toBe(false);
+    });
+
+    it('is true when there is at least one multi-piece group and the puzzle is in progress', () => {
+        const state = buildState({
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+                { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+        });
+        expect(hasShareableProgress(state)).toBe(true);
+    });
+});
