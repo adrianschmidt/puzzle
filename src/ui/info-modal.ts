@@ -322,17 +322,16 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     }
 
     // Share section: inserted before Credits when state is available.
+    // We strip the hash here so attachShareSection receives the bare page URL
+    // rather than silently relying on buildShareUrl to drop any stale `#p=...`.
     if (options.state) {
+        const baseUrl = window.location.href.split('#')[0];
+        attachShareSection(content, options.state, baseUrl);
         const creditsHeading = Array.from(content.querySelectorAll<HTMLElement>('section.info-section h3'))
             .find((h) => h.textContent === 'Credits');
-        const before = creditsHeading?.parentElement ?? null;
-        if (before) {
-            const holder = document.createElement('div');
-            attachShareSection(holder, options.state, window.location.href);
-            const shareSection = holder.firstElementChild;
-            if (shareSection) content.insertBefore(shareSection, before);
-        } else {
-            attachShareSection(content, options.state, window.location.href);
+        const creditsSection = creditsHeading?.parentElement ?? null;
+        if (creditsSection && content.lastElementChild) {
+            content.insertBefore(content.lastElementChild, creditsSection);
         }
     }
 
