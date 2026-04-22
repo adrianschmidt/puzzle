@@ -9,7 +9,7 @@
  * meets `mateEdge.end` on the neighbour.
  */
 
-import type { Piece, Point } from '../model/types.js';
+import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
 
 export function computeMergedOffsets(
     pieces: Piece[],
@@ -62,8 +62,6 @@ export function computeMergedOffsets(
     if (offsets.size !== want.size) return null;
     return offsets;
 }
-
-import type { GameState, PieceGroup } from '../model/types.js';
 
 export interface ProgressInput {
     m: number[][];
