@@ -1166,3 +1166,18 @@ details.info-section[open] > .info-section-summary {
   user-select: all;
   color: #ddd;
 }
+
+.completion-share-btn {
+  margin-top: 16px;
+  padding: 10px 22px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  border-radius: 12px;
+  font-size: 16px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.completion-share-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
