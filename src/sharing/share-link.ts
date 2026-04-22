@@ -76,12 +76,13 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (!isTuple2Number(p.is)) return false;
     if (!isTuple2Number(p.g)) return false;
     if (p.c !== 'classic' && p.c !== 'fractal' && p.c !== 'composable') return false;
-    if (typeof p.s !== 'number') return false;
+    if (typeof p.s !== 'number' || !Number.isFinite(p.s)) return false;
     if (p.r !== 'none' && p.r !== 'quarter-turn') return false;
     return true;
 }
 
 function isTuple2Number(x: unknown): x is [number, number] {
     return Array.isArray(x) && x.length === 2
-        && typeof x[0] === 'number' && typeof x[1] === 'number';
+        && typeof x[0] === 'number' && typeof x[1] === 'number'
+        && Number.isFinite(x[0]) && Number.isFinite(x[1]);
 }
