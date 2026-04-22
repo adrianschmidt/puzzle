@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
-import { computeMergedOffsets } from './reconstruct-groups.js';
+import { computeMergedOffsets, applyProgress } from './reconstruct-groups.js';
+import { createNewGame } from './init.js';
+import type { GameState } from '../model/types.js';
 
 describe('computeMergedOffsets', () => {
     it('computes offsets for a two-piece horizontal merge that match the generator layout', () => {
@@ -58,5 +60,64 @@ describe('computeMergedOffsets', () => {
         const offsets = computeMergedOffsets(pieces, [5]);
         expect(offsets!.size).toBe(1);
         expect(offsets!.get(5)).toEqual({ x: 0, y: 0 });
+    });
+});
+
+function fresh(seed: number, rotationMode: 'none' | 'quarter-turn' = 'none'): GameState {
+    return createNewGame(
+        'blank',
+        { width: 400, height: 300 },
+        { width: 800, height: 600 },
+        { cols: 4, rows: 3 },
+        { cutStyle: 'classic', seed, rotationMode },
+    );
+}
+
+describe('applyProgress', () => {
+    it('merges the listed piece groups into one multi-piece group', () => {
+        const state = fresh(123);
+        const originalGroupCount = state.groups.length;
+
+        const ok = applyProgress(state, { m: [[0, 1]] });
+        expect(ok).toBe(true);
+
+        expect(state.groups.length).toBe(originalGroupCount - 1);
+        const merged = state.groups.find((g) => g.pieces.size === 2);
+        expect(merged).toBeDefined();
+        expect([...merged!.pieces.keys()].sort()).toEqual([0, 1]);
+    });
+
+    it('restores merged-group rotation when rotation mode is on', () => {
+        const state = fresh(123, 'quarter-turn');
+        const ok = applyProgress(state, { m: [[0, 1]], mr: [2] });
+        expect(ok).toBe(true);
+        const merged = state.groups.find((g) => g.pieces.size === 2);
+        expect(merged!.rotation).toBe(2);
+    });
+
+    it('restores solo-piece rotations from sr', () => {
+        const state = fresh(123, 'quarter-turn');
+        // Force all solo rotations to a known baseline (0) before the test.
+        for (const g of state.groups) g.rotation = 0;
+
+        const ok = applyProgress(state, { m: [], sr: [2, 1, 5, 3] });
+        expect(ok).toBe(true);
+        const soloFor = (pid: number) =>
+            state.groups.find((g) => g.pieces.size === 1 && g.pieces.has(pid))!;
+        expect(soloFor(2).rotation).toBe(1);
+        expect(soloFor(5).rotation).toBe(3);
+    });
+
+    it('returns false if any group references a missing piece id', () => {
+        const state = fresh(123);
+        const ok = applyProgress(state, { m: [[0, 999]] });
+        expect(ok).toBe(false);
+    });
+
+    it('returns false if any group references disconnected pieces', () => {
+        const state = fresh(123);
+        // Pieces 0 and 2 are not adjacent.
+        const ok = applyProgress(state, { m: [[0, 2]] });
+        expect(ok).toBe(false);
     });
 });
