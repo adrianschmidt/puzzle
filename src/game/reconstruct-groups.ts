@@ -42,8 +42,9 @@ export function computeMergedOffsets(
             if (!want.has(mateId)) continue;
             if (offsets.has(mateId)) continue;
 
-            const mate = byId.get(mateId);
-            if (!mate) return null;
+            // mateId is in `want`, and every id in `want` was validated
+            // against `byId` at function entry, so this lookup can't miss.
+            const mate = byId.get(mateId)!;
             const mateEdge = mate.edges.find((e) => e.id === edge.mateEdgeId);
             if (!mateEdge) return null;
 
