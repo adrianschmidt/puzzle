@@ -70,21 +70,20 @@ export interface ProgressInput {
 }
 
 export function applyProgress(state: GameState, progress: ProgressInput): boolean {
-    // Validate merged groups first so we can abort atomically.
-    const reconstructed: Array<{ ids: number[]; offsets: Map<number, { x: number; y: number }> }> = [];
+    // Validate every merge first so we can abort without mutating state.
+    const reconstructed: Array<Map<number, Point>> = [];
+    const absorbedIds = new Set<number>();
     for (const ids of progress.m) {
         if (ids.length < 2) return false;
         const offsets = computeMergedOffsets(state.pieces, ids);
         if (!offsets) return false;
-        reconstructed.push({ ids, offsets });
+        for (const id of ids) absorbedIds.add(id);
+        reconstructed.push(offsets);
     }
 
-    const nextGroupId = Math.max(0, ...state.groups.map((g) => g.id)) + 1;
-    let idCursor = nextGroupId;
+    let idCursor = Math.max(0, ...state.groups.map((g) => g.id)) + 1;
 
     // Remove solo groups that are being absorbed into merges.
-    const absorbedIds = new Set<number>();
-    for (const { ids } of reconstructed) for (const id of ids) absorbedIds.add(id);
     state.groups = state.groups.filter((g) => {
         if (g.pieces.size !== 1) return true;
         const [only] = g.pieces.keys();
@@ -92,7 +91,7 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
     });
 
     // Push each reconstructed merged group.
-    reconstructed.forEach(({ offsets }, idx) => {
+    reconstructed.forEach((offsets, idx) => {
         const rotation = (progress.mr?.[idx] ?? 0) as 0 | 1 | 2 | 3;
         const group: PieceGroup = {
             id: idCursor++,
