@@ -4,4 +4,6 @@ export {
     decodePayload,
     buildShareUrl,
     parseLocationHash,
+    gameStateToPayload,
+    hasShareableProgress,
 } from './share-link.js';

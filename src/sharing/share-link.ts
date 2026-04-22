@@ -6,6 +6,8 @@
  * main.ts on boot to detect and load `#p=...` hash links.
  */
 
+import type { GameState } from '../model/types.js';
+
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
     v: 1;
@@ -112,4 +114,83 @@ export function parseLocationHash(hash: string): SharePayload | null {
     const body = hash.slice(3);
     if (!body) return null;
     return decodePayload(body);
+}
+
+export interface EncodeOptions {
+    includeProgress: boolean;
+}
+
+export function gameStateToPayload(
+    state: GameState,
+    options: EncodeOptions,
+): SharePayload {
+    const cutStyle = (state.cutStyle ?? 'classic') as SharePayload['c'];
+    const rotationMode = (state.rotationMode ?? 'none') as SharePayload['r'];
+
+    const payload: SharePayload = {
+        v: 1,
+        i: state.imageUrl,
+        is: [state.imageSize.width, state.imageSize.height],
+        g: [state.gridSize.cols, state.gridSize.rows],
+        c: cutStyle,
+        s: state.seed ?? 0,
+        r: rotationMode,
+    };
+
+    if (state.attribution) {
+        payload.a = {
+            n: state.attribution.photographerName,
+            u: state.attribution.photographerUrl,
+            p: state.attribution.photoUrl,
+        };
+    }
+
+    if (cutStyle === 'composable' && state.composableConfig) {
+        const c = state.composableConfig;
+        payload.cf = {
+            ha: c.horizontalAmplitude ?? 0,
+            hf: c.horizontalFrequency ?? 0,
+            va: c.verticalAmplitude ?? 0,
+            vf: c.verticalFrequency ?? 0,
+            dt: c.disableTabs ?? false,
+        };
+    }
+
+    if (cutStyle === 'fractal' && state.fractalConfig) {
+        payload.ff = { bl: state.fractalConfig.borderless ?? false };
+    }
+
+    if (options.includeProgress) {
+        const progress = extractProgress(state);
+        if (progress) payload.pr = progress;
+    }
+
+    return payload;
+}
+
+export function hasShareableProgress(state: GameState): boolean {
+    if (state.completed) return false;
+    return state.groups.some((g) => g.pieces.size >= 2);
+}
+
+function extractProgress(state: GameState): SharePayload['pr'] | null {
+    const merged = state.groups.filter((g) => g.pieces.size >= 2);
+    if (merged.length === 0) return null;
+
+    const m = merged.map((g) => [...g.pieces.keys()].sort((a, b) => a - b));
+    const pr: NonNullable<SharePayload['pr']> = { m };
+
+    if (state.rotationMode === 'quarter-turn') {
+        pr.mr = merged.map((g) => g.rotation);
+        const sr: number[] = [];
+        for (const g of state.groups) {
+            if (g.pieces.size !== 1) continue;
+            if (g.rotation === 0) continue;
+            const [pieceId] = g.pieces.keys();
+            sr.push(pieceId, g.rotation);
+        }
+        if (sr.length > 0) pr.sr = sr;
+    }
+
+    return pr;
 }
