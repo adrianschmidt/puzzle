@@ -60,6 +60,9 @@ import {
     buildImageQuery,
 } from './game/image-categories.js';
 import { createSizePickerDialog, type FractalDialogConfig } from './ui/size-picker.js';
+import { gameStateToPayload, buildShareUrl } from './sharing/index.js';
+import { sharePuzzle } from './ui/share.js';
+import { showToast } from './ui/toast.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -105,6 +108,31 @@ function showCompletionOverlay(): void {
             <p class="completion-dismiss-hint">Tap anywhere to dismiss</p>
         </div>
     `;
+
+    const challengeBtn = document.createElement('button');
+    challengeBtn.type = 'button';
+    challengeBtn.className = 'completion-share-btn';
+    challengeBtn.textContent = 'Challenge a friend — share this puzzle!';
+    challengeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const payload = gameStateToPayload(gameState, { includeProgress: false });
+        const url = buildShareUrl(window.location.href.split('#')[0], payload);
+        void sharePuzzle({
+            url,
+            title: 'Puzzle',
+            text: 'I finished this puzzle — can you?',
+            onCopied: () => showToast('Link copied to clipboard'),
+            onError: (err) => showToast(`Couldn't share: ${err.message}`),
+        });
+    });
+
+    const message = overlay.querySelector('.completion-message');
+    const dismissHint = message?.querySelector('.completion-dismiss-hint');
+    if (message && dismissHint) {
+        message.insertBefore(challengeBtn, dismissHint);
+    } else if (message) {
+        message.appendChild(challengeBtn);
+    }
 
     // Add click handler to dismiss the overlay
     overlay.addEventListener('click', removeCompletionOverlay, { once: true });
