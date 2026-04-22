@@ -292,6 +292,14 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 10.3
 **Description:** When starting a new game, use the same gather layout algorithm (compact grid with zoom-to-fit) instead of random scattering. This gives the player a neatly organized starting point at the right zoom level, immediately playable without having to zoom out and hunt for pieces.
 
+## Phase 11: Sharing
+
+### 11.1 — Puzzle sharing via link
+**Status:** done
+**Done:** 2026-04-22
+**Depends on:** 8.5, 10.4
+**Description:** Share a puzzle via `#p=<payload>` URL hash — same image, cuts, seed, rotation mode, and optionally merge progress. The info modal grows a "Share this puzzle" section with a checkbox to include current progress; the completion overlay gets a "Challenge a friend" button. Sharing uses the Web Share API when available and falls back to copying the link to the clipboard. Recipients land on the same puzzle on boot; if they already had a game in progress, a confirm dialog prompts before overwriting.
+
 ---
 
-*Last updated: 2026-03-24*
+*Last updated: 2026-04-22*
