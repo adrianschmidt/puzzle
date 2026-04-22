@@ -62,3 +62,58 @@ export function computeMergedOffsets(
     if (offsets.size !== want.size) return null;
     return offsets;
 }
+
+import type { GameState, PieceGroup } from '../model/types.js';
+
+export interface ProgressInput {
+    m: number[][];
+    mr?: number[];
+    sr?: number[];
+}
+
+export function applyProgress(state: GameState, progress: ProgressInput): boolean {
+    // Validate merged groups first so we can abort atomically.
+    const reconstructed: Array<{ ids: number[]; offsets: Map<number, { x: number; y: number }> }> = [];
+    for (const ids of progress.m) {
+        if (ids.length < 2) return false;
+        const offsets = computeMergedOffsets(state.pieces, ids);
+        if (!offsets) return false;
+        reconstructed.push({ ids, offsets });
+    }
+
+    const nextGroupId = Math.max(0, ...state.groups.map((g) => g.id)) + 1;
+    let idCursor = nextGroupId;
+
+    // Remove solo groups that are being absorbed into merges.
+    const absorbedIds = new Set<number>();
+    for (const { ids } of reconstructed) for (const id of ids) absorbedIds.add(id);
+    state.groups = state.groups.filter((g) => {
+        if (g.pieces.size !== 1) return true;
+        const [only] = g.pieces.keys();
+        return !absorbedIds.has(only);
+    });
+
+    // Push each reconstructed merged group.
+    reconstructed.forEach(({ offsets }, idx) => {
+        const rotation = (progress.mr?.[idx] ?? 0) as 0 | 1 | 2 | 3;
+        const group: PieceGroup = {
+            id: idCursor++,
+            pieces: offsets,
+            position: { x: 0, y: 0 }, // gatherAndZoomToFit re-lays-out after this.
+            rotation,
+        };
+        state.groups.push(group);
+    });
+
+    // Apply solo rotations.
+    if (progress.sr && progress.sr.length >= 2) {
+        for (let i = 0; i + 1 < progress.sr.length; i += 2) {
+            const pid = progress.sr[i];
+            const rot = progress.sr[i + 1] as 0 | 1 | 2 | 3;
+            const g = state.groups.find((g) => g.pieces.size === 1 && g.pieces.has(pid));
+            if (g) g.rotation = rot;
+        }
+    }
+
+    return true;
+}
