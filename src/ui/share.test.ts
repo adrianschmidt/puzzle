@@ -62,6 +62,7 @@ describe('sharePuzzle', () => {
 
         expect(writeText).toHaveBeenCalledWith('u');
         expect(onCopied).toHaveBeenCalledTimes(1);
+        expect(onError).not.toHaveBeenCalled();
     });
 
     it('falls back to clipboard on a non-Abort share error', async () => {
@@ -76,6 +77,24 @@ describe('sharePuzzle', () => {
 
         expect(writeText).toHaveBeenCalledWith('u');
         expect(onCopied).toHaveBeenCalledTimes(1);
+        expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('treats a DOMException-style AbortError without Error inheritance as a cancel', async () => {
+        // Older WebKit throws DOMException for cancelled share sheets without
+        // inheriting from Error. The module should still swallow it.
+        const share = vi.fn().mockRejectedValue({ name: 'AbortError', message: 'cancelled' });
+        const writeText = vi.fn();
+        stubNavigator({ share, clipboard: { writeText } } as unknown as Navigator);
+
+        await sharePuzzle({
+            url: 'u', title: 't', text: 'd',
+            onCopied, onError,
+        });
+
+        expect(writeText).not.toHaveBeenCalled();
+        expect(onCopied).not.toHaveBeenCalled();
+        expect(onError).not.toHaveBeenCalled();
     });
 
     it('calls onError when clipboard fails', async () => {
