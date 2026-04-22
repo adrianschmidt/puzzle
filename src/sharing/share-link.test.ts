@@ -36,3 +36,88 @@ describe('share-link codec — minimal round-trip', () => {
         expect(decodePayload(encodePayload(payload))?.i).toBe('blank');
     });
 });
+
+describe('share-link codec — optional fields', () => {
+    it('round-trips attribution', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [2, 2], c: 'classic', s: 1, r: 'none',
+            a: { n: 'Ada', u: 'https://u', p: 'https://p' },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('round-trips composable config', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'composable', s: 1, r: 'none',
+            cf: { ha: 0.2, hf: 1, va: 0.3, vf: 2, dt: false },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('round-trips fractal config with rotation', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [8, 6], c: 'fractal', s: 1, r: 'quarter-turn',
+            ff: { bl: true },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('round-trips progress with merged groups only', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [3, 2], c: 'classic', s: 1, r: 'none',
+            pr: { m: [[0, 1], [2, 3, 4]] },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('round-trips progress with rotation fidelity', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [3, 2], c: 'fractal', s: 1, r: 'quarter-turn',
+            ff: { bl: false },
+            pr: { m: [[0, 1]], mr: [2], sr: [3, 1, 4, 3] },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+});
+
+describe('share-link codec — rejection paths', () => {
+    it('rejects unsupported schema version', () => {
+        const bad = { v: 2, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 0, r: 'none' };
+        const encoded = encodeRaw(bad);
+        expect(decodePayload(encoded)).toBeNull();
+    });
+
+    it('rejects malformed base64', () => {
+        expect(decodePayload('!!!not base64!!!')).toBeNull();
+    });
+
+    it('rejects JSON whose shape is wrong', () => {
+        const encoded = encodeRaw({ hello: 'world' });
+        expect(decodePayload(encoded)).toBeNull();
+    });
+
+    it('rejects invalid cut style', () => {
+        const bad = { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'bogus', s: 0, r: 'none' };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+
+    it('rejects non-finite numbers in tuples', () => {
+        const bad = { v: 1, i: 'x', is: [NaN, 1], g: [2, 2], c: 'classic', s: 0, r: 'none' };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+
+    it('rejects non-finite seed', () => {
+        const bad = { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: Infinity, r: 'none' };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+});
+
+// Helper that mirrors encodePayload without shape-validation, so we can
+// craft malformed-but-well-encoded payloads for rejection tests.
+function encodeRaw(obj: unknown): string {
+    const json = JSON.stringify(obj);
+    const bytes = new TextEncoder().encode(json);
+    let binary = '';
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
