@@ -767,6 +767,7 @@ createInfoButton({
         createInfoModal({
             container: app,
             getState: () => gameState,
+            state: gameState,
             onSolve: () => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any).__solvePuzzle?.();
