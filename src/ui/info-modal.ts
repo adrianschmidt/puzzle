@@ -17,6 +17,7 @@ import {
     loadOffsetDragPreference,
     saveOffsetDragPreference,
 } from './offset-drag.js';
+import { attachShareSection } from './share-section.js';
 
 export interface InfoModalOptions {
     /** Container to append the modal to. */
@@ -33,6 +34,8 @@ export interface InfoModalOptions {
      * repro block is omitted.
      */
     getState?: () => GameState | null | undefined;
+    /** Current game state; when provided, a "Share this puzzle" section is rendered. */
+    state?: GameState;
 }
 
 /** HTML class toggled on <html> to switch pieces into debug (white) view. */
@@ -316,6 +319,21 @@ export function createInfoModal(options: InfoModalOptions): () => void {
             options.onSolve!();
         });
         debugSection.appendChild(solveBtn);
+    }
+
+    // Share section: inserted before Credits when state is available.
+    if (options.state) {
+        const creditsHeading = Array.from(content.querySelectorAll<HTMLElement>('section.info-section h3'))
+            .find((h) => h.textContent === 'Credits');
+        const before = creditsHeading?.parentElement ?? null;
+        if (before) {
+            const holder = document.createElement('div');
+            attachShareSection(holder, options.state, window.location.href);
+            const shareSection = holder.firstElementChild;
+            if (shareSection) content.insertBefore(shareSection, before);
+        } else {
+            attachShareSection(content, options.state, window.location.href);
+        }
     }
 
     modal.appendChild(header);
