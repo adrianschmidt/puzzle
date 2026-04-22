@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { attachShareSection } from './share-section.js';
 import type { GameState } from '../model/types.js';
 
@@ -28,6 +28,9 @@ describe('attachShareSection', () => {
     beforeEach(() => {
         host = document.createElement('div');
         document.body.replaceChildren(host);
+    });
+    afterEach(() => {
+        vi.unstubAllGlobals();
     });
 
     it('renders a heading, checkbox, primary button, and URL preview', () => {
@@ -89,17 +92,17 @@ describe('attachShareSection', () => {
         expect(urlAfter.length).toBeGreaterThan(urlBefore.length);
     });
 
-    it('primary button label is "Share…" if navigator.share is available, else "Copy link"', () => {
-        const originalNav = globalThis.navigator;
-        try {
-            Object.defineProperty(globalThis, 'navigator', {
-                value: { share: () => {} }, configurable: true,
-            });
-            attachShareSection(host, state(), 'https://example.com/');
-            expect(host.querySelector<HTMLButtonElement>('[data-testid="share-primary-btn"]')!.textContent)
-                .toMatch(/Share/);
-        } finally {
-            Object.defineProperty(globalThis, 'navigator', { value: originalNav, configurable: true });
-        }
+    it('primary button label is "Share…" when navigator.share is available', () => {
+        vi.stubGlobal('navigator', { share: () => {} });
+        attachShareSection(host, state(), 'https://example.com/');
+        expect(host.querySelector<HTMLButtonElement>('[data-testid="share-primary-btn"]')!.textContent)
+            .toMatch(/Share/);
+    });
+
+    it('primary button label is "Copy link" when navigator.share is unavailable', () => {
+        vi.stubGlobal('navigator', {});
+        attachShareSection(host, state(), 'https://example.com/');
+        expect(host.querySelector<HTMLButtonElement>('[data-testid="share-primary-btn"]')!.textContent)
+            .toBe('Copy link');
     });
 });
