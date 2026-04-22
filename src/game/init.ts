@@ -120,6 +120,8 @@ export function createNewGame(
         seed,
         cutStyle,
         rotationMode,
+        composableConfig: cutStyle === 'composable' ? options.composableConfig : undefined,
+        fractalConfig: cutStyle === 'fractal' ? options.fractalConfig : undefined,
     };
 
     if (generatorConfig) {

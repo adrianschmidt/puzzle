@@ -146,4 +146,16 @@ export interface GameState {
      * panel for bug reports.
      */
     generatorConfig?: Record<string, unknown>;
+    /** Composable-cut config (only set when cutStyle === 'composable'). */
+    composableConfig?: {
+        horizontalAmplitude?: number;
+        horizontalFrequency?: number;
+        verticalAmplitude?: number;
+        verticalFrequency?: number;
+        disableTabs?: boolean;
+    };
+    /** Fractal-cut config (only set when cutStyle === 'fractal'). */
+    fractalConfig?: {
+        borderless?: boolean;
+    };
 }
