@@ -1117,3 +1117,25 @@ details.info-section[open] > .info-section-summary {
   .rotate-button--ccw { left: 8px; }
   .rotate-button--cw { left: 50px; }
 }
+
+.app-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    background: rgba(30, 30, 30, 0.75);
+    color: #fff;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    font-size: 14px;
+    z-index: 9999;
+    pointer-events: none;
+    animation: app-toast-in 180ms ease-out;
+}
+
+@keyframes app-toast-in {
+    from { opacity: 0; transform: translate(-50%, 12px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+}
