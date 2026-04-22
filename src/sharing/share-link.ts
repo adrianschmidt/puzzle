@@ -146,13 +146,16 @@ export function gameStateToPayload(
     }
 
     if (cutStyle === 'composable' && state.composableConfig) {
+        // Defaults mirror the topology generator (src/puzzle/topology/generator.ts)
+        // so the recipient reproduces the same cuts even if the sharer's state
+        // has undefined sub-fields.
         const c = state.composableConfig;
         payload.cf = {
-            ha: c.horizontalAmplitude ?? 0,
-            hf: c.horizontalFrequency ?? 0,
-            va: c.verticalAmplitude ?? 0,
-            vf: c.verticalFrequency ?? 0,
-            dt: c.disableTabs ?? false,
+            ha: c.horizontalAmplitude ?? 0.15,
+            hf: c.horizontalFrequency ?? 1.5,
+            va: c.verticalAmplitude ?? 0.15,
+            vf: c.verticalFrequency ?? 1.5,
+            dt: c.disableTabs ?? true,
         };
     }
 
@@ -174,7 +177,11 @@ export function hasShareableProgress(state: GameState): boolean {
 }
 
 function extractProgress(state: GameState): SharePayload['pr'] | null {
-    const merged = state.groups.filter((g) => g.pieces.size >= 2);
+    // Sort groups by smallest piece ID so the encoded output is deterministic
+    // regardless of the order groups were created in `state.groups`.
+    const merged = state.groups
+        .filter((g) => g.pieces.size >= 2)
+        .sort((a, b) => smallestPieceId(a) - smallestPieceId(b));
     if (merged.length === 0) return null;
 
     const m = merged.map((g) => [...g.pieces.keys()].sort((a, b) => a - b));
@@ -193,4 +200,12 @@ function extractProgress(state: GameState): SharePayload['pr'] | null {
     }
 
     return pr;
+}
+
+function smallestPieceId(group: { pieces: Map<number, unknown> }): number {
+    let min = Infinity;
+    for (const id of group.pieces.keys()) {
+        if (id < min) min = id;
+    }
+    return min;
 }

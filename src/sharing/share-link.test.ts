@@ -261,6 +261,45 @@ describe('gameStateToPayload', () => {
         expect(payload.pr?.sr).toBeUndefined();
     });
 
+    it('sorts merged groups deterministically by smallest piece ID', () => {
+        const state = buildState({
+            groups: [
+                { id: 7, pieces: new Map([[5, { x: 0, y: 0 }], [6, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+                { id: 3, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+                { id: 9, pieces: new Map([[2, { x: 0, y: 0 }], [3, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: true });
+        expect(payload.pr?.m).toEqual([[0, 1], [2, 3], [5, 6]]);
+    });
+
+    it('mr parallels the sorted m array, not the original group order', () => {
+        const state = buildState({
+            rotationMode: 'quarter-turn',
+            groups: [
+                { id: 7, pieces: new Map([[5, { x: 0, y: 0 }], [6, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 3 },
+                { id: 3, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 1 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: true });
+        expect(payload.pr?.m).toEqual([[0, 1], [5, 6]]);
+        expect(payload.pr?.mr).toEqual([1, 3]);
+    });
+
+    it('fills composable defaults from generator when sub-fields are undefined', () => {
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {},
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.cf).toEqual({ ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5, dt: true });
+    });
+
     it('captures rotation fidelity in quarter-turn mode', () => {
         const state = buildState({
             rotationMode: 'quarter-turn',
