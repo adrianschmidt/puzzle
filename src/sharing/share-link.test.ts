@@ -101,14 +101,18 @@ describe('share-link codec — rejection paths', () => {
         expect(decodePayload(encodeRaw(bad))).toBeNull();
     });
 
-    it('rejects non-finite numbers in tuples', () => {
-        const bad = { v: 1, i: 'x', is: [NaN, 1], g: [2, 2], c: 'classic', s: 0, r: 'none' };
-        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    it('throws when tuple values are non-finite', () => {
+        const bad: SharePayload = {
+            v: 1, i: 'x', is: [NaN, 1], g: [2, 2], c: 'classic', s: 0, r: 'none',
+        };
+        expect(() => encodePayload(bad)).toThrow(/finite/i);
     });
 
-    it('rejects non-finite seed', () => {
-        const bad = { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: Infinity, r: 'none' };
-        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    it('throws when seed is non-finite', () => {
+        const bad: SharePayload = {
+            v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: Infinity, r: 'none',
+        };
+        expect(() => encodePayload(bad)).toThrow(/finite/i);
     });
 });
 

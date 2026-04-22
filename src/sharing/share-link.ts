@@ -36,8 +36,24 @@ export interface SharePayload {
 }
 
 export function encodePayload(payload: SharePayload): string {
+    assertPayloadNumbersFinite(payload);
     const json = JSON.stringify(payload);
     return base64UrlEncode(json);
+}
+
+function assertPayloadNumbersFinite(payload: SharePayload): void {
+    const check = (n: number, label: string): void => {
+        if (!Number.isFinite(n)) {
+            throw new Error(`Share payload ${label} must be finite (got ${n})`);
+        }
+    };
+    check(payload.is[0], 'is[0]'); check(payload.is[1], 'is[1]');
+    check(payload.g[0], 'g[0]');   check(payload.g[1], 'g[1]');
+    check(payload.s, 's');
+    if (payload.cf) {
+        check(payload.cf.ha, 'cf.ha'); check(payload.cf.hf, 'cf.hf');
+        check(payload.cf.va, 'cf.va'); check(payload.cf.vf, 'cf.vf');
+    }
 }
 
 export function decodePayload(encoded: string): SharePayload | null {
@@ -76,13 +92,12 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (!isTuple2Number(p.is)) return false;
     if (!isTuple2Number(p.g)) return false;
     if (p.c !== 'classic' && p.c !== 'fractal' && p.c !== 'composable') return false;
-    if (typeof p.s !== 'number' || !Number.isFinite(p.s)) return false;
+    if (typeof p.s !== 'number') return false;
     if (p.r !== 'none' && p.r !== 'quarter-turn') return false;
     return true;
 }
 
 function isTuple2Number(x: unknown): x is [number, number] {
     return Array.isArray(x) && x.length === 2
-        && typeof x[0] === 'number' && typeof x[1] === 'number'
-        && Number.isFinite(x[0]) && Number.isFinite(x[1]);
+        && typeof x[0] === 'number' && typeof x[1] === 'number';
 }
