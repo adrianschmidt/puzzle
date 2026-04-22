@@ -60,7 +60,13 @@ import {
     buildImageQuery,
 } from './game/image-categories.js';
 import { createSizePickerDialog, type FractalDialogConfig } from './ui/size-picker.js';
-import { gameStateToPayload, buildShareUrl } from './sharing/index.js';
+import {
+    gameStateToPayload,
+    buildShareUrl,
+    parseLocationHash,
+    type SharePayload,
+} from './sharing/index.js';
+import { applyProgress } from './game/reconstruct-groups.js';
 import { sharePuzzle } from './ui/share.js';
 import { showToast } from './ui/toast.js';
 
@@ -769,18 +775,105 @@ createInfoButton({
     },
 });
 
-// On load: try to restore a saved game, otherwise start fresh
-const savedState = loadState();
+async function loadSharedPuzzle(payload: SharePayload): Promise<void> {
+    const imageSize = { width: payload.is[0], height: payload.is[1] };
 
-if (savedState) {
-    initGame(savedState);
-} else {
+    // If the sentinel is the blank canvas, regenerate it locally.
+    let imageUrl = payload.i;
+    if (imageUrl === 'blank') {
+        const canvas = document.createElement('canvas');
+        canvas.width = imageSize.width;
+        canvas.height = imageSize.height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, imageSize.width, imageSize.height);
+        imageUrl = canvas.toDataURL('image/png');
+    }
+
+    const viewport = {
+        width: app.clientWidth || window.innerWidth,
+        height: app.clientHeight || window.innerHeight,
+    };
+
+    const state = createNewGame(imageUrl, imageSize, viewport, { cols: payload.g[0], rows: payload.g[1] }, {
+        cutStyle: payload.c,
+        seed: payload.s,
+        rotationMode: payload.r,
+        fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
+        composableConfig: payload.cf
+            ? {
+                horizontalAmplitude: payload.cf.ha,
+                horizontalFrequency: payload.cf.hf,
+                verticalAmplitude: payload.cf.va,
+                verticalFrequency: payload.cf.vf,
+                disableTabs: payload.cf.dt,
+              }
+            : undefined,
+    });
+
+    if (payload.a) {
+        state.attribution = {
+            photographerName: payload.a.n,
+            photographerUrl: payload.a.u,
+            photoUrl: payload.a.p,
+        };
+    }
+
+    if (payload.pr) {
+        const ok = applyProgress(state, payload.pr);
+        if (!ok) {
+            showToast("Couldn't load progress — starting from scratch");
+        }
+    }
+
+    initGame(state);
+    gatherAndZoomToFit();
+    renderer.renderState(gameState);
+    autoSave();
+}
+
+async function tryLoadSharedPuzzle(): Promise<boolean> {
+    const payload = parseLocationHash(window.location.hash);
+    if (!payload) {
+        if (window.location.hash.startsWith('#p=')) {
+            showToast('Invalid share link');
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        return false;
+    }
+
+    const hasExistingProgress = !!loadState();
+    if (hasExistingProgress) {
+        const ok = window.confirm('Load shared puzzle? Your current progress will be lost.');
+        if (!ok) {
+            // Leave the hash in place so the user can reload to retry.
+            return false;
+        }
+    }
+
+    clearSavedState();
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    await loadSharedPuzzle(payload);
+    return true;
+}
+
+// On load: shared-link (hash) > saved game > fresh start
+void (async () => {
+    const loadedFromShare = await tryLoadSharedPuzzle();
+    if (loadedFromShare) return;
+
+    const savedState = loadState();
+    if (savedState) {
+        initGame(savedState);
+        return;
+    }
+
     // First load with no saved game: use the preferred size and cut style
     const preferredIndex = loadSizePreference();
     const option = getSizeOption(preferredIndex);
     const preferredCutStyle = getCutStyleOption(loadCutStylePreference()).id;
     const preferredFractalConfig = loadFractalConfigPreference();
-    void startNewGame(
+    await startNewGame(
         toGridSize(option),
         preferredCutStyle,
         undefined,
@@ -788,4 +881,4 @@ if (savedState) {
         undefined,
         preferredFractalConfig,
     );
-}
+})();
