@@ -1,0 +1,41 @@
+/**
+ * sharePuzzle — invoke the OS share sheet if available, otherwise copy
+ * the link to the clipboard. Users cancelling a native share sheet
+ * (AbortError) do NOT fall through to clipboard — treat cancel as a
+ * silent no-op.
+ */
+
+export interface SharePuzzleOptions {
+    url: string;
+    title: string;
+    text: string;
+    onCopied: () => void;
+    onError: (e: Error) => void;
+}
+
+export async function sharePuzzle(opts: SharePuzzleOptions): Promise<void> {
+    const { url, title, text, onCopied, onError } = opts;
+
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        try {
+            await navigator.share({ url, title, text });
+            return;
+        } catch (e) {
+            if (e instanceof Error && e.name === 'AbortError') return;
+            // fall through to clipboard
+        }
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(url);
+            onCopied();
+            return;
+        } catch (e) {
+            onError(e instanceof Error ? e : new Error(String(e)));
+            return;
+        }
+    }
+
+    onError(new Error('No share mechanism available'));
+}
