@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
     encodePayload,
     decodePayload,
+    buildShareUrl,
+    parseLocationHash,
     type SharePayload,
 } from './share-link.js';
 
@@ -113,6 +115,47 @@ describe('share-link codec — rejection paths', () => {
             v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: Infinity, r: 'none',
         };
         expect(() => encodePayload(bad)).toThrow(/finite/i);
+    });
+});
+
+describe('buildShareUrl', () => {
+    it('appends "#p=<encoded>" to a bare URL', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 0, r: 'none',
+        };
+        const url = buildShareUrl('https://example.com/puzzle/', payload);
+        expect(url.startsWith('https://example.com/puzzle/#p=')).toBe(true);
+    });
+
+    it('strips an existing hash before appending', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 0, r: 'none',
+        };
+        const url = buildShareUrl('https://example.com/puzzle/#stale', payload);
+        expect(url.includes('#stale')).toBe(false);
+        expect(url.includes('#p=')).toBe(true);
+    });
+});
+
+describe('parseLocationHash', () => {
+    it('returns null for empty hash', () => {
+        expect(parseLocationHash('')).toBeNull();
+    });
+
+    it('returns null for unrelated hash', () => {
+        expect(parseLocationHash('#section')).toBeNull();
+    });
+
+    it('returns the payload when the hash is a valid share link', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 42, r: 'none',
+        };
+        const hash = '#p=' + encodePayload(payload);
+        expect(parseLocationHash(hash)).toEqual(payload);
+    });
+
+    it('returns null for #p= with malformed body', () => {
+        expect(parseLocationHash('#p=!!!')).toBeNull();
     });
 });
 
