@@ -41,6 +41,24 @@ describe('attachShareSection', () => {
         expect(host.querySelector<HTMLElement>('[data-testid="share-url-preview"]')).not.toBeNull();
     });
 
+    it('renders the URL preview as a single-line readonly input with the URL as its value', () => {
+        attachShareSection(host, state(), 'https://example.com/');
+        const preview = host.querySelector<HTMLInputElement>('[data-testid="share-url-preview"]')!;
+        expect(preview.tagName.toLowerCase()).toBe('input');
+        expect(preview.type).toBe('text');
+        expect(preview.readOnly).toBe(true);
+        expect(preview.value).toMatch(/^https:\/\/example\.com\/#p=/);
+    });
+
+    it('selects the full URL when the preview input receives focus', () => {
+        attachShareSection(host, state(), 'https://example.com/');
+        const preview = host.querySelector<HTMLInputElement>('[data-testid="share-url-preview"]')!;
+        document.body.appendChild(preview);
+        preview.focus();
+        expect(preview.selectionStart).toBe(0);
+        expect(preview.selectionEnd).toBe(preview.value.length);
+    });
+
     it('disables the progress checkbox when no pieces are merged', () => {
         attachShareSection(host, state(), 'https://example.com/');
         const cb = host.querySelector<HTMLInputElement>('[data-testid="share-include-progress"]')!;
@@ -80,14 +98,14 @@ describe('attachShareSection', () => {
             ],
         });
         attachShareSection(host, s, 'https://example.com/');
-        const preview = host.querySelector<HTMLElement>('[data-testid="share-url-preview"]')!;
-        const urlBefore = preview.textContent!;
+        const preview = host.querySelector<HTMLInputElement>('[data-testid="share-url-preview"]')!;
+        const urlBefore = preview.value;
 
         const cb = host.querySelector<HTMLInputElement>('[data-testid="share-include-progress"]')!;
         cb.checked = true;
         cb.dispatchEvent(new Event('change'));
 
-        const urlAfter = preview.textContent!;
+        const urlAfter = preview.value;
         expect(urlAfter).not.toBe(urlBefore);
         expect(urlAfter.length).toBeGreaterThan(urlBefore.length);
     });

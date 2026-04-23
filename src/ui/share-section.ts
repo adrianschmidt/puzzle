@@ -61,10 +61,16 @@ export function attachShareSection(
     button.textContent = webShareAvailable ? 'Share\u2026' : 'Copy link';
     section.appendChild(button);
 
-    // URL preview
-    const preview = document.createElement('div');
+    // URL preview. An <input readonly> gives Chrome Android a proper
+    // long-press "Copy" toolbar (a plain <div> doesn't reliably do that),
+    // and it's naturally single-line. Auto-select on focus so one tap
+    // selects the entire URL for quick copy.
+    const preview = document.createElement('input');
+    preview.type = 'text';
+    preview.readOnly = true;
     preview.className = 'share-url-preview';
     preview.dataset.testid = 'share-url-preview';
+    preview.addEventListener('focus', () => preview.select());
     section.appendChild(preview);
 
     // Wiring
@@ -89,7 +95,7 @@ export function attachShareSection(
     }
 
     function refreshPreview(): void {
-        preview.textContent = currentUrl();
+        preview.value = currentUrl();
     }
     refreshPreview();
     checkbox.addEventListener('change', refreshPreview);
