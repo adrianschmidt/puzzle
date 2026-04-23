@@ -883,3 +883,11 @@ void (async () => {
         preferredFractalConfig,
     );
 })();
+
+// Handle share links pasted into the address bar of a tab that already
+// has the app loaded. Without this, the hash changes but nothing reacts
+// until the user reloads. `history.replaceState` calls inside
+// tryLoadSharedPuzzle don't fire hashchange, so there's no loop risk.
+window.addEventListener('hashchange', () => {
+    void tryLoadSharedPuzzle();
+});
