@@ -1182,3 +1182,34 @@ details.info-section[open] > .info-section-summary {
 .completion-share-btn:hover {
   background: rgba(255, 255, 255, 0.25);
 }
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10003;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(10, 10, 20, 0.72);
+  backdrop-filter: blur(4px);
+  color: #eee;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  pointer-events: all;
+}
+.loading-overlay__spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.85);
+  animation: loading-overlay-spin 0.9s linear infinite;
+}
+.loading-overlay__text {
+  opacity: 0.85;
+}
+@keyframes loading-overlay-spin {
+  to { transform: rotate(360deg); }
+}

@@ -69,6 +69,11 @@ import {
 import { applyProgress } from './game/reconstruct-groups.js';
 import { sharePuzzle } from './ui/share.js';
 import { showToast } from './ui/toast.js';
+import {
+    showLoadingOverlay,
+    hideLoadingOverlay,
+    yieldForPaint,
+} from './ui/loading-overlay.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -544,88 +549,96 @@ async function startNewGame(
     fractalConfig?: FractalDialogConfig,
     vibrant: boolean = false,
 ): Promise<void> {
-    // Reset viewport transform so pieces are randomized in unzoomed coordinates
-    viewportTransform.reset();
-    applyViewportTransform();
+    showLoadingOverlay();
+    try {
+        // Reset viewport transform so pieces are randomized in unzoomed coordinates
+        viewportTransform.reset();
+        applyViewportTransform();
 
-    const viewport = {
-        width: app.clientWidth || window.innerWidth,
-        height: app.clientHeight || window.innerHeight,
-    };
+        const viewport = {
+            width: app.clientWidth || window.innerWidth,
+            height: app.clientHeight || window.innerHeight,
+        };
 
-    let imageUrl = FALLBACK_IMAGE_URL;
-    let imageSize = FALLBACK_IMAGE_SIZE;
-    let attribution: GameState['attribution'];
+        let imageUrl = FALLBACK_IMAGE_URL;
+        let imageSize = FALLBACK_IMAGE_SIZE;
+        let attribution: GameState['attribution'];
 
-    // Blank puzzle: white image, no photo
-    if (imageSource === 'blank') {
-        // Create a white 1080×720 image via canvas data URL
-        const canvas = document.createElement('canvas');
-        canvas.width = 1080;
-        canvas.height = 720;
-        const ctx = canvas.getContext('2d')!;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, 1080, 720);
-        imageUrl = canvas.toDataURL('image/png');
-        imageSize = { width: 1080, height: 720 };
-    }
-
-    // Try to fetch a random Unsplash image (unless blank was selected)
-    const accessKey = imageSource !== 'blank' ? getUnsplashAccessKey() : null;
-
-    if (accessKey) {
-        try {
-            const category = findImageCategory(imageCategory ?? 'any');
-            const query = buildImageQuery(category.query, vibrant);
-            const result = await fetchRandomImage(accessKey, fetch, query);
-
-            if (result) {
-                imageUrl = result.imageUrl;
-                attribution = {
-                    photographerName: result.photographerName,
-                    photographerUrl: result.photographerUrl,
-                    photoUrl: result.photoUrl,
-                };
-
-                // The Unsplash "regular" URL delivers images scaled to 1080px
-                // wide. Compute the height from the original aspect ratio so
-                // the puzzle generator produces correctly proportioned pieces.
-                const aspectRatio = result.height / result.width;
-                const displayWidth = 1080;
-                imageSize = {
-                    width: displayWidth,
-                    height: Math.round(displayWidth * aspectRatio),
-                };
-            }
-        } catch (error) {
-            console.warn('Failed to fetch Unsplash image, using fallback:', error);
+        // Blank puzzle: white image, no photo
+        if (imageSource === 'blank') {
+            // Create a white 1080×720 image via canvas data URL
+            const canvas = document.createElement('canvas');
+            canvas.width = 1080;
+            canvas.height = 720;
+            const ctx = canvas.getContext('2d')!;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 1080, 720);
+            imageUrl = canvas.toDataURL('image/png');
+            imageSize = { width: 1080, height: 720 };
         }
+
+        // Try to fetch a random Unsplash image (unless blank was selected)
+        const accessKey = imageSource !== 'blank' ? getUnsplashAccessKey() : null;
+
+        if (accessKey) {
+            try {
+                const category = findImageCategory(imageCategory ?? 'any');
+                const query = buildImageQuery(category.query, vibrant);
+                const result = await fetchRandomImage(accessKey, fetch, query);
+
+                if (result) {
+                    imageUrl = result.imageUrl;
+                    attribution = {
+                        photographerName: result.photographerName,
+                        photographerUrl: result.photographerUrl,
+                        photoUrl: result.photoUrl,
+                    };
+
+                    // The Unsplash "regular" URL delivers images scaled to 1080px
+                    // wide. Compute the height from the original aspect ratio so
+                    // the puzzle generator produces correctly proportioned pieces.
+                    const aspectRatio = result.height / result.width;
+                    const displayWidth = 1080;
+                    imageSize = {
+                        width: displayWidth,
+                        height: Math.round(displayWidth * aspectRatio),
+                    };
+                }
+            } catch (error) {
+                console.warn('Failed to fetch Unsplash image, using fallback:', error);
+            }
+        }
+
+        const rotationMode: 'none' | 'quarter-turn' =
+            cutStyle === 'fractal' && fractalConfig?.rotationEnabled
+                ? 'quarter-turn'
+                : 'none';
+
+        const generatorFractalConfig = fractalConfig
+            ? { borderless: fractalConfig.borderless }
+            : undefined;
+
+        // Let the overlay paint before the synchronous piece-generation burst.
+        await yieldForPaint();
+
+        const state = createNewGame(imageUrl, imageSize, viewport, gridSize, {
+            cutStyle,
+            composableConfig,
+            fractalConfig: generatorFractalConfig,
+            rotationMode,
+        });
+
+        if (attribution) {
+            state.attribution = attribution;
+        }
+
+        initGame(state);
+        gatherAndZoomToFit();
+        renderer.renderState(gameState);
+        autoSave();
+    } finally {
+        hideLoadingOverlay();
     }
-
-    const rotationMode: 'none' | 'quarter-turn' =
-        cutStyle === 'fractal' && fractalConfig?.rotationEnabled
-            ? 'quarter-turn'
-            : 'none';
-
-    const generatorFractalConfig = fractalConfig
-        ? { borderless: fractalConfig.borderless }
-        : undefined;
-
-    const state = createNewGame(imageUrl, imageSize, viewport, gridSize, {
-        cutStyle,
-        composableConfig,
-        fractalConfig: generatorFractalConfig,
-        rotationMode,
-    });
-
-    if (attribution) {
-        state.attribution = attribution;
-    }
-
-    initGame(state);
-    gatherAndZoomToFit();
-    renderer.renderState(gameState);
-    autoSave();
 }
 
 // Set up the New Game button
@@ -777,60 +790,68 @@ createInfoButton({
 });
 
 async function loadSharedPuzzle(payload: SharePayload): Promise<void> {
-    const imageSize = { width: payload.is[0], height: payload.is[1] };
+    showLoadingOverlay();
+    try {
+        const imageSize = { width: payload.is[0], height: payload.is[1] };
 
-    // If the sentinel is the blank canvas, regenerate it locally.
-    let imageUrl = payload.i;
-    if (imageUrl === 'blank') {
-        const canvas = document.createElement('canvas');
-        canvas.width = imageSize.width;
-        canvas.height = imageSize.height;
-        const ctx = canvas.getContext('2d')!;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, imageSize.width, imageSize.height);
-        imageUrl = canvas.toDataURL('image/png');
-    }
-
-    const viewport = {
-        width: app.clientWidth || window.innerWidth,
-        height: app.clientHeight || window.innerHeight,
-    };
-
-    const state = createNewGame(imageUrl, imageSize, viewport, { cols: payload.g[0], rows: payload.g[1] }, {
-        cutStyle: payload.c,
-        seed: payload.s,
-        rotationMode: payload.r,
-        fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
-        composableConfig: payload.cf
-            ? {
-                horizontalAmplitude: payload.cf.ha,
-                horizontalFrequency: payload.cf.hf,
-                verticalAmplitude: payload.cf.va,
-                verticalFrequency: payload.cf.vf,
-                disableTabs: payload.cf.dt,
-              }
-            : undefined,
-    });
-
-    if (payload.a) {
-        state.attribution = {
-            photographerName: payload.a.n,
-            photographerUrl: payload.a.u,
-            photoUrl: payload.a.p,
-        };
-    }
-
-    if (payload.pr) {
-        const ok = applyProgress(state, payload.pr);
-        if (!ok) {
-            showToast("Couldn't load progress — starting from scratch");
+        // If the sentinel is the blank canvas, regenerate it locally.
+        let imageUrl = payload.i;
+        if (imageUrl === 'blank') {
+            const canvas = document.createElement('canvas');
+            canvas.width = imageSize.width;
+            canvas.height = imageSize.height;
+            const ctx = canvas.getContext('2d')!;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, imageSize.width, imageSize.height);
+            imageUrl = canvas.toDataURL('image/png');
         }
-    }
 
-    initGame(state);
-    gatherAndZoomToFit();
-    renderer.renderState(gameState);
-    autoSave();
+        const viewport = {
+            width: app.clientWidth || window.innerWidth,
+            height: app.clientHeight || window.innerHeight,
+        };
+
+        // Let the overlay paint before the synchronous piece-generation burst.
+        await yieldForPaint();
+
+        const state = createNewGame(imageUrl, imageSize, viewport, { cols: payload.g[0], rows: payload.g[1] }, {
+            cutStyle: payload.c,
+            seed: payload.s,
+            rotationMode: payload.r,
+            fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
+            composableConfig: payload.cf
+                ? {
+                    horizontalAmplitude: payload.cf.ha,
+                    horizontalFrequency: payload.cf.hf,
+                    verticalAmplitude: payload.cf.va,
+                    verticalFrequency: payload.cf.vf,
+                    disableTabs: payload.cf.dt,
+                  }
+                : undefined,
+        });
+
+        if (payload.a) {
+            state.attribution = {
+                photographerName: payload.a.n,
+                photographerUrl: payload.a.u,
+                photoUrl: payload.a.p,
+            };
+        }
+
+        if (payload.pr) {
+            const ok = applyProgress(state, payload.pr);
+            if (!ok) {
+                showToast("Couldn't load progress — starting from scratch");
+            }
+        }
+
+        initGame(state);
+        gatherAndZoomToFit();
+        renderer.renderState(gameState);
+        autoSave();
+    } finally {
+        hideLoadingOverlay();
+    }
 }
 
 async function tryLoadSharedPuzzle(): Promise<boolean> {
@@ -858,30 +879,37 @@ async function tryLoadSharedPuzzle(): Promise<boolean> {
     return true;
 }
 
-// On load: shared-link (hash) > saved game > fresh start
+// On load: shared-link (hash) > saved game > fresh start.
+// index.html renders the loading overlay up front so users see feedback
+// before JS finishes booting. `startNewGame` / `loadSharedPuzzle` manage
+// the overlay themselves; the saved-state branch hides it manually.
 void (async () => {
-    const loadedFromShare = await tryLoadSharedPuzzle();
-    if (loadedFromShare) return;
+    try {
+        const loadedFromShare = await tryLoadSharedPuzzle();
+        if (loadedFromShare) return;
 
-    const savedState = loadState();
-    if (savedState) {
-        initGame(savedState);
-        return;
+        const savedState = loadState();
+        if (savedState) {
+            initGame(savedState);
+            return;
+        }
+
+        // First load with no saved game: use the preferred size and cut style
+        const preferredIndex = loadSizePreference();
+        const option = getSizeOption(preferredIndex);
+        const preferredCutStyle = getCutStyleOption(loadCutStylePreference()).id;
+        const preferredFractalConfig = loadFractalConfigPreference();
+        await startNewGame(
+            toGridSize(option),
+            preferredCutStyle,
+            undefined,
+            undefined,
+            undefined,
+            preferredFractalConfig,
+        );
+    } finally {
+        hideLoadingOverlay();
     }
-
-    // First load with no saved game: use the preferred size and cut style
-    const preferredIndex = loadSizePreference();
-    const option = getSizeOption(preferredIndex);
-    const preferredCutStyle = getCutStyleOption(loadCutStylePreference()).id;
-    const preferredFractalConfig = loadFractalConfigPreference();
-    await startNewGame(
-        toGridSize(option),
-        preferredCutStyle,
-        undefined,
-        undefined,
-        undefined,
-        preferredFractalConfig,
-    );
 })();
 
 // Handle share links pasted into the address bar of a tab that already
