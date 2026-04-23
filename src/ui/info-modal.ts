@@ -111,7 +111,7 @@ export function createInfoModal(options: InfoModalOptions): () => void {
                     <li>⬚ <strong>Multi-select</strong> (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all.</li>
                     <li>↺ ↻ <strong>Rotate</strong> (bottom-left, fractal only) — Rotate every selected group 90° counter-clockwise or clockwise</li>
                 </ul>
-                <li><strong>Share this puzzle</strong> — scroll down to the <em>Share this puzzle</em> section below to copy a link your friends can open to get the exact same puzzle. Finish a puzzle to unlock a <em>Challenge a friend</em> button on the completion screen.</li>
+                <li><strong>Share this puzzle</strong> — use the <em>Share this puzzle</em> section above to copy a link your friends can open to get the exact same puzzle. Finish a puzzle to unlock a <em>Challenge a friend</em> button on the completion screen.</li>
             </ul>
         </section>
 
@@ -322,17 +322,16 @@ export function createInfoModal(options: InfoModalOptions): () => void {
         debugSection.appendChild(solveBtn);
     }
 
-    // Share section: inserted before Credits when state is available.
-    // We strip the hash here so attachShareSection receives the bare page URL
-    // rather than silently relying on buildShareUrl to drop any stale `#p=...`.
+    // Share section: rendered at the top of the modal when state is available,
+    // so it's the first thing the player sees. We strip the hash so
+    // attachShareSection receives the bare page URL rather than silently
+    // relying on buildShareUrl to drop any stale `#p=...`.
     if (options.state) {
         const baseUrl = window.location.href.split('#')[0];
         attachShareSection(content, options.state, baseUrl);
-        const creditsHeading = Array.from(content.querySelectorAll<HTMLElement>('section.info-section h3'))
-            .find((h) => h.textContent === 'Credits');
-        const creditsSection = creditsHeading?.parentElement ?? null;
-        if (creditsSection && content.lastElementChild) {
-            content.insertBefore(content.lastElementChild, creditsSection);
+        const firstSection = content.querySelector<HTMLElement>('section.info-section');
+        if (firstSection && content.lastElementChild) {
+            content.insertBefore(content.lastElementChild, firstSection);
         }
     }
 

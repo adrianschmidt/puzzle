@@ -127,4 +127,13 @@ describe('createInfoModal', () => {
         );
         expect(toggle!.checked).toBe(true);
     });
+
+    it('renders the share section as the first section in the modal content', () => {
+        createInfoModal({ container, state: makeState() });
+
+        const firstSection = container.querySelector<HTMLElement>(
+            '.info-modal-content > section.info-section',
+        );
+        expect(firstSection?.classList.contains('share-section')).toBe(true);
+    });
 });
