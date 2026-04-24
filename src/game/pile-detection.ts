@@ -17,6 +17,7 @@
  */
 
 import type { GameState, Piece, PieceGroup } from '../model/types.js';
+import { rotatePoint } from '../model/helpers.js';
 
 /**
  * A simple axis-aligned bounding rectangle.
@@ -46,8 +47,9 @@ export const OVERLAP_PADDING_PX = 20;
  * Compute the bounding rectangle of a group in world coordinates.
  *
  * Uses the edge start/end points of each piece to determine the
- * piece-local bounds, then transforms to world space using the
- * group's position and each piece's offset.
+ * piece-local bounds, rotates them by the group's quarter-turn rotation
+ * (piece offsets and edge endpoints live in un-rotated local space), then
+ * translates by the group's world position.
  */
 export function getGroupBounds(
     group: PieceGroup,
@@ -64,8 +66,12 @@ export function getGroupBounds(
 
         for (const edge of piece.edges) {
             for (const point of [edge.start, edge.end]) {
-                const worldX = group.position.x + offset.x + point.x;
-                const worldY = group.position.y + offset.y + point.y;
+                const rotated = rotatePoint(
+                    { x: offset.x + point.x, y: offset.y + point.y },
+                    group.rotation,
+                );
+                const worldX = group.position.x + rotated.x;
+                const worldY = group.position.y + rotated.y;
 
                 if (worldX < minX) minX = worldX;
                 if (worldX > maxX) maxX = worldX;
