@@ -155,6 +155,28 @@ describe('getGroupBounds', () => {
         expect(bounds.maxX).toBe(250);  // 100 + 50 + 100
         expect(bounds.maxY).toBe(225);  // 100 + 25 + 100
     });
+
+    it('accounts for the group rotation when computing world-space bounds', () => {
+        // 100x100 piece, group at world (100, 100) with 90° clockwise rotation.
+        // Un-rotated local corners: (0,0), (100,0), (100,100), (0,100).
+        // After rotating 90° CW around local origin: (0,0), (0,100), (-100,100), (-100,0).
+        // After translating by position (100, 100): (100,100), (100,200), (0,200), (0,100).
+        // AABB → [0..100] × [100..200].
+        const piece = makeSquarePiece(0);
+        const group: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 100, y: 100 },
+            rotation: 1,
+        };
+
+        const bounds = getGroupBounds(group, [piece]);
+
+        expect(bounds.minX).toBe(0);
+        expect(bounds.minY).toBe(100);
+        expect(bounds.maxX).toBe(100);
+        expect(bounds.maxY).toBe(200);
+    });
 });
 
 describe('rectsOverlap', () => {
@@ -411,6 +433,66 @@ describe('shouldSuppressMerge', () => {
 
         // Non-mates >= threshold and > 0 mates → suppressed
         expect(shouldSuppressMerge(0, state)).toBe(true);
+    });
+
+    it('does not falsely suppress when the moved group is rotated (issue #237)', () => {
+        // Regression for issue #237: getGroupBounds must account for group
+        // rotation. When it doesn't, a rotated moved piece's bounds sit at
+        // the wrong world location, so the overlap check silently walks past
+        // its real mate and instead counts unrelated loose pieces that happen
+        // to lie at the phantom shifted location — tripping the pile filter
+        // and vetoing a perfectly legitimate drop.
+        //
+        // Layout (visual / world space):
+        //   - Moved piece at visual AABB [0..100] × [0..100]  (rotation 1)
+        //   - Mate piece at visual AABB [-100..0] × [0..100]  (rotation 0,
+        //     touching the moved piece's left edge)
+        //   - Three non-mate pieces far to the right at x ≥ 150 — well
+        //     outside the moved piece's visual bounds + padding.
+        //
+        // Because rotation 1 translates un-rotated local [0..100]² to
+        // rotated-local [-100..0] × [0..100], the moved group's position
+        // must be offset by (+100, 0) to place the visual AABB at [0..100]².
+        // The rotation-ignorant implementation will compute the moved
+        // group's bounds at [100..200]², shift the overlap window east by
+        // 100 pixels, lose the real mate and pick up the three distant
+        // non-mates, then suppress the merge.
+        const piece0 = makeSquarePiece(0, {
+            left: { pieceId: 1, edgeId: 5 }, // mates with piece 1 to the left
+        });
+        const piece1 = makeSquarePiece(1, {
+            right: { pieceId: 0, edgeId: 3 },
+        });
+        const piece2 = makeSquarePiece(2); // non-mate
+        const piece3 = makeSquarePiece(3); // non-mate
+        const piece4 = makeSquarePiece(4); // non-mate
+
+        // Moved group: rotated 90° CW. position = (100, 0) → visual [0..100]².
+        const movedGroup: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 100, y: 0 },
+            rotation: 1,
+        };
+
+        // Mate group: un-rotated, positioned so its visual AABB is
+        // [-100..0] × [0..100] — touches the moved group's left edge
+        // visually, well clear of the rotation-ignorant phantom bounds.
+        const mateGroup = makeGroup(1, 1, { x: -100, y: 0 });
+
+        // Three non-mate loose pieces clustered far to the right of the
+        // moved piece's VISUAL bounds, but right on top of its BUGGY
+        // (un-rotated) bounds at x ≈ 150..200.
+        const nonMate1 = makeGroup(2, 2, { x: 150, y: 0 });
+        const nonMate2 = makeGroup(3, 3, { x: 160, y: 0 });
+        const nonMate3 = makeGroup(4, 4, { x: 170, y: 0 });
+
+        const state = makeGameState(
+            [piece0, piece1, piece2, piece3, piece4],
+            [movedGroup, mateGroup, nonMate1, nonMate2, nonMate3],
+        );
+
+        expect(shouldSuppressMerge(0, state)).toBe(false);
     });
 
     it('does not suppress when non-mates equal mates', () => {
