@@ -428,7 +428,7 @@ Replace it with:
             cols: gridSize.cols,
             rows: gridSize.rows,
             pieceCount: state.pieces.length,
-            imageSource: imageSource ?? 'unsplash',
+            imageSource: classifyImageSource(state.imageUrl),
         };
         if (data.imageSource === 'unsplash') {
             data.imageCategory = imageCategory ?? 'any';
@@ -443,9 +443,9 @@ Replace it with:
 
 Notes on the values:
 - `cutStyle` and `rotationMode` are already in scope as local consts/parameters.
-- `imageSource ?? 'unsplash'` — when the dialog doesn't pass a source, the function falls through to the Unsplash fetch path, so `'unsplash'` is the honest default.
+- `classifyImageSource(state.imageUrl)` — the dialog's internal `imageSource` value (`'random'` / `'blank'`) doesn't match the spec's `'unsplash' | 'blank' | 'fallback'`, and only `state.imageUrl` reflects whether the Unsplash fetch actually succeeded vs. fell back to the default image. The helper is defined in Task 4 — if re-executing top-to-bottom on a fresh branch, swap Task 3 and Task 4 (or move the helper definition into Task 3).
 - `imageCategory ?? 'any'` mirrors the same default `findImageCategory(imageCategory ?? 'any')` already uses inside the function.
-- `imageCategory` and `vibrant` only attach when the source is `'unsplash'` because they're meaningless for `'blank'` or `'fallback'`.
+- `imageCategory` and `vibrant` only attach when the source resolved to `'unsplash'` (i.e. the Unsplash fetch succeeded) because they're meaningless for `'blank'` or `'fallback'`.
 
 - [ ] **Step 4: Verify the build still passes**
 

@@ -208,13 +208,20 @@ with `source` defined" if it wants to ignore the resumed cohort.
   - Info-modal path: `checkbox.checked && !checkbox.disabled` —
     exactly the same expression already passed to
     `gameStateToPayload`.
-- For `new-game-started` (`source: 'shared'`) image fields:
-  - `imageSource` is derived from the share payload's image URL:
-    `'blank'` if the URL is the blank sentinel; otherwise `'unsplash'`
-    if the URL host is `images.unsplash.com`; otherwise `'fallback'`.
-  - `imageCategory` and `vibrant` are *not* recoverable — the share
-    link only carries the image URL, not the search terms used to
-    pick it. They are left undefined for shared loads.
+- For `new-game-started` image fields:
+  - `imageSource` is derived from the resulting image URL by a single
+    `classifyImageSource()` helper used on *all* paths (fresh, shared,
+    completed): `'blank'` if the URL is a `data:` sentinel; otherwise
+    `'unsplash'` if the URL host is `images.unsplash.com`; otherwise
+    `'fallback'`. The dialog's internal source value (`'random'` /
+    `'blank'`) is *not* used directly because it can't distinguish a
+    successful Unsplash fetch from a fallback to the bundled default
+    image when the API key is missing or the request fails.
+  - `imageCategory` and `vibrant` only attach when the resolved
+    `imageSource` is `'unsplash'`. On the fresh path they come from
+    the dialog selection. On the shared path they are *not*
+    recoverable — the share link only carries the image URL, not the
+    search terms used to pick it — so they're left undefined.
 - For `new-game-started.recipientHadSavedState` and
   `includesProgress`:
   - `recipientHadSavedState` is captured in `tryLoadSharedPuzzle()`

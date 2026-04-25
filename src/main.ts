@@ -706,7 +706,7 @@ async function startNewGame(
             cols: gridSize.cols,
             rows: gridSize.rows,
             pieceCount: state.pieces.length,
-            imageSource: imageSource ?? 'unsplash',
+            imageSource: classifyImageSource(state.imageUrl),
         };
         if (data.imageSource === 'unsplash') {
             data.imageCategory = imageCategory ?? 'any';
