@@ -124,7 +124,7 @@ A new `src/analytics/` directory:
 ```ts
 type AnalyticsEvent =
   | { name: 'new-game-started'; data: NewGameData }
-  | { name: 'puzzle-completed'; data: NewGameData }
+  | { name: 'puzzle-completed'; data: PuzzleCompletedData }
   | {
       name: 'puzzle-shared';
       data: {
@@ -135,7 +135,7 @@ type AnalyticsEvent =
 
 interface NewGameData {
   source: 'fresh' | 'shared';
-  cutStyle: CutStyle;                 // 'classic' | 'fractal' | 'composable'
+  cutStyle: string;                   // 'classic' | 'fractal' | 'composable'
   rotationMode: 'none' | 'quarter-turn';
   cols: number;
   rows: number;
@@ -146,11 +146,30 @@ interface NewGameData {
   includesProgress?: boolean;         // only when source === 'shared'
   recipientHadSavedState?: boolean;   // only when source === 'shared'
 }
+
+// puzzle-completed has the same shape, but every field outside the
+// puzzle-shape core is optional — for resumed-then-completed games we
+// only know the puzzle's geometry, not how it was originally started.
+type PuzzleCompletedData = Pick<
+  NewGameData,
+  'cutStyle' | 'rotationMode' | 'cols' | 'rows' | 'pieceCount'
+> & Partial<NewGameData>;
 ```
 
-`puzzle-completed` reuses `NewGameData` so a single dashboard query
-("`puzzle-completed` grouped by `cutStyle`") gives completion-by-style
-without needing to join two event types.
+The same field names mean a single dashboard query ("`puzzle-completed`
+grouped by `cutStyle`") gives completion-by-style without needing to
+join two event types.
+
+**How `puzzle-completed` gets its bonus fields.** When a game starts
+(fresh or shared), we cache the full `NewGameData` in a module-local
+variable in `main.ts`. On `puzzle-completed`, we send that cached data
+augmented with anything still derivable from `gameState`. If the user
+resumed an earlier session's puzzle from localStorage, the cache is
+empty and we fall back to deriving only what `gameState` gives us
+(`cutStyle`, `rotationMode`, `cols`, `rows`, `pieceCount`, plus
+`imageSource` heuristically from `imageUrl`). The optional fields
+simply stay `undefined`; the dashboard can filter on "completed events
+with `source` defined" if it wants to ignore the resumed cohort.
 
 ### Reading the data: caveats
 
