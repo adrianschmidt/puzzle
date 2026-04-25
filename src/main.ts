@@ -74,6 +74,7 @@ import {
     hideLoadingOverlay,
     yieldForPaint,
 } from './ui/loading-overlay.js';
+import { initAnalytics } from './analytics/index.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -85,6 +86,8 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 // On touch devices (especially iPad), long-pressing a piece would
 // otherwise trigger the context menu, interfering with drag.
 app.addEventListener('contextmenu', (e) => e.preventDefault());
+
+initAnalytics();
 
 // Display app version in bottom-right corner.
 // Injected at build time by the deploy workflow via VITE_APP_VERSION.
