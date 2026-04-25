@@ -176,6 +176,28 @@ function removeCompletionOverlay(): void {
  * gameState alone.
  */
 let currentGameAnalytics: NewGameData | null = null;
+
+/**
+ * Heuristically classify a puzzle image URL into one of the three
+ * sources we care about for analytics. Used when the puzzle origin
+ * (a share payload, or a resumed save) only carries the URL — not
+ * the choice that produced it.
+ */
+function classifyImageSource(imageUrl: string): 'unsplash' | 'blank' | 'fallback' {
+    if (imageUrl.startsWith('data:')) {
+        return 'blank';
+    }
+    try {
+        const host = new URL(imageUrl, window.location.href).host;
+        if (host === 'images.unsplash.com') {
+            return 'unsplash';
+        }
+    } catch {
+        // Fall through to 'fallback' on malformed URLs.
+    }
+    return 'fallback';
+}
+
 let gameState: GameState;
 let cleanupDrag: (() => void) | null = null;
 
@@ -818,7 +840,10 @@ createInfoButton({
     },
 });
 
-async function loadSharedPuzzle(payload: SharePayload): Promise<void> {
+async function loadSharedPuzzle(
+    payload: SharePayload,
+    recipientHadSavedState: boolean,
+): Promise<void> {
     showLoadingOverlay();
     try {
         const imageSize = { width: payload.is[0], height: payload.is[1] };
@@ -878,6 +903,20 @@ async function loadSharedPuzzle(payload: SharePayload): Promise<void> {
         gatherAndZoomToFit();
         renderer.renderState(gameState);
         autoSave();
+
+        const data: NewGameData = {
+            source: 'shared',
+            cutStyle: state.cutStyle ?? 'classic',
+            rotationMode: state.rotationMode ?? 'none',
+            cols: state.gridSize.cols,
+            rows: state.gridSize.rows,
+            pieceCount: state.pieces.length,
+            imageSource: classifyImageSource(state.imageUrl),
+            includesProgress: payload.pr !== undefined,
+            recipientHadSavedState,
+        };
+        currentGameAnalytics = data;
+        track('new-game-started', currentGameAnalytics);
     } finally {
         hideLoadingOverlay();
     }
@@ -904,7 +943,7 @@ async function tryLoadSharedPuzzle(): Promise<boolean> {
 
     clearSavedState();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    await loadSharedPuzzle(payload);
+    await loadSharedPuzzle(payload, hasExistingProgress);
     return true;
 }
 
