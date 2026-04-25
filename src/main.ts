@@ -75,7 +75,7 @@ import {
     yieldForPaint,
 } from './ui/loading-overlay.js';
 import { initAnalytics, track } from './analytics/index.js';
-import type { NewGameData } from './analytics/index.js';
+import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -196,6 +196,31 @@ function classifyImageSource(imageUrl: string): 'unsplash' | 'blank' | 'fallback
         // Fall through to 'fallback' on malformed URLs.
     }
     return 'fallback';
+}
+
+/**
+ * Build the analytics payload for a puzzle completion.
+ *
+ * Always derives geometry/style fields from gameState (so resumed
+ * games still get a useful event), then merges in any cached
+ * NewGameData fields the user wouldn't be able to recover otherwise
+ * (source, imageCategory, vibrant, etc.).
+ */
+function buildPuzzleCompletedData(state: GameState): PuzzleCompletedData {
+    const derived: PuzzleCompletedData = {
+        cutStyle: state.cutStyle ?? 'classic',
+        rotationMode: state.rotationMode ?? 'none',
+        cols: state.gridSize.cols,
+        rows: state.gridSize.rows,
+        pieceCount: state.pieces.length,
+        imageSource: classifyImageSource(state.imageUrl),
+    };
+
+    if (currentGameAnalytics) {
+        return { ...derived, ...currentGameAnalytics };
+    }
+
+    return derived;
 }
 
 let gameState: GameState;
@@ -543,6 +568,7 @@ function initGame(state: GameState): void {
                 autoSave();
 
                 if (checkAndMarkWin(gameState)) {
+                    track('puzzle-completed', buildPuzzleCompletedData(gameState));
                     // Animate zoom to fit the completed puzzle, then show overlay
                     if (gameState.groups.length === 1) {
                         zoomToFitCompletedPuzzle(gameState.groups[0], () => {
