@@ -4,7 +4,7 @@
 
 **Goal:** Add lightweight, privacy-friendly usage tracking to the puzzle app via Umami Cloud. Pageviews are automatic; three custom events (`new-game-started`, `puzzle-completed`, `puzzle-shared`) carry puzzle metadata.
 
-**Architecture:** A single thin wrapper module under `src/analytics/` injects the Umami script (gated by a build-time env var) and exposes a typed `track()` function. Event payloads are typed via TypeScript overloads. A module-local cache in `main.ts` carries new-game metadata forward so `puzzle-completed` can include source/category/vibrant on the same-session-completion path. Localhost stays silent (env var unset); PR-preview and production each get their own Umami "website" via separate GitHub-Actions secrets.
+**Architecture:** A single thin wrapper module under `src/analytics/` injects the Umami script (gated by a build-time env var) and exposes a typed `track()` function. Event payloads are typed via TypeScript overloads. A module-local cache in `main.ts` carries new-game metadata forward so `puzzle-completed` can include source/category/vibrant on the same-session-completion path. Localhost stays silent (env var unset); PR-preview and production both report to a single Umami "website" via one shared GitHub-Actions secret, separated on the dashboard side by URL path (`/puzzle/` vs `/puzzle/dev/`).
 
 **Tech Stack:** Vite + TypeScript, vitest with jsdom for tests, Umami Cloud `script.js`, GitHub Actions for build-time env var injection.
 
@@ -22,8 +22,8 @@
 **Modify:**
 - `src/main.ts` — call `initAnalytics()` once at startup; fire `new-game-started` (fresh) inside `startNewGame`; fire `new-game-started` (shared) inside `loadSharedPuzzle` (taking `recipientHadSavedState` as a new arg from `tryLoadSharedPuzzle`); fire `puzzle-completed` in the `onDrop` win branch; fire `puzzle-shared` in the completion-overlay share-button handler. Holds the `currentGameAnalytics` module-local cache.
 - `src/ui/share-section.ts` — fire `puzzle-shared` (`source: 'info-modal'`) in the share-button click handler.
-- `.github/workflows/deploy.yml` — add `VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID_PROD }}` to the build step's `env:`.
-- `.github/workflows/deploy-preview.yml` — same, with `UMAMI_WEBSITE_ID_DEV`.
+- `.github/workflows/deploy.yml` — add `VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}` to the build step's `env:`.
+- `.github/workflows/deploy-preview.yml` — same secret, same value.
 
 No persistence schema bump. The `currentGameAnalytics` cache is session-scoped on purpose — for resumed-then-completed games, optional fields are simply omitted from the completion event.
 
@@ -925,13 +925,15 @@ EOF
 
 ---
 
-## Task 8: Wire up GitHub Actions secrets
+## Task 8: Wire up the GitHub Actions secret
 
 **Files:**
 - Modify: `.github/workflows/deploy.yml`
 - Modify: `.github/workflows/deploy-preview.yml`
 
 This task is environment-only — no code changes.
+
+Both workflows pass the same `VITE_UMAMI_WEBSITE_ID` secret. Umami Cloud doesn't allow two separate "websites" at the same domain, so production and PR preview both report to one Umami site; dev vs. prod is filtered on the dashboard by URL path (`/puzzle/` vs `/puzzle/dev/`).
 
 - [ ] **Step 1: Add the env var to the production deploy workflow**
 
@@ -951,7 +953,7 @@ Add one line under `env:`:
         env:
           VITE_UNSPLASH_ACCESS_KEY: ${{ secrets.VITE_UNSPLASH_ACCESS_KEY }}
           VITE_APP_VERSION: "#${{ github.run_number }}"
-          VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID_PROD }}
+          VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
 ```
 
 - [ ] **Step 2: Add the env var to the PR preview workflow**
@@ -966,7 +968,7 @@ In `.github/workflows/deploy-preview.yml`, find the `npm run build` step:
           VITE_APP_VERSION: "PR #${{ github.event.pull_request.number }} (run ${{ github.run_number }})"
 ```
 
-Add one line under `env:`:
+Add one line under `env:` (the same secret as production):
 
 ```yaml
       - run: npm run build
@@ -974,19 +976,18 @@ Add one line under `env:`:
           VITE_BASE_PATH: /puzzle/dev/
           VITE_UNSPLASH_ACCESS_KEY: ${{ secrets.VITE_UNSPLASH_ACCESS_KEY }}
           VITE_APP_VERSION: "PR #${{ github.event.pull_request.number }} (run ${{ github.run_number }})"
-          VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID_DEV }}
+          VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
 ```
 
-- [ ] **Step 3: Tell the user to add the secrets**
+- [ ] **Step 3: Tell the user to add the secret**
 
 Pause and report to the user:
 
-> "Workflows updated. Before merging, please add two GitHub Actions secrets at the repo's Settings → Secrets and variables → Actions page:
+> "Workflows updated. Before merging, please add one GitHub Actions secret at the repo's Settings → Secrets and variables → Actions page:
 >
-> - `UMAMI_WEBSITE_ID_PROD` — Website ID of the `puzzle-prod` site in Umami Cloud.
-> - `UMAMI_WEBSITE_ID_DEV` — Website ID of the `puzzle-dev` site in Umami Cloud.
+> - `UMAMI_WEBSITE_ID` — Website ID of the puzzle site in Umami Cloud.
 >
-> Without these, `VITE_UMAMI_WEBSITE_ID` will be empty in the deploy and tracking will silently no-op (no errors, just no data). Let me know once they're set so I can verify the PR-preview deploy actually reports."
+> Without it, `VITE_UMAMI_WEBSITE_ID` will be empty in the deploy and tracking will silently no-op (no errors, just no data). Filter dev vs. prod on the Umami dashboard by URL path. Let me know once it's set so I can verify the PR-preview deploy actually reports."
 
 Wait for confirmation before continuing.
 
@@ -997,9 +998,10 @@ git add .github/workflows/deploy.yml .github/workflows/deploy-preview.yml
 git commit -m "$(cat <<'EOF'
 ci(analytics): pass Umami website ID into deploy builds
 
-Production and PR-preview workflows each get their own
-VITE_UMAMI_WEBSITE_ID, sourced from separate secrets so the two deploys
-report to separate Umami "websites".
+Both production and PR-preview workflows pass the same
+VITE_UMAMI_WEBSITE_ID secret. Umami Cloud doesn't allow two
+"websites" at the same domain, so dev vs. prod is filtered on the
+dashboard by URL path (/puzzle/ vs /puzzle/dev/).
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
@@ -1021,14 +1023,14 @@ gh pr create --title "feat: add Umami analytics" --body "$(cat <<'EOF'
 
 - Adds Umami Cloud tracking via a thin typed wrapper module
 - Custom events: new-game-started, puzzle-completed, puzzle-shared
-- Localhost stays silent (env var unset); PR preview uses puzzle-dev, prod uses puzzle-prod
+- Localhost stays silent (env var unset); PR preview and prod share one Umami site, separated on the dashboard by URL path
 
 See `docs/superpowers/specs/2026-04-25-umami-analytics-design.md` for the full design.
 
 ## Test plan
 
 - [ ] PR-preview deploy shows the Umami script loading in DevTools
-- [ ] Starting a new game fires `new-game-started` (visible in puzzle-dev dashboard within ~1 min)
+- [ ] Starting a new game fires `new-game-started` (visible in the Umami dashboard within ~1 min)
 - [ ] Completing a small puzzle fires `puzzle-completed`
 - [ ] Sharing from the info modal fires `puzzle-shared` with `includesProgress` matching the toggle
 - [ ] Sharing from the completion overlay fires `puzzle-shared` with `includesProgress: false`
@@ -1057,4 +1059,4 @@ Tell the user the preview is verified. Hand the PR over for human review and mer
 
 ## Done state
 
-After all tasks: pageviews flowing into both Umami "websites", three custom events firing on the right paths, localhost silent, PR-preview and production reporting separately. Implementation matches `docs/superpowers/specs/2026-04-25-umami-analytics-design.md`. No persistence schema changes; no public API surface added beyond the new `src/analytics/` module.
+After all tasks: pageviews flowing into the single Umami "website", three custom events firing on the right paths, localhost silent, PR-preview and production both reporting (filtered on the dashboard by URL path). Implementation matches `docs/superpowers/specs/2026-04-25-umami-analytics-design.md`. No persistence schema changes; no public API surface added beyond the new `src/analytics/` module.

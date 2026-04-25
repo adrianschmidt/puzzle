@@ -17,9 +17,9 @@ JavaScript API. Pageviews are automatic; three custom events
 puzzle metadata (style, size, image source, etc.) on their payloads.
 
 The integration is gated by build-time env vars, so localhost is
-silent, the PR-preview deploy reports to a separate Umami "website"
-from production, and any forgotten secret falls back to a no-op
-without errors.
+silent, the PR-preview and production deploys both report into the
+same Umami "website" (separated on the dashboard by URL path), and
+any forgotten secret falls back to a no-op without errors.
 
 ## Goals
 
@@ -37,7 +37,8 @@ without errors.
 - **No infrastructure burden.** No backend, no DB, no proxy. One
   third-party service plus a script tag.
 - **Clean dev / prod separation.** Localhost never reports. PR
-  previews report to a separate dataset from production.
+  previews and production share one Umami site, and we rely on the
+  dashboard's URL-path filter to slice dev vs. prod traffic.
 
 ## Non-goals
 
@@ -52,25 +53,29 @@ without errors.
 
 ## Tooling: Umami Cloud, free tier
 
-Account holds two "websites":
+Account holds a single "website":
 
-| Umami site | Domain | Path | Tracking destination for |
-|---|---|---|---|
-| `puzzle-prod` | `adrianschmidt.github.io` | `/puzzle/` | Production deploy |
-| `puzzle-dev`  | `adrianschmidt.github.io` | `/puzzle/dev/` | PR preview deploy |
+| Umami site | Domain | Tracking destination for |
+|---|---|---|
+| `puzzle` | `adrianschmidt.github.io` | Production (`/puzzle/`) and PR preview (`/puzzle/dev/`) |
+
+Umami Cloud doesn't allow two separate "websites" at the same domain,
+so production and PR preview both report to one site. Dev vs. prod
+are sliced on the dashboard side using the URL-path filter
+(`/puzzle/` vs. `/puzzle/dev/`).
 
 Free tier limits (10,000 events/month, 3 websites) are well within
 budget for a personal app. If usage ever exceeds the cap, a follow-up
 can add a donation/tip path to fund a paid tier — out of scope here.
 
-The user creates the account and both websites manually. From Umami,
+The user creates the account and the website manually. From Umami,
 two artifacts are needed:
 
-- **Website IDs** (one per site) — public UUIDs embedded in the
-  tracking script. Stored as GitHub Actions secrets.
-- **API key** — single private key for read access. Stored only in
-  the user's local environment (not in CI), and used by Claude when
-  the user asks for stats.
+- **Website ID** — public UUID embedded in the tracking script.
+  Stored as a GitHub Actions secret.
+- **API key** — private key for read access. Stored only in the
+  user's local environment (not in CI), and used by Claude when the
+  user asks for stats.
 
 ## Build-time configuration
 
@@ -87,16 +92,16 @@ Wired up per build target:
 | Build target | `VITE_UMAMI_WEBSITE_ID` | Result |
 |---|---|---|
 | `npm run dev` (localhost) | unset | Tracking disabled (no script injected) |
-| PR preview (`/puzzle/dev/`) | `secrets.UMAMI_WEBSITE_ID_DEV` | Reports to `puzzle-dev` |
-| Production (`/puzzle/`)    | `secrets.UMAMI_WEBSITE_ID_PROD` | Reports to `puzzle-prod` |
+| PR preview (`/puzzle/dev/`) | `secrets.UMAMI_WEBSITE_ID` | Reports to the puzzle Umami site (filter by path on the dashboard for dev) |
+| Production (`/puzzle/`)    | `secrets.UMAMI_WEBSITE_ID` | Reports to the puzzle Umami site (filter by path on the dashboard for prod) |
 
 The tracking module checks `if (!import.meta.env.VITE_UMAMI_WEBSITE_ID) return;`
 at init time — so localhost and any deploy that forgets to set the
 secret simply produce a no-op. No console errors, no broken builds.
 
 The two GitHub Actions workflows that build for deploy
-(`deploy-preview.yml` and `deploy.yml`) each get the corresponding
-secret added to their `env:` block.
+(`deploy-preview.yml` and `deploy.yml`) each pass the same
+`UMAMI_WEBSITE_ID` secret in their `env:` block.
 
 ## Tracking module
 
