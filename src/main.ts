@@ -74,7 +74,8 @@ import {
     hideLoadingOverlay,
     yieldForPaint,
 } from './ui/loading-overlay.js';
-import { initAnalytics } from './analytics/index.js';
+import { initAnalytics, track } from './analytics/index.js';
+import type { NewGameData } from './analytics/index.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -166,6 +167,15 @@ function removeCompletionOverlay(): void {
     app.classList.remove('completion-glow');
 }
 
+/**
+ * Analytics metadata for the currently-playing puzzle.
+ *
+ * Populated when a puzzle starts (fresh or shared). Stays null when
+ * the user resumes a previous session from localStorage — in that
+ * case `puzzle-completed` falls back to deriving fields from
+ * gameState alone.
+ */
+let currentGameAnalytics: NewGameData | null = null;
 let gameState: GameState;
 let cleanupDrag: (() => void) | null = null;
 
@@ -639,6 +649,22 @@ async function startNewGame(
         gatherAndZoomToFit();
         renderer.renderState(gameState);
         autoSave();
+
+        const data: NewGameData = {
+            source: 'fresh',
+            cutStyle,
+            rotationMode,
+            cols: gridSize.cols,
+            rows: gridSize.rows,
+            pieceCount: state.pieces.length,
+            imageSource: imageSource ?? 'unsplash',
+        };
+        if (data.imageSource === 'unsplash') {
+            data.imageCategory = imageCategory ?? 'any';
+            data.vibrant = vibrant;
+        }
+        currentGameAnalytics = data;
+        track('new-game-started', currentGameAnalytics);
     } finally {
         hideLoadingOverlay();
     }
