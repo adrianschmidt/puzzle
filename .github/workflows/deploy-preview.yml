@@ -31,6 +31,7 @@ jobs:
           VITE_BASE_PATH: /puzzle/dev/
           VITE_UNSPLASH_ACCESS_KEY: ${{ secrets.VITE_UNSPLASH_ACCESS_KEY }}
           VITE_APP_VERSION: "PR #${{ github.event.pull_request.number }} (run ${{ github.run_number }})"
+          VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID_DEV }}
 
       - uses: peaceiris/actions-gh-pages@v4
         with:
