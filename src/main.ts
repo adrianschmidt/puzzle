@@ -130,6 +130,7 @@ function showCompletionOverlay(): void {
     challengeBtn.textContent = 'Challenge a friend — share this puzzle!';
     challengeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        track('puzzle-shared', { source: 'completion-overlay', includesProgress: false });
         const payload = gameStateToPayload(gameState, { includeProgress: false });
         const url = buildShareUrl(window.location.href.split('#')[0], payload);
         void sharePuzzle({
