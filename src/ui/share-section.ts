@@ -12,6 +12,7 @@ import {
 } from '../sharing/index.js';
 import { sharePuzzle } from './share.js';
 import { showToast } from './toast.js';
+import { track } from '../analytics/index.js';
 
 export function attachShareSection(
     parent: HTMLElement,
@@ -101,6 +102,8 @@ export function attachShareSection(
     checkbox.addEventListener('change', refreshPreview);
 
     button.addEventListener('click', () => {
+        const includesProgress = checkbox.checked && !checkbox.disabled;
+        track('puzzle-shared', { source: 'info-modal', includesProgress });
         void sharePuzzle({
             url: currentUrl(),
             title: 'Puzzle',
