@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
+import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import {
     getGroupBounds,
     rectsOverlap,
@@ -9,12 +9,9 @@ import {
     reorderGroupsAfterDrop,
     PILE_OVERLAP_THRESHOLD,
 } from './pile-detection.js';
+import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
 // --- Test helpers ---
-
-function makePiece(id: number, edges: Edge[]): Piece {
-    return { id, edges, shape: '', imageOffset: { x: 0, y: 0 } };
-}
 
 function makeEdge(
     id: number,
@@ -35,13 +32,6 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
     };
 }
 
-function makeGameState(
-    pieces: Piece[],
-    groups: PieceGroup[],
-): GameState {
-    return { pieces, groups, imageUrl: 'test.jpg', imageSize: { width: 800, height: 600 }, gridSize: { cols: 8, rows: 6 }, completed: false };
-}
-
 /**
  * Create a simple 100×100 piece with four straight edges.
  * Optionally set mate info for specific edges.
@@ -58,7 +48,7 @@ function makeSquarePiece(
     const edgeBase = id * 4;
     const m = mates ?? {};
 
-    return makePiece(id, [
+    return makePiece({ id, edges: [
         makeEdge(
             edgeBase,
             { x: 0, y: 0 },
@@ -87,7 +77,7 @@ function makeSquarePiece(
             m.left?.pieceId ?? -1,
             m.left?.edgeId ?? -1,
         ), // left
-    ]);
+    ] });
 }
 
 // --- Tests ---
@@ -272,10 +262,7 @@ describe('shouldSuppressMerge', () => {
         const group1 = makeGroup(1, 1, { x: 150, y: 50 });
         const group2 = makeGroup(2, 2, { x: 50, y: 50 }); // overlapping, non-mate
 
-        const state = makeGameState(
-            [piece0, piece1, piece2],
-            [group0, group1, group2],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1, piece2], groups: [group0, group1, group2] });
 
         // Only 1 non-mate overlap — below threshold
         expect(shouldSuppressMerge(0, state)).toBe(false);
@@ -302,17 +289,14 @@ describe('shouldSuppressMerge', () => {
         const group3 = makeGroup(3, 3, { x: 60, y: 60 });
         const group4 = makeGroup(4, 4, { x: 45, y: 45 });
 
-        const state = makeGameState(
-            [piece0, piece1, piece2, piece3, piece4],
-            [group0, group1, group2, group3, group4],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1, piece2, piece3, piece4], groups: [group0, group1, group2, group3, group4] });
 
         // 3 non-mate overlaps (>= PILE_OVERLAP_THRESHOLD) and > 1 mate overlap
         expect(shouldSuppressMerge(0, state)).toBe(true);
     });
 
     it('returns false when group is not found', () => {
-        const state = makeGameState([], []);
+        const state = makeGameState({ pieces: [], groups: [] });
         expect(shouldSuppressMerge(999, state)).toBe(false);
     });
 
@@ -340,10 +324,7 @@ describe('shouldSuppressMerge', () => {
         const group3 = makeGroup(3, 3, { x: 60, y: 60 });
         const group4 = makeGroup(4, 4, { x: 45, y: 45 });
 
-        const state = makeGameState(
-            [piece0, piece1, piece2, piece3, piece4],
-            [movedGroup, group2, group3, group4],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1, piece2, piece3, piece4], groups: [movedGroup, group2, group3, group4] });
 
         // Multi-piece group → never suppressed
         expect(shouldSuppressMerge(0, state)).toBe(false);
@@ -381,10 +362,7 @@ describe('shouldSuppressMerge', () => {
         const group4 = makeGroup(4, 4, { x: 100, y: 0 });   // mate above
         const group5 = makeGroup(5, 5, { x: 105, y: 105 }); // non-mate overlap
 
-        const state = makeGameState(
-            [piece0, piece1, piece2, piece3, piece4, piece5],
-            [group0, group1, group2, group3, group4, group5],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1, piece2, piece3, piece4, piece5], groups: [group0, group1, group2, group3, group4, group5] });
 
         // 4 mate overlaps, 1 non-mate → mates outnumber, so NOT suppressed
         expect(shouldSuppressMerge(0, state)).toBe(false);
@@ -409,10 +387,7 @@ describe('shouldSuppressMerge', () => {
         const group3 = makeGroup(3, 3, { x: 600, y: 600 });
         const group4 = makeGroup(4, 4, { x: 700, y: 700 });
 
-        const state = makeGameState(
-            [piece0, piece1, piece2, piece3, piece4],
-            [group0, group1, group2, group3, group4],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1, piece2, piece3, piece4], groups: [group0, group1, group2, group3, group4] });
 
         expect(shouldSuppressMerge(0, state)).toBe(false);
     });
@@ -429,7 +404,7 @@ describe('shouldSuppressMerge', () => {
             groups.push(makeGroup(i, i, { x: 50 + i * 5, y: 50 + i * 5 }));
         }
 
-        const state = makeGameState(pieces, groups);
+        const state = makeGameState({ pieces: pieces, groups: groups });
 
         // Non-mates >= threshold and > 0 mates → suppressed
         expect(shouldSuppressMerge(0, state)).toBe(true);
@@ -487,10 +462,7 @@ describe('shouldSuppressMerge', () => {
         const nonMate2 = makeGroup(3, 3, { x: 160, y: 0 });
         const nonMate3 = makeGroup(4, 4, { x: 170, y: 0 });
 
-        const state = makeGameState(
-            [piece0, piece1, piece2, piece3, piece4],
-            [movedGroup, mateGroup, nonMate1, nonMate2, nonMate3],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1, piece2, piece3, piece4], groups: [movedGroup, mateGroup, nonMate1, nonMate2, nonMate3] });
 
         expect(shouldSuppressMerge(0, state)).toBe(false);
     });
@@ -526,10 +498,7 @@ describe('shouldSuppressMerge', () => {
         const group5 = makeGroup(5, 5, { x: 110, y: 110 }); // non-mate
         const group6 = makeGroup(6, 6, { x: 115, y: 115 }); // non-mate
 
-        const state = makeGameState(
-            [piece0, piece1, piece2, piece3, piece4, piece5, piece6],
-            [group0, group1, group2, group3, group4, group5, group6],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1, piece2, piece3, piece4, piece5, piece6], groups: [group0, group1, group2, group3, group4, group5, group6] });
 
         // 3 non-mates = 3 mates, non-mates do NOT outnumber mates → allow merge
         expect(shouldSuppressMerge(0, state)).toBe(false);
@@ -599,34 +568,34 @@ describe('rectFullyContains', () => {
 describe('reorderGroupsAfterDrop', () => {
     it('raises smaller groups that are fully covered by dropped group', () => {
         // Create custom pieces with specific bounds to ensure proper coverage
-        const largePiece = makePiece(0, [
+        const largePiece = makePiece({ id: 0, edges: [
             makeEdge(0, { x: 0, y: 0 }, { x: 200, y: 0 }),     // top
             makeEdge(1, { x: 200, y: 0 }, { x: 200, y: 200 }), // right  
             makeEdge(2, { x: 200, y: 200 }, { x: 0, y: 200 }), // bottom
             makeEdge(3, { x: 0, y: 200 }, { x: 0, y: 0 }),     // left
-        ]);
+        ] });
 
-        const smallPiece1 = makePiece(1, [
+        const smallPiece1 = makePiece({ id: 1, edges: [
             makeEdge(4, { x: 0, y: 0 }, { x: 50, y: 0 }),
             makeEdge(5, { x: 50, y: 0 }, { x: 50, y: 50 }),
             makeEdge(6, { x: 50, y: 50 }, { x: 0, y: 50 }),
             makeEdge(7, { x: 0, y: 50 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const smallPiece2 = makePiece(2, [
+        const smallPiece2 = makePiece({ id: 2, edges: [
             makeEdge(8, { x: 0, y: 0 }, { x: 40, y: 0 }),
             makeEdge(9, { x: 40, y: 0 }, { x: 40, y: 40 }),
             makeEdge(10, { x: 40, y: 40 }, { x: 0, y: 40 }),
             makeEdge(11, { x: 0, y: 40 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Create an additional piece to make the large group actually have more pieces
-        const additionalPiece = makePiece(3, [
+        const additionalPiece = makePiece({ id: 3, edges: [
             makeEdge(12, { x: 0, y: 0 }, { x: 200, y: 0 }),
             makeEdge(13, { x: 200, y: 0 }, { x: 200, y: 200 }),
             makeEdge(14, { x: 200, y: 200 }, { x: 0, y: 200 }),
             makeEdge(15, { x: 0, y: 200 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Large dropped group (2 pieces for larger size)
         const largeGroup: PieceGroup = {
@@ -643,10 +612,7 @@ describe('reorderGroupsAfterDrop', () => {
         const smallGroup1 = makeGroup(1, 1, { x: 50, y: 50 }); // Covers 50-100 x 50-100 (inside)
         const smallGroup2 = makeGroup(2, 2, { x: 100, y: 100 }); // Covers 100-140 x 100-140 (inside)
 
-        const state = makeGameState(
-            [largePiece, smallPiece1, smallPiece2, additionalPiece],
-            [largeGroup, smallGroup1, smallGroup2],
-        );
+        const state = makeGameState({ pieces: [largePiece, smallPiece1, smallPiece2, additionalPiece], groups: [largeGroup, smallGroup1, smallGroup2] });
 
         const raisedGroups: number[] = [];
         const mockBringToFront = (groupId: number) => {
@@ -669,7 +635,7 @@ describe('reorderGroupsAfterDrop', () => {
         const group0 = makeGroup(0, 0, { x: 50, y: 50 });
         const group1 = makeGroup(1, 1, { x: 60, y: 60 }); // Covered but same size
 
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
 
         const raisedGroups: number[] = [];
         const mockBringToFront = (groupId: number) => {
@@ -698,7 +664,7 @@ describe('reorderGroupsAfterDrop', () => {
         // Small group that extends beyond the large group's bounds
         const smallGroup = makeGroup(1, 1, { x: 120, y: 120 }); // Covers 120-220 x 120-220, partially outside
 
-        const state = makeGameState([piece0, piece1], [largeGroup, smallGroup]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [largeGroup, smallGroup] });
 
         const raisedGroups: number[] = [];
         const mockBringToFront = (groupId: number) => {
@@ -713,49 +679,49 @@ describe('reorderGroupsAfterDrop', () => {
 
     it('sorts raised groups by size descending (largest raised first)', () => {
         // Create a large piece that will cover multiple smaller pieces
-        const largePiece = makePiece(0, [
+        const largePiece = makePiece({ id: 0, edges: [
             makeEdge(0, { x: 0, y: 0 }, { x: 300, y: 0 }),
             makeEdge(1, { x: 300, y: 0 }, { x: 300, y: 300 }),
             makeEdge(2, { x: 300, y: 300 }, { x: 0, y: 300 }),
             makeEdge(3, { x: 0, y: 300 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Create smaller pieces
-        const mediumPiece1 = makePiece(1, [
+        const mediumPiece1 = makePiece({ id: 1, edges: [
             makeEdge(4, { x: 0, y: 0 }, { x: 50, y: 0 }),
             makeEdge(5, { x: 50, y: 0 }, { x: 50, y: 50 }),
             makeEdge(6, { x: 50, y: 50 }, { x: 0, y: 50 }),
             makeEdge(7, { x: 0, y: 50 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const mediumPiece2 = makePiece(2, [
+        const mediumPiece2 = makePiece({ id: 2, edges: [
             makeEdge(8, { x: 0, y: 0 }, { x: 50, y: 0 }),
             makeEdge(9, { x: 50, y: 0 }, { x: 50, y: 50 }),
             makeEdge(10, { x: 50, y: 50 }, { x: 0, y: 50 }),
             makeEdge(11, { x: 0, y: 50 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const smallPiece = makePiece(3, [
+        const smallPiece = makePiece({ id: 3, edges: [
             makeEdge(12, { x: 0, y: 0 }, { x: 30, y: 0 }),
             makeEdge(13, { x: 30, y: 0 }, { x: 30, y: 30 }),
             makeEdge(14, { x: 30, y: 30 }, { x: 0, y: 30 }),
             makeEdge(15, { x: 0, y: 30 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Create additional pieces for the large group
-        const additionalPiece1 = makePiece(4, [
+        const additionalPiece1 = makePiece({ id: 4, edges: [
             makeEdge(16, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(17, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(18, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(19, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const additionalPiece2 = makePiece(5, [
+        const additionalPiece2 = makePiece({ id: 5, edges: [
             makeEdge(20, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(21, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(22, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(23, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Large dropped group (3 pieces)
         const largeGroup: PieceGroup = {
@@ -783,10 +749,7 @@ describe('reorderGroupsAfterDrop', () => {
         // Small group (1 piece)
         const smallGroup = makeGroup(3, 3, { x: 100, y: 100 }); // Covers 100-130 x 100-130
 
-        const state = makeGameState(
-            [largePiece, mediumPiece1, mediumPiece2, smallPiece, additionalPiece1, additionalPiece2],
-            [largeGroup, mediumGroup, smallGroup],
-        );
+        const state = makeGameState({ pieces: [largePiece, mediumPiece1, mediumPiece2, smallPiece, additionalPiece1, additionalPiece2], groups: [largeGroup, mediumGroup, smallGroup] });
 
         const raisedGroups: number[] = [];
         const mockBringToFront = (groupId: number) => {
@@ -801,49 +764,49 @@ describe('reorderGroupsAfterDrop', () => {
 
     it('handles multiple dropped groups from multi-select', () => {
         // Create large pieces for the dropped groups
-        const largePiece0 = makePiece(0, [
+        const largePiece0 = makePiece({ id: 0, edges: [
             makeEdge(0, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(1, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(2, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(3, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const largePiece1 = makePiece(1, [
+        const largePiece1 = makePiece({ id: 1, edges: [
             makeEdge(4, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(5, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(6, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(7, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Small pieces that will be covered
-        const smallPiece2 = makePiece(2, [
+        const smallPiece2 = makePiece({ id: 2, edges: [
             makeEdge(8, { x: 0, y: 0 }, { x: 50, y: 0 }),
             makeEdge(9, { x: 50, y: 0 }, { x: 50, y: 50 }),
             makeEdge(10, { x: 50, y: 50 }, { x: 0, y: 50 }),
             makeEdge(11, { x: 0, y: 50 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const smallPiece3 = makePiece(3, [
+        const smallPiece3 = makePiece({ id: 3, edges: [
             makeEdge(12, { x: 0, y: 0 }, { x: 50, y: 0 }),
             makeEdge(13, { x: 50, y: 0 }, { x: 50, y: 50 }),
             makeEdge(14, { x: 50, y: 50 }, { x: 0, y: 50 }),
             makeEdge(15, { x: 0, y: 50 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Create additional pieces for the dropped groups to make them larger
-        const additionalPiece4 = makePiece(4, [
+        const additionalPiece4 = makePiece({ id: 4, edges: [
             makeEdge(16, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(17, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(18, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(19, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const additionalPiece5 = makePiece(5, [
+        const additionalPiece5 = makePiece({ id: 5, edges: [
             makeEdge(20, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(21, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(22, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(23, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Two dropped groups (from multi-select drag) - each with 2 pieces
         const droppedGroup1: PieceGroup = {
@@ -870,10 +833,7 @@ describe('reorderGroupsAfterDrop', () => {
         const smallGroup1 = makeGroup(2, 2, { x: 50, y: 50 }); // Covers 50-100 x 50-100 (inside droppedGroup1)
         const smallGroup2 = makeGroup(3, 3, { x: 250, y: 50 }); // Covers 250-300 x 50-100 (inside droppedGroup2)
 
-        const state = makeGameState(
-            [largePiece0, largePiece1, smallPiece2, smallPiece3, additionalPiece4, additionalPiece5],
-            [droppedGroup1, droppedGroup2, smallGroup1, smallGroup2],
-        );
+        const state = makeGameState({ pieces: [largePiece0, largePiece1, smallPiece2, smallPiece3, additionalPiece4, additionalPiece5], groups: [droppedGroup1, droppedGroup2, smallGroup1, smallGroup2] });
 
         const raisedGroups: number[] = [];
         const mockBringToFront = (groupId: number) => {
@@ -890,42 +850,42 @@ describe('reorderGroupsAfterDrop', () => {
 
     it('avoids duplicate raises when multiple dropped groups cover the same small group', () => {
         // Create large pieces for the dropped groups
-        const largePiece0 = makePiece(0, [
+        const largePiece0 = makePiece({ id: 0, edges: [
             makeEdge(0, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(1, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(2, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(3, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const largePiece1 = makePiece(1, [
+        const largePiece1 = makePiece({ id: 1, edges: [
             makeEdge(4, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(5, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(6, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(7, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Small piece that will be covered by both
-        const smallPiece2 = makePiece(2, [
+        const smallPiece2 = makePiece({ id: 2, edges: [
             makeEdge(8, { x: 0, y: 0 }, { x: 50, y: 0 }),
             makeEdge(9, { x: 50, y: 0 }, { x: 50, y: 50 }),
             makeEdge(10, { x: 50, y: 50 }, { x: 0, y: 50 }),
             makeEdge(11, { x: 0, y: 50 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Create additional pieces to make the dropped groups larger
-        const additionalPiece4 = makePiece(4, [
+        const additionalPiece4 = makePiece({ id: 4, edges: [
             makeEdge(16, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(17, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(18, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(19, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
-        const additionalPiece5 = makePiece(5, [
+        const additionalPiece5 = makePiece({ id: 5, edges: [
             makeEdge(20, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(21, { x: 150, y: 0 }, { x: 150, y: 150 }),
             makeEdge(22, { x: 150, y: 150 }, { x: 0, y: 150 }),
             makeEdge(23, { x: 0, y: 150 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Two overlapping dropped groups (each with 2 pieces) that both cover the same small group
         const droppedGroup1: PieceGroup = {
@@ -951,10 +911,7 @@ describe('reorderGroupsAfterDrop', () => {
         // Small group in the overlapping area (covers 75-125 x 75-125, inside both dropped groups)
         const smallGroup = makeGroup(2, 2, { x: 75, y: 75 });
 
-        const state = makeGameState(
-            [largePiece0, largePiece1, smallPiece2, additionalPiece4, additionalPiece5],
-            [droppedGroup1, droppedGroup2, smallGroup],
-        );
+        const state = makeGameState({ pieces: [largePiece0, largePiece1, smallPiece2, additionalPiece4, additionalPiece5], groups: [droppedGroup1, droppedGroup2, smallGroup] });
 
         const raisedGroups: number[] = [];
         const mockBringToFront = (groupId: number) => {
@@ -970,7 +927,7 @@ describe('reorderGroupsAfterDrop', () => {
     it('handles empty dropped groups list', () => {
         const piece0 = makeSquarePiece(0);
         const group0 = makeGroup(0, 0, { x: 50, y: 50 });
-        const state = makeGameState([piece0], [group0]);
+        const state = makeGameState({ pieces: [piece0], groups: [group0] });
 
         const raisedGroups: number[] = [];
         const mockBringToFront = (groupId: number) => {
@@ -985,7 +942,7 @@ describe('reorderGroupsAfterDrop', () => {
     it('handles non-existent dropped group IDs gracefully', () => {
         const piece0 = makeSquarePiece(0);
         const group0 = makeGroup(0, 0, { x: 50, y: 50 });
-        const state = makeGameState([piece0], [group0]);
+        const state = makeGameState({ pieces: [piece0], groups: [group0] });
 
         const raisedGroups: number[] = [];
         const mockBringToFront = (groupId: number) => {

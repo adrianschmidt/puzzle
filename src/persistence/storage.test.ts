@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { GameState, Piece, PieceGroup } from '../model/types.js';
+import type { GameState, PieceGroup } from '../model/types.js';
 import {
     saveState,
     loadState,
@@ -18,29 +18,13 @@ import {
     STORAGE_KEY,
 } from './storage.js';
 import { STATE_VERSION } from './serialization.js';
+import {
+    makeRectPiece,
+    makeGameState as makeBaseGameState,
+} from '../test-helpers/fixtures.js';
 
-/** Create a minimal valid piece for testing. */
-function makePiece(id: number): Piece {
-    return {
-        id,
-        edges: [
-            {
-                id: id * 10,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: 'M0,0 L100,0',
-                start: { x: 0, y: 0 },
-                end: { x: 100, y: 0 },
-            },
-        ],
-        shape: 'M0,0 L100,0 L100,100 L0,100 Z',
-        imageOffset: { x: id * 100, y: 0 },
-    };
-}
-
-/** Create a minimal valid game state for testing. */
 function makeGameState(overrides?: Partial<GameState>): GameState {
-    const pieces = [makePiece(0), makePiece(1)];
+    const pieces = [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 })];
 
     const groups: PieceGroup[] = [
         {
@@ -57,15 +41,12 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
         },
     ];
 
-    return {
+    return makeBaseGameState({
         pieces,
         groups,
         imageUrl: 'test-image.jpg',
-        imageSize: { width: 800, height: 600 },
-        gridSize: { cols: 8, rows: 6 },
-        completed: false,
         ...overrides,
-    };
+    });
 }
 
 describe('saveState / loadState', () => {
@@ -105,7 +86,7 @@ describe('saveState / loadState', () => {
     it('returns undefined for wrong version', () => {
         const badData = {
             version: 999,
-            pieces: [makePiece(0)],
+            pieces: [makeRectPiece({ id: 0 })],
             groups: [
                 {
                     id: 0,

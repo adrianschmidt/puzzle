@@ -12,23 +12,7 @@ import {
     getGroupVisualBounds,
     getPathBounds,
 } from './gather.js';
-
-/**
- * Helper to create a mock piece with edges defining a rectangular bounding box.
- */
-function makePiece(id: number, width: number, height: number): Piece {
-    return {
-        id,
-        edges: [
-            { id: id * 100, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 0 }, end: { x: width, y: 0 } },
-            { id: id * 100 + 1, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: width, y: 0 }, end: { x: width, y: height } },
-            { id: id * 100 + 2, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: width, y: height }, end: { x: 0, y: height } },
-            { id: id * 100 + 3, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: height }, end: { x: 0, y: 0 } },
-        ],
-        shape: '',
-        imageOffset: { x: 0, y: 0 },
-    };
-}
+import { makeRectPiece } from '../test-helpers/fixtures.js';
 
 function makeGroup(id: number, x: number, y: number): PieceGroup {
     return { id, pieces: new Map([[id, { x: 0, y: 0 }]]), position: { x, y }, rotation: 0 };
@@ -67,7 +51,7 @@ describe('computeGatheredPositions', () => {
     });
 
     it('should return a position for a single group', () => {
-        const pieces = [makePiece(1, 100, 100)];
+        const pieces = [makeRectPiece({ id: 1, width: 100, height: 100 })];
         const groups = [makeGroup(1, 1000, 2000)];
         const { positions } = computeGatheredPositions(groups, landscapeAspect, pieces);
 
@@ -76,7 +60,7 @@ describe('computeGatheredPositions', () => {
     });
 
     it('should produce positions for all groups', () => {
-        const pieces = [makePiece(1, 100, 100), makePiece(2, 100, 100), makePiece(3, 100, 100)];
+        const pieces = [makeRectPiece({ id: 1, width: 100, height: 100 }), makeRectPiece({ id: 2, width: 100, height: 100 }), makeRectPiece({ id: 3, width: 100, height: 100 })];
         const groups = [makeGroup(1, 0, 0), makeGroup(2, 500, 500), makeGroup(3, -200, 100)];
         const { positions } = computeGatheredPositions(groups, landscapeAspect, pieces);
 
@@ -87,7 +71,7 @@ describe('computeGatheredPositions', () => {
     });
 
     it('should not stack pieces on top of each other', () => {
-        const pieces = Array.from({ length: 6 }, (_, i) => makePiece(i, 100, 100));
+        const pieces = Array.from({ length: 6 }, (_, i) => makeRectPiece({ id: i, width: 100, height: 100 }));
         const groups = pieces.map(p => makeGroup(p.id, p.id * 10, p.id * 10));
         const { positions } = computeGatheredPositions(groups, landscapeAspect, pieces);
 
@@ -102,7 +86,7 @@ describe('computeGatheredPositions', () => {
     });
 
     it('should return layout bounds that contain all positions', () => {
-        const pieces = Array.from({ length: 4 }, (_, i) => makePiece(i, 100, 100));
+        const pieces = Array.from({ length: 4 }, (_, i) => makeRectPiece({ id: i, width: 100, height: 100 }));
         const groups = pieces.map(p => makeGroup(p.id, 0, 0));
         const { positions, layoutBounds } = computeGatheredPositions(groups, landscapeAspect, pieces);
 
@@ -116,7 +100,7 @@ describe('computeGatheredPositions', () => {
     });
 
     it('should handle groups with varying sizes', () => {
-        const pieces = [makePiece(0, 100, 100), makePiece(1, 100, 100), makePiece(2, 100, 100)];
+        const pieces = [makeRectPiece({ id: 0, width: 100, height: 100 }), makeRectPiece({ id: 1, width: 100, height: 100 }), makeRectPiece({ id: 2, width: 100, height: 100 })];
         const bigGroup = makeMultiGroup(10, { x: 0, y: 0 }, [
             [0, { x: 0, y: 0 }],
             [1, { x: 100, y: 0 }],
@@ -257,7 +241,7 @@ describe('applyGatheredPositions', () => {
 
 describe('getGroupLocalBounds', () => {
     it('ignores rotation and returns un-rotated bounds', () => {
-        const piece = makePiece(1, 100, 40);
+        const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
         group.rotation = 1; // CW 90°
 
@@ -272,7 +256,7 @@ describe('getGroupLocalBounds', () => {
 
 describe('getGroupVisualBounds', () => {
     it('matches local bounds at rotation 0', () => {
-        const piece = makePiece(1, 100, 40);
+        const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
 
         expect(getGroupVisualBounds(group, [piece])).toEqual(
@@ -281,7 +265,7 @@ describe('getGroupVisualBounds', () => {
     });
 
     it('swaps width and height at rotation 1 (90° CW)', () => {
-        const piece = makePiece(1, 100, 40);
+        const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
         group.rotation = 1;
 
@@ -292,7 +276,7 @@ describe('getGroupVisualBounds', () => {
     });
 
     it('swaps width and height at rotation 3 (270° CW)', () => {
-        const piece = makePiece(1, 100, 40);
+        const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
         group.rotation = 3;
 
@@ -303,7 +287,7 @@ describe('getGroupVisualBounds', () => {
     });
 
     it('keeps width and height at rotation 2 (180°)', () => {
-        const piece = makePiece(1, 100, 40);
+        const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
         group.rotation = 2;
 

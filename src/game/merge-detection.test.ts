@@ -1,23 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
+import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import {
     checkEdgeAlignment,
     detectMerges,
     getWorldPosition,
     MERGE_TOLERANCE_PX,
 } from './merge-detection.js';
+import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
 // --- Test helpers ---
-
-/** Create a minimal piece with specified edges. */
-function makePiece(id: number, edges: Edge[]): Piece {
-    return {
-        id,
-        edges,
-        shape: '',
-        imageOffset: { x: 0, y: 0 },
-    };
-}
 
 /** Create a minimal edge. */
 function makeEdge(
@@ -64,19 +55,19 @@ function createAdjacentPiecePair(): {
     const rightEdge = makeEdge(0, { x: 100, y: 0 }, { x: 100, y: 100 }, 1, 1);
     const leftEdge = makeEdge(1, { x: 0, y: 100 }, { x: 0, y: 0 }, 0, 0);
 
-    const piece0 = makePiece(0, [
+    const piece0 = makePiece({ id: 0, edges: [
         makeEdge(10, { x: 0, y: 0 }, { x: 100, y: 0 }),  // top (border)
         rightEdge,                                           // right (mates with piece 1)
         makeEdge(11, { x: 100, y: 100 }, { x: 0, y: 100 }), // bottom (border)
         makeEdge(12, { x: 0, y: 100 }, { x: 0, y: 0 }),     // left (border)
-    ]);
+    ] });
 
-    const piece1 = makePiece(1, [
+    const piece1 = makePiece({ id: 1, edges: [
         makeEdge(13, { x: 0, y: 0 }, { x: 100, y: 0 }),  // top (border)
         makeEdge(14, { x: 100, y: 0 }, { x: 100, y: 100 }), // right (border)
         makeEdge(15, { x: 100, y: 100 }, { x: 0, y: 100 }), // bottom (border)
         leftEdge,                                              // left (mates with piece 0)
-    ]);
+    ] });
 
     return { piece0, piece1, rightEdge, leftEdge };
 }
@@ -303,27 +294,13 @@ describe('checkEdgeAlignment', () => {
 });
 
 describe('detectMerges', () => {
-    function makeGameState(
-        pieces: Piece[],
-        groups: PieceGroup[],
-    ): GameState {
-        return {
-            pieces,
-            groups,
-            imageUrl: 'test.jpg',
-            imageSize: { width: 800, height: 600 },
-            gridSize: { cols: 8, rows: 6 },
-            completed: false,
-        };
-    }
-
     it('finds a merge when two adjacent pieces are close enough', () => {
         const { piece0, piece1 } = createAdjacentPiecePair();
 
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 100, y: 5 }); // 5px off vertically
 
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
         const candidates = detectMerges(0, state);
 
         expect(candidates).toHaveLength(1);
@@ -337,7 +314,7 @@ describe('detectMerges', () => {
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 500, y: 500 }); // way too far
 
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
         const candidates = detectMerges(0, state);
 
         expect(candidates).toHaveLength(0);
@@ -345,10 +322,7 @@ describe('detectMerges', () => {
 
     it('returns empty for an invalid group ID', () => {
         const { piece0, piece1 } = createAdjacentPiecePair();
-        const state = makeGameState(
-            [piece0, piece1],
-            [makeGroup(0, 0, { x: 0, y: 0 }), makeGroup(1, 1, { x: 100, y: 0 })],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [makeGroup(0, 0, { x: 0, y: 0 }), makeGroup(1, 1, { x: 100, y: 0 })] });
 
         const candidates = detectMerges(999, state);
         expect(candidates).toHaveLength(0);
@@ -368,7 +342,7 @@ describe('detectMerges', () => {
             rotation: 0,
         };
 
-        const state = makeGameState([piece0, piece1], [group]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group] });
         const candidates = detectMerges(0, state);
 
         expect(candidates).toHaveLength(0);
@@ -382,36 +356,33 @@ describe('detectMerges', () => {
         const rightLeft = makeEdge(1, { x: 0, y: 100 }, { x: 0, y: 0 }, 0, 0);
         const bottomTop = makeEdge(3, { x: 0, y: 0 }, { x: 100, y: 0 }, 0, 2);
 
-        const center = makePiece(0, [
+        const center = makePiece({ id: 0, edges: [
             makeEdge(10, { x: 0, y: 0 }, { x: 100, y: 0 }),   // top (border)
             centerRight,
             centerBottom,
             makeEdge(11, { x: 0, y: 100 }, { x: 0, y: 0 }),   // left (border)
-        ]);
+        ] });
 
-        const rightPiece = makePiece(1, [
+        const rightPiece = makePiece({ id: 1, edges: [
             makeEdge(12, { x: 0, y: 0 }, { x: 100, y: 0 }),
             makeEdge(13, { x: 100, y: 0 }, { x: 100, y: 100 }),
             makeEdge(14, { x: 100, y: 100 }, { x: 0, y: 100 }),
             rightLeft,
-        ]);
+        ] });
 
-        const bottomPiece = makePiece(2, [
+        const bottomPiece = makePiece({ id: 2, edges: [
             bottomTop,
             makeEdge(15, { x: 100, y: 0 }, { x: 100, y: 100 }),
             makeEdge(16, { x: 100, y: 100 }, { x: 0, y: 100 }),
             makeEdge(17, { x: 0, y: 100 }, { x: 0, y: 0 }),
-        ]);
+        ] });
 
         // Position all pieces perfectly adjacent
         const centerGroup = makeGroup(0, 0, { x: 0, y: 0 });
         const rightGroup = makeGroup(1, 1, { x: 100, y: 0 });
         const bottomGroup = makeGroup(2, 2, { x: 0, y: 100 });
 
-        const state = makeGameState(
-            [center, rightPiece, bottomPiece],
-            [centerGroup, rightGroup, bottomGroup],
-        );
+        const state = makeGameState({ pieces: [center, rightPiece, bottomPiece], groups: [centerGroup, rightGroup, bottomGroup] });
 
         const candidates = detectMerges(0, state);
 
@@ -429,7 +400,7 @@ describe('detectMerges', () => {
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 108, y: -5 });
 
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
         const candidates = detectMerges(0, state);
 
         expect(candidates).toHaveLength(1);

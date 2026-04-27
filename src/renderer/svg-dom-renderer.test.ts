@@ -4,56 +4,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SvgDomRenderer } from './svg-dom-renderer.js';
-import type { GameState, Piece, PieceGroup } from '../model/types.js';
-
-/** Create a simple rectangular piece (no Bézier curves). */
-function makePiece(
-    id: number,
-    width: number,
-    height: number,
-    col: number,
-    row: number,
-): Piece {
-    return {
-        id,
-        edges: [
-            {
-                id: id * 4,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: `L ${width} 0`,
-                start: { x: 0, y: 0 },
-                end: { x: width, y: 0 },
-            },
-            {
-                id: id * 4 + 1,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: `L ${width} ${height}`,
-                start: { x: width, y: 0 },
-                end: { x: width, y: height },
-            },
-            {
-                id: id * 4 + 2,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: `L 0 ${height}`,
-                start: { x: width, y: height },
-                end: { x: 0, y: height },
-            },
-            {
-                id: id * 4 + 3,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: 'L 0 0',
-                start: { x: 0, y: height },
-                end: { x: 0, y: 0 },
-            },
-        ],
-        shape: `M 0 0 L ${width} 0 L ${width} ${height} L 0 ${height} Z`,
-        imageOffset: { x: -col * width, y: -row * height },
-    };
-}
+import type { GameState, PieceGroup } from '../model/types.js';
+import { makeRectPiece } from '../test-helpers/fixtures.js';
 
 function makeGroup(id: number, pieceIds: number[], x = 0, y = 0): PieceGroup {
     return {
@@ -70,10 +22,10 @@ function make2x2State(): GameState {
 
     return {
         pieces: [
-            makePiece(0, pw, ph, 0, 0),
-            makePiece(1, pw, ph, 1, 0),
-            makePiece(2, pw, ph, 0, 1),
-            makePiece(3, pw, ph, 1, 1),
+            makeRectPiece({ id: 0, width: pw, height: ph, col: 0, row: 0 }),
+            makeRectPiece({ id: 1, width: pw, height: ph, col: 1, row: 0 }),
+            makeRectPiece({ id: 2, width: pw, height: ph, col: 0, row: 1 }),
+            makeRectPiece({ id: 3, width: pw, height: ph, col: 1, row: 1 }),
         ],
         groups: [
             makeGroup(0, [0], 50, 50),
