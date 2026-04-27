@@ -7,29 +7,23 @@
  * Disabled by default. Users can enable it in the info modal.
  */
 
+import { createBooleanPreference } from './preference-store.js';
+
 /** localStorage key for the offset drag preference. */
 export const OFFSET_DRAG_KEY = 'puzzle-offset-drag';
+
+const store = createBooleanPreference({
+    key: OFFSET_DRAG_KEY,
+    defaultValue: false,
+});
 
 /**
  * Load the offset drag preference from localStorage.
  * Returns false (disabled) if nothing is saved.
  */
-export function loadOffsetDragPreference(): boolean {
-    try {
-        const raw = localStorage.getItem(OFFSET_DRAG_KEY);
-        if (raw === null) {
-            return false; // disabled by default
-        }
-
-        return raw !== 'false';
-    } catch {
-        return false;
-    }
-}
+export const loadOffsetDragPreference = store.load;
 
 /**
  * Save the offset drag preference to localStorage.
  */
-export function saveOffsetDragPreference(enabled: boolean): void {
-    localStorage.setItem(OFFSET_DRAG_KEY, String(enabled));
-}
+export const saveOffsetDragPreference = store.save;
