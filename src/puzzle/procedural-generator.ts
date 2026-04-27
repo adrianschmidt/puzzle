@@ -39,25 +39,6 @@ const Dir = {
 type Dir = (typeof Dir)[keyof typeof Dir];
 
 /**
- * Parameters controlling the shape of a single tab/blank.
- * Generated per shared internal edge by the PRNG.
- */
-export interface TabParams {
-    /** Whether the "first" side of the shared edge gets a tab (true) or blank (false). */
-    isTab: boolean;
-    /** Bump height as a fraction of edge length. Range: [0.14, 0.36]. */
-    heightFraction: number;
-    /** Neck width as a fraction of edge length. Range: [0.04, 0.10]. */
-    neckFraction: number;
-    /** Tab head width as a fraction of edge length. Range: [0.16, 0.28]. */
-    headWidthFraction: number;
-    /** Tab centre offset along the edge, 0 = dead centre. Range: [-0.18, 0.18]. */
-    centreOffset: number;
-    /** Asymmetry: slight left/right skew of the tab head. Range: [-0.04, 0.04]. */
-    skew: number;
-}
-
-/**
  * A series of Bézier curve segments represented as points.
  * Each segment has: startPoint, controlPoint1, controlPoint2, endPoint.
  * For N segments, we store: [start, cp1, cp2, end, cp1, cp2, end, ...]
@@ -98,9 +79,10 @@ export function generateProceduralPuzzle(
     const pieceWidth = imageSize.width / cols;
     const pieceHeight = imageSize.height / rows;
 
-    // Generate unique tab parameters for each shared internal edge
-    const horizontalParams = createParamsMap(cols, rows - 1, random); // between rows
-    const verticalParams = createParamsMap(cols - 1, rows, random); // between cols
+    // Decide tab vs blank for each shared internal edge.
+    // Each entry: true = first side gets a tab, false = first side gets a blank.
+    const horizontalIsTab = createIsTabMap(cols, rows - 1, random); // between rows
+    const verticalIsTab = createIsTabMap(cols - 1, rows, random); // between cols
 
     // Generate shared edge paths ONCE for each internal edge
     const sharedPaths = generateAllSharedEdgePaths(
@@ -108,8 +90,8 @@ export function generateProceduralPuzzle(
         rows,
         pieceWidth,
         pieceHeight,
-        horizontalParams,
-        verticalParams,
+        horizontalIsTab,
+        verticalIsTab,
         random,
     );
 
@@ -168,8 +150,6 @@ export function generateProceduralPuzzle(
                         cols,
                         pieceWidth,
                         pieceHeight,
-                        horizontalParams,
-                        verticalParams,
                         edgeIdMap,
                         sharedPaths,
                     }),
@@ -204,8 +184,8 @@ function generateAllSharedEdgePaths(
     rows: number,
     pieceWidth: number,
     pieceHeight: number,
-    horizontalParams: TabParams[][],
-    verticalParams: TabParams[][],
+    horizontalIsTab: boolean[][],
+    verticalIsTab: boolean[][],
     random: () => number,
 ): SharedEdgePaths {
     // Horizontal edges (between row and row+1)
@@ -214,7 +194,6 @@ function generateAllSharedEdgePaths(
     for (let row = 0; row < rows - 1; row++) {
         horizontal[row] = [];
         for (let col = 0; col < cols; col++) {
-            const params = horizontalParams[row][col];
             // Bottom edge of piece at (row, col): goes from (w, h) to (0, h)
             // Start and end in piece-local coordinates
             const start: Point = { x: pieceWidth, y: pieceHeight };
@@ -223,8 +202,7 @@ function generateAllSharedEdgePaths(
             horizontal[row][col] = generateSharedEdgePath(
                 start,
                 end,
-                params.isTab, // first side uses isTab directly
-                params,
+                horizontalIsTab[row][col],
                 random,
             );
         }
@@ -236,7 +214,6 @@ function generateAllSharedEdgePaths(
     for (let row = 0; row < rows; row++) {
         vertical[row] = [];
         for (let col = 0; col < cols - 1; col++) {
-            const params = verticalParams[row][col];
             // Right edge of piece at (row, col): goes from (w, 0) to (w, h)
             const start: Point = { x: pieceWidth, y: 0 };
             const end: Point = { x: pieceWidth, y: pieceHeight };
@@ -244,8 +221,7 @@ function generateAllSharedEdgePaths(
             vertical[row][col] = generateSharedEdgePath(
                 start,
                 end,
-                params.isTab, // first side uses isTab directly
-                params,
+                verticalIsTab[row][col],
                 random,
             );
         }
@@ -270,7 +246,6 @@ function generateAllSharedEdgePaths(
  * @param start - Start point of the edge (in piece-local coordinates)
  * @param end - End point of the edge (in piece-local coordinates)
  * @param isTab - Whether this side gets a tab (true) or blank (false)
- * @param params - Shape parameters for the tab/blank
  * @param random - Seeded PRNG function for consistent randomization
  * @returns Array of points representing Bézier curve segments
  */
@@ -278,7 +253,6 @@ function generateSharedEdgePath(
     start: Point,
     end: Point,
     isTab: boolean,
-    _params: TabParams,
     random: () => number,
 ): BezierPath {
     // Edge vectors
@@ -521,8 +495,6 @@ interface BuildEdgeParams {
     cols: number;
     pieceWidth: number;
     pieceHeight: number;
-    horizontalParams: TabParams[][];
-    verticalParams: TabParams[][];
     edgeIdMap: number[][][];
     sharedPaths: SharedEdgePaths;
 }
@@ -537,8 +509,6 @@ function buildEdge(params: BuildEdgeParams): Edge {
         cols,
         pieceWidth,
         pieceHeight,
-        horizontalParams,
-        verticalParams,
         edgeIdMap,
         sharedPaths,
     } = params;
@@ -569,8 +539,6 @@ function buildEdge(params: BuildEdgeParams): Edge {
             end,
             pieceWidth,
             pieceHeight,
-            horizontalParams,
-            verticalParams,
             sharedPaths,
         );
     }
@@ -590,8 +558,6 @@ function buildSharedEdgePath(
     end: Point,
     pieceWidth: number,
     pieceHeight: number,
-    _horizontalParams: TabParams[][],
-    _verticalParams: TabParams[][],
     sharedPaths: SharedEdgePaths,
 ): string {
     let storedPath: BezierPath;
@@ -726,30 +692,17 @@ function getMatePosition(
 }
 
 /**
- * Create a map of randomized TabParams for shared edges.
+ * Build a 2D map of isTab flags (one per shared internal edge).
+ * true = first side gets a tab, false = first side gets a blank.
  */
-function createParamsMap(
+function createIsTabMap(
     width: number,
     height: number,
     random: () => number,
-): TabParams[][] {
+): boolean[][] {
     return Array.from({ length: height }, () =>
-        Array.from({ length: width }, () => randomTabParams(random)),
+        Array.from({ length: width }, () => random() < 0.5),
     );
-}
-
-/**
- * Generate random tab parameters within natural-looking ranges.
- */
-export function randomTabParams(random: () => number): TabParams {
-    return {
-        isTab: random() < 0.5,
-        heightFraction: lerp(0.14, 0.36, random()),
-        neckFraction: lerp(0.04, 0.10, random()),
-        headWidthFraction: lerp(0.16, 0.28, random()),
-        centreOffset: lerp(-0.18, 0.18, random()),
-        skew: lerp(-0.04, 0.04, random()),
-    };
 }
 
 function lerp(a: number, b: number, t: number): number {
