@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
     createIndexedPreferenceStore,
     createBooleanPreference,
+    createJsonPreference,
 } from './preference-store.js';
 
 describe('createIndexedPreferenceStore', () => {
@@ -88,5 +89,61 @@ describe('createBooleanPreference', () => {
         const store = createBooleanPreference({ key: KEY, defaultValue: true });
         localStorage.setItem(KEY, 'garbage');
         expect(store.load()).toBe(false);
+    });
+});
+
+describe('createJsonPreference', () => {
+    const KEY = 'test-json-pref';
+
+    interface Sample {
+        n: number;
+        flag: boolean;
+    }
+
+    function parseSample(raw: unknown): Sample | undefined {
+        if (typeof raw !== 'object' || raw === null || !('n' in raw)) {
+            return undefined;
+        }
+        const r = raw as Record<string, unknown>;
+        return { n: Number(r.n), flag: Boolean(r.flag) };
+    }
+
+    function makeStore() {
+        return createJsonPreference<Sample>({ key: KEY, parse: parseSample });
+    }
+
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('returns undefined when nothing is saved', () => {
+        expect(makeStore().load()).toBeUndefined();
+    });
+
+    it('saves and loads a value', () => {
+        const store = makeStore();
+        store.save({ n: 7, flag: true });
+        expect(store.load()).toEqual({ n: 7, flag: true });
+    });
+
+    it('returns undefined for non-JSON saved values', () => {
+        localStorage.setItem(KEY, 'not-json');
+        expect(makeStore().load()).toBeUndefined();
+    });
+
+    it('returns undefined when the parser rejects the value', () => {
+        localStorage.setItem(KEY, JSON.stringify({ unrelated: true }));
+        expect(makeStore().load()).toBeUndefined();
+    });
+
+    it('returns undefined when the parser throws', () => {
+        const store = createJsonPreference<Sample>({
+            key: KEY,
+            parse: () => {
+                throw new Error('boom');
+            },
+        });
+        localStorage.setItem(KEY, JSON.stringify({ n: 1 }));
+        expect(store.load()).toBeUndefined();
     });
 });
