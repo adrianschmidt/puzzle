@@ -1,11 +1,10 @@
 /**
  * Generic helpers for persisting small preferences in `localStorage`.
  *
- * Several modules (background colour, merge tolerance, offset drag, …)
- * had near-identical preset+localStorage code, with the same
- * `null`/`NaN`/range/try-catch handling repeated by hand. These
- * factories centralise that logic so each callsite only declares its
- * key, presets, and default.
+ * Several modules had near-identical preset+localStorage code, with
+ * the same `null`/`NaN`/range/JSON-parse/try-catch handling repeated
+ * by hand. These factories centralise that logic so each callsite
+ * only declares its key, the shape of the value, and a default.
  */
 
 /**
@@ -58,6 +57,48 @@ export function createIndexedPreferenceStore<T>(opts: {
                 return index;
             } catch {
                 return defaultIndex;
+            }
+        },
+    };
+}
+
+/**
+ * A store for a JSON-object preference: a typed value persisted as
+ * serialised JSON. Missing, unreadable, or rejected-by-`parse` values
+ * load as `undefined` (callers decide what to do with that — usually
+ * fall back to a hard-coded default).
+ */
+export interface JsonPreferenceStore<T> {
+    save: (value: T) => void;
+    load: () => T | undefined;
+}
+
+/**
+ * Build a JSON-object preference backed by `localStorage`.
+ *
+ * The `parse` callback validates and coerces the parsed JSON into the
+ * target type. Returning `undefined` rejects the saved value.
+ */
+export function createJsonPreference<T>(opts: {
+    key: string;
+    parse: (raw: unknown) => T | undefined;
+}): JsonPreferenceStore<T> {
+    const { key, parse } = opts;
+
+    return {
+        save(value) {
+            localStorage.setItem(key, JSON.stringify(value));
+        },
+        load() {
+            try {
+                const raw = localStorage.getItem(key);
+                if (raw === null) {
+                    return undefined;
+                }
+
+                return parse(JSON.parse(raw) as unknown);
+            } catch {
+                return undefined;
             }
         },
     };
