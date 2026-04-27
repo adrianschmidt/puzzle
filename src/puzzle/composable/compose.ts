@@ -25,6 +25,13 @@ import { clampTabToCurve } from './curve-clamp.js';
 // ---------------------------------------------------------------------------
 
 /**
+ * Canonical default for `disableTabs` across the composable pipeline.
+ * Consumed by the topology generator, share-link codec, and UI to keep
+ * the encode/decode/generate boundary in agreement (#285).
+ */
+export const DEFAULT_DISABLE_TABS = false;
+
+/**
  * Compose a puzzle from piece definitions and a tab template.
  *
  * @param pieceDefs - Abstract piece definitions from the grid layer
@@ -46,7 +53,7 @@ export function composePuzzle(
     random: () => number,
     options?: ComposeOptions,
 ): Piece[] {
-    const disableTabs = options?.disableTabs ?? false;
+    const disableTabs = options?.disableTabs ?? DEFAULT_DISABLE_TABS;
     // Step 1: Generate tab shapes for all shared edges.
     // Store in normalized space by shared edge key.
     // Skip entirely when tabs are disabled.

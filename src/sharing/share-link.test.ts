@@ -9,6 +9,10 @@ import {
     type SharePayload,
 } from './share-link.js';
 import type { GameState } from '../model/types.js';
+import { DEFAULT_DISABLE_TABS, composePuzzle } from '../puzzle/composable/compose.js';
+import { generateTopologyPuzzle } from '../puzzle/topology/generator.js';
+import { classicTabTemplate } from '../puzzle/composable/tab-shapes.js';
+import type { PieceDefinition } from '../puzzle/composable/types.js';
 
 describe('share-link codec — minimal round-trip', () => {
     it('round-trips a minimal starting payload (no attribution, no progress)', () => {
@@ -297,7 +301,9 @@ describe('gameStateToPayload', () => {
             composableConfig: {},
         });
         const payload = gameStateToPayload(state, { includeProgress: false });
-        expect(payload.cf).toEqual({ ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5, dt: true });
+        expect(payload.cf).toEqual({
+            ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5, dt: DEFAULT_DISABLE_TABS,
+        });
     });
 
     it('captures rotation fidelity in quarter-turn mode', () => {
@@ -352,5 +358,96 @@ describe('hasShareableProgress', () => {
             ],
         });
         expect(hasShareableProgress(state)).toBe(true);
+    });
+});
+
+// Regression test for #285: every consumer that resolves an undefined
+// `disableTabs` must produce the same value, otherwise sharing/loading
+// drifts the flag silently.
+describe('disableTabs default agreement (#285)', () => {
+    function seededRandom(seed: number): () => number {
+        let s = seed;
+        return () => {
+            s = (s * 1664525 + 1013904223) & 0x7fffffff;
+            return s / 0x7fffffff;
+        };
+    }
+
+    it('canonical default is false (matches the UI checkbox)', () => {
+        expect(DEFAULT_DISABLE_TABS).toBe(false);
+    });
+
+    it('share-link encodes an undefined disableTabs as the canonical default', () => {
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {
+                horizontalAmplitude: 0.1, horizontalFrequency: 1,
+                verticalAmplitude: 0.1, verticalFrequency: 1,
+                // disableTabs intentionally left undefined
+            },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.cf?.dt).toBe(DEFAULT_DISABLE_TABS);
+    });
+
+    it('topology generator treats undefined disableTabs identically to the canonical default', () => {
+        const args = {
+            cols: 3, rows: 3,
+            imageSize: { width: 90, height: 90 },
+            shared: { horizontalAmplitude: 0.1, horizontalFrequency: 1,
+                      verticalAmplitude: 0.1, verticalFrequency: 1 },
+        };
+        const fromUndefined = generateTopologyPuzzle(
+            args.cols, args.rows, args.imageSize, seededRandom(42),
+            { ...args.shared },
+        );
+        const fromExplicit = generateTopologyPuzzle(
+            args.cols, args.rows, args.imageSize, seededRandom(42),
+            { ...args.shared, disableTabs: DEFAULT_DISABLE_TABS },
+        );
+        expect(fromUndefined.map((p) => p.shape))
+            .toEqual(fromExplicit.map((p) => p.shape));
+    });
+
+    it('compose treats undefined disableTabs identically to the canonical default', () => {
+        const pieceDefs: PieceDefinition[] = [
+            {
+                id: 0,
+                imageOffset: { x: 0, y: 0 },
+                edges: [
+                    { id: 0, start: { x: 0, y: 0 }, end: { x: 10, y: 0 },
+                      mateEdgeId: -1, matePieceId: -1 },
+                    { id: 1, start: { x: 10, y: 0 }, end: { x: 10, y: 10 },
+                      mateEdgeId: 4, matePieceId: 1, sharedEdgeKey: 'a', isFirstSide: true },
+                    { id: 2, start: { x: 10, y: 10 }, end: { x: 0, y: 10 },
+                      mateEdgeId: -1, matePieceId: -1 },
+                    { id: 3, start: { x: 0, y: 10 }, end: { x: 0, y: 0 },
+                      mateEdgeId: -1, matePieceId: -1 },
+                ],
+            },
+            {
+                id: 1,
+                imageOffset: { x: 10, y: 0 },
+                edges: [
+                    { id: 4, start: { x: 0, y: 0 }, end: { x: 0, y: 10 },
+                      mateEdgeId: 1, matePieceId: 0, sharedEdgeKey: 'a', isFirstSide: false },
+                    { id: 5, start: { x: 0, y: 10 }, end: { x: 10, y: 10 },
+                      mateEdgeId: -1, matePieceId: -1 },
+                    { id: 6, start: { x: 10, y: 10 }, end: { x: 10, y: 0 },
+                      mateEdgeId: -1, matePieceId: -1 },
+                    { id: 7, start: { x: 10, y: 0 }, end: { x: 0, y: 0 },
+                      mateEdgeId: -1, matePieceId: -1 },
+                ],
+            },
+        ];
+        const fromUndefined = composePuzzle(
+            pieceDefs, classicTabTemplate, seededRandom(42),
+        );
+        const fromExplicit = composePuzzle(
+            pieceDefs, classicTabTemplate, seededRandom(42),
+            { disableTabs: DEFAULT_DISABLE_TABS },
+        );
+        expect(fromUndefined.map((p) => p.shape))
+            .toEqual(fromExplicit.map((p) => p.shape));
     });
 });
