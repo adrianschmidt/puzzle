@@ -47,10 +47,12 @@ import {
     saveComposableConfigPreference,
     loadFractalConfigPreference,
     saveFractalConfigPreference,
-    loadImageSourcePreference,
-    saveImageSourcePreference,
 } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
+import {
+    loadImageSourcePreference,
+    saveImageSourcePreference,
+} from './game/image-source.js';
 import {
     loadImageCategoryPreference,
     saveImageCategoryPreference,
