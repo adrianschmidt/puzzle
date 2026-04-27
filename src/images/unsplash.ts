@@ -10,9 +10,6 @@
 /** The API endpoint for fetching a random photo. */
 export const UNSPLASH_RANDOM_URL = 'https://api.unsplash.com/photos/random';
 
-/** Minimum image dimension to ensure quality. */
-export const MIN_IMAGE_DIMENSION = 800;
-
 /**
  * Relevant fields from the Unsplash random photo response.
  * Only the fields we actually use — the full API response is much larger.
