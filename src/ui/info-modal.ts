@@ -51,7 +51,8 @@ function buildReproParams(state: GameState): Record<string, unknown> {
     if (state.cutStyle) params.cutStyle = state.cutStyle;
     if (state.gridSize) params.gridSize = state.gridSize;
     if (state.rotationMode) params.rotationMode = state.rotationMode;
-    if (state.generatorConfig) params.generatorConfig = state.generatorConfig;
+    if (state.composableConfig) params.composableConfig = state.composableConfig;
+    if (state.fractalConfig) params.fractalConfig = state.fractalConfig;
     return params;
 }
 

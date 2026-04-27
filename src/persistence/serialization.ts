@@ -18,7 +18,7 @@ import { getImageDimensions } from '../renderer/svg-dom-utils.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 7;
+export const STATE_VERSION = 8;
 
 /**
  * Supported schema versions.
@@ -30,8 +30,9 @@ export const STATE_VERSION = 7;
  * - v5: adds cutStyle ('classic' | 'fractal')
  * - v6: adds rotation (0-3 quarter-turns) per group
  * - v7: adds generatorConfig (fractal/composable params) for reproducibility
+ * - v8: replaces opaque generatorConfig with typed composableConfig / fractalConfig
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
@@ -60,7 +61,20 @@ export interface SerializedGameState {
      * cut style.
      */
     rotationMode?: 'none' | 'quarter-turn';
-    /** Generator config that produced this puzzle. v7+. */
+    /**
+     * Composable-cut config (v8+; only set when cutStyle === 'composable').
+     */
+    composableConfig?: GameState['composableConfig'];
+    /**
+     * Fractal-cut config (v8+; only set when cutStyle === 'fractal').
+     */
+    fractalConfig?: GameState['fractalConfig'];
+    /**
+     * v7 legacy field: opaque generator config. Migrated to the typed
+     * `composableConfig` / `fractalConfig` fields based on `cutStyle` on
+     * deserialization. v7 saves are still produced in the wild, so keep
+     * the field around for input validation.
+     */
     generatorConfig?: Record<string, unknown>;
 }
 
@@ -96,8 +110,12 @@ export function serializeState(state: GameState): SerializedGameState {
         serialized.rotationMode = state.rotationMode;
     }
 
-    if (state.generatorConfig) {
-        serialized.generatorConfig = state.generatorConfig;
+    if (state.composableConfig) {
+        serialized.composableConfig = state.composableConfig;
+    }
+
+    if (state.fractalConfig) {
+        serialized.fractalConfig = state.fractalConfig;
     }
 
     return serialized;
@@ -150,11 +168,79 @@ export function deserializeState(data: SerializedGameState): GameState {
 
     state.rotationMode = resolveRotationMode(data, groups);
 
-    if (data.generatorConfig) {
-        state.generatorConfig = data.generatorConfig;
+    const composableConfig = resolveComposableConfig(data);
+    if (composableConfig) {
+        state.composableConfig = composableConfig;
+    }
+
+    const fractalConfig = resolveFractalConfig(data);
+    if (fractalConfig) {
+        state.fractalConfig = fractalConfig;
     }
 
     return state;
+}
+
+/**
+ * Resolve the composable config from a serialized state.
+ *
+ * v8+ stores it directly. v7 saves stored an opaque `generatorConfig` whose
+ * shape depends on `cutStyle`; for composable puzzles, migrate those fields
+ * into the typed shape.
+ */
+function resolveComposableConfig(
+    data: SerializedGameState,
+): GameState['composableConfig'] | undefined {
+    if (data.composableConfig) {
+        return data.composableConfig;
+    }
+
+    if (data.cutStyle !== 'composable' || !data.generatorConfig) {
+        return undefined;
+    }
+
+    const gc = data.generatorConfig;
+    const config: NonNullable<GameState['composableConfig']> = {};
+    if (typeof gc.horizontalAmplitude === 'number') {
+        config.horizontalAmplitude = gc.horizontalAmplitude;
+    }
+    if (typeof gc.horizontalFrequency === 'number') {
+        config.horizontalFrequency = gc.horizontalFrequency;
+    }
+    if (typeof gc.verticalAmplitude === 'number') {
+        config.verticalAmplitude = gc.verticalAmplitude;
+    }
+    if (typeof gc.verticalFrequency === 'number') {
+        config.verticalFrequency = gc.verticalFrequency;
+    }
+    if (typeof gc.disableTabs === 'boolean') {
+        config.disableTabs = gc.disableTabs;
+    }
+    return config;
+}
+
+/**
+ * Resolve the fractal config from a serialized state.
+ *
+ * v8+ stores it directly. v7 saves stored an opaque `generatorConfig`;
+ * for fractal puzzles, migrate the `borderless` flag into the typed shape.
+ */
+function resolveFractalConfig(
+    data: SerializedGameState,
+): GameState['fractalConfig'] | undefined {
+    if (data.fractalConfig) {
+        return data.fractalConfig;
+    }
+
+    if (data.cutStyle !== 'fractal' || !data.generatorConfig) {
+        return undefined;
+    }
+
+    const gc = data.generatorConfig;
+    if (typeof gc.borderless !== 'boolean') {
+        return {};
+    }
+    return { borderless: gc.borderless };
 }
 
 /**

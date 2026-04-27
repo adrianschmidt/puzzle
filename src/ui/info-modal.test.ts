@@ -17,7 +17,7 @@ function makeState(overrides?: Partial<GameState>): GameState {
         seed: 12345,
         cutStyle: 'fractal',
         rotationMode: 'quarter-turn',
-        generatorConfig: { borderless: true },
+        fractalConfig: { borderless: true },
         ...overrides,
     };
 }
@@ -62,7 +62,7 @@ describe('createInfoModal', () => {
             cutStyle: 'fractal',
             gridSize: { cols: 8, rows: 6 },
             rotationMode: 'quarter-turn',
-            generatorConfig: { borderless: true },
+            fractalConfig: { borderless: true },
         });
     });
 
@@ -80,7 +80,7 @@ describe('createInfoModal', () => {
             container,
             getState: () =>
                 makeState({
-                    generatorConfig: undefined,
+                    fractalConfig: undefined,
                     rotationMode: undefined,
                 }),
         });
@@ -89,7 +89,8 @@ describe('createInfoModal', () => {
             '[data-testid="repro-params"]',
         );
         const parsed = JSON.parse(repro!.textContent ?? '{}');
-        expect(parsed.generatorConfig).toBeUndefined();
+        expect(parsed.fractalConfig).toBeUndefined();
+        expect(parsed.composableConfig).toBeUndefined();
         expect(parsed.rotationMode).toBeUndefined();
         expect(parsed.seed).toBe(12345);
     });

@@ -116,25 +116,48 @@ describe('serializeState', () => {
         expect(serialized.attribution).toBeUndefined();
     });
 
-    it('includes generatorConfig when present', () => {
+    it('includes fractalConfig when present', () => {
         const state = makeGameState({
-            generatorConfig: { borderless: true },
+            cutStyle: 'fractal',
+            fractalConfig: { borderless: true },
         });
         const serialized = serializeState(state);
 
-        expect(serialized.generatorConfig).toEqual({ borderless: true });
+        expect(serialized.fractalConfig).toEqual({ borderless: true });
+        expect(serialized.composableConfig).toBeUndefined();
     });
 
-    it('omits generatorConfig when not present', () => {
+    it('includes composableConfig when present', () => {
+        const state = makeGameState({
+            cutStyle: 'composable',
+            composableConfig: {
+                horizontalAmplitude: 0.15,
+                verticalFrequency: 2,
+                disableTabs: false,
+            },
+        });
+        const serialized = serializeState(state);
+
+        expect(serialized.composableConfig).toEqual({
+            horizontalAmplitude: 0.15,
+            verticalFrequency: 2,
+            disableTabs: false,
+        });
+        expect(serialized.fractalConfig).toBeUndefined();
+    });
+
+    it('omits both cut-style configs when not present', () => {
         const state = makeGameState();
         const serialized = serializeState(state);
 
-        expect(serialized.generatorConfig).toBeUndefined();
+        expect(serialized.composableConfig).toBeUndefined();
+        expect(serialized.fractalConfig).toBeUndefined();
     });
 
-    it('round-trips generatorConfig through serialization', () => {
+    it('round-trips composableConfig through serialization', () => {
         const state = makeGameState({
-            generatorConfig: {
+            cutStyle: 'composable',
+            composableConfig: {
                 horizontalAmplitude: 0.15,
                 verticalFrequency: 2,
                 disableTabs: false,
@@ -142,11 +165,21 @@ describe('serializeState', () => {
         });
         const restored = deserializeState(serializeState(state));
 
-        expect(restored.generatorConfig).toEqual({
+        expect(restored.composableConfig).toEqual({
             horizontalAmplitude: 0.15,
             verticalFrequency: 2,
             disableTabs: false,
         });
+    });
+
+    it('round-trips fractalConfig through serialization', () => {
+        const state = makeGameState({
+            cutStyle: 'fractal',
+            fractalConfig: { borderless: true },
+        });
+        const restored = deserializeState(serializeState(state));
+
+        expect(restored.fractalConfig).toEqual({ borderless: true });
     });
 });
 
@@ -245,6 +278,83 @@ describe('deserializeState', () => {
         const restored = deserializeState(v2Serialized);
 
         expect(restored.gridSize).toEqual({ cols: 8, rows: 6 });
+    });
+
+    it('migrates v7 fractal generatorConfig to fractalConfig', () => {
+        const v7Serialized: SerializedGameState = {
+            version: 7,
+            pieces: [makeRectPiece({ id: 0 })],
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
+            ],
+            imageUrl: 'v7-fractal.jpg',
+            imageSize: { width: 800, height: 600 },
+            gridSize: { cols: 8, rows: 6 },
+            cutStyle: 'fractal',
+            rotationMode: 'quarter-turn',
+            completed: false,
+            generatorConfig: { borderless: true },
+        };
+
+        const restored = deserializeState(v7Serialized);
+
+        expect(restored.fractalConfig).toEqual({ borderless: true });
+        expect(restored.composableConfig).toBeUndefined();
+    });
+
+    it('migrates v7 composable generatorConfig to composableConfig', () => {
+        const v7Serialized: SerializedGameState = {
+            version: 7,
+            pieces: [makeRectPiece({ id: 0 })],
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
+            ],
+            imageUrl: 'v7-composable.jpg',
+            imageSize: { width: 800, height: 600 },
+            gridSize: { cols: 8, rows: 6 },
+            cutStyle: 'composable',
+            rotationMode: 'none',
+            completed: false,
+            generatorConfig: {
+                horizontalAmplitude: 0.2,
+                horizontalFrequency: 1.5,
+                verticalAmplitude: 0.1,
+                verticalFrequency: 2,
+                disableTabs: true,
+            },
+        };
+
+        const restored = deserializeState(v7Serialized);
+
+        expect(restored.composableConfig).toEqual({
+            horizontalAmplitude: 0.2,
+            horizontalFrequency: 1.5,
+            verticalAmplitude: 0.1,
+            verticalFrequency: 2,
+            disableTabs: true,
+        });
+        expect(restored.fractalConfig).toBeUndefined();
+    });
+
+    it('ignores v7 generatorConfig for classic puzzles (no typed shape)', () => {
+        const v7Serialized: SerializedGameState = {
+            version: 7,
+            pieces: [makeRectPiece({ id: 0 })],
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
+            ],
+            imageUrl: 'v7-classic.jpg',
+            imageSize: { width: 800, height: 600 },
+            gridSize: { cols: 8, rows: 6 },
+            cutStyle: 'classic',
+            completed: false,
+            generatorConfig: { borderless: true },
+        };
+
+        const restored = deserializeState(v7Serialized);
+
+        expect(restored.composableConfig).toBeUndefined();
+        expect(restored.fractalConfig).toBeUndefined();
     });
 
     it('defaults rotation to 0 when missing (v5 → v6 migration)', () => {
