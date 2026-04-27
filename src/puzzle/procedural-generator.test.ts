@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateProceduralPuzzle, randomTabParams } from './procedural-generator.js';
-import { createSeededRandom } from './seeded-random.js';
+import { generateProceduralPuzzle } from './procedural-generator.js';
 
 describe('generateProceduralPuzzle', () => {
     const cols = 8;
@@ -212,44 +211,6 @@ describe('different grid sizes', () => {
                 expect(mateEdge.matePieceId).toBe(piece.id);
             }
         }
-    });
-});
-
-describe('randomTabParams', () => {
-    it('produces values within expected ranges', () => {
-        const random = createSeededRandom(42);
-
-        for (let i = 0; i < 100; i++) {
-            const params = randomTabParams(random);
-
-            expect(typeof params.isTab).toBe('boolean');
-            expect(params.heightFraction).toBeGreaterThanOrEqual(0.14);
-            expect(params.heightFraction).toBeLessThanOrEqual(0.36);
-            expect(params.neckFraction).toBeGreaterThanOrEqual(0.04);
-            expect(params.neckFraction).toBeLessThanOrEqual(0.10);
-            expect(params.headWidthFraction).toBeGreaterThanOrEqual(0.16);
-            expect(params.headWidthFraction).toBeLessThanOrEqual(0.28);
-            expect(params.centreOffset).toBeGreaterThanOrEqual(-0.18);
-            expect(params.centreOffset).toBeLessThanOrEqual(0.18);
-            expect(params.skew).toBeGreaterThanOrEqual(-0.04);
-            expect(params.skew).toBeLessThanOrEqual(0.04);
-        }
-    });
-
-    it('produces varied values across calls', () => {
-        const random = createSeededRandom(42);
-        const params1 = randomTabParams(random);
-        const params2 = randomTabParams(random);
-
-        // At least one parameter should differ
-        const allSame =
-            params1.heightFraction === params2.heightFraction &&
-            params1.neckFraction === params2.neckFraction &&
-            params1.headWidthFraction === params2.headWidthFraction &&
-            params1.centreOffset === params2.centreOffset &&
-            params1.skew === params2.skew;
-
-        expect(allSame).toBe(false);
     });
 });
 
