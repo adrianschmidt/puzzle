@@ -1,9 +1,9 @@
 /**
  * Game initialization logic.
  *
- * Creates a new game state: generates pieces from the grid generator,
- * wraps each in its own single-piece group, and randomizes positions
- * within the viewport so all pieces are visible.
+ * Creates a new game state: generates pieces using the configured cut
+ * style's generator, wraps each in its own single-piece group, and
+ * randomizes positions within the viewport so all pieces are visible.
  */
 
 import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
