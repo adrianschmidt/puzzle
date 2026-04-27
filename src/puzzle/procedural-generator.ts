@@ -694,6 +694,13 @@ function getMatePosition(
 /**
  * Build a 2D map of isTab flags (one per shared internal edge).
  * true = first side gets a tab, false = first side gets a blank.
+ *
+ * Advances the seeded PRNG by 6 calls per edge: the historical
+ * randomTabParams() consumed 6 values (isTab + 5 shape fields that
+ * the rest of the generator never read). Existing share links store
+ * only the seed and re-run this generator, so the exact sequence of
+ * PRNG calls is part of the on-the-wire contract. The 5 reserved
+ * calls are also slots available for future per-edge shape randomness.
  */
 function createIsTabMap(
     width: number,
@@ -701,7 +708,11 @@ function createIsTabMap(
     random: () => number,
 ): boolean[][] {
     return Array.from({ length: height }, () =>
-        Array.from({ length: width }, () => random() < 0.5),
+        Array.from({ length: width }, () => {
+            const isTab = random() < 0.5;
+            random(); random(); random(); random(); random();
+            return isTab;
+        }),
     );
 }
 
