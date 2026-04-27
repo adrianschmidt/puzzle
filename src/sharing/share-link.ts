@@ -7,6 +7,7 @@
  */
 
 import type { GameState } from '../model/types.js';
+import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -155,7 +156,7 @@ export function gameStateToPayload(
             hf: c.horizontalFrequency ?? 1.5,
             va: c.verticalAmplitude ?? 0.15,
             vf: c.verticalFrequency ?? 1.5,
-            dt: c.disableTabs ?? true,
+            dt: c.disableTabs ?? DEFAULT_DISABLE_TABS,
         };
     }
 

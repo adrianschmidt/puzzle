@@ -11,6 +11,7 @@ import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
 import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
+import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
 
 /** Composable generator config passed through from sliders. */
 export interface ComposableSliderConfig {
@@ -383,7 +384,7 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
             horizontalFrequency: parseFloat(sliderInputs.get('horizontalFrequency')!.value),
             verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
             verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
-            disableTabs: disableTabsCheckbox?.checked ?? false,
+            disableTabs: disableTabsCheckbox?.checked ?? DEFAULT_DISABLE_TABS,
         };
     }
 
@@ -397,7 +398,7 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
 
     const disableTabsCheckbox = document.createElement('input');
     disableTabsCheckbox.type = 'checkbox';
-    disableTabsCheckbox.checked = saved?.disableTabs ?? false;
+    disableTabsCheckbox.checked = saved?.disableTabs ?? DEFAULT_DISABLE_TABS;
 
     checkboxRow.appendChild(checkboxLabel);
     checkboxRow.appendChild(disableTabsCheckbox);

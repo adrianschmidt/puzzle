@@ -21,7 +21,7 @@ import type { HalfEdge, Face } from './dcel.js';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
-import { composePuzzle } from '../composable/compose.js';
+import { composePuzzle, DEFAULT_DISABLE_TABS } from '../composable/compose.js';
 import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
 import type { CollisionOptions } from './tab-merge.js';
 import { resolveExcessIntersections } from './collision.js';
@@ -77,8 +77,7 @@ export function generateTopologyPuzzle(
     const hFreq = config?.horizontalFrequency ?? 1.5;
     const vAmp = config?.verticalAmplitude ?? 0.15;
     const vFreq = config?.verticalFrequency ?? 1.5;
-    // Tabs disabled by default until intersection reliability is resolved (#191)
-    const disableTabs = config?.disableTabs ?? true;
+    const disableTabs = config?.disableTabs ?? DEFAULT_DISABLE_TABS;
     const template = config?.tabTemplate ?? classicTabTemplate;
 
     const pieceWidth = imageSize.width / cols;
