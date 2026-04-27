@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
+import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import {
     mergeGroups,
     selectBestCandidate,
@@ -7,12 +7,9 @@ import {
 } from './group-merging.js';
 import type { MergeCandidate } from './merge-detection.js';
 import { getWorldPosition } from './merge-detection.js';
+import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
 // --- Test helpers ---
-
-function makePiece(id: number, edges: Edge[]): Piece {
-    return { id, edges, shape: '', imageOffset: { x: 0, y: 0 } };
-}
 
 function makeEdge(
     id: number,
@@ -33,13 +30,6 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
     };
 }
 
-function makeGameState(
-    pieces: Piece[],
-    groups: PieceGroup[],
-): GameState {
-    return { pieces, groups, imageUrl: 'test.jpg', imageSize: { width: 800, height: 600 }, gridSize: { cols: 8, rows: 6 }, completed: false };
-}
-
 /**
  * Create two pieces that share a vertical edge.
  *
@@ -56,19 +46,19 @@ function createAdjacentPiecePair(): {
     const rightEdge = makeEdge(0, { x: 100, y: 0 }, { x: 100, y: 100 }, 1, 1);
     const leftEdge = makeEdge(1, { x: 0, y: 100 }, { x: 0, y: 0 }, 0, 0);
 
-    const piece0 = makePiece(0, [
+    const piece0 = makePiece({ id: 0, edges: [
         makeEdge(10, { x: 0, y: 0 }, { x: 100, y: 0 }),     // top (border)
         rightEdge,                                             // right
         makeEdge(11, { x: 100, y: 100 }, { x: 0, y: 100 }), // bottom (border)
         makeEdge(12, { x: 0, y: 100 }, { x: 0, y: 0 }),     // left (border)
-    ]);
+    ] });
 
-    const piece1 = makePiece(1, [
+    const piece1 = makePiece({ id: 1, edges: [
         makeEdge(13, { x: 0, y: 0 }, { x: 100, y: 0 }),     // top (border)
         makeEdge(14, { x: 100, y: 0 }, { x: 100, y: 100 }), // right (border)
         makeEdge(15, { x: 100, y: 100 }, { x: 0, y: 100 }), // bottom (border)
         leftEdge,                                              // left
-    ]);
+    ] });
 
     return { piece0, piece1, rightEdge, leftEdge };
 }
@@ -97,26 +87,26 @@ function createThreePieceRow(): {
     const p1Right = makeEdge(2, { x: 100, y: 0 }, { x: 100, y: 100 }, 2, 3);
     const p2Left = makeEdge(3, { x: 0, y: 100 }, { x: 0, y: 0 }, 1, 2);
 
-    const piece0 = makePiece(0, [
+    const piece0 = makePiece({ id: 0, edges: [
         makeEdge(20, { x: 0, y: 0 }, { x: 100, y: 0 }),
         p0Right,
         makeEdge(21, { x: 100, y: 100 }, { x: 0, y: 100 }),
         makeEdge(22, { x: 0, y: 100 }, { x: 0, y: 0 }),
-    ]);
+    ] });
 
-    const piece1 = makePiece(1, [
+    const piece1 = makePiece({ id: 1, edges: [
         makeEdge(23, { x: 0, y: 0 }, { x: 100, y: 0 }),
         p1Right,
         makeEdge(24, { x: 100, y: 100 }, { x: 0, y: 100 }),
         p1Left,
-    ]);
+    ] });
 
-    const piece2 = makePiece(2, [
+    const piece2 = makePiece({ id: 2, edges: [
         makeEdge(25, { x: 0, y: 0 }, { x: 100, y: 0 }),
         makeEdge(26, { x: 100, y: 0 }, { x: 100, y: 100 }),
         makeEdge(27, { x: 100, y: 100 }, { x: 0, y: 100 }),
         p2Left,
-    ]);
+    ] });
 
     return {
         pieces: [piece0, piece1, piece2],
@@ -310,9 +300,9 @@ describe('selectBestCandidate', () => {
         return {
             movedGroup: makeGroup(0, 0, { x: 0, y: 0 }),
             targetGroup: makeGroup(1, 1, { x: 0, y: 0 }),
-            movedPiece: makePiece(0, []),
+            movedPiece: makePiece({ id: 0, edges: [] }),
             movedEdge: makeEdge(0, { x: 0, y: 0 }, { x: 0, y: 0 }),
-            targetPiece: makePiece(1, []),
+            targetPiece: makePiece({ id: 1, edges: [] }),
             targetEdge: makeEdge(1, { x: 0, y: 0 }, { x: 0, y: 0 }),
             snapDelta,
         };
@@ -365,7 +355,7 @@ describe('processDrop', () => {
         // Piece 0 at (0,0), piece 1 at (100,0) — perfectly adjacent
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 100, y: 0 });
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
 
         const result = processDrop(0, state);
 
@@ -382,7 +372,7 @@ describe('processDrop', () => {
 
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 100, y: 0 });
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
 
         processDrop(0, state);
 
@@ -396,7 +386,7 @@ describe('processDrop', () => {
 
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 500, y: 500 }); // too far
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
 
         const result = processDrop(0, state);
         expect(result).toBeNull();
@@ -405,10 +395,7 @@ describe('processDrop', () => {
 
     it('returns null for invalid group id', () => {
         const { piece0, piece1 } = createAdjacentPiecePair();
-        const state = makeGameState(
-            [piece0, piece1],
-            [makeGroup(0, 0, { x: 0, y: 0 }), makeGroup(1, 1, { x: 100, y: 0 })],
-        );
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [makeGroup(0, 0, { x: 0, y: 0 }), makeGroup(1, 1, { x: 100, y: 0 })] });
 
         const result = processDrop(999, state);
         expect(result).toBeNull();
@@ -420,7 +407,7 @@ describe('processDrop', () => {
         // Piece 1 is slightly off (5px right, 3px down) — within tolerance
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 105, y: 3 });
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
 
         processDrop(0, state);
 
@@ -442,7 +429,7 @@ describe('processDrop', () => {
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 100, y: 0 });
         const group2 = makeGroup(2, 2, { x: 200, y: 0 });
-        const state = makeGameState(pieces, [group0, group1, group2]);
+        const state = makeGameState({ pieces, groups: [group0, group1, group2] });
 
         // Drop group 1 (center) — should merge with both neighbors via cascade
         const result = processDrop(1, state);
@@ -460,7 +447,7 @@ describe('processDrop', () => {
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 100, y: 0 });
         const group2 = makeGroup(2, 2, { x: 200, y: 0 });
-        const state = makeGameState(pieces, [group0, group1, group2]);
+        const state = makeGameState({ pieces, groups: [group0, group1, group2] });
 
         processDrop(1, state);
 
@@ -490,7 +477,7 @@ describe('processDrop', () => {
             position: { x: 0, y: 0 },
             rotation: 0,
         };
-        const state = makeGameState([piece0, piece1], [group]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group] });
 
         const result = processDrop(0, state);
         expect(result).toBeNull();
@@ -512,7 +499,7 @@ describe('processDrop', () => {
         };
         const groupB = makeGroup(2, 2, { x: 200, y: 0 });
 
-        const state = makeGameState(pieces, [groupA, groupB]);
+        const state = makeGameState({ pieces, groups: [groupA, groupB] });
 
         // Drop group A — piece 1 (in group A) is adjacent to piece 2 (group B)
         const result = processDrop(0, state);
@@ -528,7 +515,7 @@ describe('processDrop', () => {
 
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1 = makeGroup(1, 1, { x: 100, y: 0 });
-        const state = makeGameState([piece0, piece1], [group0, group1]);
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [group0, group1] });
 
         const result = processDrop(0, state);
 

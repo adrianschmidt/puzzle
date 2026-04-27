@@ -3,37 +3,20 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { GameState, Piece, PieceGroup } from '../model/types.js';
+import type { GameState, PieceGroup } from '../model/types.js';
 import {
     serializeState,
     deserializeState,
     STATE_VERSION,
     type SerializedGameState,
 } from './serialization.js';
+import {
+    makeRectPiece,
+    makeGameState as makeBaseGameState,
+} from '../test-helpers/fixtures.js';
 
-/**
- * Create a minimal valid piece for testing with 4 edges forming a 100×100 square.
- *
- * Image offsets simulate a grid: piece 0 at (0,0), piece 1 at (-100,0), etc.
- * This lets getImageDimensions derive a meaningful size from the pieces.
- */
-function makePiece(id: number): Piece {
-    return {
-        id,
-        edges: [
-            { id: id * 10, mateEdgeId: -1, matePieceId: -1, path: 'L100,0', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
-            { id: id * 10 + 1, mateEdgeId: -1, matePieceId: -1, path: 'L100,100', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
-            { id: id * 10 + 2, mateEdgeId: -1, matePieceId: -1, path: 'L0,100', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
-            { id: id * 10 + 3, mateEdgeId: -1, matePieceId: -1, path: 'L0,0', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
-        ],
-        shape: 'M0,0 L100,0 L100,100 L0,100 Z',
-        imageOffset: { x: id === 0 ? 0 : -id * 100, y: 0 },
-    };
-}
-
-/** Create a minimal valid game state for testing. */
 function makeGameState(overrides?: Partial<GameState>): GameState {
-    const pieces = [makePiece(0), makePiece(1), makePiece(2)];
+    const pieces = [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 }), makeRectPiece({ id: 2 })];
 
     const groups: PieceGroup[] = [
         {
@@ -53,15 +36,12 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
         },
     ];
 
-    return {
+    return makeBaseGameState({
         pieces,
         groups,
         imageUrl: 'test-image.jpg',
-        imageSize: { width: 800, height: 600 },
-        gridSize: { cols: 8, rows: 6 },
-        completed: false,
         ...overrides,
-    };
+    });
 }
 
 describe('serializeState', () => {
@@ -232,7 +212,7 @@ describe('deserializeState', () => {
         // Simulate a v1 saved state (no imageSize field)
         const v1Serialized: SerializedGameState = {
             version: 1,
-            pieces: [makePiece(0), makePiece(1), makePiece(2)],
+            pieces: [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 }), makeRectPiece({ id: 2 })],
             groups: [
                 { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
             ],
@@ -252,7 +232,7 @@ describe('deserializeState', () => {
         // Simulate a v2 saved state (has imageSize but no gridSize)
         const v2Serialized: SerializedGameState = {
             version: 2,
-            pieces: [makePiece(0), makePiece(1)],
+            pieces: [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 })],
             groups: [
                 { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
                 { id: 1, pieces: [[1, { x: 0, y: 0 }]], position: { x: 100, y: 0 } },
@@ -271,7 +251,7 @@ describe('deserializeState', () => {
         // Simulate a v5 saved state (has cutStyle but no rotation on groups)
         const v5Serialized: SerializedGameState = {
             version: 5,
-            pieces: [makePiece(0), makePiece(1)],
+            pieces: [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 })],
             groups: [
                 { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
                 { id: 1, pieces: [[1, { x: 0, y: 0 }]], position: { x: 100, y: 0 } },
@@ -304,7 +284,7 @@ describe('deserializeState', () => {
     it('coerces out-of-range rotation values to 0', () => {
         const bad: SerializedGameState = {
             version: STATE_VERSION,
-            pieces: [makePiece(0)],
+            pieces: [makeRectPiece({ id: 0 })],
             groups: [
                 {
                     id: 0,
@@ -367,7 +347,7 @@ describe('deserializeState', () => {
     it('throws on empty groups array', () => {
         const serialized: SerializedGameState = {
             version: STATE_VERSION,
-            pieces: [makePiece(0)],
+            pieces: [makeRectPiece({ id: 0 })],
             groups: [],
             imageUrl: 'test.jpg',
             completed: false,
@@ -381,7 +361,7 @@ describe('deserializeState', () => {
     it('throws on missing imageUrl', () => {
         const serialized: SerializedGameState = {
             version: STATE_VERSION,
-            pieces: [makePiece(0)],
+            pieces: [makeRectPiece({ id: 0 })],
             groups: [
                 { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
             ],
@@ -397,7 +377,7 @@ describe('deserializeState', () => {
     it('throws on invalid group position', () => {
         const serialized: SerializedGameState = {
             version: STATE_VERSION,
-            pieces: [makePiece(0)],
+            pieces: [makeRectPiece({ id: 0 })],
             groups: [
                 {
                     id: 0,
@@ -432,7 +412,7 @@ describe('deserializeState', () => {
     it('infers rotationMode = "quarter-turn" from non-zero group rotations (missing field)', () => {
         const v6WithoutMode: SerializedGameState = {
             version: 6,
-            pieces: [makePiece(0), makePiece(1)],
+            pieces: [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 })],
             groups: [
                 {
                     id: 0,
@@ -459,7 +439,7 @@ describe('deserializeState', () => {
     it('infers rotationMode = "quarter-turn" for pre-field fractal saves', () => {
         const fractalNoMode: SerializedGameState = {
             version: 6,
-            pieces: [makePiece(0)],
+            pieces: [makeRectPiece({ id: 0 })],
             groups: [
                 {
                     id: 0,
@@ -481,7 +461,7 @@ describe('deserializeState', () => {
     it('defaults rotationMode to "none" for classic saves without the field', () => {
         const classicNoMode: SerializedGameState = {
             version: 6,
-            pieces: [makePiece(0)],
+            pieces: [makeRectPiece({ id: 0 })],
             groups: [
                 {
                     id: 0,
@@ -503,7 +483,7 @@ describe('deserializeState', () => {
     it('throws on group with no pieces', () => {
         const serialized: SerializedGameState = {
             version: STATE_VERSION,
-            pieces: [makePiece(0)],
+            pieces: [makeRectPiece({ id: 0 })],
             groups: [
                 { id: 0, pieces: [], position: { x: 0, y: 0 } },
             ],
