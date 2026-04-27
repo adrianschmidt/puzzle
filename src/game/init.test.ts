@@ -105,46 +105,6 @@ describe('createNewGame', () => {
         expect(state.imageSize).toEqual(imageSize);
     });
 
-    it('stores fractalConfig as generatorConfig when cutStyle is fractal', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
-            random: seededRandom([0.5]),
-            cutStyle: 'fractal',
-            fractalConfig: { borderless: true },
-            seed: 42,
-        });
-        expect(state.generatorConfig).toEqual({ borderless: true });
-    });
-
-    it('stores composableConfig as generatorConfig when cutStyle is composable', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
-            random: seededRandom([0.5]),
-            cutStyle: 'composable',
-            composableConfig: {
-                horizontalAmplitude: 0.2,
-                horizontalFrequency: 2,
-                verticalAmplitude: 0.1,
-                verticalFrequency: 1,
-                disableTabs: true,
-            },
-            seed: 42,
-        });
-        expect(state.generatorConfig).toEqual({
-            horizontalAmplitude: 0.2,
-            horizontalFrequency: 2,
-            verticalAmplitude: 0.1,
-            verticalFrequency: 1,
-            disableTabs: true,
-        });
-    });
-
-    it('omits generatorConfig for classic puzzles', () => {
-        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
-            random: seededRandom([0.5]),
-            cutStyle: 'classic',
-        });
-        expect(state.generatorConfig).toBeUndefined();
-    });
-
     it('respects custom grid size', () => {
         const customGrid: GridSize = { cols: 6, rows: 4 };
         const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, customGrid, {

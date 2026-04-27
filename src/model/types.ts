@@ -136,17 +136,11 @@ export interface GameState {
      */
     rotationMode?: 'none' | 'quarter-turn';
     /**
-     * Generator-specific configuration that produced this puzzle.
+     * Composable-cut config (only set when cutStyle === 'composable').
      *
-     * Shape depends on `cutStyle`: `FractalConfig` for fractal,
-     * `ComposableConfig` for composable, absent for classic. Stored as an
-     * opaque record so `model/types.ts` stays free of generator imports.
-     *
-     * Needed to reproduce a puzzle from its seed — displayed in the Debug
-     * panel for bug reports.
+     * Needed to reproduce the puzzle from its seed and surfaced in the
+     * Debug panel for bug reports.
      */
-    generatorConfig?: Record<string, unknown>;
-    /** Composable-cut config (only set when cutStyle === 'composable'). */
     composableConfig?: {
         horizontalAmplitude?: number;
         horizontalFrequency?: number;
@@ -154,7 +148,12 @@ export interface GameState {
         verticalFrequency?: number;
         disableTabs?: boolean;
     };
-    /** Fractal-cut config (only set when cutStyle === 'fractal'). */
+    /**
+     * Fractal-cut config (only set when cutStyle === 'fractal').
+     *
+     * Needed to reproduce the puzzle from its seed and surfaced in the
+     * Debug panel for bug reports.
+     */
     fractalConfig?: {
         borderless?: boolean;
     };
