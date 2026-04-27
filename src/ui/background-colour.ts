@@ -6,6 +6,8 @@
  * The selected colour is applied via a CSS custom property on the root element.
  */
 
+import { createIndexedPreferenceStore } from './preference-store.js';
+
 /**
  * A background colour preset.
  */
@@ -43,50 +45,28 @@ export const COLOUR_PREFERENCE_KEY = 'puzzle-background-colour';
 /** CSS custom property name applied to the document root. */
 export const CSS_CUSTOM_PROPERTY = '--puzzle-bg-colour';
 
+const store = createIndexedPreferenceStore({
+    key: COLOUR_PREFERENCE_KEY,
+    presets: BACKGROUND_COLOUR_PRESETS,
+    defaultIndex: DEFAULT_COLOUR_INDEX,
+});
+
 /**
  * Get the preset at the given index,
  * or the default if the index is out of range.
  */
-export function getColourPreset(index: number): BackgroundColourPreset {
-    if (index >= 0 && index < BACKGROUND_COLOUR_PRESETS.length) {
-        return BACKGROUND_COLOUR_PRESETS[index];
-    }
-
-    return BACKGROUND_COLOUR_PRESETS[DEFAULT_COLOUR_INDEX];
-}
+export const getColourPreset = store.getPreset;
 
 /**
  * Save the preferred background colour index to localStorage.
  */
-export function saveColourPreference(index: number): void {
-    localStorage.setItem(COLOUR_PREFERENCE_KEY, String(index));
-}
+export const saveColourPreference = store.save;
 
 /**
  * Load the preferred background colour index from localStorage.
  * Returns the default index if nothing is saved or the value is invalid.
  */
-export function loadColourPreference(): number {
-    try {
-        const raw = localStorage.getItem(COLOUR_PREFERENCE_KEY);
-        if (raw === null) {
-            return DEFAULT_COLOUR_INDEX;
-        }
-
-        const index = parseInt(raw, 10);
-        if (
-            Number.isNaN(index) ||
-            index < 0 ||
-            index >= BACKGROUND_COLOUR_PRESETS.length
-        ) {
-            return DEFAULT_COLOUR_INDEX;
-        }
-
-        return index;
-    } catch {
-        return DEFAULT_COLOUR_INDEX;
-    }
-}
+export const loadColourPreference = store.load;
 
 /**
  * Determine whether a hex colour is perceptually light
