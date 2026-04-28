@@ -7,6 +7,8 @@
  * groupings.
  */
 
+import { createToolbarButton } from './toolbar-button.js';
+
 export interface GatherPiecesButtonOptions {
     /** The container to append the button to. */
     container: HTMLElement;
@@ -22,22 +24,10 @@ export interface GatherPiecesButtonOptions {
 export function createGatherPiecesButton(
     options: GatherPiecesButtonOptions,
 ): () => void {
-    const { container, onGatherPieces } = options;
-
-    const button = document.createElement('button');
-    button.className = 'gather-pieces-button';
-    button.textContent = 'Gather Pieces';
-    button.type = 'button';
-
-    function handleClick(): void {
-        onGatherPieces();
-    }
-
-    button.addEventListener('click', handleClick);
-    container.appendChild(button);
-
-    return () => {
-        button.removeEventListener('click', handleClick);
-        button.remove();
-    };
+    return createToolbarButton({
+        container: options.container,
+        className: 'gather-pieces-button',
+        label: 'Gather Pieces',
+        onClick: options.onGatherPieces,
+    });
 }

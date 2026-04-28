@@ -5,6 +5,8 @@
  * overlay with credits, project link, license info, and help text.
  */
 
+import { createToolbarButton } from './toolbar-button.js';
+
 export interface InfoButtonOptions {
     /** The container to append the button to. */
     container: HTMLElement;
@@ -18,23 +20,11 @@ export interface InfoButtonOptions {
  * Returns a cleanup function that removes the button from the DOM.
  */
 export function createInfoButton(options: InfoButtonOptions): () => void {
-    const { container, onShowInfo } = options;
-
-    const button = document.createElement('button');
-    button.className = 'info-button';
-    button.textContent = 'ℹ️';
-    button.type = 'button';
-    button.title = 'Info & Help';
-
-    function handleClick(): void {
-        onShowInfo();
-    }
-
-    button.addEventListener('click', handleClick);
-    container.appendChild(button);
-
-    return () => {
-        button.removeEventListener('click', handleClick);
-        button.remove();
-    };
+    return createToolbarButton({
+        container: options.container,
+        className: 'info-button',
+        label: 'ℹ️',
+        title: 'Info & Help',
+        onClick: options.onShowInfo,
+    });
 }
