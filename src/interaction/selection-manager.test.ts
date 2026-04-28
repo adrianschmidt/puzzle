@@ -258,6 +258,40 @@ describe('SelectionManager', () => {
         });
     });
 
+    describe('listener argument is a snapshot', () => {
+        it('does not reflect mutations made after the listener returns', () => {
+            const mgr = new SelectionManager();
+            let firstCaptured: ReadonlySet<number> | undefined;
+            const unsubscribe = mgr.onChange((ids) => {
+                firstCaptured = ids;
+                unsubscribe();
+            });
+
+            mgr.select(1);
+            mgr.select(2);
+            mgr.select(3);
+
+            expect(firstCaptured).toBeDefined();
+            expect(new Set(firstCaptured)).toEqual(new Set([1]));
+        });
+
+        it('passes a fresh snapshot to every listener invocation', () => {
+            const mgr = new SelectionManager();
+            const captures: ReadonlySet<number>[] = [];
+            mgr.onChange((ids) => {
+                captures.push(ids);
+            });
+
+            mgr.select(1);
+            mgr.select(2);
+
+            expect(captures).toHaveLength(2);
+            expect(captures[0]).not.toBe(captures[1]);
+            expect(new Set(captures[0])).toEqual(new Set([1]));
+            expect(new Set(captures[1])).toEqual(new Set([1, 2]));
+        });
+    });
+
     describe('unsubscribe', () => {
         it('onChange unsubscribe stops the listener from being called', () => {
             const mgr = new SelectionManager();

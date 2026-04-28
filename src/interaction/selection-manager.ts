@@ -139,8 +139,11 @@ export class SelectionManager {
     }
 
     private notify(): void {
+        // Snapshot so listeners that retain the reference don't observe
+        // future mutations — the ReadonlySet type is compile-time only.
+        const snapshot: ReadonlySet<number> = new Set(this.selected);
         for (const listener of this.listeners) {
-            listener(this.selected);
+            listener(snapshot);
         }
     }
 }
