@@ -6,6 +6,8 @@
  * to a known orientation.
  */
 
+import { createToolbarButton } from './toolbar-button.js';
+
 export interface CentreViewButtonOptions {
     /** The container to append the button to. */
     container: HTMLElement;
@@ -21,22 +23,10 @@ export interface CentreViewButtonOptions {
 export function createCentreViewButton(
     options: CentreViewButtonOptions,
 ): () => void {
-    const { container, onCentreView } = options;
-
-    const button = document.createElement('button');
-    button.className = 'centre-view-button';
-    button.textContent = 'Centre View';
-    button.type = 'button';
-
-    function handleClick(): void {
-        onCentreView();
-    }
-
-    button.addEventListener('click', handleClick);
-    container.appendChild(button);
-
-    return () => {
-        button.removeEventListener('click', handleClick);
-        button.remove();
-    };
+    return createToolbarButton({
+        container: options.container,
+        className: 'centre-view-button',
+        label: 'Centre View',
+        onClick: options.onCentreView,
+    });
 }

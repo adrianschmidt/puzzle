@@ -34,6 +34,9 @@ export type { BackgroundColourPickerOptions } from './background-colour-picker.j
 export { createInfoButton } from './info-button.js';
 export type { InfoButtonOptions } from './info-button.js';
 
+export { createToolbarButton } from './toolbar-button.js';
+export type { ToolbarButtonOptions } from './toolbar-button.js';
+
 export { createInfoModal } from './info-modal.js';
 export type { InfoModalOptions } from './info-modal.js';
 
