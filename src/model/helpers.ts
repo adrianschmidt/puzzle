@@ -101,6 +101,46 @@ export function normaliseQuarterTurns(q: number): 0 | 1 | 2 | 3 {
 }
 
 /**
+ * Project a point from a group's un-rotated local space into world space.
+ *
+ * Applies `group.rotation` around the group's own origin, then translates
+ * by `group.position`. The input is assumed to already be in the group's
+ * piece-offset frame (so for points expressed relative to a specific piece,
+ * use `getWorldPosition` instead, which adds the piece offset first).
+ */
+export function localToWorld(local: Point, group: PieceGroup): Point {
+    const rotated = rotatePoint(local, group.rotation);
+
+    return {
+        x: group.position.x + rotated.x,
+        y: group.position.y + rotated.y,
+    };
+}
+
+/**
+ * Compute the world position of a point on a piece.
+ *
+ * Piece offsets and edge endpoints live in the group's un-rotated local
+ * space. The point is shifted by the piece's offset within the group, then
+ * projected to world space via `localToWorld`.
+ */
+export function getWorldPosition(
+    point: Point,
+    pieceId: number,
+    group: PieceGroup,
+): Point {
+    const offset = group.pieces.get(pieceId);
+    if (!offset) {
+        throw new Error(`Piece ${pieceId} not found in group ${group.id}`);
+    }
+
+    return localToWorld(
+        { x: offset.x + point.x, y: offset.y + point.y },
+        group,
+    );
+}
+
+/**
  * Get all border edges of a group — edges whose mates
  * are in a different group.
  *

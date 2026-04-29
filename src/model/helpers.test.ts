@@ -4,6 +4,8 @@ import {
     findGroupForPiece,
     moveGroup,
     getBorderEdges,
+    getWorldPosition,
+    localToWorld,
     normaliseQuarterTurns,
     rotatePoint,
 } from './helpers.js';
@@ -246,5 +248,96 @@ describe('normaliseQuarterTurns', () => {
         expect(normaliseQuarterTurns(-1)).toBe(3);
         expect(normaliseQuarterTurns(-4)).toBe(0);
         expect(normaliseQuarterTurns(-5)).toBe(3);
+    });
+});
+
+describe('localToWorld', () => {
+    it('translates by group position when rotation is 0', () => {
+        const g: PieceGroup = {
+            id: 1,
+            pieces: new Map(),
+            position: { x: 100, y: 200 },
+            rotation: 0,
+        };
+        expect(localToWorld({ x: 10, y: 20 }, g)).toEqual({ x: 110, y: 220 });
+    });
+
+    it('rotates around the group origin before translating', () => {
+        // Local (10, 0) rotated 90° CW → (0, 10); + position (100, 200)
+        const g: PieceGroup = {
+            id: 1,
+            pieces: new Map(),
+            position: { x: 100, y: 200 },
+            rotation: 1,
+        };
+        expect(localToWorld({ x: 10, y: 0 }, g)).toEqual({ x: 100, y: 210 });
+    });
+
+    it('handles 180° rotation', () => {
+        // Local (10, 5) rotated 180° → (-10, -5); + position (50, 50)
+        const g: PieceGroup = {
+            id: 1,
+            pieces: new Map(),
+            position: { x: 50, y: 50 },
+            rotation: 2,
+        };
+        expect(localToWorld({ x: 10, y: 5 }, g)).toEqual({ x: 40, y: 45 });
+    });
+});
+
+describe('getWorldPosition', () => {
+    function singlePieceGroup(id: number, pieceId: number, position: { x: number; y: number }): PieceGroup {
+        return {
+            id,
+            pieces: new Map([[pieceId, { x: 0, y: 0 }]]),
+            position,
+            rotation: 0,
+        };
+    }
+
+    it('computes world position from group position + offset + point', () => {
+        const g: PieceGroup = {
+            id: 1,
+            pieces: new Map([[5, { x: 10, y: 20 }]]),
+            position: { x: 100, y: 200 },
+            rotation: 0,
+        };
+
+        expect(getWorldPosition({ x: 30, y: 40 }, 5, g)).toEqual({ x: 140, y: 260 });
+    });
+
+    it('handles zero offset (single-piece group)', () => {
+        const g = singlePieceGroup(1, 5, { x: 50, y: 75 });
+        expect(getWorldPosition({ x: 10, y: 20 }, 5, g)).toEqual({ x: 60, y: 95 });
+    });
+
+    it('throws if piece is not in the group', () => {
+        const g = singlePieceGroup(1, 5, { x: 0, y: 0 });
+        expect(() => getWorldPosition({ x: 0, y: 0 }, 99, g)).toThrow();
+    });
+
+    it('applies rotation to the local point before translating', () => {
+        // Group at world (100, 200), rotated 90° CW, single piece at local (0,0)
+        const g: PieceGroup = {
+            id: 1,
+            pieces: new Map([[5, { x: 0, y: 0 }]]),
+            position: { x: 100, y: 200 },
+            rotation: 1,
+        };
+
+        // Local point (10, 0) rotated 90° CW → (0, 10); then + position
+        expect(getWorldPosition({ x: 10, y: 0 }, 5, g)).toEqual({ x: 100, y: 210 });
+    });
+
+    it('applies rotation with a non-zero piece offset', () => {
+        // Offset + point = local (10, 0); rotated 180° → (-10, 0)
+        const g: PieceGroup = {
+            id: 1,
+            pieces: new Map([[5, { x: 10, y: 0 }]]),
+            position: { x: 50, y: 50 },
+            rotation: 2,
+        };
+
+        expect(getWorldPosition({ x: 0, y: 0 }, 5, g)).toEqual({ x: 40, y: 50 });
     });
 });

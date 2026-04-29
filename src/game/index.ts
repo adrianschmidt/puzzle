@@ -23,7 +23,6 @@ export type { PuzzleSizeOption } from './puzzle-sizes.js';
 export {
     detectMerges,
     checkEdgeAlignment,
-    getWorldPosition,
     MERGE_TOLERANCE_PX,
 } from './merge-detection.js';
 export type { MergeCandidate } from './merge-detection.js';

@@ -8,7 +8,7 @@
  */
 
 import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
-import { getBorderEdges, rotatePoint } from '../model/helpers.js';
+import { getBorderEdges, getWorldPosition } from '../model/helpers.js';
 
 /**
  * Tolerance in pixels for edge alignment.
@@ -38,33 +38,6 @@ export interface MergeCandidate {
      * into perfect alignment with the target group for this edge pair.
      */
     snapDelta: Point;
-}
-
-/**
- * Compute the world position of a point on a piece.
- *
- * Piece offsets and edge endpoints live in the group's un-rotated local
- * space. When the group carries a non-zero rotation, the local point is
- * rotated around the group's own origin before being translated by the
- * group's world position.
- */
-export function getWorldPosition(
-    point: Point,
-    pieceId: number,
-    group: PieceGroup,
-): Point {
-    const offset = group.pieces.get(pieceId);
-    if (!offset) {
-        throw new Error(`Piece ${pieceId} not found in group ${group.id}`);
-    }
-
-    const local = { x: offset.x + point.x, y: offset.y + point.y };
-    const rotated = rotatePoint(local, group.rotation);
-
-    return {
-        x: group.position.x + rotated.x,
-        y: group.position.y + rotated.y,
-    };
 }
 
 /**

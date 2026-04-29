@@ -15,7 +15,7 @@
  */
 
 import type { Piece, PieceGroup } from '../model/types.js';
-import { rotatePoint } from '../model/helpers.js';
+import { localToWorld } from '../model/helpers.js';
 import { getPathBounds } from './path-bounds.js';
 
 /**
@@ -69,17 +69,13 @@ export function getGroupBounds(
     let maxY = -Infinity;
 
     const expand = (localX: number, localY: number) => {
-        let x = localX;
-        let y = localY;
-        if (options.space === 'world') {
-            const rotated = rotatePoint({ x, y }, group.rotation);
-            x = rotated.x + group.position.x;
-            y = rotated.y + group.position.y;
-        }
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
+        const projected = options.space === 'world'
+            ? localToWorld({ x: localX, y: localY }, group)
+            : { x: localX, y: localY };
+        if (projected.x < minX) minX = projected.x;
+        if (projected.y < minY) minY = projected.y;
+        if (projected.x > maxX) maxX = projected.x;
+        if (projected.y > maxY) maxY = projected.y;
     };
 
     for (const [pieceId, offset] of group.pieces) {
