@@ -30,7 +30,7 @@ import { createRotateButtons } from './ui/rotate-buttons.js';
 import { rotateGroup } from './game/rotate-group.js';
 import { rotatePoint } from './model/helpers.js';
 import { getActiveTolerance } from './ui/merge-tolerance.js';
-import { reorderGroupsAfterDrop } from './game/pile-detection.js';
+import { reorderGroupsAfterDrop } from './game/z-order.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import { createAttributionElement, removeAttribution } from './ui/attribution.js';
 import {

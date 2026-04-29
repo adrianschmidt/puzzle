@@ -45,6 +45,11 @@ export {
 } from './pile-detection.js';
 
 export {
+    reorderGroupsAfterDrop,
+    rectFullyContains,
+} from './z-order.js';
+
+export {
     computeGatheredPositions,
     applyGatheredPositions,
     GATHER_PADDING,
