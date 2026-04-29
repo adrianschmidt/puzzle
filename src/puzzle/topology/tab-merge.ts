@@ -22,8 +22,9 @@
 import type { Point } from '../../model/types.js';
 import { Curve } from './curve.js';
 import type { BezierSegment } from './curve.js';
-import type { BezierPath, TabTemplate } from '../composable/tab-shapes.js';
-import { mirrorBezierPathY } from '../composable/tab-shapes.js';
+import type { TabTemplate } from '../composable/tab-shapes.js';
+import type { BezierPath } from '../composable/bezier-path.js';
+import { mirrorBezierPathY } from '../composable/bezier-path.js';
 import type { CollisionDetector, ConflictResolver } from './collision.js';
 import {
     createTabCollisionDetector,

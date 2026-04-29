@@ -26,7 +26,12 @@
  */
 
 import type { Edge, Piece, Point, Size } from '../model/types.js';
-import { bezierPathToSvg, fmt } from './composable/bezier-path.js';
+import {
+    bezierPathToSvg,
+    fmt,
+    reverseBezierPath,
+} from './composable/bezier-path.js';
+import type { BezierPath } from './composable/bezier-path.js';
 import { createSeededRandom } from './seeded-random.js';
 
 /** Direction of an edge relative to a grid cell. */
@@ -38,18 +43,6 @@ const Dir = {
 } as const;
 
 type Dir = (typeof Dir)[keyof typeof Dir];
-
-/**
- * A series of Bézier curve segments represented as points.
- * Each segment has: startPoint, controlPoint1, controlPoint2, endPoint.
- * For N segments, we store: [start, cp1, cp2, end, cp1, cp2, end, ...]
- * where each segment after the first shares the previous end as its start.
- *
- * Format: [p0, cp1_1, cp2_1, p1, cp1_2, cp2_2, p2, ...]
- * - Index 0: start point
- * - Then groups of 3: (cp1, cp2, endpoint) for each segment
- */
-type BezierPath = Point[];
 
 /**
  * Stored edge paths for shared internal edges.
@@ -367,45 +360,6 @@ function generateSharedEdgePath(
         cp6_2,
         end,
     ];
-}
-
-/**
- * Reverse a Bézier path to create the mating edge.
- * This reverses both the order of points and the control point pairs.
- *
- * Input format: [p0, cp1_1, cp2_1, p1, cp1_2, cp2_2, p2, ...]
- * Each segment: p_{i} uses cp1_{i+1}, cp2_{i+1} to reach p_{i+1}
- *
- * For reversal, we need to swap the order of control points within each segment.
- */
-function reverseBezierPath(path: BezierPath): BezierPath {
-    if (path.length < 4) return [...path].reverse();
-
-    // Path format: [p0, cp1_1, cp2_1, p1, cp1_2, cp2_2, p2, ...]
-    // Each group of 3 after the first point is (cp1, cp2, endpoint)
-    // Number of segments = (path.length - 1) / 3
-
-    const result: BezierPath = [];
-    const numSegments = (path.length - 1) / 3;
-
-    // Start with the last endpoint
-    result.push(path[path.length - 1]);
-
-    // Work backwards through segments, swapping control points
-    for (let i = numSegments - 1; i >= 0; i--) {
-        const segmentStart = 1 + i * 3;
-        const cp1 = path[segmentStart];
-        const cp2 = path[segmentStart + 1];
-        // Swap control points: cp2 becomes new cp1, cp1 becomes new cp2
-        result.push(cp2);
-        result.push(cp1);
-        // The endpoint of reversed segment is the start of original segment
-        // For segment 0, that's path[0]; for segment i, that's path[1 + (i-1)*3 + 2] = path[i*3]
-        const prevEndpoint = i === 0 ? path[0] : path[i * 3];
-        result.push(prevEndpoint);
-    }
-
-    return result;
 }
 
 /**

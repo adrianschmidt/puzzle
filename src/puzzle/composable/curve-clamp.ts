@@ -12,7 +12,7 @@
  */
 
 import type { Point } from '../../model/types.js';
-import type { BezierPath } from './tab-shapes.js';
+import type { BezierPath } from './bezier-path.js';
 import { bezierPathToSvg, fmt } from './bezier-path.js';
 
 // ---------------------------------------------------------------------------
