@@ -13,6 +13,7 @@
 
 import type { Point } from '../../model/types.js';
 import type { BezierPath } from './tab-shapes.js';
+import { bezierPathToSvg, fmt } from './bezier-path.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -191,33 +192,3 @@ function computePathLength(points: Point[]): number {
     return len;
 }
 
-// ---------------------------------------------------------------------------
-// SVG helpers
-// ---------------------------------------------------------------------------
-
-function bezierPathToSvg(path: BezierPath): string {
-    if (path.length < 4) {
-        const last = path[path.length - 1];
-        return `L ${fmt(last.x)} ${fmt(last.y)}`;
-    }
-
-    const parts: string[] = [];
-    // Move to the tab start point
-    parts.push(`L ${fmt(path[0].x)} ${fmt(path[0].y)}`);
-
-    for (let i = 1; i < path.length; i += 3) {
-        if (i + 2 >= path.length) break;
-        const cp1 = path[i];
-        const cp2 = path[i + 1];
-        const end = path[i + 2];
-        parts.push(
-            `C ${fmt(cp1.x)} ${fmt(cp1.y)}, ${fmt(cp2.x)} ${fmt(cp2.y)}, ${fmt(end.x)} ${fmt(end.y)}`,
-        );
-    }
-
-    return parts.join(' ');
-}
-
-function fmt(n: number): string {
-    return Number.isInteger(n) ? String(n) : n.toFixed(2);
-}

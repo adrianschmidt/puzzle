@@ -26,6 +26,7 @@
  */
 
 import type { Edge, Piece, Point, Size } from '../model/types.js';
+import { bezierPathToSvg, fmt } from './composable/bezier-path.js';
 import { createSeededRandom } from './seeded-random.js';
 
 /** Direction of an edge relative to a grid cell. */
@@ -408,30 +409,6 @@ function reverseBezierPath(path: BezierPath): BezierPath {
 }
 
 /**
- * Convert a Bézier path to SVG path commands.
- * The path starts from the current position (after M command),
- * so we skip the first point and emit C commands for each segment.
- */
-function bezierPathToSvg(path: BezierPath): string {
-    if (path.length < 4) return '';
-
-    const commands: string[] = [];
-    const numSegments = (path.length - 1) / 3;
-
-    for (let i = 0; i < numSegments; i++) {
-        const segmentStart = 1 + i * 3;
-        const cp1 = path[segmentStart];
-        const cp2 = path[segmentStart + 1];
-        const end = path[segmentStart + 2];
-        commands.push(
-            `C ${fmt(cp1.x)} ${fmt(cp1.y)}, ${fmt(cp2.x)} ${fmt(cp2.y)}, ${fmt(end.x)} ${fmt(end.y)}`,
-        );
-    }
-
-    return commands.join(' ');
-}
-
-/**
  * Transform a Bézier path to new start/end coordinates.
  * The path was generated for a specific edge position; this transforms
  * it to the actual edge position in piece-local coordinates.
@@ -723,10 +700,6 @@ function lerp(a: number, b: number, t: number): number {
 /** Straight line path segment (for border edges). */
 function buildFlatEdgePath(end: Point): string {
     return `L ${end.x} ${end.y}`;
-}
-
-function fmt(n: number): string {
-    return n.toFixed(2);
 }
 
 /**

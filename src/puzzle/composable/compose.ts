@@ -19,6 +19,7 @@ import type { PieceDefinition, EdgeDefinition } from './types.js';
 import type { TabTemplate, BezierPath } from './tab-shapes.js';
 import { reverseBezierPath, mirrorBezierPathY } from './tab-shapes.js';
 import { clampTabToCurve } from './curve-clamp.js';
+import { bezierPathToSvg, fmt } from './bezier-path.js';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -232,25 +233,6 @@ function transformToEdge(
 // SVG path helpers
 // ---------------------------------------------------------------------------
 
-function bezierPathToSvg(path: BezierPath): string {
-    if (path.length < 4) {
-        const last = path[path.length - 1];
-        return `L ${fmt(last.x)} ${fmt(last.y)}`;
-    }
-
-    const parts: string[] = [];
-    for (let i = 1; i < path.length; i += 3) {
-        const cp1 = path[i];
-        const cp2 = path[i + 1];
-        const end = path[i + 2];
-        parts.push(
-            `C ${fmt(cp1.x)} ${fmt(cp1.y)}, ${fmt(cp2.x)} ${fmt(cp2.y)}, ${fmt(end.x)} ${fmt(end.y)}`,
-        );
-    }
-
-    return parts.join(' ');
-}
-
 function buildShape(edges: Edge[]): string {
     if (edges.length === 0) return '';
     const first = edges[0];
@@ -262,6 +244,3 @@ function buildShape(edges: Edge[]): string {
     return parts.join(' ');
 }
 
-function fmt(n: number): string {
-    return Number.isInteger(n) ? String(n) : n.toFixed(2);
-}
