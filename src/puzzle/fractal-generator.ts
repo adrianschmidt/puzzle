@@ -21,6 +21,7 @@
  */
 
 import type { Edge, Piece, Size } from '../model/types.js';
+import { fmt } from './composable/bezier-path.js';
 import { createSeededRandom } from './seeded-random.js';
 
 // ---------------------------------------------------------------------------
@@ -1010,10 +1011,6 @@ function borderPathBetween(
     // This shouldn't happen for well-formed trimmed sub-paths, but draw
     // a direct line rather than failing outright.
     return [{ sx: px, sy: py, ex: qx, ey: qy }];
-}
-
-function fmt(n: number): string {
-    return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 // ---------------------------------------------------------------------------
