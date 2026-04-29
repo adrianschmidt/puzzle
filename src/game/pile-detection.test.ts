@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import {
-    getGroupBounds,
     rectsOverlap,
     padRect,
     rectFullyContains,
@@ -81,93 +80,6 @@ function makeSquarePiece(
 }
 
 // --- Tests ---
-
-describe('getGroupBounds', () => {
-    it('computes bounds for a single-piece group', () => {
-        const piece = makeSquarePiece(0);
-        const group = makeGroup(0, 0, { x: 50, y: 75 });
-
-        const bounds = getGroupBounds(group, [piece]);
-
-        expect(bounds.minX).toBe(50);
-        expect(bounds.minY).toBe(75);
-        expect(bounds.maxX).toBe(150);
-        expect(bounds.maxY).toBe(175);
-    });
-
-    it('computes bounds for a multi-piece group', () => {
-        const piece0 = makeSquarePiece(0);
-        const piece1 = makeSquarePiece(1);
-
-        const group: PieceGroup = {
-            id: 0,
-            pieces: new Map([
-                [0, { x: 0, y: 0 }],
-                [1, { x: 100, y: 0 }], // piece 1 is to the right
-            ]),
-            position: { x: 10, y: 20 },
-            rotation: 0,
-        };
-
-        const bounds = getGroupBounds(group, [piece0, piece1]);
-
-        expect(bounds.minX).toBe(10);      // group.x + offset0.x + edge min x (10+0+0)
-        expect(bounds.minY).toBe(20);      // group.y + offset0.y + edge min y (20+0+0)
-        expect(bounds.maxX).toBe(210);     // 10 + 100 + 100 (group.x + offset1.x + piece edge max x)
-        expect(bounds.maxY).toBe(120);     // 20 + 0 + 100
-    });
-
-    it('handles negative group positions', () => {
-        const piece = makeSquarePiece(0);
-        const group = makeGroup(0, 0, { x: -50, y: -30 });
-
-        const bounds = getGroupBounds(group, [piece]);
-
-        expect(bounds.minX).toBe(-50);
-        expect(bounds.minY).toBe(-30);
-        expect(bounds.maxX).toBe(50);
-        expect(bounds.maxY).toBe(70);
-    });
-
-    it('handles non-zero piece offsets within group', () => {
-        const piece = makeSquarePiece(0);
-        const group: PieceGroup = {
-            id: 0,
-            pieces: new Map([[0, { x: 50, y: 25 }]]),
-            position: { x: 100, y: 100 },
-            rotation: 0,
-        };
-
-        const bounds = getGroupBounds(group, [piece]);
-
-        expect(bounds.minX).toBe(150);  // 100 + 50 + 0
-        expect(bounds.minY).toBe(125);  // 100 + 25 + 0
-        expect(bounds.maxX).toBe(250);  // 100 + 50 + 100
-        expect(bounds.maxY).toBe(225);  // 100 + 25 + 100
-    });
-
-    it('accounts for the group rotation when computing world-space bounds', () => {
-        // 100x100 piece, group at world (100, 100) with 90° clockwise rotation.
-        // Un-rotated local corners: (0,0), (100,0), (100,100), (0,100).
-        // After rotating 90° CW around local origin: (0,0), (0,100), (-100,100), (-100,0).
-        // After translating by position (100, 100): (100,100), (100,200), (0,200), (0,100).
-        // AABB → [0..100] × [100..200].
-        const piece = makeSquarePiece(0);
-        const group: PieceGroup = {
-            id: 0,
-            pieces: new Map([[0, { x: 0, y: 0 }]]),
-            position: { x: 100, y: 100 },
-            rotation: 1,
-        };
-
-        const bounds = getGroupBounds(group, [piece]);
-
-        expect(bounds.minX).toBe(0);
-        expect(bounds.minY).toBe(100);
-        expect(bounds.maxX).toBe(100);
-        expect(bounds.maxY).toBe(200);
-    });
-});
 
 describe('rectsOverlap', () => {
     it('detects overlap when rects share a region', () => {

@@ -1,18 +1,105 @@
 /**
  * Group bounds primitives.
  *
- * Three flavours of "bounding box" for a `PieceGroup`, used by layout
- * (gather), rotation pivot math, and anywhere else the on-screen footprint
- * of a group matters:
+ * The core primitive is `getGroupBounds(group, pieces, options)`. It walks
+ * piece offsets + edge endpoints (and bezier control points if asked), then
+ * either leaves the result in un-rotated local space or rotates and
+ * translates to world space.
+ *
+ * Three sugar wrappers cover the common shapes:
  *
  * - `getGroupOffsetBounds` — min/max of piece offsets only (no edge geometry).
  * - `getGroupLocalBounds` — un-rotated local-space AABB including tab paths.
- * - `getGroupVisualBounds` — rendered footprint, accounting for `group.rotation`.
+ * - `getGroupVisualBounds` — rendered footprint, accounting for `group.rotation`,
+ *   returned as offsets relative to `group.position`.
  */
 
-import type { Point, Piece, PieceGroup } from '../model/types.js';
+import type { Piece, PieceGroup } from '../model/types.js';
 import { rotatePoint } from '../model/helpers.js';
 import { getPathBounds } from './path-bounds.js';
+
+/**
+ * A simple axis-aligned bounding rectangle.
+ */
+export interface BoundingRect {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
+
+/**
+ * Options for `getGroupBounds`.
+ */
+export interface GroupBoundsOptions {
+    /**
+     * - `'local'`: un-rotated piece-offset frame; ignores `group.rotation`
+     *   and `group.position`.
+     * - `'world'`: applies `group.rotation` and `group.position` to every
+     *   sampled point before computing the AABB.
+     */
+    space: 'local' | 'world';
+
+    /**
+     * If true, samples bezier control points from each edge's `path`
+     * string for a tighter fit that includes tab geometry. If false,
+     * samples only the `start` and `end` corner points.
+     */
+    includePathGeometry: boolean;
+}
+
+/**
+ * Compute the AABB of a group by walking its piece edge geometry.
+ *
+ * Single source of truth for group bounds. Pile detection (world-space,
+ * endpoints only) and layout (local-space, with path geometry) both call
+ * into this via `options`.
+ *
+ * Returns Infinity-valued bounds when the group has no findable pieces;
+ * sugar wrappers normalise that to zero-sized.
+ */
+export function getGroupBounds(
+    group: PieceGroup,
+    pieces: ReadonlyArray<Readonly<Piece>>,
+    options: GroupBoundsOptions,
+): BoundingRect {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    const expand = (localX: number, localY: number) => {
+        let x = localX;
+        let y = localY;
+        if (options.space === 'world') {
+            const rotated = rotatePoint({ x, y }, group.rotation);
+            x = rotated.x + group.position.x;
+            y = rotated.y + group.position.y;
+        }
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+    };
+
+    for (const [pieceId, offset] of group.pieces) {
+        const piece = pieces.find(p => p.id === pieceId);
+        if (!piece) continue;
+
+        for (const edge of piece.edges) {
+            expand(offset.x + edge.start.x, offset.y + edge.start.y);
+            expand(offset.x + edge.end.x, offset.y + edge.end.y);
+
+            if (options.includePathGeometry && edge.path) {
+                const pb = getPathBounds(edge.path, edge.start);
+                expand(offset.x + pb.minX, offset.y + pb.minY);
+                expand(offset.x + pb.maxX, offset.y + pb.maxY);
+            }
+        }
+    }
+
+    return { minX, minY, maxX, maxY };
+}
 
 /**
  * Compute bounding box of piece offsets within a group (group-local space).
@@ -21,15 +108,10 @@ import { getPathBounds } from './path-bounds.js';
  * group at offset (0,0), this returns {minX:0, minY:0, maxX:0, maxY:0}.
  *
  * Note: This uses piece offsets only (not edge geometry). For accurate
- * world-space bounding boxes that include tab shapes, use
- * `getGroupBounds` from pile-detection.
+ * world-space bounding boxes that include tab shapes, use `getGroupBounds`
+ * with `space: 'world'` and `includePathGeometry: true`.
  */
-export function getGroupOffsetBounds(group: PieceGroup): {
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-} {
+export function getGroupOffsetBounds(group: PieceGroup): BoundingRect {
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -71,51 +153,21 @@ export function getGroupLocalBounds(
     group: PieceGroup,
     pieces: ReadonlyArray<Readonly<Piece>>,
 ): { minX: number; minY: number; width: number; height: number } {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
+    const b = getGroupBounds(group, pieces, {
+        space: 'local',
+        includePathGeometry: true,
+    });
 
-    for (const [pieceId, offset] of group.pieces) {
-        const piece = pieces.find(p => p.id === pieceId);
-        if (!piece) continue;
-
-        for (const edge of piece.edges) {
-            // Always include start/end points
-            const points = [edge.start, edge.end];
-            for (const pt of points) {
-                const wx = offset.x + pt.x;
-                const wy = offset.y + pt.y;
-                if (wx < minX) minX = wx;
-                if (wy < minY) minY = wy;
-                if (wx > maxX) maxX = wx;
-                if (wy > maxY) maxY = wy;
-            }
-
-            // Include path geometry (control points, curve endpoints)
-            if (edge.path) {
-                const pathBounds = getPathBounds(edge.path, edge.start);
-                const pts = [
-                    { x: pathBounds.minX, y: pathBounds.minY },
-                    { x: pathBounds.maxX, y: pathBounds.maxY },
-                ];
-                for (const pt of pts) {
-                    const wx = offset.x + pt.x;
-                    const wy = offset.y + pt.y;
-                    if (wx < minX) minX = wx;
-                    if (wy < minY) minY = wy;
-                    if (wx > maxX) maxX = wx;
-                    if (wy > maxY) maxY = wy;
-                }
-            }
-        }
-    }
-
-    if (!isFinite(minX)) {
+    if (!isFinite(b.minX)) {
         return { minX: 0, minY: 0, width: 0, height: 0 };
     }
 
-    return { minX, minY, width: maxX - minX, height: maxY - minY };
+    return {
+        minX: b.minX,
+        minY: b.minY,
+        width: b.maxX - b.minX,
+        height: b.maxY - b.minY,
+    };
 }
 
 /**
@@ -131,35 +183,19 @@ export function getGroupVisualBounds(
     group: PieceGroup,
     pieces: ReadonlyArray<Readonly<Piece>>,
 ): { minX: number; minY: number; width: number; height: number } {
-    const local = getGroupLocalBounds(group, pieces);
+    const b = getGroupBounds(group, pieces, {
+        space: 'world',
+        includePathGeometry: true,
+    });
 
-    if (group.rotation === 0) {
-        return local;
+    if (!isFinite(b.minX)) {
+        return { minX: 0, minY: 0, width: 0, height: 0 };
     }
 
-    if (local.width === 0 && local.height === 0) {
-        return local;
-    }
-
-    // Rotate the four local-space corners and recompute the AABB.
-    const corners: Point[] = [
-        { x: local.minX, y: local.minY },
-        { x: local.minX + local.width, y: local.minY },
-        { x: local.minX + local.width, y: local.minY + local.height },
-        { x: local.minX, y: local.minY + local.height },
-    ];
-
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const c of corners) {
-        const r = rotatePoint(c, group.rotation);
-        if (r.x < minX) minX = r.x;
-        if (r.y < minY) minY = r.y;
-        if (r.x > maxX) maxX = r.x;
-        if (r.y > maxY) maxY = r.y;
-    }
-
-    return { minX, minY, width: maxX - minX, height: maxY - minY };
+    return {
+        minX: b.minX - group.position.x,
+        minY: b.minY - group.position.y,
+        width: b.maxX - b.minX,
+        height: b.maxY - b.minY,
+    };
 }
