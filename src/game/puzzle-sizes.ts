@@ -6,6 +6,7 @@
  */
 
 import type { GridSize } from '../model/types.js';
+import { createIndexedPreferenceStore } from '../ui/preference-store.js';
 
 /**
  * A selectable puzzle size option.
@@ -38,17 +39,17 @@ export const DEFAULT_SIZE_INDEX = 1;
 /** localStorage key for the saved size preference. */
 export const SIZE_PREFERENCE_KEY = 'puzzle-size-preference';
 
+const store = createIndexedPreferenceStore({
+    key: SIZE_PREFERENCE_KEY,
+    presets: PUZZLE_SIZE_OPTIONS,
+    defaultIndex: DEFAULT_SIZE_INDEX,
+});
+
 /**
  * Get the puzzle size option at the given index,
  * or the default if the index is out of range.
  */
-export function getSizeOption(index: number): PuzzleSizeOption {
-    if (index >= 0 && index < PUZZLE_SIZE_OPTIONS.length) {
-        return PUZZLE_SIZE_OPTIONS[index];
-    }
-
-    return PUZZLE_SIZE_OPTIONS[DEFAULT_SIZE_INDEX];
-}
+export const getSizeOption = store.getPreset;
 
 /**
  * Convert a PuzzleSizeOption to a GridSize.
@@ -70,28 +71,10 @@ export function findSizeIndex(gridSize: GridSize): number {
 /**
  * Save the preferred puzzle size index to localStorage.
  */
-export function saveSizePreference(index: number): void {
-    localStorage.setItem(SIZE_PREFERENCE_KEY, String(index));
-}
+export const saveSizePreference = store.save;
 
 /**
  * Load the preferred puzzle size index from localStorage.
  * Returns the default index if nothing is saved or the value is invalid.
  */
-export function loadSizePreference(): number {
-    try {
-        const raw = localStorage.getItem(SIZE_PREFERENCE_KEY);
-        if (raw === null) {
-            return DEFAULT_SIZE_INDEX;
-        }
-
-        const index = parseInt(raw, 10);
-        if (Number.isNaN(index) || index < 0 || index >= PUZZLE_SIZE_OPTIONS.length) {
-            return DEFAULT_SIZE_INDEX;
-        }
-
-        return index;
-    } catch {
-        return DEFAULT_SIZE_INDEX;
-    }
-}
+export const loadSizePreference = store.load;

@@ -5,6 +5,8 @@
  * the player's preferred style from localStorage.
  */
 
+import { createIndexedPreferenceStore } from '../ui/preference-store.js';
+
 /**
  * Identifier for a cut style generator.
  */
@@ -49,17 +51,17 @@ export const DEFAULT_CUT_STYLE_INDEX = 0;
 /** localStorage key for the saved cut style preference. */
 export const CUT_STYLE_PREFERENCE_KEY = 'puzzle-cut-style';
 
+const store = createIndexedPreferenceStore({
+    key: CUT_STYLE_PREFERENCE_KEY,
+    presets: CUT_STYLE_OPTIONS,
+    defaultIndex: DEFAULT_CUT_STYLE_INDEX,
+});
+
 /**
  * Get the cut style option at the given index,
  * or the default if the index is out of range.
  */
-export function getCutStyleOption(index: number): CutStyleOption {
-    if (index >= 0 && index < CUT_STYLE_OPTIONS.length) {
-        return CUT_STYLE_OPTIONS[index];
-    }
-
-    return CUT_STYLE_OPTIONS[DEFAULT_CUT_STYLE_INDEX];
-}
+export const getCutStyleOption = store.getPreset;
 
 /**
  * Find the index of a cut style option by its id.
@@ -74,28 +76,10 @@ export function findCutStyleIndex(style: CutStyle): number {
 /**
  * Save the preferred cut style index to localStorage.
  */
-export function saveCutStylePreference(index: number): void {
-    localStorage.setItem(CUT_STYLE_PREFERENCE_KEY, String(index));
-}
+export const saveCutStylePreference = store.save;
 
 /**
  * Load the preferred cut style index from localStorage.
  * Returns the default index if nothing is saved or the value is invalid.
  */
-export function loadCutStylePreference(): number {
-    try {
-        const raw = localStorage.getItem(CUT_STYLE_PREFERENCE_KEY);
-        if (raw === null) {
-            return DEFAULT_CUT_STYLE_INDEX;
-        }
-
-        const index = parseInt(raw, 10);
-        if (Number.isNaN(index) || index < 0 || index >= CUT_STYLE_OPTIONS.length) {
-            return DEFAULT_CUT_STYLE_INDEX;
-        }
-
-        return index;
-    } catch {
-        return DEFAULT_CUT_STYLE_INDEX;
-    }
-}
+export const loadCutStylePreference = store.load;

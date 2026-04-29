@@ -5,6 +5,11 @@
  * Each category maps to a search query passed to the Unsplash API.
  */
 
+import {
+    createBooleanPreference,
+    createStringPreference,
+} from '../ui/preference-store.js';
+
 /**
  * Identifier for an image category.
  */
@@ -134,49 +139,35 @@ export function findImageCategory(
     return found ?? IMAGE_CATEGORY_OPTIONS[0];
 }
 
+const categoryStore = createStringPreference({
+    key: IMAGE_CATEGORY_PREFERENCE_KEY,
+    allowed: IMAGE_CATEGORY_OPTIONS.map((opt) => opt.id),
+    defaultValue: 'any',
+});
+
 /**
  * Save the preferred image category id to localStorage.
  */
-export function saveImageCategoryPreference(id: string): void {
-    localStorage.setItem(IMAGE_CATEGORY_PREFERENCE_KEY, id);
-}
+export const saveImageCategoryPreference = categoryStore.save;
 
 /**
  * Load the preferred image category id from localStorage.
  * Returns `'any'` if no preference is saved or the value is invalid.
  */
-export function loadImageCategoryPreference(): string {
-    try {
-        const raw = localStorage.getItem(IMAGE_CATEGORY_PREFERENCE_KEY);
-        if (raw === null) {
-            return 'any';
-        }
+export const loadImageCategoryPreference = categoryStore.load;
 
-        // Validate that the saved value is a known category
-        const found = IMAGE_CATEGORY_OPTIONS.find((opt) => opt.id === raw);
-
-        return found ? raw : 'any';
-    } catch {
-        return 'any';
-    }
-}
+const vibrantStore = createBooleanPreference({
+    key: VIBRANT_PREFERENCE_KEY,
+    defaultValue: false,
+});
 
 /**
  * Save the "vibrant images" preference to localStorage.
  */
-export function saveVibrantPreference(vibrant: boolean): void {
-    localStorage.setItem(VIBRANT_PREFERENCE_KEY, vibrant ? 'true' : 'false');
-}
+export const saveVibrantPreference = vibrantStore.save;
 
 /**
  * Load the "vibrant images" preference from localStorage.
  * Returns `false` when nothing is saved or the stored value is invalid.
  */
-export function loadVibrantPreference(): boolean {
-    try {
-        const raw = localStorage.getItem(VIBRANT_PREFERENCE_KEY);
-        return raw === 'true';
-    } catch {
-        return false;
-    }
-}
+export const loadVibrantPreference = vibrantStore.load;

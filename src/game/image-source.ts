@@ -7,26 +7,20 @@
  * `image-categories.ts`.
  */
 
+import { createStringPreference } from '../ui/preference-store.js';
+
 /** localStorage key for the saved image source preference. */
 const IMAGE_SOURCE_PREFERENCE_KEY = 'puzzle-image-source';
+
+const store = createStringPreference({ key: IMAGE_SOURCE_PREFERENCE_KEY });
 
 /**
  * Save the preferred image source to localStorage.
  */
-export function saveImageSourcePreference(source: string): void {
-    localStorage.setItem(IMAGE_SOURCE_PREFERENCE_KEY, source);
-}
+export const saveImageSourcePreference = store.save;
 
 /**
  * Load the preferred image source from localStorage.
  * Returns `undefined` if no preference is saved.
  */
-export function loadImageSourcePreference(): string | undefined {
-    try {
-        const raw = localStorage.getItem(IMAGE_SOURCE_PREFERENCE_KEY);
-
-        return raw ?? undefined;
-    } catch {
-        return undefined;
-    }
-}
+export const loadImageSourcePreference = store.load;

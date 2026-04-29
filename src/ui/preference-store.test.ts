@@ -7,6 +7,7 @@ import {
     createIndexedPreferenceStore,
     createBooleanPreference,
     createJsonPreference,
+    createStringPreference,
 } from './preference-store.js';
 
 describe('createIndexedPreferenceStore', () => {
@@ -145,5 +146,83 @@ describe('createJsonPreference', () => {
         });
         localStorage.setItem(KEY, JSON.stringify({ n: 1 }));
         expect(store.load()).toBeUndefined();
+    });
+});
+
+describe('createStringPreference', () => {
+    const KEY = 'test-string-pref';
+
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    describe('without defaultValue', () => {
+        it('returns undefined when nothing is saved', () => {
+            const store = createStringPreference({ key: KEY });
+            expect(store.load()).toBeUndefined();
+        });
+
+        it('saves and loads a string', () => {
+            const store = createStringPreference({ key: KEY });
+            store.save('hello');
+            expect(store.load()).toBe('hello');
+        });
+
+        it('returns undefined when saved value is not in allowed list', () => {
+            const store = createStringPreference({
+                key: KEY,
+                allowed: ['a', 'b'],
+            });
+            localStorage.setItem(KEY, 'c');
+            expect(store.load()).toBeUndefined();
+        });
+
+        it('returns the saved value when in allowed list', () => {
+            const store = createStringPreference({
+                key: KEY,
+                allowed: ['a', 'b'],
+            });
+            localStorage.setItem(KEY, 'b');
+            expect(store.load()).toBe('b');
+        });
+    });
+
+    describe('with defaultValue', () => {
+        it('returns the default when nothing is saved', () => {
+            const store = createStringPreference({
+                key: KEY,
+                defaultValue: 'fallback',
+            });
+            expect(store.load()).toBe('fallback');
+        });
+
+        it('returns the saved value when present', () => {
+            const store = createStringPreference({
+                key: KEY,
+                defaultValue: 'fallback',
+            });
+            store.save('actual');
+            expect(store.load()).toBe('actual');
+        });
+
+        it('returns the default when saved value is rejected by allowed', () => {
+            const store = createStringPreference({
+                key: KEY,
+                defaultValue: 'fallback',
+                allowed: ['fallback', 'other'],
+            });
+            localStorage.setItem(KEY, 'invalid');
+            expect(store.load()).toBe('fallback');
+        });
+
+        it('returns the saved value when in allowed list', () => {
+            const store = createStringPreference({
+                key: KEY,
+                defaultValue: 'fallback',
+                allowed: ['fallback', 'other'],
+            });
+            localStorage.setItem(KEY, 'other');
+            expect(store.load()).toBe('other');
+        });
     });
 });
