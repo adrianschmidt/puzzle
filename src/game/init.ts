@@ -7,13 +7,11 @@
  */
 
 import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
-import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
-import { generateFractalPuzzle, scaleFractalGrid } from '../puzzle/fractal-generator.js';
 import type { FractalConfig } from '../puzzle/fractal-generator.js';
-import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
+import { getCutStyleStrategy } from './cut-style-strategies.js';
 
 /** Default grid dimensions for the MVP puzzle. */
 export const DEFAULT_COLS = 8;
@@ -67,39 +65,15 @@ export function createNewGame(
     const cutStyle = options.cutStyle ?? 'classic';
     const rotationMode = options.rotationMode ?? 'none';
 
-    // For fractal puzzles, scale the tile grid to produce approximately
-    // the target piece count. The gridSize cols×rows for classic puzzles
-    // equals the piece count, but fractal pieces span multiple tiles.
-    const fractalGrid = cutStyle === 'fractal'
-        ? scaleFractalGrid(
-            gridSize.cols * gridSize.rows,
-            imageSize.width / imageSize.height,
-            options.fractalConfig?.borderless ?? false,
-        )
-        : undefined;
+    const strategy = getCutStyleStrategy(cutStyle);
+    const ctx = {
+        fractalConfig: options.fractalConfig,
+        composableConfig: options.composableConfig,
+    };
 
-    // Fractal arcs must scale uniformly to stay circular. We inscribe a
-    // rectangle of the grid's aspect ratio inside the image; the renderer
-    // covers this puzzle rectangle with the image via SVG `slice`, cropping
-    // what sticks out. For non-fractal cuts the puzzle fills the image as
-    // before.
-    const puzzleSize = cutStyle === 'fractal' && fractalGrid
-        ? inscribeToGridAspect(
-            imageSize,
-            options.fractalConfig?.borderless ?? false
-                ? fractalGrid.cols / fractalGrid.rows
-                : (fractalGrid.cols - 1) / (fractalGrid.rows - 1),
-        )
-        : imageSize;
-
-    let pieces: Piece[];
-    if (cutStyle === 'fractal') {
-        pieces = generateFractalPuzzle(fractalGrid!.cols, fractalGrid!.rows, puzzleSize, seed, options.fractalConfig);
-    } else if (cutStyle === 'composable') {
-        pieces = generateComposablePuzzle(gridSize.cols, gridSize.rows, puzzleSize, seed, options.composableConfig);
-    } else {
-        pieces = generateProceduralPuzzle(gridSize.cols, gridSize.rows, puzzleSize, seed);
-    }
+    const generationGrid = strategy.scaleGrid(gridSize, imageSize, ctx);
+    const puzzleSize = strategy.inscribePuzzleSize(imageSize, generationGrid, ctx);
+    const pieces = strategy.generatePieces(generationGrid, puzzleSize, seed, ctx);
 
     const groups = createInitialGroups(pieces, puzzleSize, viewport, gridSize, options);
 
@@ -113,24 +87,9 @@ export function createNewGame(
         seed,
         cutStyle,
         rotationMode,
-        composableConfig: cutStyle === 'composable' ? options.composableConfig : undefined,
-        fractalConfig: cutStyle === 'fractal' ? options.fractalConfig : undefined,
+        composableConfig: strategy.configKey === 'composableConfig' ? options.composableConfig : undefined,
+        fractalConfig: strategy.configKey === 'fractalConfig' ? options.fractalConfig : undefined,
     };
-}
-
-/**
- * Return the largest rectangle of `gridAspect` that fits inside `imageSize`,
- * centred. Used for fractal puzzles so the tile grid scales uniformly
- * (arcs stay circular) and the image is cropped to cover the puzzle rect.
- */
-function inscribeToGridAspect(imageSize: Size, gridAspect: number): Size {
-    const imageAspect = imageSize.width / imageSize.height;
-    if (gridAspect >= imageAspect) {
-        // Grid wider than image — match image width, shrink height.
-        return { width: imageSize.width, height: imageSize.width / gridAspect };
-    }
-    // Grid taller than image — match image height, shrink width.
-    return { width: imageSize.height * gridAspect, height: imageSize.height };
 }
 
 /**
