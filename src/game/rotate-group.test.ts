@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Edge, Piece, PieceGroup } from '../model/types.js';
 import { rotateGroup } from './rotate-group.js';
-import { getGroupLocalBounds } from './gather.js';
+import { getGroupLocalBounds } from './group-bounds.js';
 
 function makeEdge(id: number, sx: number, sy: number, ex: number, ey: number): Edge {
     return {

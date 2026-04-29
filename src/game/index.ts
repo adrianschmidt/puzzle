@@ -50,12 +50,17 @@ export type { BoundingRect } from './pile-detection.js';
 export {
     computeGatheredPositions,
     applyGatheredPositions,
-    getGroupOffsetBounds,
-    getGroupLocalBounds,
-    getGroupVisualBounds,
     GATHER_PADDING,
 } from './gather.js';
 export type { WorldRect } from './gather.js';
+
+export {
+    getGroupOffsetBounds,
+    getGroupLocalBounds,
+    getGroupVisualBounds,
+} from './group-bounds.js';
+
+export { getPathBounds } from './path-bounds.js';
 
 export {
     CUT_STYLE_OPTIONS,

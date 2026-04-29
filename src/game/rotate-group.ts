@@ -9,7 +9,7 @@
 
 import type { Piece, PieceGroup } from '../model/types.js';
 import { normaliseQuarterTurns, rotatePoint } from '../model/helpers.js';
-import { getGroupLocalBounds } from './gather.js';
+import { getGroupLocalBounds } from './group-bounds.js';
 
 export type RotationDirection = 'cw' | 'ccw';
 
