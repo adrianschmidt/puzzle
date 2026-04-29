@@ -105,6 +105,58 @@ export function createJsonPreference<T>(opts: {
 }
 
 /**
+ * A store for a string preference. The optional `allowed` list
+ * whitelists valid values; saved values outside it are rejected like
+ * a missing entry. The optional `defaultValue` decides what `load()`
+ * returns when nothing is saved (or the saved value is rejected):
+ * with a default, `load()` always returns a string; without one, it
+ * returns `string | undefined`.
+ */
+export interface StringPreferenceStore<T extends string | undefined> {
+    save: (value: string) => void;
+    load: () => T;
+}
+
+export function createStringPreference(opts: {
+    key: string;
+    allowed?: readonly string[];
+}): StringPreferenceStore<string | undefined>;
+export function createStringPreference(opts: {
+    key: string;
+    defaultValue: string;
+    allowed?: readonly string[];
+}): StringPreferenceStore<string>;
+export function createStringPreference(opts: {
+    key: string;
+    defaultValue?: string;
+    allowed?: readonly string[];
+}): StringPreferenceStore<string | undefined> {
+    const { key, defaultValue, allowed } = opts;
+
+    return {
+        save(value) {
+            localStorage.setItem(key, value);
+        },
+        load() {
+            try {
+                const raw = localStorage.getItem(key);
+                if (raw === null) {
+                    return defaultValue;
+                }
+
+                if (allowed !== undefined && !allowed.includes(raw)) {
+                    return defaultValue;
+                }
+
+                return raw;
+            } catch {
+                return defaultValue;
+            }
+        },
+    };
+}
+
+/**
  * A store for a boolean preference. Missing or unreadable values fall
  * back to `defaultValue`; otherwise the saved string is parsed
  * strictly as `'true'` → `true`, anything else → `false`.
