@@ -16,10 +16,15 @@
 
 import type { Edge, Piece, Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from './types.js';
-import type { TabTemplate, BezierPath } from './tab-shapes.js';
-import { reverseBezierPath, mirrorBezierPathY } from './tab-shapes.js';
+import type { TabTemplate } from './tab-shapes.js';
+import type { BezierPath } from './bezier-path.js';
+import {
+    bezierPathToSvg,
+    fmt,
+    mirrorBezierPathY,
+    reverseBezierPath,
+} from './bezier-path.js';
 import { clampTabToCurve } from './curve-clamp.js';
-import { bezierPathToSvg, fmt } from './bezier-path.js';
 
 // ---------------------------------------------------------------------------
 // Public API

@@ -14,17 +14,11 @@
  */
 
 import type { Point } from '../../model/types.js';
+import type { BezierPath } from './bezier-path.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/**
- * A series of Bézier curve segments represented as points.
- * Format: [p0, cp1_1, cp2_1, p1, cp1_2, cp2_2, p2, ...]
- * where each segment after the first shares the previous end as start.
- */
-export type BezierPath = Point[];
 
 /**
  * A tab shape template that generates Bézier paths in normalized space.
@@ -113,37 +107,6 @@ export const classicTabTemplate: TabTemplate = {
         ];
     },
 };
-
-/**
- * Reverse a BezierPath to create the mating edge.
- * Reverses the point order and swaps control point pairs within each segment.
- */
-export function reverseBezierPath(path: BezierPath): BezierPath {
-    const reversed: Point[] = [];
-    const n = path.length;
-
-    // The path has (n-1)/3 segments.
-    // Walk backwards through segments.
-    reversed.push(path[n - 1]); // New start = old end
-
-    for (let i = n - 2; i >= 0; i -= 3) {
-        // Old segment ended at path[i+1] with control points path[i-1], path[i]
-        // Reversed: swap cp1 and cp2
-        reversed.push(path[i]);     // was cp2, becomes cp1
-        reversed.push(path[i - 1]); // was cp1, becomes cp2
-        reversed.push(path[i - 2]); // was segment start, becomes segment end
-    }
-
-    return reversed;
-}
-
-/**
- * Mirror a BezierPath's Y coordinates to convert a tab into a blank
- * (or vice versa).
- */
-export function mirrorBezierPathY(path: BezierPath): BezierPath {
-    return path.map(p => ({ x: p.x, y: -p.y }));
-}
 
 /**
  * All available tab templates.
