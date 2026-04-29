@@ -17,17 +17,7 @@
  */
 
 import type { GameState, Piece, PieceGroup } from '../model/types.js';
-import { rotatePoint } from '../model/helpers.js';
-
-/**
- * A simple axis-aligned bounding rectangle.
- */
-export interface BoundingRect {
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-}
+import { getGroupBounds, type BoundingRect } from './group-bounds.js';
 
 /**
  * If this many or more non-matching groups overlap the dropped group,
@@ -44,44 +34,15 @@ export const PILE_OVERLAP_THRESHOLD = 3;
 export const OVERLAP_PADDING_PX = 20;
 
 /**
- * Compute the bounding rectangle of a group in world coordinates.
- *
- * Uses the edge start/end points of each piece to determine the
- * piece-local bounds, rotates them by the group's quarter-turn rotation
- * (piece offsets and edge endpoints live in un-rotated local space), then
- * translates by the group's world position.
+ * World-space AABB using just edge corner endpoints (no tab geometry).
+ * Pile detection has always used corner-only bounds — the
+ * `OVERLAP_PADDING_PX` constant exists to compensate for tabs.
  */
-export function getGroupBounds(
-    group: PieceGroup,
-    pieces: Piece[],
-): BoundingRect {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-
-    for (const [pieceId, offset] of group.pieces) {
-        const piece = pieces.find((p) => p.id === pieceId);
-        if (!piece) continue;
-
-        for (const edge of piece.edges) {
-            for (const point of [edge.start, edge.end]) {
-                const rotated = rotatePoint(
-                    { x: offset.x + point.x, y: offset.y + point.y },
-                    group.rotation,
-                );
-                const worldX = group.position.x + rotated.x;
-                const worldY = group.position.y + rotated.y;
-
-                if (worldX < minX) minX = worldX;
-                if (worldX > maxX) maxX = worldX;
-                if (worldY < minY) minY = worldY;
-                if (worldY > maxY) maxY = worldY;
-            }
-        }
-    }
-
-    return { minX, minY, maxX, maxY };
+function pileBounds(group: PieceGroup, pieces: Piece[]): BoundingRect {
+    return getGroupBounds(group, pieces, {
+        space: 'world',
+        includePathGeometry: false,
+    });
 }
 
 /**
@@ -177,7 +138,7 @@ export function shouldSuppressMerge(
     if (movedGroup.pieces.size > 1) return false;
 
     const movedBounds = padRect(
-        getGroupBounds(movedGroup, state.pieces),
+        pileBounds(movedGroup, state.pieces),
         OVERLAP_PADDING_PX,
     );
 
@@ -190,7 +151,7 @@ export function shouldSuppressMerge(
     for (const otherGroup of state.groups) {
         if (otherGroup.id === movedGroupId) continue;
 
-        const otherBounds = getGroupBounds(otherGroup, state.pieces);
+        const otherBounds = pileBounds(otherGroup, state.pieces);
         if (!rectsOverlap(movedBounds, otherBounds)) continue;
 
         if (mateGroupIds.has(otherGroup.id)) {
@@ -231,14 +192,14 @@ export function reorderGroupsAfterDrop(
         const droppedGroup = state.groups.find(g => g.id === droppedId);
         if (!droppedGroup) continue;
 
-        const droppedBounds = getGroupBounds(droppedGroup, state.pieces);
+        const droppedBounds = pileBounds(droppedGroup, state.pieces);
 
         // Check all other groups that are smaller than the dropped group
         for (const otherGroup of state.groups) {
             if (otherGroup.id === droppedId) continue;
             if (otherGroup.pieces.size >= droppedGroup.pieces.size) continue;
 
-            const otherBounds = getGroupBounds(otherGroup, state.pieces);
+            const otherBounds = pileBounds(otherGroup, state.pieces);
 
             // If the dropped group fully covers this smaller group, mark it for raising
             if (rectFullyContains(droppedBounds, otherBounds)) {

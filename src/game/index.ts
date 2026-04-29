@@ -39,13 +39,11 @@ export { checkWin, checkAndMarkWin } from './win-detection.js';
 
 export {
     shouldSuppressMerge,
-    getGroupBounds,
     rectsOverlap,
     padRect,
     PILE_OVERLAP_THRESHOLD,
     OVERLAP_PADDING_PX,
 } from './pile-detection.js';
-export type { BoundingRect } from './pile-detection.js';
 
 export {
     computeGatheredPositions,
@@ -55,10 +53,12 @@ export {
 export type { WorldRect } from './gather.js';
 
 export {
+    getGroupBounds,
     getGroupOffsetBounds,
     getGroupLocalBounds,
     getGroupVisualBounds,
 } from './group-bounds.js';
+export type { BoundingRect, GroupBoundsOptions } from './group-bounds.js';
 
 export { getPathBounds } from './path-bounds.js';
 
