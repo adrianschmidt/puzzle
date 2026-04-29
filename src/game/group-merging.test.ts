@@ -6,7 +6,7 @@ import {
     processDrop,
 } from './group-merging.js';
 import type { MergeCandidate } from './merge-detection.js';
-import { getWorldPosition } from './merge-detection.js';
+import { getWorldPosition } from '../model/helpers.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
 // --- Test helpers ---

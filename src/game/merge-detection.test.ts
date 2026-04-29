@@ -3,7 +3,6 @@ import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import {
     checkEdgeAlignment,
     detectMerges,
-    getWorldPosition,
     MERGE_TOLERANCE_PX,
 } from './merge-detection.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
@@ -71,58 +70,6 @@ function createAdjacentPiecePair(): {
 
     return { piece0, piece1, rightEdge, leftEdge };
 }
-
-describe('getWorldPosition', () => {
-    it('computes world position from group position + offset + point', () => {
-        const group: PieceGroup = {
-            id: 1,
-            pieces: new Map([[5, { x: 10, y: 20 }]]),
-            position: { x: 100, y: 200 },
-            rotation: 0,
-        };
-
-        const result = getWorldPosition({ x: 30, y: 40 }, 5, group);
-        expect(result).toEqual({ x: 140, y: 260 });
-    });
-
-    it('handles zero offset (single-piece group)', () => {
-        const group = makeGroup(1, 5, { x: 50, y: 75 });
-        const result = getWorldPosition({ x: 10, y: 20 }, 5, group);
-        expect(result).toEqual({ x: 60, y: 95 });
-    });
-
-    it('throws if piece is not in the group', () => {
-        const group = makeGroup(1, 5, { x: 0, y: 0 });
-        expect(() => getWorldPosition({ x: 0, y: 0 }, 99, group)).toThrow();
-    });
-
-    it('applies rotation to the local point before translating', () => {
-        // Group at world (100, 200), rotated 90° CW, single piece at local (0,0)
-        const group: PieceGroup = {
-            id: 1,
-            pieces: new Map([[5, { x: 0, y: 0 }]]),
-            position: { x: 100, y: 200 },
-            rotation: 1,
-        };
-
-        // Local point (10, 0) rotated 90° CW → (0, 10); then + position
-        const result = getWorldPosition({ x: 10, y: 0 }, 5, group);
-        expect(result).toEqual({ x: 100, y: 210 });
-    });
-
-    it('applies rotation with a non-zero piece offset', () => {
-        // Offset + point = local (10, 0); rotated 180° → (-10, 0)
-        const group: PieceGroup = {
-            id: 1,
-            pieces: new Map([[5, { x: 10, y: 0 }]]),
-            position: { x: 50, y: 50 },
-            rotation: 2,
-        };
-
-        const result = getWorldPosition({ x: 0, y: 0 }, 5, group);
-        expect(result).toEqual({ x: 40, y: 50 });
-    });
-});
 
 describe('checkEdgeAlignment', () => {
     it('detects alignment when edges are perfectly positioned', () => {
