@@ -15,10 +15,25 @@
 
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
 import type { PiecePointerDownCallback, Renderer } from './types.js';
-import {
-    PIECE_PADDING,
-    HIT_AREA_EXPANSION_PX,
-} from './svg-dom-utils.js';
+
+/**
+ * Extra padding around each piece's SVG element to accommodate
+ * tabs that extend beyond the base piece rectangle.
+ */
+const PIECE_PADDING = 30;
+
+/**
+ * Width of the expanded hit-area stroke around each piece (in world-space
+ * pixels). This creates a larger touch target so that near-misses on a
+ * piece edge still register as hitting the piece rather than the
+ * background. Because the value is in world space, the screen-space
+ * expansion is proportionally larger when zoomed out — exactly when
+ * pieces are hardest to tap.
+ *
+ * Only applies to piece-vs-background decisions. When another piece's
+ * exact hit area is under the pointer, the expanded area defers.
+ */
+const HIT_AREA_EXPANSION_PX = 8;
 
 export class SvgDomRenderer implements Renderer {
     private tableEl: HTMLElement | null = null;

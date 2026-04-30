@@ -4,10 +4,8 @@ import {
     getPieceBaseDimension,
     getGridCols,
     getGridRows,
-    PIECE_PADDING,
-    HIT_AREA_EXPANSION_PX,
-} from './svg-dom-utils.js';
-import type { Edge, GameState, Piece } from '../model/types.js';
+} from './derive.js';
+import type { Edge, GameState, Piece } from './types.js';
 
 /** Create a minimal edge with start/end points. */
 function edge(
@@ -56,12 +54,6 @@ function gameState(pieces: Piece[]): GameState {
         completed: false,
     };
 }
-
-describe('PIECE_PADDING', () => {
-    it('is a positive number', () => {
-        expect(PIECE_PADDING).toBeGreaterThan(0);
-    });
-});
 
 describe('getPieceBaseDimension', () => {
     it('returns width from edge endpoints', () => {
@@ -170,16 +162,5 @@ describe('getGridRows', () => {
         ];
 
         expect(getGridRows(gameState(pieces))).toBe(2);
-    });
-});
-
-describe('HIT_AREA_EXPANSION_PX', () => {
-    it('is a positive number', () => {
-        expect(HIT_AREA_EXPANSION_PX).toBeGreaterThan(0);
-    });
-
-    it('is reasonable (not too large)', () => {
-        // Should be small enough not to cause overlapping issues
-        expect(HIT_AREA_EXPANSION_PX).toBeLessThanOrEqual(20);
     });
 });
