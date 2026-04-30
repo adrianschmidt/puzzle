@@ -39,6 +39,46 @@ export function getImageDimensions(
 }
 
 /**
+ * Get the piece-local bounding box from its edge endpoints.
+ *
+ * Approximates the silhouette well enough for layout/labeling without
+ * accounting for tab protrusions or curved-edge bulges. Works for any shape
+ * the generators produce, including fractal arcs whose start/end points
+ * trace the overall outline.
+ */
+export function getPieceBounds(piece: Piece): {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+    width: number;
+    height: number;
+} {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const edge of piece.edges) {
+        for (const point of [edge.start, edge.end]) {
+            if (point.x < minX) minX = point.x;
+            if (point.x > maxX) maxX = point.x;
+            if (point.y < minY) minY = point.y;
+            if (point.y > maxY) maxY = point.y;
+        }
+    }
+
+    return {
+        minX,
+        minY,
+        maxX,
+        maxY,
+        width: maxX - minX,
+        height: maxY - minY,
+    };
+}
+
+/**
  * Get the base dimension of a piece (width or height) from its edge endpoints.
  * This is the rectangular cell size, not including tab protrusions.
  */
@@ -46,17 +86,8 @@ export function getPieceBaseDimension(
     piece: Piece,
     axis: 'x' | 'y',
 ): number {
-    let min = Infinity;
-    let max = -Infinity;
-
-    for (const edge of piece.edges) {
-        const startVal = edge.start[axis];
-        const endVal = edge.end[axis];
-        min = Math.min(min, startVal, endVal);
-        max = Math.max(max, startVal, endVal);
-    }
-
-    return max - min;
+    const bounds = getPieceBounds(piece);
+    return axis === 'x' ? bounds.width : bounds.height;
 }
 
 /** Derive grid columns from image offsets. */

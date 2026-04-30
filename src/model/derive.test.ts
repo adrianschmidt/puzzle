@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     getImageDimensions,
     getPieceBaseDimension,
+    getPieceBounds,
     getGridCols,
     getGridRows,
 } from './derive.js';
@@ -54,6 +55,60 @@ function gameState(pieces: Piece[]): GameState {
         completed: false,
     };
 }
+
+describe('getPieceBounds', () => {
+    it('returns full bbox for a rectangular piece at the origin', () => {
+        const piece = rectPiece(0, 100, 75);
+        expect(getPieceBounds(piece)).toEqual({
+            minX: 0,
+            minY: 0,
+            maxX: 100,
+            maxY: 75,
+            width: 100,
+            height: 75,
+        });
+    });
+
+    it('handles pieces whose edges extend into negative coords', () => {
+        const piece: Piece = {
+            id: 1,
+            edges: [
+                edge({ x: -10, y: -20 }, { x: 30, y: -20 }),
+                edge({ x: 30, y: -20 }, { x: 30, y: 50 }),
+                edge({ x: 30, y: 50 }, { x: -10, y: 50 }),
+                edge({ x: -10, y: 50 }, { x: -10, y: -20 }),
+            ],
+            shape: '',
+            imageOffset: { x: 0, y: 0 },
+        };
+        expect(getPieceBounds(piece)).toEqual({
+            minX: -10,
+            minY: -20,
+            maxX: 30,
+            maxY: 50,
+            width: 40,
+            height: 70,
+        });
+    });
+
+    it('considers both endpoints of every edge', () => {
+        // Single diagonal edge whose start/end define the bbox extremes.
+        const piece: Piece = {
+            id: 2,
+            edges: [edge({ x: 5, y: 1 }, { x: 9, y: 8 })],
+            shape: '',
+            imageOffset: { x: 0, y: 0 },
+        };
+        expect(getPieceBounds(piece)).toEqual({
+            minX: 5,
+            minY: 1,
+            maxX: 9,
+            maxY: 8,
+            width: 4,
+            height: 7,
+        });
+    });
+});
 
 describe('getPieceBaseDimension', () => {
     it('returns width from edge endpoints', () => {
