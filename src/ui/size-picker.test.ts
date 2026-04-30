@@ -80,7 +80,15 @@ describe('createSizePickerDialog', () => {
         const buttons = container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         buttons[3].click();
 
-        expect(onSelect).toHaveBeenCalledWith(3, 0, undefined, "random", "any", undefined, false);
+        expect(onSelect).toHaveBeenCalledWith({
+            sizeIndex: 3,
+            cutStyleIndex: 0,
+            composableConfig: undefined,
+            fractalConfig: undefined,
+            imageSource: 'random',
+            imageCategory: 'any',
+            vibrant: false,
+        });
     });
 
     it('removes the overlay after selection', () => {
@@ -191,7 +199,15 @@ describe('createSizePickerDialog', () => {
             container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         sizeButtons[0].click();
 
-        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random", "any", { borderless: false, rotationEnabled: false }, false);
+        expect(onSelect).toHaveBeenCalledWith({
+            sizeIndex: 0,
+            cutStyleIndex: 1,
+            composableConfig: undefined,
+            fractalConfig: { borderless: false, rotationEnabled: false },
+            imageSource: 'random',
+            imageCategory: 'any',
+            vibrant: false,
+        });
     });
 
     it('updates the cut style when a different style is clicked before selecting size', () => {
@@ -213,6 +229,14 @@ describe('createSizePickerDialog', () => {
             container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
         sizeButtons[0].click();
 
-        expect(onSelect).toHaveBeenCalledWith(0, 1, undefined, "random", "any", { borderless: false, rotationEnabled: false }, false);
+        expect(onSelect).toHaveBeenCalledWith({
+            sizeIndex: 0,
+            cutStyleIndex: 1,
+            composableConfig: undefined,
+            fractalConfig: { borderless: false, rotationEnabled: false },
+            imageSource: 'random',
+            imageCategory: 'any',
+            vibrant: false,
+        });
     });
 });
