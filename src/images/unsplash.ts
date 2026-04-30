@@ -104,65 +104,42 @@ export function parseUnsplashResponse(data: unknown): UnsplashImageResult {
     };
 }
 
+/** Walk a dotted-key path through an unknown value, returning the leaf or undefined. */
+function getAtPath(data: unknown, path: readonly string[]): unknown {
+    let current: unknown = data;
+
+    for (const key of path) {
+        if (typeof current !== 'object' || current === null) {
+            return undefined;
+        }
+
+        current = (current as Record<string, unknown>)[key];
+    }
+
+    return current;
+}
+
+function hasString(data: unknown, ...path: string[]): boolean {
+    return typeof getAtPath(data, path) === 'string';
+}
+
+function hasNumber(data: unknown, ...path: string[]): boolean {
+    return typeof getAtPath(data, path) === 'number';
+}
+
 /**
  * Type guard to validate an Unsplash photo response.
  */
 function isUnsplashPhoto(data: unknown): data is UnsplashPhoto {
-    if (typeof data !== 'object' || data === null) {
-        return false;
-    }
-
-    const obj = data as Record<string, unknown>;
-
-    // Check urls
-    if (typeof obj.urls !== 'object' || obj.urls === null) {
-        return false;
-    }
-
-    const urls = obj.urls as Record<string, unknown>;
-
-    if (typeof urls.regular !== 'string' || typeof urls.full !== 'string') {
-        return false;
-    }
-
-    // Check dimensions
-    if (typeof obj.width !== 'number' || typeof obj.height !== 'number') {
-        return false;
-    }
-
-    // Check user
-    if (typeof obj.user !== 'object' || obj.user === null) {
-        return false;
-    }
-
-    const user = obj.user as Record<string, unknown>;
-
-    if (typeof user.name !== 'string') {
-        return false;
-    }
-
-    if (typeof user.links !== 'object' || user.links === null) {
-        return false;
-    }
-
-    const userLinks = user.links as Record<string, unknown>;
-
-    if (typeof userLinks.html !== 'string') {
-        return false;
-    }
-
-    // Check links
-    if (typeof obj.links !== 'object' || obj.links === null) {
-        return false;
-    }
-
-    const links = obj.links as Record<string, unknown>;
-
-    if (typeof links.html !== 'string') {
-        return false;
-    }
-
-    return true;
+    return (
+        hasString(data, 'urls', 'regular') &&
+        hasString(data, 'urls', 'full') &&
+        hasNumber(data, 'width') &&
+        hasNumber(data, 'height') &&
+        hasString(data, 'user', 'name') &&
+        hasString(data, 'user', 'links', 'html') &&
+        hasString(data, 'links', 'html')
+    );
 }
 
 /**
