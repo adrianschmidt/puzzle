@@ -645,30 +645,41 @@ html, body {
   border-radius: 12px;
 }
 
-.composable-slider-row {
+/*
+ * Generic two-column "label + control" row used throughout the new-game
+ * dialog (size + cut-style sliders, fractal options, image source, etc.).
+ * Despite the historical name, this is not slider-specific.
+ */
+.dialog-row {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
 }
 
-.composable-slider-row:last-child {
+/*
+ * Scope the bottom-margin trim to the boxed sub-sections (fractal options
+ * and composable sliders), where the last row sits flush against the box's
+ * own padding. Top-level rows in the dialog still need their 10px gap.
+ */
+.fractal-options .dialog-row:last-child,
+.composable-sliders .dialog-row:last-child {
   margin-bottom: 0;
 }
 
-.composable-slider-label {
+.dialog-row-label {
   font-size: 0.75rem;
   opacity: 0.8;
   min-width: 110px;
 }
 
-.composable-slider-input {
+.dialog-row-input {
   flex: 1;
   accent-color: var(--lime-primary-color, #7c6faa);
   cursor: pointer;
 }
 
-.composable-slider-value {
+.dialog-row-value {
   font-size: 0.75rem;
   opacity: 0.6;
   min-width: 30px;

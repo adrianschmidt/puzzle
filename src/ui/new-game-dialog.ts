@@ -1,0 +1,456 @@
+/**
+ * New-game dialog — modal that lets the player configure and start a new
+ * puzzle. Despite the legacy `.size-picker-*` CSS classes, the dialog now
+ * owns the cut-style picker, fractal/composable options, image-source
+ * controls, and the size grid itself.
+ *
+ * The dialog is dismissed by picking a size, clicking the backdrop, or
+ * pressing Escape. The latter two paths fire `onCancel`; size picks fire
+ * `onSelect` with a {@link NewGameSelection}.
+ */
+
+import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
+import { createCutStylePicker } from './cut-style-picker.js';
+import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
+import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
+import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
+import { createDismissableOverlay } from './dismissable-overlay.js';
+
+/** Composable generator config passed through from sliders. */
+export interface ComposableSliderConfig {
+    horizontalAmplitude: number;
+    horizontalFrequency: number;
+    verticalAmplitude: number;
+    verticalFrequency: number;
+    disableTabs: boolean;
+}
+
+/** Fractal generator config passed through from the dialog. */
+export interface FractalDialogConfig {
+    borderless: boolean;
+    /** Player opted into 90°-snap rotation (fractal only). */
+    rotationEnabled: boolean;
+}
+
+/** Everything the player chose in the new-game dialog. */
+export interface NewGameSelection {
+    sizeIndex: number;
+    cutStyleIndex: number;
+    /** Present only when the chosen cut style is composable. */
+    composableConfig?: ComposableSliderConfig;
+    /** Present only when the chosen cut style is fractal. */
+    fractalConfig?: FractalDialogConfig;
+    imageSource: string;
+    imageCategory: string;
+    vibrant: boolean;
+}
+
+export interface NewGameDialogOptions {
+    /** Container to append the dialog to. */
+    container: HTMLElement;
+    /** Currently selected size index (highlighted in the dialog). */
+    selectedIndex: number;
+    /** Currently selected cut style index. */
+    selectedCutStyleIndex?: number;
+    /** Previously saved composable slider config (used to pre-populate sliders). */
+    savedComposableConfig?: ComposableSliderConfig;
+    /** Previously saved fractal config (used to pre-populate controls). */
+    savedFractalConfig?: FractalDialogConfig;
+    /** Previously saved image source preference. */
+    savedImageSource?: string;
+    /** Previously saved image category preference. */
+    savedImageCategory?: string;
+    /** Previously saved "vibrant images" preference. */
+    savedVibrant?: boolean;
+    /** Called when the player selects a size. */
+    onSelect: (selection: NewGameSelection) => void;
+    /** Called when the dialog is dismissed without selecting. */
+    onCancel?: () => void;
+}
+
+/**
+ * Determine the CSS class suffix for a size option based on its piece count.
+ * Used for visual differentiation of the size buttons.
+ */
+export function getSizeClass(pieceCount: number): string {
+    if (pieceCount <= 24) return 'small';
+    if (pieceCount <= 48) return 'medium';
+    if (pieceCount <= 96) return 'large';
+
+    return 'xlarge';
+}
+
+interface SizeSection {
+    element: HTMLElement;
+    /** Re-render button labels (e.g. when cut style changes between fractal and classic). */
+    updateLabels(): void;
+}
+
+interface FractalSection {
+    element: HTMLElement;
+    getValues(): FractalDialogConfig;
+    setVisible(visible: boolean): void;
+}
+
+interface ComposableSection {
+    element: HTMLElement;
+    getValues(): ComposableSliderConfig;
+    setVisible(visible: boolean): void;
+}
+
+interface ImageSourceSection {
+    element: HTMLElement;
+    getValues(): { imageSource: string; imageCategory: string; vibrant: boolean };
+}
+
+function buildSizeSection(args: {
+    selectedIndex: number;
+    getCutStyleIndex: () => number;
+    onPick: (sizeIndex: number) => void;
+}): SizeSection {
+    const grid = document.createElement('div');
+    grid.className = 'size-picker-grid';
+
+    const buttons: HTMLButtonElement[] = [];
+
+    for (let i = 0; i < PUZZLE_SIZE_OPTIONS.length; i++) {
+        const opt = PUZZLE_SIZE_OPTIONS[i];
+        const btn = document.createElement('button');
+        btn.className = `size-picker-option size-picker-option--${getSizeClass(opt.pieceCount)}`;
+        btn.type = 'button';
+
+        if (i === args.selectedIndex) {
+            btn.classList.add('size-picker-option--selected');
+        }
+
+        btn.addEventListener('click', () => args.onPick(i));
+
+        buttons.push(btn);
+        grid.appendChild(btn);
+    }
+
+    function updateLabels(): void {
+        const isFractal = CUT_STYLE_OPTIONS[args.getCutStyleIndex()].id === 'fractal';
+
+        for (let i = 0; i < buttons.length; i++) {
+            const btn = buttons[i];
+            const opt = PUZZLE_SIZE_OPTIONS[i];
+
+            btn.replaceChildren();
+
+            const count = document.createElement('span');
+            count.className = 'size-picker-count';
+            count.textContent = isFractal ? `~${opt.pieceCount}` : String(opt.pieceCount);
+
+            const label = document.createElement('span');
+            label.className = 'size-picker-label';
+            label.textContent = 'pieces';
+
+            btn.appendChild(count);
+            btn.appendChild(label);
+
+            // Fractal piece counts are approximate — its grid dimensions
+            // aren't a meaningful "cols × rows", so omit them.
+            if (!isFractal) {
+                const dims = document.createElement('span');
+                dims.className = 'size-picker-dims';
+                dims.textContent = `${opt.cols} × ${opt.rows}`;
+                btn.appendChild(dims);
+            }
+        }
+    }
+
+    updateLabels();
+
+    return { element: grid, updateLabels };
+}
+
+function buildFractalOptionsSection(args: {
+    saved?: FractalDialogConfig;
+}): FractalSection {
+    const section = document.createElement('div');
+    section.className = 'fractal-options';
+
+    const borderlessCheckbox = appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false);
+    const rotationCheckbox = appendCheckboxRow(section, 'Enable rotation', args.saved?.rotationEnabled ?? false);
+
+    return {
+        element: section,
+        getValues: () => ({
+            borderless: borderlessCheckbox.checked,
+            rotationEnabled: rotationCheckbox.checked,
+        }),
+        setVisible: (visible) => {
+            section.style.display = visible ? 'block' : 'none';
+        },
+    };
+}
+
+function buildImageSourceSection(args: {
+    savedImageSource?: string;
+    savedImageCategory?: string;
+    savedVibrant?: boolean;
+}): ImageSourceSection {
+    const section = document.createElement('div');
+    section.className = 'image-source-section';
+
+    const sourceRow = document.createElement('div');
+    sourceRow.className = 'dialog-row';
+    const sourceLabel = document.createElement('label');
+    sourceLabel.className = 'dialog-row-label';
+    sourceLabel.textContent = 'Image';
+    const sourceSelect = document.createElement('select');
+    sourceSelect.className = 'dialog-row-input';
+    for (const [value, label] of [['random', 'Random photo'], ['blank', 'Blank (white)']]) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = label;
+        sourceSelect.appendChild(opt);
+    }
+    if (args.savedImageSource) {
+        sourceSelect.value = args.savedImageSource;
+    }
+    sourceRow.appendChild(sourceLabel);
+    sourceRow.appendChild(sourceSelect);
+    section.appendChild(sourceRow);
+
+    const categoryRow = document.createElement('div');
+    categoryRow.className = 'dialog-row';
+    const categoryLabel = document.createElement('label');
+    categoryLabel.className = 'dialog-row-label';
+    categoryLabel.textContent = 'Picture Type';
+    const categorySelect = document.createElement('select');
+    categorySelect.className = 'dialog-row-input';
+    for (const cat of IMAGE_CATEGORY_OPTIONS) {
+        const opt = document.createElement('option');
+        opt.value = cat.id;
+        opt.textContent = cat.label;
+        categorySelect.appendChild(opt);
+    }
+    if (args.savedImageCategory) {
+        categorySelect.value = args.savedImageCategory;
+    }
+    categoryRow.appendChild(categoryLabel);
+    categoryRow.appendChild(categorySelect);
+    section.appendChild(categoryRow);
+
+    // Vibrant-colours toggle — appends keywords like "vibrant colorful" to
+    // the Unsplash query to bias results toward saturated photos.
+    const vibrantRow = document.createElement('div');
+    vibrantRow.className = 'dialog-row';
+    const vibrantLabel = document.createElement('label');
+    vibrantLabel.className = 'dialog-row-label';
+    vibrantLabel.textContent = 'Vibrant colours';
+    const vibrantCheckbox = document.createElement('input');
+    vibrantCheckbox.type = 'checkbox';
+    vibrantCheckbox.checked = args.savedVibrant ?? false;
+    vibrantRow.appendChild(vibrantLabel);
+    vibrantRow.appendChild(vibrantCheckbox);
+    section.appendChild(vibrantRow);
+
+    function updateCategoryVisibility(): void {
+        const hidden = sourceSelect.value === 'blank';
+        categoryRow.style.display = hidden ? 'none' : '';
+        vibrantRow.style.display = hidden ? 'none' : '';
+    }
+
+    sourceSelect.addEventListener('change', updateCategoryVisibility);
+    updateCategoryVisibility();
+
+    return {
+        element: section,
+        getValues: () => ({
+            imageSource: sourceSelect.value,
+            imageCategory: categorySelect.value,
+            vibrant: vibrantCheckbox.checked,
+        }),
+    };
+}
+
+function buildComposableSlidersSection(args: {
+    saved?: ComposableSliderConfig;
+}): ComposableSection {
+    const section = document.createElement('div');
+    section.className = 'composable-sliders';
+
+    interface SliderDef {
+        id: keyof Omit<ComposableSliderConfig, 'disableTabs'>;
+        label: string;
+        min: number;
+        max: number;
+        step: number;
+        defaultValue: number;
+    }
+
+    const sliderDefs: SliderDef[] = [
+        { id: 'horizontalAmplitude', label: 'H Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: args.saved?.horizontalAmplitude ?? 0.15 },
+        { id: 'horizontalFrequency', label: 'H Frequency', min: 0, max: 10, step: 0.1, defaultValue: args.saved?.horizontalFrequency ?? 1.5 },
+        { id: 'verticalAmplitude', label: 'V Amplitude', min: 0, max: 0.5, step: 0.01, defaultValue: args.saved?.verticalAmplitude ?? 0.15 },
+        { id: 'verticalFrequency', label: 'V Frequency', min: 0, max: 10, step: 0.1, defaultValue: args.saved?.verticalFrequency ?? 1.5 },
+    ];
+
+    const sliderInputs = new Map<SliderDef['id'], HTMLInputElement>();
+
+    for (const def of sliderDefs) {
+        const row = document.createElement('div');
+        row.className = 'dialog-row';
+
+        const lbl = document.createElement('label');
+        lbl.className = 'dialog-row-label';
+        lbl.textContent = def.label;
+
+        const valueDisplay = document.createElement('span');
+        valueDisplay.className = 'dialog-row-value';
+        valueDisplay.textContent = String(def.defaultValue);
+
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.className = 'dialog-row-input';
+        input.min = String(def.min);
+        input.max = String(def.max);
+        input.step = String(def.step);
+        input.value = String(def.defaultValue);
+
+        input.addEventListener('input', () => {
+            valueDisplay.textContent = input.value;
+        });
+
+        sliderInputs.set(def.id, input);
+
+        row.appendChild(lbl);
+        row.appendChild(input);
+        row.appendChild(valueDisplay);
+        section.appendChild(row);
+    }
+
+    const disableTabsCheckbox = appendCheckboxRow(
+        section,
+        'Disable Tabs',
+        args.saved?.disableTabs ?? DEFAULT_DISABLE_TABS,
+    );
+
+    return {
+        element: section,
+        getValues: () => ({
+            horizontalAmplitude: parseFloat(sliderInputs.get('horizontalAmplitude')!.value),
+            horizontalFrequency: parseFloat(sliderInputs.get('horizontalFrequency')!.value),
+            verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
+            verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
+            disableTabs: disableTabsCheckbox.checked,
+        }),
+        setVisible: (visible) => {
+            section.style.display = visible ? 'block' : 'none';
+        },
+    };
+}
+
+/** Append a label + checkbox row and return the checkbox. */
+function appendCheckboxRow(
+    parent: HTMLElement,
+    labelText: string,
+    initialChecked: boolean,
+): HTMLInputElement {
+    const row = document.createElement('div');
+    row.className = 'dialog-row';
+
+    const label = document.createElement('label');
+    label.className = 'dialog-row-label';
+    label.textContent = labelText;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = initialChecked;
+
+    row.appendChild(label);
+    row.appendChild(checkbox);
+    parent.appendChild(row);
+
+    return checkbox;
+}
+
+/**
+ * Create and show the new-game dialog.
+ *
+ * Returns a cleanup function that removes the dialog from the DOM.
+ */
+export function createNewGameDialog(options: NewGameDialogOptions): () => void {
+    const { container, selectedIndex, onSelect, onCancel } = options;
+
+    let currentCutStyleIndex = options.selectedCutStyleIndex ?? 0;
+    const composableCutIndex = CUT_STYLE_OPTIONS.findIndex(o => o.id === 'composable');
+    const fractalCutIndex = CUT_STYLE_OPTIONS.findIndex(o => o.id === 'fractal');
+
+    // The helper owns Escape/backdrop dismissal and fires onCancel only on
+    // those paths — not when the caller invokes dismiss() after picking a
+    // size.
+    const { overlay, dismiss } = createDismissableOverlay({
+        container,
+        className: 'size-picker-overlay',
+        onDismiss: onCancel,
+    });
+
+    const dialog = document.createElement('div');
+    dialog.className = 'size-picker-dialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-label', 'New game options');
+
+    const title = document.createElement('h2');
+    title.className = 'size-picker-title';
+    title.textContent = 'New Game';
+    dialog.appendChild(title);
+
+    const sizeSubtitle = document.createElement('h3');
+    sizeSubtitle.className = 'size-picker-subtitle';
+    sizeSubtitle.textContent = 'Puzzle Size';
+    dialog.appendChild(sizeSubtitle);
+
+    const fractalSection = buildFractalOptionsSection({ saved: options.savedFractalConfig });
+    const composableSection = buildComposableSlidersSection({ saved: options.savedComposableConfig });
+    const imageSourceSection = buildImageSourceSection({
+        savedImageSource: options.savedImageSource,
+        savedImageCategory: options.savedImageCategory,
+        savedVibrant: options.savedVibrant,
+    });
+
+    const sizeSection = buildSizeSection({
+        selectedIndex,
+        getCutStyleIndex: () => currentCutStyleIndex,
+        onPick: (sizeIndex) => {
+            dismiss();
+            onSelect({
+                sizeIndex,
+                cutStyleIndex: currentCutStyleIndex,
+                composableConfig: currentCutStyleIndex === composableCutIndex
+                    ? composableSection.getValues()
+                    : undefined,
+                fractalConfig: currentCutStyleIndex === fractalCutIndex
+                    ? fractalSection.getValues()
+                    : undefined,
+                ...imageSourceSection.getValues(),
+            });
+        },
+    });
+
+    const cutStyleSection = createCutStylePicker({
+        selectedIndex: currentCutStyleIndex,
+        onSelect: (index) => {
+            currentCutStyleIndex = index;
+            sizeSection.updateLabels();
+            fractalSection.setVisible(index === fractalCutIndex);
+            composableSection.setVisible(index === composableCutIndex);
+        },
+    });
+
+    fractalSection.setVisible(currentCutStyleIndex === fractalCutIndex);
+    composableSection.setVisible(currentCutStyleIndex === composableCutIndex);
+
+    dialog.appendChild(cutStyleSection);
+    dialog.appendChild(fractalSection.element);
+    dialog.appendChild(imageSourceSection.element);
+    dialog.appendChild(sizeSection.element);
+    dialog.appendChild(composableSection.element);
+
+    overlay.appendChild(dialog);
+
+    return dismiss;
+}

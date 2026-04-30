@@ -65,7 +65,7 @@ import {
     saveVibrantPreference,
     buildImageQuery,
 } from './game/image-categories.js';
-import { createSizePickerDialog, type FractalDialogConfig } from './ui/size-picker.js';
+import { createNewGameDialog, type FractalDialogConfig } from './ui/new-game-dialog.js';
 import {
     parseLocationHash,
     type SharePayload,
@@ -678,7 +678,7 @@ createNewGameButton({
         const savedImageSource = loadImageSourcePreference();
         const savedImageCategory = loadImageCategoryPreference();
         const savedVibrant = loadVibrantPreference();
-        createSizePickerDialog({
+        createNewGameDialog({
             container: app,
             selectedIndex: preferredIndex,
             selectedCutStyleIndex: preferredCutStyleIndex,

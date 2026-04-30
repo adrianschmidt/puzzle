@@ -16,8 +16,8 @@ export {
     formatAttributionText,
 } from './attribution.js';
 
-export { createSizePickerDialog, getSizeClass } from './size-picker.js';
-export type { SizePickerOptions, NewGameSelection } from './size-picker.js';
+export { createNewGameDialog, getSizeClass } from './new-game-dialog.js';
+export type { NewGameDialogOptions, NewGameSelection } from './new-game-dialog.js';
 
 export {
     BACKGROUND_COLOUR_PRESETS,
