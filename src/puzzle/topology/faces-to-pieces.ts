@@ -11,7 +11,7 @@
 import type { Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from '../composable/types.js';
 import type { HalfEdge, Face, DCELResult } from './dcel.js';
-import { getFaceEdges } from './dcel.js';
+import { getFaceEdges, countFaceEdges } from './dcel.js';
 import { diagnostics } from './diagnostics.js';
 
 // ---------------------------------------------------------------------------
@@ -82,19 +82,6 @@ export function facesToPieceDefinitions(
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Count the number of edges (half-edges) bounding a face.
- */
-function countFaceEdges(face: Face): number {
-    let count = 0;
-    let he = face.outerEdge;
-    do {
-        count++;
-        he = he.next;
-    } while (he !== face.outerEdge);
-    return count;
-}
 
 interface BBox {
     minX: number;
