@@ -13,6 +13,7 @@
  * The puzzle image is loaded once and referenced by all piece elements.
  */
 
+import { getPieceBounds } from '../model/derive.js';
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
 import type { PiecePointerDownCallback, Renderer } from './types.js';
 
@@ -418,22 +419,7 @@ export class SvgDomRenderer implements Renderer {
         fillPath.dataset.pieceFill = 'true';
         svg.appendChild(fillPath);
 
-        // Piece-local bbox from edge endpoints — works for any shape the
-        // generators produce (including fractal arcs whose start/end points
-        // approximate the overall silhouette well enough for a label).
-        let minX = Infinity;
-        let minY = Infinity;
-        let maxX = -Infinity;
-        let maxY = -Infinity;
-        for (const edge of piece.edges) {
-            for (const point of [edge.start, edge.end]) {
-                if (point.x < minX) minX = point.x;
-                if (point.x > maxX) maxX = point.x;
-                if (point.y < minY) minY = point.y;
-                if (point.y > maxY) maxY = point.y;
-            }
-        }
-
+        const { minX, minY, maxX, maxY } = getPieceBounds(piece);
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
 
