@@ -30,6 +30,19 @@ export interface FractalDialogConfig {
     rotationEnabled: boolean;
 }
 
+/** Everything the player chose in the new-game dialog. */
+export interface NewGameSelection {
+    sizeIndex: number;
+    cutStyleIndex: number;
+    /** Present only when the chosen cut style is composable. */
+    composableConfig?: ComposableSliderConfig;
+    /** Present only when the chosen cut style is fractal. */
+    fractalConfig?: FractalDialogConfig;
+    imageSource: string;
+    imageCategory: string;
+    vibrant: boolean;
+}
+
 export interface SizePickerOptions {
     /** Container to append the dialog to. */
     container: HTMLElement;
@@ -48,15 +61,7 @@ export interface SizePickerOptions {
     /** Previously saved "vibrant images" preference. */
     savedVibrant?: boolean;
     /** Called when the player selects a size. */
-    onSelect: (
-        index: number,
-        cutStyleIndex?: number,
-        composableConfig?: ComposableSliderConfig,
-        imageSource?: string,
-        imageCategory?: string,
-        fractalConfig?: FractalDialogConfig,
-        vibrant?: boolean,
-    ) => void;
+    onSelect: (selection: NewGameSelection) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
 }
@@ -172,15 +177,15 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
                     rotationEnabled: fractalRotationCheckbox.checked,
                 }
                 : undefined;
-            onSelect(
-                i,
-                currentCutStyleIndex,
+            onSelect({
+                sizeIndex: i,
+                cutStyleIndex: currentCutStyleIndex,
                 composableConfig,
-                imageSourceSelect.value,
-                imageCategorySelect.value,
                 fractalConfig,
-                vibrantCheckbox.checked,
-            );
+                imageSource: imageSourceSelect.value,
+                imageCategory: imageCategorySelect.value,
+                vibrant: vibrantCheckbox.checked,
+            });
         });
 
         sizeButtons.push(btn);

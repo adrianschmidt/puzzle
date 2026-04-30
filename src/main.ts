@@ -687,25 +687,20 @@ createNewGameButton({
             savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
             savedVibrant: savedVibrant,
-            onSelect: (index, cutStyleIndex, composableConfig, imageSource, imageCategory, fractalConfig, vibrant) => {
-                saveSizePreference(index);
-                const resolvedCutStyleIndex = cutStyleIndex ?? preferredCutStyleIndex;
-                saveCutStylePreference(resolvedCutStyleIndex);
+            onSelect: ({ sizeIndex, cutStyleIndex, composableConfig, fractalConfig, imageSource, imageCategory, vibrant }) => {
+                saveSizePreference(sizeIndex);
+                saveCutStylePreference(cutStyleIndex);
                 if (composableConfig) {
                     saveComposableConfigPreference(composableConfig);
                 }
                 if (fractalConfig) {
                     saveFractalConfigPreference(fractalConfig);
                 }
-                if (imageSource) {
-                    saveImageSourcePreference(imageSource);
-                }
-                if (imageCategory) {
-                    saveImageCategoryPreference(imageCategory);
-                }
-                saveVibrantPreference(vibrant ?? false);
-                const option = getSizeOption(index);
-                const cutStyle = getCutStyleOption(resolvedCutStyleIndex).id;
+                saveImageSourcePreference(imageSource);
+                saveImageCategoryPreference(imageCategory);
+                saveVibrantPreference(vibrant);
+                const option = getSizeOption(sizeIndex);
+                const cutStyle = getCutStyleOption(cutStyleIndex).id;
                 clearSavedState();
                 void startNewGame(
                     toGridSize(option),
@@ -714,7 +709,7 @@ createNewGameButton({
                     imageSource,
                     imageCategory,
                     fractalConfig,
-                    vibrant ?? false,
+                    vibrant,
                 );
             },
         });
