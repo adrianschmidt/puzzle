@@ -10,7 +10,7 @@ import {
     gameStateToPayload,
     hasShareableProgress,
 } from '../sharing/index.js';
-import { sharePuzzle } from './share.js';
+import { isWebShareAvailable, sharePuzzle } from './share.js';
 import { showToast } from './toast.js';
 import { track } from '../analytics/index.js';
 
@@ -19,8 +19,7 @@ export function attachShareSection(
     state: GameState,
     baseUrl: string,
 ): void {
-    const webShareAvailable =
-        typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+    const webShareAvailable = isWebShareAvailable();
 
     const section = document.createElement('section');
     section.className = 'info-section share-section';
