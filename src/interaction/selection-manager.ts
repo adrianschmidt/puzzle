@@ -103,6 +103,18 @@ export class SelectionManager {
     }
 
     /**
+     * Expand a single group ID to all selected IDs when the multi-select
+     * tool is active and the given ID is part of the selection; otherwise
+     * return just `[id]`. Used by drag handlers to fan out a single-group
+     * operation to every selected group. The given `id` is always first.
+     */
+    expandToSelectionIfActive(id: number): readonly number[] {
+        if (!this._toolActive || !this.selected.has(id)) return [id];
+        const others = [...this.selected].filter((other) => other !== id);
+        return [id, ...others];
+    }
+
+    /**
      * Update selection after a merge: oldGroupId was absorbed into newGroupId.
      * If the old group was selected, the new group inherits the selection.
      */

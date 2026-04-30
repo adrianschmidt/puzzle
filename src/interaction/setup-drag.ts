@@ -68,23 +68,20 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
 
     const deltaToWorld = screenDeltaToWorld ?? ((d: Point) => d);
 
+    const expandToSelection = (groupId: number): readonly number[] =>
+        selectionManager?.expandToSelectionIfActive(groupId) ?? [groupId];
+
     // Auto-pan controller: pans viewport when dragging near edges
     const autoPan = panViewport
         ? new AutoPanController({
             panViewport,
             moveGroup(groupId: number, worldDelta: Point) {
-                // Also compensate other selected groups during auto-pan
-                if (selectionManager?.toolActive && selectionManager.isSelected(groupId)) {
-                    for (const selectedId of selectionManager.selectedGroupIds) {
-                        if (selectedId === groupId) continue;
-                        const otherGroup = getState().groups.find(g => g.id === selectedId);
-                        if (otherGroup) {
-                            moveGroup(otherGroup, worldDelta);
-                        }
-                    }
+                // Compensate the dragged group AND every other selected
+                // group when the multi-select tool is active.
+                for (const id of expandToSelection(groupId)) {
+                    const group = getState().groups.find(g => g.id === id);
+                    if (group) moveGroup(group, worldDelta);
                 }
-                const group = findGroup(groupId, getState());
-                moveGroup(group, worldDelta);
             },
             screenDeltaToWorld: deltaToWorld,
             requestRender: onStateChanged,
@@ -99,41 +96,28 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
         () => getState().groups,
         {
             moveGroup(groupId: number, delta: Point) {
-                // If this group is part of a multi-selection, move all selected groups
-                if (selectionManager?.toolActive && selectionManager.isSelected(groupId)) {
-                    for (const selectedId of selectionManager.selectedGroupIds) {
-                        if (selectedId === groupId) continue;
-                        const otherGroup = getState().groups.find(g => g.id === selectedId);
-                        if (otherGroup) {
-                            moveGroup(otherGroup, delta);
-                        }
-                    }
+                // Move the dragged group AND every other selected group
+                // when the multi-select tool is active.
+                for (const id of expandToSelection(groupId)) {
+                    const group = getState().groups.find(g => g.id === id);
+                    if (group) moveGroup(group, delta);
                 }
-                // Always move the dragged group itself
-                const group = findGroup(groupId, getState());
-                moveGroup(group, delta);
             },
             bringToFront(groupId: number) {
-                // Bring all selected groups to front when dragging one
-                if (selectionManager?.toolActive && selectionManager.isSelected(groupId)) {
-                    for (const selectedId of selectionManager.selectedGroupIds) {
-                        if (selectedId === groupId) continue;
-                        renderer.bringGroupToFront(selectedId);
-                        renderer.setGroupDragging(selectedId, true);
-                    }
+                // Bring every selected group to the front, dragged last so
+                // it ends up visually on top (DOM appendChild = on top).
+                const ids = expandToSelection(groupId);
+                for (let i = ids.length - 1; i >= 0; i--) {
+                    renderer.bringGroupToFront(ids[i]);
+                    renderer.setGroupDragging(ids[i], true);
                 }
-                renderer.bringGroupToFront(groupId);
-                renderer.setGroupDragging(groupId, true);
             },
             onDrop(groupId: number) {
                 autoPan?.stop();
-                // Clear dragging visual from all selected groups
-                if (selectionManager?.toolActive && selectionManager.isSelected(groupId)) {
-                    for (const selectedId of selectionManager.selectedGroupIds) {
-                        renderer.setGroupDragging(selectedId, false);
-                    }
+                // Clear dragging visual from every selected group.
+                for (const id of expandToSelection(groupId)) {
+                    renderer.setGroupDragging(id, false);
                 }
-                renderer.setGroupDragging(groupId, false);
                 onDrop(groupId);
             },
             requestRender() {
