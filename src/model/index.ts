@@ -7,3 +7,9 @@ export {
     localToWorld,
     getWorldPosition,
 } from './helpers.js';
+export {
+    getImageDimensions,
+    getPieceBaseDimension,
+    getGridCols,
+    getGridRows,
+} from './derive.js';

@@ -14,7 +14,7 @@ import type {
     Point,
     Size,
 } from '../model/types.js';
-import { getImageDimensions } from '../renderer/svg-dom-utils.js';
+import { getImageDimensions } from '../model/derive.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
@@ -275,11 +275,10 @@ function resolveRotationMode(
 /**
  * Derive image dimensions from piece data (for v1 migration).
  *
- * Uses the same algorithm as the renderer's getImageDimensions,
- * but works on serialized data by constructing a temporary partial state.
+ * Uses `getImageDimensions` on a temporary partial state synthesised
+ * from the serialized pieces.
  */
 function deriveImageSize(data: SerializedGameState): Size {
-    // Construct a minimal GameState-like object for getImageDimensions
     const tempState: GameState = {
         pieces: data.pieces,
         groups: [],
