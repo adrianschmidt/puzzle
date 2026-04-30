@@ -66,6 +66,7 @@ import {
     buildImageQuery,
 } from './game/image-categories.js';
 import { createSizePickerDialog, type FractalDialogConfig } from './ui/size-picker.js';
+import { createDismissableOverlay } from './ui/dismissable-overlay.js';
 import {
     gameStateToPayload,
     buildShareUrl,
@@ -111,17 +112,36 @@ if (appVersion) {
  * A simple centered message that fades in.
  * The overlay can be dismissed by clicking/tapping anywhere on it.
  */
+let currentCompletionDismiss: (() => void) | null = null;
+
 function showCompletionOverlay(): void {
     // Guard against multiple overlays
-    if (document.querySelector('.completion-overlay')) {
+    if (currentCompletionDismiss) {
         return;
     }
 
     // Add a glow effect to the completed puzzle
     app.classList.add('completion-glow');
 
-    const overlay = document.createElement('div');
-    overlay.className = 'completion-overlay';
+    function cleanup(): void {
+        app.classList.remove('completion-glow');
+        currentCompletionDismiss = null;
+    }
+
+    const handle = createDismissableOverlay({
+        container: app,
+        className: 'completion-overlay',
+        dismissOn: 'any-click',
+        dismissOnEscape: false,
+        onDismiss: cleanup,
+    });
+    const overlay = handle.overlay;
+
+    currentCompletionDismiss = () => {
+        handle.dismiss();
+        cleanup();
+    };
+
     overlay.innerHTML = `
         <div class="completion-message">
             <h1>🧩 Puzzle Complete!</h1>
@@ -155,23 +175,13 @@ function showCompletionOverlay(): void {
     } else if (message) {
         message.appendChild(challengeBtn);
     }
-
-    // Add click handler to dismiss the overlay
-    overlay.addEventListener('click', removeCompletionOverlay, { once: true });
-
-    app.appendChild(overlay);
 }
 
 /**
  * Remove the completion overlay if it exists.
  */
 function removeCompletionOverlay(): void {
-    const overlay = document.querySelector('.completion-overlay');
-    if (overlay) {
-        overlay.remove();
-    }
-
-    app.classList.remove('completion-glow');
+    currentCompletionDismiss?.();
 }
 
 /**
