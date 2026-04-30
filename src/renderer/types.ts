@@ -44,6 +44,19 @@ export interface Renderer {
     setViewportTransform(scale: number, offsetX: number, offsetY: number): void;
 
     /**
+     * Enable smooth animation of subsequent {@link setViewportTransform}
+     * changes. Used for choreographed transitions (e.g. zoom-to-fit on
+     * completion). Implementations that cannot animate may no-op.
+     */
+    enableViewportTransition(): void;
+
+    /**
+     * Disable viewport transitions so subsequent transform changes apply
+     * immediately. Should be called once an animation has completed.
+     */
+    disableViewportTransition(): void;
+
+    /**
      * Returns the table element (the rendering surface).
      * Used by the viewport controller to check if pointer events
      * hit piece elements vs empty space.
