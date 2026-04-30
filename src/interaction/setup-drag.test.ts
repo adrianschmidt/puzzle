@@ -83,6 +83,8 @@ function createFakeRenderer(): FakeRenderer {
         }),
         bringGroupToFront: vi.fn(),
         setViewportTransform: vi.fn(),
+        enableViewportTransition: vi.fn(),
+        disableViewportTransition: vi.fn(),
         getTableElement: vi.fn(() => null),
         setGroupDragging: vi.fn(),
         flashMergePulse: vi.fn(),

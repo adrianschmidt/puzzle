@@ -138,19 +138,11 @@ export class SvgDomRenderer implements Renderer {
             `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
     }
 
-    /**
-     * Enable smooth CSS transitions on viewport transform changes.
-     * Call this before changing the viewport to animate the transformation.
-     */
     enableViewportTransition(): void {
         if (!this.tableEl) return;
         this.tableEl.style.transition = 'transform 0.8s ease-in-out';
     }
 
-    /**
-     * Disable viewport transitions for immediate transform changes.
-     * Call this after an animation completes to restore normal behavior.
-     */
     disableViewportTransition(): void {
         if (!this.tableEl) return;
         this.tableEl.style.transition = '';
