@@ -43,6 +43,22 @@ export interface HalfEdge {
     curve: Curve;
 }
 
+/**
+ * Construction-only shape for half-edges. The cyclic fields (`twin`, `next`,
+ * `prev`) cannot be populated at allocation time, so they start as null and
+ * are wired up by `makeTwinPair` (twins) and Step 5 `linkHalfEdges`
+ * (next/prev). Narrowed to `HalfEdge` once wiring is complete.
+ */
+interface MutableHalfEdge {
+    id: number;
+    origin: Vertex;
+    twin: MutableHalfEdge | null;
+    next: MutableHalfEdge | null;
+    prev: MutableHalfEdge | null;
+    face: Face | null;
+    curve: Curve;
+}
+
 export interface Face {
     id: number;
     /** One of the half-edges on this face's boundary. */
@@ -115,27 +131,11 @@ export function buildDCEL(cutSet: CutSet): DCELResult {
         // Skip zero-length segments
         if (originVertex === targetVertex) continue;
 
-        const he1 = {
-            id: nextHalfEdgeId++,
-            origin: originVertex,
-            curve: segment,
-        } as unknown as HalfEdge;
-
-        const he2 = {
-            id: nextHalfEdgeId++,
-            origin: targetVertex,
-            curve: segment.reverse(),
-        } as unknown as HalfEdge;
-
-        he1.twin = he2;
-        he2.twin = he1;
-        he1.face = null;
-        he2.face = null;
-        // next/prev set later
-        he1.next = he1; // placeholder
-        he1.prev = he1;
-        he2.next = he2;
-        he2.prev = he2;
+        const [he1, he2] = makeTwinPair(
+            nextHalfEdgeId, nextHalfEdgeId + 1,
+            originVertex, targetVertex, segment,
+        );
+        nextHalfEdgeId += 2;
 
         halfEdges.push(he1, he2);
 
@@ -443,6 +443,39 @@ class VertexPool {
     all(): Vertex[] {
         return this.vertices;
     }
+}
+
+/**
+ * Allocate a pair of twin half-edges for a curve segment.
+ *
+ * Wires up the cyclic `twin` field (which can't be set at allocation time
+ * due to the chicken-and-egg of mutual references) and seeds `next`/`prev`
+ * with self-pointers; Step 5 `linkHalfEdges` overwrites those once the
+ * angular ordering at each vertex is known.
+ *
+ * The returned pair is narrowed to `HalfEdge` because all cyclic fields
+ * are non-null after this function returns.
+ */
+function makeTwinPair(
+    id1: number,
+    id2: number,
+    originA: Vertex,
+    originB: Vertex,
+    curve: Curve,
+): [HalfEdge, HalfEdge] {
+    const he1: MutableHalfEdge = {
+        id: id1, origin: originA, curve,
+        twin: null, next: null, prev: null, face: null,
+    };
+    const he2: MutableHalfEdge = {
+        id: id2, origin: originB, curve: curve.reverse(),
+        twin: null, next: null, prev: null, face: null,
+    };
+    he1.twin = he2;
+    he2.twin = he1;
+    he1.next = he1; he1.prev = he1;
+    he2.next = he2; he2.prev = he2;
+    return [he1 as HalfEdge, he2 as HalfEdge];
 }
 
 // ---------------------------------------------------------------------------
