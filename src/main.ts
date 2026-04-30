@@ -66,15 +66,12 @@ import {
     buildImageQuery,
 } from './game/image-categories.js';
 import { createSizePickerDialog, type FractalDialogConfig } from './ui/size-picker.js';
-import { createDismissableOverlay } from './ui/dismissable-overlay.js';
 import {
-    gameStateToPayload,
-    buildShareUrl,
     parseLocationHash,
     type SharePayload,
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
-import { sharePuzzle } from './ui/share.js';
+import { showCompletionOverlay as renderCompletionOverlay } from './ui/completion-overlay.js';
 import { showToast } from './ui/toast.js';
 import {
     showLoadingOverlay,
@@ -107,81 +104,22 @@ if (appVersion) {
     app.appendChild(versionEl);
 }
 
-/**
- * Show a "Puzzle Complete!" overlay on top of the puzzle.
- * A simple centered message that fades in.
- * The overlay can be dismissed by clicking/tapping anywhere on it.
- */
-let currentCompletionDismiss: (() => void) | null = null;
+let currentCompletionHide: (() => void) | null = null;
 
 function showCompletionOverlay(): void {
-    // Guard against multiple overlays
-    if (currentCompletionDismiss) {
-        return;
-    }
-
-    // Add a glow effect to the completed puzzle
-    app.classList.add('completion-glow');
-
-    function cleanup(): void {
-        app.classList.remove('completion-glow');
-        currentCompletionDismiss = null;
-    }
-
-    const handle = createDismissableOverlay({
+    if (currentCompletionHide) return;
+    currentCompletionHide = renderCompletionOverlay({
         container: app,
-        className: 'completion-overlay',
-        dismissOn: 'any-click',
-        dismissOnEscape: false,
-        onDismiss: cleanup,
+        state: gameState,
+        onDismiss: () => {
+            currentCompletionHide = null;
+        },
     });
-    const overlay = handle.overlay;
-
-    currentCompletionDismiss = () => {
-        handle.dismiss();
-        cleanup();
-    };
-
-    overlay.innerHTML = `
-        <div class="completion-message">
-            <h1>🧩 Puzzle Complete!</h1>
-            <p>Well done!</p>
-            <p class="completion-dismiss-hint">Tap anywhere to dismiss</p>
-        </div>
-    `;
-
-    const challengeBtn = document.createElement('button');
-    challengeBtn.type = 'button';
-    challengeBtn.className = 'completion-share-btn';
-    challengeBtn.textContent = 'Challenge a friend — share this puzzle!';
-    challengeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        track('puzzle-shared', { source: 'completion-overlay', includesProgress: false });
-        const payload = gameStateToPayload(gameState, { includeProgress: false });
-        const url = buildShareUrl(window.location.href.split('#')[0], payload);
-        void sharePuzzle({
-            url,
-            title: 'Puzzle',
-            text: 'I finished this puzzle — can you?',
-            onClipboardFallback: () => showToast('Link copied to clipboard'),
-            onError: (err) => showToast(`Couldn't share: ${err.message}`),
-        });
-    });
-
-    const message = overlay.querySelector('.completion-message');
-    const dismissHint = message?.querySelector('.completion-dismiss-hint');
-    if (message && dismissHint) {
-        message.insertBefore(challengeBtn, dismissHint);
-    } else if (message) {
-        message.appendChild(challengeBtn);
-    }
 }
 
-/**
- * Remove the completion overlay if it exists.
- */
 function removeCompletionOverlay(): void {
-    currentCompletionDismiss?.();
+    currentCompletionHide?.();
+    currentCompletionHide = null;
 }
 
 /**
