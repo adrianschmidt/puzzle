@@ -8,6 +8,7 @@
  */
 
 import type { GameState } from '../model/types.js';
+import { createDismissableOverlay } from './dismissable-overlay.js';
 import {
     getSortedPresets,
     loadTolerancePreference,
@@ -64,9 +65,17 @@ function buildReproParams(state: GameState): Record<string, unknown> {
 export function createInfoModal(options: InfoModalOptions): () => void {
     const { container, onDismiss, onToleranceChanged, getState } = options;
 
-    // Build overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'info-modal-overlay';
+    // Build overlay (dismissal listeners owned by createDismissableOverlay).
+    const { overlay, dismiss: dismissOverlay } = createDismissableOverlay({
+        container,
+        className: 'info-modal-overlay',
+        onDismiss,
+    });
+
+    function dismiss(): void {
+        dismissOverlay();
+        onDismiss?.();
+    }
 
     const modal = document.createElement('div');
     modal.className = 'info-modal';
@@ -340,32 +349,10 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     modal.appendChild(content);
     overlay.appendChild(modal);
 
-    function dismiss(): void {
-        overlay.remove();
-        document.removeEventListener('keydown', handleKeyDown);
-        onDismiss?.();
-    }
-
-    function handleKeyDown(e: KeyboardEvent): void {
-        if (e.key === 'Escape') {
-            dismiss();
-        }
-    }
-
-    // Dismiss on backdrop click
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            dismiss();
-        }
-    });
-
-    // Dismiss on close button click
+    // Dismiss on close button click. Backdrop / Escape are handled by the
+    // helper; both fire onDismiss already, so we only need to wire up the
+    // close button (and the debug solve button above) here.
     closeButton.addEventListener('click', dismiss);
-
-    // Dismiss on Escape
-    document.addEventListener('keydown', handleKeyDown);
-
-    container.appendChild(overlay);
 
     return dismiss;
 }

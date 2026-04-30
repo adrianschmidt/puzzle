@@ -12,6 +12,7 @@ import { createCutStylePicker } from './cut-style-picker.js';
 import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
+import { createDismissableOverlay } from './dismissable-overlay.js';
 
 /** Composable generator config passed through from sliders. */
 export interface ComposableSliderConfig {
@@ -83,9 +84,14 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     // Track the current cut style selection
     let currentCutStyleIndex = options.selectedCutStyleIndex ?? 0;
 
-    // Build overlay
-    const overlay = document.createElement('div');
-    overlay.className = 'size-picker-overlay';
+    // Build overlay. The helper owns Escape/backdrop dismissal and fires
+    // onCancel only on those paths — not when the caller invokes
+    // `dismiss()` after picking a size.
+    const { overlay, dismiss } = createDismissableOverlay({
+        container,
+        className: 'size-picker-overlay',
+        onDismiss: onCancel,
+    });
 
     const dialog = document.createElement('div');
     dialog.className = 'size-picker-dialog';
@@ -105,18 +111,6 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
 
     const grid = document.createElement('div');
     grid.className = 'size-picker-grid';
-
-    function dismiss(): void {
-        overlay.remove();
-        document.removeEventListener('keydown', handleKeyDown);
-    }
-
-    function handleKeyDown(e: KeyboardEvent): void {
-        if (e.key === 'Escape') {
-            dismiss();
-            onCancel?.();
-        }
-    }
 
     // Store button elements for re-rendering when cut style changes
     const sizeButtons: HTMLButtonElement[] = [];
@@ -408,19 +402,6 @@ export function createSizePickerDialog(options: SizePickerOptions): () => void {
     updateSlidersVisibility();
 
     overlay.appendChild(dialog);
-
-    // Dismiss on backdrop click
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            dismiss();
-            onCancel?.();
-        }
-    });
-
-    // Dismiss on Escape
-    document.addEventListener('keydown', handleKeyDown);
-
-    container.appendChild(overlay);
 
     return dismiss;
 }

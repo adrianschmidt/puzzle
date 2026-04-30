@@ -11,6 +11,7 @@ import {
     BACKGROUND_COLOUR_PRESETS,
     type BackgroundColourPreset,
 } from './background-colour.js';
+import { attachDismissablePopover } from './dismissable-overlay.js';
 
 export interface BackgroundColourPickerOptions {
     /** The container to append the button to. */
@@ -95,24 +96,14 @@ export function createBackgroundColourPicker(
     button.innerHTML = '🎨';
 
     let panel: HTMLDivElement | null = null;
-    let dismissListener: ((e: MouseEvent) => void) | null = null;
-    let keyListener: ((e: KeyboardEvent) => void) | null = null;
+    let dismissPopover: (() => void) | null = null;
 
     function dismissPanel(): void {
-        if (panel) {
-            panel.remove();
-            panel = null;
+        if (dismissPopover) {
+            dismissPopover();
+            dismissPopover = null;
         }
-
-        if (dismissListener) {
-            document.removeEventListener('pointerdown', dismissListener, true);
-            dismissListener = null;
-        }
-
-        if (keyListener) {
-            document.removeEventListener('keydown', keyListener);
-            keyListener = null;
-        }
+        panel = null;
     }
 
     function showPanel(): void {
@@ -133,28 +124,17 @@ export function createBackgroundColourPicker(
 
         button.after(panel);
 
-        // Dismiss on click outside (next tick to avoid catching the opening click)
-        requestAnimationFrame(() => {
-            dismissListener = (e: MouseEvent) => {
-                if (
-                    panel &&
-                    !panel.contains(e.target as Node) &&
-                    e.target !== button
-                ) {
-                    dismissPanel();
-                }
-            };
-            // Use pointerdown in capture phase to reliably detect outside
-            // clicks even when the drag handler captures pointer events.
-            document.addEventListener('pointerdown', dismissListener, true);
-
-            keyListener = (e: KeyboardEvent) => {
-                if (e.key === 'Escape') {
-                    dismissPanel();
-                }
-            };
-            document.addEventListener('keydown', keyListener);
+        const handle = attachDismissablePopover({
+            panel,
+            anchor: button,
+            onDismiss: () => {
+                // The helper already removed the panel; clear our refs so
+                // the next click reopens cleanly.
+                panel = null;
+                dismissPopover = null;
+            },
         });
+        dismissPopover = handle.dismiss;
     }
 
     button.addEventListener('click', (e) => {
