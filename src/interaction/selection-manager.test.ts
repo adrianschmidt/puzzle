@@ -258,6 +258,47 @@ describe('SelectionManager', () => {
         });
     });
 
+    describe('expandToSelectionIfActive', () => {
+        it('returns [id] when the tool is inactive', () => {
+            const mgr = new SelectionManager();
+            mgr.select(1);
+            mgr.select(2);
+
+            expect([...mgr.expandToSelectionIfActive(1)]).toEqual([1]);
+        });
+
+        it('returns [id] when the tool is active but the id is not selected', () => {
+            const mgr = new SelectionManager();
+            mgr.toolActive = true;
+            mgr.select(1);
+            mgr.select(2);
+
+            expect([...mgr.expandToSelectionIfActive(99)]).toEqual([99]);
+        });
+
+        it('returns the dragged id followed by every other selected id when applicable', () => {
+            const mgr = new SelectionManager();
+            mgr.toolActive = true;
+            mgr.select(1);
+            mgr.select(2);
+            mgr.select(3);
+
+            const result = [...mgr.expandToSelectionIfActive(2)];
+
+            expect(result[0]).toBe(2);
+            expect(new Set(result.slice(1))).toEqual(new Set([1, 3]));
+            expect(result).toHaveLength(3);
+        });
+
+        it('returns [id] when the only selected group is the dragged one', () => {
+            const mgr = new SelectionManager();
+            mgr.toolActive = true;
+            mgr.select(7);
+
+            expect([...mgr.expandToSelectionIfActive(7)]).toEqual([7]);
+        });
+    });
+
     describe('listener argument is a snapshot', () => {
         it('does not reflect mutations made after the listener returns', () => {
             const mgr = new SelectionManager();

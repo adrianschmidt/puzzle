@@ -526,17 +526,8 @@ function initGame(state: GameState): void {
                 gameState.cutStyle,
             );
 
-            // Determine all groups involved in this drop operation
-            // (primary dragged group + any selected groups in multi-select mode)
-            const droppedGroupIds = [groupId];
-            if (selectionManager.toolActive && selectionManager.isSelected(groupId)) {
-                // Add all other selected groups
-                for (const selectedId of selectionManager.selectedGroupIds) {
-                    if (selectedId !== groupId) {
-                        droppedGroupIds.push(selectedId);
-                    }
-                }
-            }
+            // Primary dragged group + any selected groups (multi-select mode).
+            const droppedGroupIds = [...selectionManager.expandToSelectionIfActive(groupId)];
 
             const result = processDrop(groupId, gameState, tolerance);
             if (result) {
