@@ -3,11 +3,11 @@
  */
 
 /**
- * Tests for the size picker dialog.
+ * Tests for the new-game dialog.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createSizePickerDialog, getSizeClass } from './size-picker.js';
+import { createNewGameDialog, getSizeClass } from './new-game-dialog.js';
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 
 describe('getSizeClass', () => {
@@ -28,7 +28,7 @@ describe('getSizeClass', () => {
     });
 });
 
-describe('createSizePickerDialog', () => {
+describe('createNewGameDialog', () => {
     let container: HTMLElement;
 
     beforeEach(() => {
@@ -37,7 +37,7 @@ describe('createSizePickerDialog', () => {
     });
 
     it('adds an overlay to the container', () => {
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -47,7 +47,7 @@ describe('createSizePickerDialog', () => {
     });
 
     it('shows the correct number of size options', () => {
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -58,7 +58,7 @@ describe('createSizePickerDialog', () => {
     });
 
     it('marks the selected option', () => {
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 2,
             onSelect: vi.fn(),
@@ -71,7 +71,7 @@ describe('createSizePickerDialog', () => {
 
     it('calls onSelect with the correct index when a size is clicked', () => {
         const onSelect = vi.fn();
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect,
@@ -92,7 +92,7 @@ describe('createSizePickerDialog', () => {
     });
 
     it('removes the overlay after selection', () => {
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -106,7 +106,7 @@ describe('createSizePickerDialog', () => {
 
     it('removes the overlay when clicking the backdrop', () => {
         const onCancel = vi.fn();
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -122,7 +122,7 @@ describe('createSizePickerDialog', () => {
 
     it('removes the overlay on Escape key', () => {
         const onCancel = vi.fn();
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -136,7 +136,7 @@ describe('createSizePickerDialog', () => {
     });
 
     it('returns a cleanup function that removes the overlay', () => {
-        const dismiss = createSizePickerDialog({
+        const dismiss = createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -148,7 +148,7 @@ describe('createSizePickerDialog', () => {
     });
 
     it('displays piece count in each button', () => {
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -162,7 +162,7 @@ describe('createSizePickerDialog', () => {
     });
 
     it('displays grid dimensions in each button', () => {
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -176,7 +176,7 @@ describe('createSizePickerDialog', () => {
     });
 
     it('includes the cut style picker section', () => {
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             onSelect: vi.fn(),
@@ -187,7 +187,7 @@ describe('createSizePickerDialog', () => {
 
     it('passes the selected cut style index to onSelect', () => {
         const onSelect = vi.fn();
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             selectedCutStyleIndex: 1,
@@ -212,7 +212,7 @@ describe('createSizePickerDialog', () => {
 
     it('updates the cut style when a different style is clicked before selecting size', () => {
         const onSelect = vi.fn();
-        createSizePickerDialog({
+        createNewGameDialog({
             container,
             selectedIndex: 1,
             selectedCutStyleIndex: 0,
