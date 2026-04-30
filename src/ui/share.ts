@@ -9,7 +9,13 @@ export interface SharePuzzleOptions {
     url: string;
     title: string;
     text: string;
-    onCopied: () => void;
+    /**
+     * Fires only on the clipboard fallback path — when navigator.share
+     * was unavailable (or threw a non-AbortError) and the URL was
+     * successfully written to the clipboard. A successful native share
+     * has no callback; an AbortError is treated as a silent cancel.
+     */
+    onClipboardFallback: () => void;
     onError: (e: Error) => void;
 }
 
@@ -23,7 +29,7 @@ export function getClipboard(): Clipboard | null {
 }
 
 export async function sharePuzzle(opts: SharePuzzleOptions): Promise<void> {
-    const { url, title, text, onCopied, onError } = opts;
+    const { url, title, text, onClipboardFallback, onError } = opts;
 
     if (isWebShareAvailable()) {
         try {
@@ -41,7 +47,7 @@ export async function sharePuzzle(opts: SharePuzzleOptions): Promise<void> {
     if (clipboard) {
         try {
             await clipboard.writeText(url);
-            onCopied();
+            onClipboardFallback();
             return;
         } catch (e) {
             onError(e instanceof Error ? e : new Error(String(e)));
