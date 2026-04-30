@@ -13,10 +13,19 @@ export interface SharePuzzleOptions {
     onError: (e: Error) => void;
 }
 
+export function isWebShareAvailable(): boolean {
+    return typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+}
+
+export function getClipboard(): Clipboard | null {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return null;
+    return navigator.clipboard;
+}
+
 export async function sharePuzzle(opts: SharePuzzleOptions): Promise<void> {
     const { url, title, text, onCopied, onError } = opts;
 
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    if (isWebShareAvailable()) {
         try {
             await navigator.share({ url, title, text });
             return;
@@ -28,9 +37,10 @@ export async function sharePuzzle(opts: SharePuzzleOptions): Promise<void> {
         }
     }
 
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    const clipboard = getClipboard();
+    if (clipboard) {
         try {
-            await navigator.clipboard.writeText(url);
+            await clipboard.writeText(url);
             onCopied();
             return;
         } catch (e) {
