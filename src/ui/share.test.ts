@@ -9,11 +9,11 @@ function stubNavigator(stub: Partial<Navigator>): void {
 }
 
 describe('sharePuzzle', () => {
-    let onCopied: ReturnType<typeof vi.fn<() => void>>;
+    let onClipboardFallback: ReturnType<typeof vi.fn<() => void>>;
     let onError: ReturnType<typeof vi.fn<(e: Error) => void>>;
 
     beforeEach(() => {
-        onCopied = vi.fn<() => void>();
+        onClipboardFallback = vi.fn<() => void>();
         onError = vi.fn<(e: Error) => void>();
     });
 
@@ -24,13 +24,13 @@ describe('sharePuzzle', () => {
         await sharePuzzle({
             url: 'https://example/#p=x',
             title: 't', text: 'd',
-            onCopied, onError,
+            onClipboardFallback, onError,
         });
 
         expect(share).toHaveBeenCalledWith({
             url: 'https://example/#p=x', title: 't', text: 'd',
         });
-        expect(onCopied).not.toHaveBeenCalled();
+        expect(onClipboardFallback).not.toHaveBeenCalled();
         expect(onError).not.toHaveBeenCalled();
     });
 
@@ -43,11 +43,11 @@ describe('sharePuzzle', () => {
 
         await sharePuzzle({
             url: 'u', title: 't', text: 'd',
-            onCopied, onError,
+            onClipboardFallback, onError,
         });
 
         expect(writeText).not.toHaveBeenCalled();
-        expect(onCopied).not.toHaveBeenCalled();
+        expect(onClipboardFallback).not.toHaveBeenCalled();
         expect(onError).not.toHaveBeenCalled();
     });
 
@@ -57,11 +57,11 @@ describe('sharePuzzle', () => {
 
         await sharePuzzle({
             url: 'u', title: 't', text: 'd',
-            onCopied, onError,
+            onClipboardFallback, onError,
         });
 
         expect(writeText).toHaveBeenCalledWith('u');
-        expect(onCopied).toHaveBeenCalledTimes(1);
+        expect(onClipboardFallback).toHaveBeenCalledTimes(1);
         expect(onError).not.toHaveBeenCalled();
     });
 
@@ -72,11 +72,11 @@ describe('sharePuzzle', () => {
 
         await sharePuzzle({
             url: 'u', title: 't', text: 'd',
-            onCopied, onError,
+            onClipboardFallback, onError,
         });
 
         expect(writeText).toHaveBeenCalledWith('u');
-        expect(onCopied).toHaveBeenCalledTimes(1);
+        expect(onClipboardFallback).toHaveBeenCalledTimes(1);
         expect(onError).not.toHaveBeenCalled();
     });
 
@@ -89,11 +89,11 @@ describe('sharePuzzle', () => {
 
         await sharePuzzle({
             url: 'u', title: 't', text: 'd',
-            onCopied, onError,
+            onClipboardFallback, onError,
         });
 
         expect(writeText).not.toHaveBeenCalled();
-        expect(onCopied).not.toHaveBeenCalled();
+        expect(onClipboardFallback).not.toHaveBeenCalled();
         expect(onError).not.toHaveBeenCalled();
     });
 
@@ -103,7 +103,7 @@ describe('sharePuzzle', () => {
 
         await sharePuzzle({
             url: 'u', title: 't', text: 'd',
-            onCopied, onError,
+            onClipboardFallback, onError,
         });
 
         expect(onError).toHaveBeenCalledTimes(1);
@@ -114,7 +114,7 @@ describe('sharePuzzle', () => {
 
         await sharePuzzle({
             url: 'u', title: 't', text: 'd',
-            onCopied, onError,
+            onClipboardFallback, onError,
         });
 
         expect(onError).toHaveBeenCalledTimes(1);

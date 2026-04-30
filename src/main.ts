@@ -143,7 +143,7 @@ function showCompletionOverlay(): void {
             url,
             title: 'Puzzle',
             text: 'I finished this puzzle — can you?',
-            onCopied: () => showToast('Link copied to clipboard'),
+            onClipboardFallback: () => showToast('Link copied to clipboard'),
             onError: (err) => showToast(`Couldn't share: ${err.message}`),
         });
     });

@@ -107,7 +107,7 @@ export function attachShareSection(
             url: currentUrl(),
             title: 'Puzzle',
             text: 'Have a go at this puzzle!',
-            onCopied: () => showToast('Link copied to clipboard'),
+            onClipboardFallback: () => showToast('Link copied to clipboard'),
             onError: (e) => showToast(`Couldn't share: ${e.message}`),
         });
     });
