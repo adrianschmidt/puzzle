@@ -5,6 +5,9 @@
  * A glassmorphism modal overlay with information about the app,
  * credits to algorithm inspirations, brief help for features,
  * and configurable game settings.
+ *
+ * The modal is composed of per-section builder functions; each owns its
+ * DOM and event wiring so adding/removing a setting is a localised change.
  */
 
 import type { GameState } from '../model/types.js';
@@ -58,6 +61,481 @@ function buildReproParams(state: GameState): Record<string, unknown> {
 }
 
 /**
+ * Append a list `<li>` to `parent`, where the contents are an alternating
+ * sequence of plain strings and `[tag, text]` tuples (rendered as that
+ * inline element). Keeps the static help-text builders compact without
+ * resorting to innerHTML.
+ */
+type InlineNode = string | [tag: string, text: string, attrs?: Record<string, string>];
+
+function appendInlineLi(parent: HTMLElement, parts: InlineNode[]): HTMLLIElement {
+    const li = document.createElement('li');
+    appendInline(li, parts);
+    parent.appendChild(li);
+    return li;
+}
+
+function appendInline(target: HTMLElement, parts: InlineNode[]): void {
+    for (const part of parts) {
+        if (typeof part === 'string') {
+            target.appendChild(document.createTextNode(part));
+            continue;
+        }
+        const [tag, text, attrs] = part;
+        const el = document.createElement(tag);
+        el.textContent = text;
+        if (attrs) {
+            for (const [k, v] of Object.entries(attrs)) {
+                el.setAttribute(k, v);
+            }
+        }
+        target.appendChild(el);
+    }
+}
+
+function buildHowToPlaySection(): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'info-section';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'How to Play';
+    section.appendChild(heading);
+
+    const list = document.createElement('ul');
+    appendInlineLi(list, [['strong', 'Drag pieces'], ' to move them around']);
+    appendInlineLi(list, [['strong', 'Drop near matching edges'], ' to merge pieces']);
+    appendInlineLi(list, [['strong', 'Pinch to zoom'], ' (or scroll wheel)']);
+    appendInlineLi(list, [['strong', 'Pan on empty space'], ' to move around']);
+    appendInlineLi(list, [['strong', 'Use the buttons'], ' for convenience:']);
+
+    const buttons = document.createElement('ul');
+    appendInlineLi(buttons, [
+        '🎮 ',
+        ['strong', 'New Game'],
+        ' — Start fresh with a random image; pick puzzle size, cut style, image source and picture type in the dialog. Tick ',
+        ['strong', 'Vibrant colours'],
+        ' for more saturated photos.',
+    ]);
+    appendInlineLi(buttons, ['📍 ', ['strong', 'Centre View'], ' — Reset zoom and pan']);
+    appendInlineLi(buttons, [
+        '🔄 ',
+        ['strong', 'Gather Pieces'],
+        ' — Organize all pieces in a compact grid',
+    ]);
+    appendInlineLi(buttons, ['🎨 ', ['strong', 'Background'], ' — Change table colour']);
+    appendInlineLi(buttons, [
+        '⬚ ',
+        ['strong', 'Multi-select'],
+        ' (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all.',
+    ]);
+    appendInlineLi(buttons, [
+        '↺ ↻ ',
+        ['strong', 'Rotate'],
+        ' (bottom-left, fractal only) — Rotate every selected group 90° counter-clockwise or clockwise',
+    ]);
+    list.appendChild(buttons);
+
+    appendInlineLi(list, [
+        ['strong', 'Share this puzzle'],
+        ' — use the ',
+        ['em', 'Share this puzzle'],
+        ' section above to copy a link your friends can open to get the exact same puzzle.',
+    ]);
+
+    section.appendChild(list);
+    return section;
+}
+
+function buildCutStylesSection(): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'info-section';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Cut Styles';
+    section.appendChild(heading);
+
+    const list = document.createElement('ul');
+
+    appendInlineLi(list, [
+        ['strong', 'Classic'],
+        ' — Traditional jigsaw tabs on a rectangular grid',
+    ]);
+
+    const fractalLi = document.createElement('li');
+    appendInline(fractalLi, [
+        ['strong', 'Fractal'],
+        ' — Organic circle-packing cuts. Options:',
+    ]);
+    const fractalSub = document.createElement('ul');
+    appendInlineLi(fractalSub, [
+        ['strong', 'Borderless'],
+        " — No pieces with flat edges, so it's not obvious which pieces make up the frame of the puzzle",
+    ]);
+    appendInlineLi(fractalSub, [
+        ['strong', 'Enable rotation'],
+        ' — Pieces start at random 90° rotations; solve orientation as well as position. Multi-select is turned on by default so you can pick the pieces to rotate, then use the ↺ / ↻ buttons.',
+    ]);
+    fractalLi.appendChild(fractalSub);
+    list.appendChild(fractalLi);
+
+    appendInlineLi(list, [
+        ['strong', 'Composable'],
+        ' (experimental) — Customizable cuts with sliders in the new-game dialog',
+    ]);
+
+    section.appendChild(list);
+    return section;
+}
+
+function buildSettingsSection(args: {
+    onToleranceChanged?: (index: number) => void;
+}): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'info-section';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Settings';
+    section.appendChild(heading);
+
+    section.appendChild(buildToleranceSetting(args.onToleranceChanged));
+    section.appendChild(buildOffsetDragSetting());
+
+    return section;
+}
+
+function buildToleranceSetting(
+    onToleranceChanged?: (index: number) => void,
+): HTMLElement {
+    const setting = document.createElement('div');
+    setting.className = 'info-setting';
+
+    const label = document.createElement('label');
+    label.className = 'info-setting-label';
+    label.textContent = 'Snap distance';
+    setting.appendChild(label);
+
+    const desc = document.createElement('p');
+    desc.className = 'info-setting-description';
+    desc.textContent = 'How close pieces need to be before they snap together.';
+    setting.appendChild(desc);
+
+    const tolContainer = document.createElement('div');
+    tolContainer.className = 'tolerance-options';
+    tolContainer.dataset.testid = 'tolerance-options';
+
+    const currentToleranceIndex = loadTolerancePreference();
+    getSortedPresets().forEach(({ preset, storageIndex }) => {
+        const button = document.createElement('button');
+        button.className = 'tolerance-option';
+        button.type = 'button';
+        button.dataset.testid = `tolerance-${preset.label.toLowerCase()}`;
+        if (storageIndex === currentToleranceIndex) {
+            button.classList.add('selected');
+        }
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'tolerance-option-label';
+        labelSpan.textContent = preset.label;
+        button.appendChild(labelSpan);
+
+        const descSpan = document.createElement('span');
+        descSpan.className = 'tolerance-option-desc';
+        descSpan.textContent = preset.description;
+        button.appendChild(descSpan);
+
+        button.addEventListener('click', () => {
+            saveTolerancePreference(storageIndex);
+            tolContainer
+                .querySelectorAll('.tolerance-option')
+                .forEach((btn) => btn.classList.remove('selected'));
+            button.classList.add('selected');
+            onToleranceChanged?.(storageIndex);
+        });
+
+        tolContainer.appendChild(button);
+    });
+
+    setting.appendChild(tolContainer);
+    return setting;
+}
+
+function buildOffsetDragSetting(): HTMLElement {
+    const setting = document.createElement('div');
+    setting.className = 'info-setting';
+
+    const toggleLabel = document.createElement('label');
+    toggleLabel.className = 'info-setting-toggle';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.testid = 'offset-drag-toggle';
+    checkbox.checked = loadOffsetDragPreference();
+    checkbox.addEventListener('change', () => {
+        saveOffsetDragPreference(checkbox.checked);
+    });
+
+    const text = document.createElement('span');
+    text.className = 'info-setting-label';
+    text.textContent = 'Offset drag';
+
+    toggleLabel.appendChild(checkbox);
+    toggleLabel.appendChild(text);
+    setting.appendChild(toggleLabel);
+
+    const desc = document.createElement('p');
+    desc.className = 'info-setting-description';
+    desc.textContent =
+        "Shift single pieces upward when dragging, so your finger doesn't block the view.";
+    setting.appendChild(desc);
+
+    return setting;
+}
+
+function buildCreditsSection(): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'info-section';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Credits';
+    section.appendChild(heading);
+
+    const intro = document.createElement('p');
+    intro.textContent = 'Algorithm inspirations:';
+    section.appendChild(intro);
+
+    const list = document.createElement('ul');
+    appendInlineLi(list, [
+        ['strong', 'Classic jigsaw cuts'],
+        ' — inspired by ',
+        [
+            'a',
+            "Dillo's CodePen",
+            { href: 'https://codepen.io/dillo/pen/MQVBpN', target: '_blank', rel: 'noopener' },
+        ],
+    ]);
+    appendInlineLi(list, [
+        ['strong', 'Fractal cuts'],
+        ' — inspired by ',
+        [
+            'a',
+            'Fractal Jigsaw Generator',
+            {
+                href: 'https://github.com/proceduraljigsaw/Fractalpuzzlejs',
+                target: '_blank',
+                rel: 'noopener',
+            },
+        ],
+    ]);
+    section.appendChild(list);
+    return section;
+}
+
+function buildAboutSection(): HTMLElement {
+    const section = document.createElement('section');
+    section.className = 'info-section';
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'About';
+    section.appendChild(heading);
+
+    const list = document.createElement('ul');
+    appendInlineLi(list, [
+        ['strong', 'Project:'],
+        ' ',
+        [
+            'a',
+            'github.com/adrianschmidt/puzzle',
+            { href: 'https://github.com/adrianschmidt/puzzle', target: '_blank', rel: 'noopener' },
+        ],
+    ]);
+    appendInlineLi(list, [['strong', 'License:'], ' MIT']);
+    appendInlineLi(list, [
+        ['strong', 'Images:'],
+        ' ',
+        ['a', 'Unsplash', { href: 'https://unsplash.com', target: '_blank', rel: 'noopener' }],
+        ' (photographer credited per image)',
+    ]);
+    section.appendChild(list);
+    return section;
+}
+
+function buildDebugSection(args: {
+    state: GameState | null | undefined;
+    onSolve?: () => void;
+    dismiss: () => void;
+}): HTMLElement {
+    const details = document.createElement('details');
+    details.className = 'info-section info-section--debug';
+    details.dataset.testid = 'debug-section';
+
+    const summary = document.createElement('summary');
+    summary.className = 'info-section-summary';
+    summary.textContent = 'Debug';
+    details.appendChild(summary);
+
+    details.appendChild(buildReproSetting(args.state));
+
+    details.appendChild(buildOpacitySetting());
+
+    details.appendChild(
+        buildDebugToggleSetting({
+            testid: 'mateless-edges-toggle',
+            label: 'Show mateless edges',
+            description:
+                'Highlight edges with no mate (mateEdgeId = -1) in pink.',
+            htmlClass: 'show-mateless-edges',
+        }),
+    );
+
+    details.appendChild(
+        buildDebugToggleSetting({
+            testid: 'debug-pieces-toggle',
+            label: 'Debug piece view',
+            description:
+                'Show pieces as white outlines with their piece IDs and an arrow indicating each piece\'s original "up" direction.',
+            htmlClass: DEBUG_PIECES_CLASS,
+        }),
+    );
+
+    // Solve button — kept inside Debug so all debug tools stay together.
+    if (args.onSolve) {
+        const solveBtn = document.createElement('button');
+        solveBtn.className = 'info-modal-solve-btn';
+        solveBtn.textContent = '🧩 Solve Puzzle';
+        solveBtn.type = 'button';
+        solveBtn.addEventListener('click', () => {
+            args.dismiss();
+            args.onSolve!();
+        });
+        details.appendChild(solveBtn);
+    }
+
+    return details;
+}
+
+function buildReproSetting(state: GameState | null | undefined): HTMLElement {
+    const setting = document.createElement('div');
+    setting.className = 'info-setting';
+    setting.dataset.testid = 'repro-params-setting';
+
+    const label = document.createElement('label');
+    label.className = 'info-setting-label';
+    label.textContent = 'Reproduction parameters';
+    setting.appendChild(label);
+
+    const desc = document.createElement('p');
+    desc.className = 'info-setting-description';
+    desc.textContent =
+        'Parameters needed to regenerate this exact puzzle. Include in bug reports.';
+    setting.appendChild(desc);
+
+    const block = document.createElement('pre');
+    block.className = 'info-repro-block';
+    block.dataset.testid = 'repro-params';
+    setting.appendChild(block);
+
+    if (state) {
+        block.textContent = JSON.stringify(buildReproParams(state), null, 2);
+    } else {
+        setting.style.display = 'none';
+    }
+
+    return setting;
+}
+
+function buildOpacitySetting(): HTMLElement {
+    const setting = document.createElement('div');
+    setting.className = 'info-setting';
+
+    const label = document.createElement('label');
+    label.className = 'info-setting-label';
+    label.htmlFor = 'piece-opacity-slider';
+    label.textContent = 'Piece opacity';
+    setting.appendChild(label);
+
+    const desc = document.createElement('p');
+    desc.className = 'info-setting-description';
+    desc.textContent = 'Adjust puzzle piece transparency.';
+    setting.appendChild(desc);
+
+    const row = document.createElement('div');
+    row.className = 'info-setting-slider';
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.id = 'piece-opacity-slider';
+    slider.dataset.testid = 'piece-opacity-slider';
+    slider.min = '0';
+    slider.max = '1';
+    slider.step = '0.05';
+    slider.value = '1';
+
+    const value = document.createElement('span');
+    value.className = 'info-setting-slider-value';
+    value.dataset.testid = 'piece-opacity-value';
+    value.textContent = '1';
+
+    // Initialise from the current CSS custom property, if previously set.
+    const current = getComputedStyle(document.documentElement)
+        .getPropertyValue('--piece-opacity')
+        .trim();
+    if (current) {
+        slider.value = current;
+        value.textContent = current;
+    }
+    slider.addEventListener('input', () => {
+        value.textContent = slider.value;
+        document.documentElement.style.setProperty('--piece-opacity', slider.value);
+    });
+
+    row.appendChild(slider);
+    row.appendChild(value);
+    setting.appendChild(row);
+
+    return setting;
+}
+
+/**
+ * Build a debug-section toggle that mirrors a class on `<html>`: the
+ * checkbox reflects whether the class is set, and changes apply or remove it.
+ */
+function buildDebugToggleSetting(args: {
+    testid: string;
+    label: string;
+    description: string;
+    htmlClass: string;
+}): HTMLElement {
+    const setting = document.createElement('div');
+    setting.className = 'info-setting';
+
+    const toggleLabel = document.createElement('label');
+    toggleLabel.className = 'info-setting-toggle';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.testid = args.testid;
+    checkbox.checked = document.documentElement.classList.contains(args.htmlClass);
+    checkbox.addEventListener('change', () => {
+        document.documentElement.classList.toggle(args.htmlClass, checkbox.checked);
+    });
+
+    const text = document.createElement('span');
+    text.className = 'info-setting-label';
+    text.textContent = args.label;
+
+    toggleLabel.appendChild(checkbox);
+    toggleLabel.appendChild(text);
+    setting.appendChild(toggleLabel);
+
+    const desc = document.createElement('p');
+    desc.className = 'info-setting-description';
+    desc.textContent = args.description;
+    setting.appendChild(desc);
+
+    return setting;
+}
+
+/**
  * Create and show the info modal.
  *
  * Returns a cleanup function that removes the modal from the DOM.
@@ -99,259 +577,36 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     header.appendChild(title);
     header.appendChild(closeButton);
 
-    // Content
     const content = document.createElement('div');
     content.className = 'info-modal-content';
 
-    // Build static HTML sections
-    content.innerHTML = `
-        <section class="info-section">
-            <h3>How to Play</h3>
-            <ul>
-                <li><strong>Drag pieces</strong> to move them around</li>
-                <li><strong>Drop near matching edges</strong> to merge pieces</li>
-                <li><strong>Pinch to zoom</strong> (or scroll wheel)</li>
-                <li><strong>Pan on empty space</strong> to move around</li>
-                <li><strong>Use the buttons</strong> for convenience:</li>
-                <ul>
-                    <li>🎮 <strong>New Game</strong> — Start fresh with a random image; pick puzzle size, cut style, image source and picture type in the dialog. Tick <strong>Vibrant colours</strong> for more saturated photos.</li>
-                    <li>📍 <strong>Centre View</strong> — Reset zoom and pan</li>
-                    <li>🔄 <strong>Gather Pieces</strong> — Organize all pieces in a compact grid</li>
-                    <li>🎨 <strong>Background</strong> — Change table colour</li>
-                    <li>⬚ <strong>Multi-select</strong> (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all.</li>
-                    <li>↺ ↻ <strong>Rotate</strong> (bottom-left, fractal only) — Rotate every selected group 90° counter-clockwise or clockwise</li>
-                </ul>
-                <li><strong>Share this puzzle</strong> — use the <em>Share this puzzle</em> section above to copy a link your friends can open to get the exact same puzzle.</li>
-            </ul>
-        </section>
-
-        <section class="info-section">
-            <h3>Cut Styles</h3>
-            <ul>
-                <li><strong>Classic</strong> — Traditional jigsaw tabs on a rectangular grid</li>
-                <li><strong>Fractal</strong> — Organic circle-packing cuts. Options:
-                    <ul>
-                        <li><strong>Borderless</strong> — No pieces with flat edges, so it's not obvious which pieces make up the frame of the puzzle</li>
-                        <li><strong>Enable rotation</strong> — Pieces start at random 90° rotations; solve orientation as well as position. Multi-select is turned on by default so you can pick the pieces to rotate, then use the ↺ / ↻ buttons.</li>
-                    </ul>
-                </li>
-                <li><strong>Composable</strong> (experimental) — Customizable cuts with sliders in the new-game dialog</li>
-            </ul>
-        </section>
-
-        <section class="info-section">
-            <h3>Settings</h3>
-            <div class="info-setting">
-                <label class="info-setting-label">Snap distance</label>
-                <p class="info-setting-description">How close pieces need to be before they snap together.</p>
-                <div class="tolerance-options" data-testid="tolerance-options"></div>
-            </div>
-            <div class="info-setting">
-                <label class="info-setting-toggle">
-                    <input type="checkbox" data-testid="offset-drag-toggle" />
-                    <span class="info-setting-label">Offset drag</span>
-                </label>
-                <p class="info-setting-description">Shift single pieces upward when dragging, so your finger doesn't block the view.</p>
-            </div>
-        </section>
-
-        <section class="info-section">
-            <h3>Credits</h3>
-            <p>Algorithm inspirations:</p>
-            <ul>
-                <li><strong>Classic jigsaw cuts</strong> — inspired by <a href="https://codepen.io/dillo/pen/MQVBpN" target="_blank" rel="noopener">Dillo's CodePen</a></li>
-                <li><strong>Fractal cuts</strong> — inspired by <a href="https://github.com/proceduraljigsaw/Fractalpuzzlejs" target="_blank" rel="noopener">Fractal Jigsaw Generator</a></li>
-            </ul>
-        </section>
-
-        <section class="info-section">
-            <h3>About</h3>
-            <ul>
-                <li><strong>Project:</strong> <a href="https://github.com/adrianschmidt/puzzle" target="_blank" rel="noopener">github.com/adrianschmidt/puzzle</a></li>
-                <li><strong>License:</strong> MIT</li>
-                <li><strong>Images:</strong> <a href="https://unsplash.com" target="_blank" rel="noopener">Unsplash</a> (photographer credited per image)</li>
-            </ul>
-        </section>
-
-        <details class="info-section info-section--debug" data-testid="debug-section">
-            <summary class="info-section-summary">Debug</summary>
-            <div class="info-setting" data-testid="repro-params-setting">
-                <label class="info-setting-label">Reproduction parameters</label>
-                <p class="info-setting-description">Parameters needed to regenerate this exact puzzle. Include in bug reports.</p>
-                <pre class="info-repro-block" data-testid="repro-params"></pre>
-            </div>
-            <div class="info-setting">
-                <label class="info-setting-label" for="piece-opacity-slider">Piece opacity</label>
-                <p class="info-setting-description">Adjust puzzle piece transparency.</p>
-                <div class="info-setting-slider">
-                    <input type="range" id="piece-opacity-slider" data-testid="piece-opacity-slider"
-                           min="0" max="1" step="0.05" value="1" />
-                    <span class="info-setting-slider-value" data-testid="piece-opacity-value">1</span>
-                </div>
-            </div>
-            <div class="info-setting">
-                <label class="info-setting-toggle">
-                    <input type="checkbox" data-testid="mateless-edges-toggle" />
-                    <span class="info-setting-label">Show mateless edges</span>
-                </label>
-                <p class="info-setting-description">Highlight edges with no mate (mateEdgeId&nbsp;=&nbsp;-1) in pink.</p>
-            </div>
-            <div class="info-setting">
-                <label class="info-setting-toggle">
-                    <input type="checkbox" data-testid="debug-pieces-toggle" />
-                    <span class="info-setting-label">Debug piece view</span>
-                </label>
-                <p class="info-setting-description">Show pieces as white outlines with their piece IDs and an arrow indicating each piece's original "up" direction.</p>
-            </div>
-        </details>
-    `;
-
-    // Build tolerance option buttons
-    const toleranceContainer = content.querySelector('.tolerance-options')!;
-    const currentToleranceIndex = loadTolerancePreference();
-
-    getSortedPresets().forEach(({ preset, storageIndex }) => {
-        const button = document.createElement('button');
-        button.className = 'tolerance-option';
-        button.type = 'button';
-        button.dataset.testid = `tolerance-${preset.label.toLowerCase()}`;
-
-        if (storageIndex === currentToleranceIndex) {
-            button.classList.add('selected');
-        }
-
-        button.innerHTML = `
-            <span class="tolerance-option-label">${preset.label}</span>
-            <span class="tolerance-option-desc">${preset.description}</span>
-        `;
-
-        button.addEventListener('click', () => {
-            saveTolerancePreference(storageIndex);
-
-            // Update button states
-            toleranceContainer
-                .querySelectorAll('.tolerance-option')
-                .forEach((btn) => btn.classList.remove('selected'));
-            button.classList.add('selected');
-
-            onToleranceChanged?.(storageIndex);
-        });
-
-        toleranceContainer.appendChild(button);
-    });
-
-    // Offset drag toggle
-    const offsetToggle = content.querySelector<HTMLInputElement>(
-        '[data-testid="offset-drag-toggle"]',
-    )!;
-    offsetToggle.checked = loadOffsetDragPreference();
-    offsetToggle.addEventListener('change', () => {
-        saveOffsetDragPreference(offsetToggle.checked);
-    });
-
-    // Piece opacity slider (debug)
-    const opacitySlider = content.querySelector<HTMLInputElement>(
-        '[data-testid="piece-opacity-slider"]',
-    )!;
-    const opacityValue = content.querySelector<HTMLSpanElement>(
-        '[data-testid="piece-opacity-value"]',
-    )!;
-    // Initialise from current CSS custom property (if previously set)
-    const current = getComputedStyle(document.documentElement)
-        .getPropertyValue('--piece-opacity')
-        .trim();
-    if (current) {
-        opacitySlider.value = current;
-        opacityValue.textContent = current;
-    }
-    opacitySlider.addEventListener('input', () => {
-        const v = opacitySlider.value;
-        opacityValue.textContent = v;
-        document.documentElement.style.setProperty('--piece-opacity', v);
-    });
-
-    // Mateless edges debug toggle
-    const matelessToggle = content.querySelector<HTMLInputElement>(
-        '[data-testid="mateless-edges-toggle"]',
-    )!;
-    matelessToggle.checked =
-        document.documentElement.classList.contains('show-mateless-edges');
-    matelessToggle.addEventListener('change', () => {
-        document.documentElement.classList.toggle(
-            'show-mateless-edges',
-            matelessToggle.checked,
-        );
-    });
-
-    // Debug piece-view toggle — swaps pieces for white outlines with IDs.
-    const debugPiecesToggle = content.querySelector<HTMLInputElement>(
-        '[data-testid="debug-pieces-toggle"]',
-    )!;
-    debugPiecesToggle.checked =
-        document.documentElement.classList.contains(DEBUG_PIECES_CLASS);
-    debugPiecesToggle.addEventListener('change', () => {
-        document.documentElement.classList.toggle(
-            DEBUG_PIECES_CLASS,
-            debugPiecesToggle.checked,
-        );
-    });
-
-    // Reproduction parameters code block. Only fill in when a state source
-    // was provided — the modal otherwise hides the row rather than showing
-    // an empty box.
-    const reproBlock = content.querySelector<HTMLPreElement>(
-        '[data-testid="repro-params"]',
-    )!;
-    const reproSetting = content.querySelector<HTMLElement>(
-        '[data-testid="repro-params-setting"]',
-    )!;
-    const state = getState?.();
-    if (state) {
-        reproBlock.textContent = JSON.stringify(
-            buildReproParams(state),
-            null,
-            2,
-        );
-    } else {
-        reproSetting.style.display = 'none';
-    }
-
-    // Debug: solve button sits inside the Debug section so all debug tools stay together.
-    if (options.onSolve) {
-        const debugSection = content.querySelector<HTMLElement>(
-            '[data-testid="debug-section"]',
-        )!;
-        const solveBtn = document.createElement('button');
-        solveBtn.className = 'info-modal-solve-btn';
-        solveBtn.textContent = '🧩 Solve Puzzle';
-        solveBtn.type = 'button';
-        solveBtn.addEventListener('click', () => {
-            dismiss();
-            options.onSolve!();
-        });
-        debugSection.appendChild(solveBtn);
-    }
-
-    // Share section: rendered at the top of the modal when state is available,
-    // so it's the first thing the player sees. We strip the hash so
-    // attachShareSection receives the bare page URL rather than silently
-    // relying on buildShareUrl to drop any stale `#p=...`.
+    // Share section first so it's the most prominent thing in the modal.
+    // Strip the hash so attachShareSection receives the bare page URL rather
+    // than silently relying on buildShareUrl to drop any stale `#p=...`.
     if (options.state) {
         const baseUrl = window.location.href.split('#')[0];
         attachShareSection(content, options.state, baseUrl);
-        const firstSection = content.querySelector<HTMLElement>('section.info-section');
-        if (firstSection && content.lastElementChild) {
-            content.insertBefore(content.lastElementChild, firstSection);
-        }
     }
+
+    content.appendChild(buildHowToPlaySection());
+    content.appendChild(buildCutStylesSection());
+    content.appendChild(buildSettingsSection({ onToleranceChanged }));
+    content.appendChild(buildCreditsSection());
+    content.appendChild(buildAboutSection());
+    content.appendChild(
+        buildDebugSection({
+            state: getState?.(),
+            onSolve: options.onSolve,
+            dismiss,
+        }),
+    );
 
     modal.appendChild(header);
     modal.appendChild(content);
     overlay.appendChild(modal);
 
-    // Dismiss on close button click. Backdrop / Escape are handled by the
-    // helper; both fire onDismiss already, so we only need to wire up the
-    // close button (and the debug solve button above) here.
+    // Backdrop / Escape are handled by the overlay helper; both fire
+    // onDismiss already, so we only wire up the close button here.
     closeButton.addEventListener('click', dismiss);
 
     return dismiss;
