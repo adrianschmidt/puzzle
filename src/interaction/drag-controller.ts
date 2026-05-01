@@ -48,6 +48,13 @@ export interface DragCallbacks {
     bringToFront(groupId: number): void;
     /** Called when a drag ends (drop). Use for merge detection. */
     onDrop(groupId: number): void;
+    /**
+     * Called when an in-progress drag is cancelled (e.g. pinch-to-zoom).
+     * Symmetric counterpart to `bringToFront` for tearing down any visual
+     * "being dragged" state. The group's position has already been
+     * restored by the time this fires.
+     */
+    onCancel(groupId: number): void;
     /** Called to re-render after a state change. */
     requestRender(): void;
 }
@@ -231,6 +238,8 @@ export class DragController {
     private cancelDrag(): void {
         if (!this.drag) return;
 
+        const cancelledGroupId = this.drag.groupId;
+
         // Restore group to its starting position
         const group = this.groups().find(g => g.id === this.drag!.groupId);
         if (group) {
@@ -243,7 +252,9 @@ export class DragController {
             this.callbacks.requestRender();
         }
 
-        // Clear drag state
+        // Clear drag state before notifying so the callback sees a
+        // post-cancel controller (e.g. getActiveDrag() returns null).
         this.drag = null;
+        this.callbacks.onCancel(cancelledGroupId);
     }
 }

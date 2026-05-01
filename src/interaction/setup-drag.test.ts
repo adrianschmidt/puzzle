@@ -591,6 +591,44 @@ describe('setupDragHandling — pinch cancellation', () => {
         expect(h.onDrop).toHaveBeenCalledWith(1);
     });
 
+    it('clears the dragging visual state when pinch cancels the drag', () => {
+        const h = setup();
+
+        // Pointer 1 down on piece 10 (group 1) — bringToFront marks the
+        // group as being dragged.
+        const downEvent1 = fakePointerEvent({ clientX: 100, clientY: 100, pointerId: 1 });
+        h.renderer.triggerPiecePointerDown(10, downEvent1);
+        h.container.fire('pointerdown', downEvent1);
+
+        // Sanity: the dragging visual was applied
+        expect(h.renderer.setGroupDragging).toHaveBeenCalledWith(1, true);
+        vi.mocked(h.renderer.setGroupDragging).mockClear();
+
+        // 2nd finger lands within the grace window → drag cancels
+        h.container.fire('pointerdown', fakePointerEvent({ clientX: 200, clientY: 150, pointerId: 2 }));
+
+        // The shadow / lifted visual must be cleared on cancellation,
+        // not just on a normal drop.
+        expect(h.renderer.setGroupDragging).toHaveBeenCalledWith(1, false);
+    });
+
+    it('clears the dragging visual on every selected group when multi-select pinch cancels', () => {
+        const h = setup();
+        h.selectionManager.toolActive = true;
+        h.selectionManager.select(1);
+        h.selectionManager.select(2);
+
+        const downEvent1 = fakePointerEvent({ clientX: 100, clientY: 100, pointerId: 1 });
+        h.renderer.triggerPiecePointerDown(10, downEvent1);
+        h.container.fire('pointerdown', downEvent1);
+        vi.mocked(h.renderer.setGroupDragging).mockClear();
+
+        h.container.fire('pointerdown', fakePointerEvent({ clientX: 200, clientY: 150, pointerId: 2 }));
+
+        expect(h.renderer.setGroupDragging).toHaveBeenCalledWith(1, false);
+        expect(h.renderer.setGroupDragging).toHaveBeenCalledWith(2, false);
+    });
+
     it('a 2nd-finger touch on a piece does not start a new drag', () => {
         const h = setup();
 
