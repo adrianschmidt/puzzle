@@ -15,7 +15,7 @@
 
 import { getPieceBounds } from '../model/derive.js';
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
-import type { PiecePointerDownCallback, Renderer } from './types.js';
+import type { Renderer } from './types.js';
 
 /**
  * Extra padding around each piece's SVG element to accommodate
@@ -40,7 +40,6 @@ export class SvgDomRenderer implements Renderer {
     private tableEl: HTMLElement | null = null;
     private groupElements = new Map<number, HTMLElement>();
     private pieceElements = new Map<number, SVGSVGElement>();
-    private callback: PiecePointerDownCallback | null = null;
     private imageSize = { width: 0, height: 0 };
     private pieceBaseWidth = 0;
     private pieceBaseHeight = 0;
@@ -119,10 +118,6 @@ export class SvgDomRenderer implements Renderer {
                 this.pieceElements.delete(pieceId);
             }
         }
-    }
-
-    onPiecePointerDown(callback: PiecePointerDownCallback): void {
-        this.callback = callback;
     }
 
     bringGroupToFront(groupId: number): void {
@@ -209,7 +204,6 @@ export class SvgDomRenderer implements Renderer {
 
         this.groupElements.clear();
         this.pieceElements.clear();
-        this.callback = null;
     }
 
     // --- Private rendering helpers ---
@@ -391,15 +385,6 @@ export class SvgDomRenderer implements Renderer {
         // Disable pointer events on the SVG container itself —
         // only the hit-area paths should respond.
         svg.style.pointerEvents = 'none';
-
-        // Shared handler for both exact and expanded hit areas
-        const handlePointerDown = (event: PointerEvent) => {
-            if (!this.callback) return;
-            this.callback(piece.id, event);
-        };
-
-        expandedHitArea.addEventListener('pointerdown', handlePointerDown);
-        hitArea.addEventListener('pointerdown', handlePointerDown);
 
         return svg;
     }
