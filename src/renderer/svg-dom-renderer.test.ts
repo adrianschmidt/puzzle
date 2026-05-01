@@ -615,6 +615,49 @@ describe('SvgDomRenderer', () => {
         });
     });
 
+    describe('pieceIdFromTarget', () => {
+        it('returns the piece id when target is the SVG element itself', () => {
+            renderer.init(container);
+            renderer.renderState(make2x2State());
+
+            const svg = container.querySelector('svg[data-piece-id="0"]') as SVGSVGElement;
+            expect(renderer.pieceIdFromTarget(svg)).toBe(0);
+        });
+
+        it('returns the piece id when target is a hit-area child of the SVG', () => {
+            renderer.init(container);
+            renderer.renderState(make2x2State());
+
+            const svg = container.querySelector('svg[data-piece-id="1"]') as SVGSVGElement;
+            const hitArea = svg.querySelector('[data-hit-area="true"]') as SVGPathElement;
+            expect(renderer.pieceIdFromTarget(hitArea)).toBe(1);
+        });
+
+        it('returns the piece id when target is an expanded-hit-area child', () => {
+            renderer.init(container);
+            renderer.renderState(make2x2State());
+
+            const svg = container.querySelector('svg[data-piece-id="2"]') as SVGSVGElement;
+            const expandedHitArea = svg.querySelector('[data-hit-area-expanded="true"]') as SVGPathElement;
+            expect(renderer.pieceIdFromTarget(expandedHitArea)).toBe(2);
+        });
+
+        it('returns null for an unrelated DOM node', () => {
+            renderer.init(container);
+            renderer.renderState(make2x2State());
+
+            const unrelated = document.createElement('div');
+            expect(renderer.pieceIdFromTarget(unrelated)).toBeNull();
+        });
+
+        it('returns null for a null target', () => {
+            renderer.init(container);
+            renderer.renderState(make2x2State());
+
+            expect(renderer.pieceIdFromTarget(null)).toBeNull();
+        });
+    });
+
     describe('destroy', () => {
         it('removes the table element', () => {
             renderer.init(container);

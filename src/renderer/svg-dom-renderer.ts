@@ -193,6 +193,14 @@ export class SvgDomRenderer implements Renderer {
         return this.tableEl;
     }
 
+    pieceIdFromTarget(target: EventTarget | null): number | null {
+        if (!(target instanceof Element)) return null;
+        const svg = target.closest('svg[data-piece-id]');
+        if (!svg) return null;
+        const id = Number((svg as HTMLElement).dataset.pieceId);
+        return Number.isFinite(id) ? id : null;
+    }
+
     destroy(): void {
         if (this.tableEl) {
             this.tableEl.remove();

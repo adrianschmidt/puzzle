@@ -81,6 +81,13 @@ export interface Renderer {
      */
     setGroupSelected(groupId: number, selected: boolean): void;
 
+    /**
+     * Recover a piece id from a DOM event target. Returns null when the
+     * target is not part of any rendered piece. Used by PointerRouter to
+     * classify pointer events without per-piece listeners.
+     */
+    pieceIdFromTarget(target: EventTarget | null): number | null;
+
     /** Clean up all DOM/resources created by this renderer. */
     destroy(): void;
 }
