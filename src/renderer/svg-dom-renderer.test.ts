@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SvgDomRenderer } from './svg-dom-renderer.js';
 import type { GameState, PieceGroup } from '../model/types.js';
 import { makeRectPiece } from '../test-helpers/fixtures.js';
@@ -337,65 +337,6 @@ describe('SvgDomRenderer', () => {
         });
     });
 
-    describe('onPiecePointerDown', () => {
-        it('calls the registered callback on pointerdown', () => {
-            renderer.init(container);
-            const state = make2x2State();
-            renderer.renderState(state);
-
-            const callback = vi.fn();
-            renderer.onPiecePointerDown(callback);
-
-            const svg = container.querySelector(
-                'svg[data-piece-id="0"]',
-            ) as SVGSVGElement;
-
-            const hitArea = svg.querySelector('[data-hit-area]') as SVGPathElement;
-            const event = new PointerEvent('pointerdown', {
-                bubbles: true,
-            });
-            hitArea.dispatchEvent(event);
-
-            expect(callback).toHaveBeenCalledOnce();
-            expect(callback).toHaveBeenCalledWith(0, expect.any(PointerEvent));
-        });
-
-        it('passes the correct piece id for different pieces', () => {
-            renderer.init(container);
-            const state = make2x2State();
-            renderer.renderState(state);
-
-            const callback = vi.fn();
-            renderer.onPiecePointerDown(callback);
-
-            const svg2 = container.querySelector(
-                'svg[data-piece-id="2"]',
-            ) as SVGSVGElement;
-            const hitArea2 = svg2.querySelector('[data-hit-area]') as SVGPathElement;
-            hitArea2.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-
-            expect(callback).toHaveBeenCalledWith(
-                2,
-                expect.any(PointerEvent),
-            );
-        });
-
-        it('does not fire if no callback is registered', () => {
-            renderer.init(container);
-            const state = make2x2State();
-            renderer.renderState(state);
-
-            const svg = container.querySelector(
-                'svg[data-piece-id="0"]',
-            ) as SVGSVGElement;
-
-            // Should not throw
-            svg.dispatchEvent(
-                new PointerEvent('pointerdown', { bubbles: true }),
-            );
-        });
-    });
-
     describe('expanded hit area', () => {
         it('creates an expanded hit-area path for each piece', () => {
             renderer.init(container);
@@ -455,41 +396,6 @@ describe('SvgDomRenderer', () => {
             const exactIndex = children.indexOf(exact);
             expect(expandedIndex).toBeLessThan(exactIndex);
         });
-
-        it('fires callback on expanded hit-area pointerdown when no exact hit overlaps', () => {
-            renderer.init(container);
-            const state = make2x2State();
-            renderer.renderState(state);
-
-            const callback = vi.fn();
-            renderer.onPiecePointerDown(callback);
-
-            const svg = container.querySelector(
-                'svg[data-piece-id="1"]',
-            ) as SVGSVGElement;
-            const expandedHitArea = svg.querySelector(
-                '[data-hit-area-expanded]',
-            ) as SVGPathElement;
-
-            // jsdom doesn't implement elementsFromPoint — define it
-            document.elementsFromPoint = vi.fn().mockReturnValue([
-                expandedHitArea,
-            ]);
-
-            const event = new PointerEvent('pointerdown', {
-                bubbles: true,
-                clientX: 50,
-                clientY: 50,
-            });
-            expandedHitArea.dispatchEvent(event);
-
-            expect(callback).toHaveBeenCalledOnce();
-            expect(callback).toHaveBeenCalledWith(
-                1,
-                expect.any(PointerEvent),
-            );
-        });
-
 
     });
 

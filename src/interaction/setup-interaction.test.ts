@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setupInteraction } from './setup-interaction.js';
 import { ViewportTransform } from './viewport-transform.js';
 import { SelectionManager } from './selection-manager.js';
-import type { Renderer, PiecePointerDownCallback } from '../renderer/types.js';
+import type { Renderer } from '../renderer/types.js';
 import type { GameState, PieceGroup } from '../model/types.js';
 
 vi.mock('../ui/offset-drag.js', () => ({
@@ -68,7 +68,6 @@ function createFakeRenderer(): Renderer {
     return {
         init: vi.fn(),
         renderState: vi.fn(),
-        onPiecePointerDown: vi.fn((_cb: PiecePointerDownCallback) => { /* legacy, unused by setupInteraction */ }),
         bringGroupToFront: vi.fn(),
         setViewportTransform: vi.fn(),
         enableViewportTransition: vi.fn(),
