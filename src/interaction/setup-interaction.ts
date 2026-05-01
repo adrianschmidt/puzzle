@@ -45,15 +45,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     const expandToSelection = (groupId: number): readonly number[] =>
         selectionManager?.expandToSelectionIfActive(groupId) ?? [groupId];
 
-    // ViewportController still attaches its own container listeners (removed in Task 9).
-    // The router also delivers pan/pinch/wheel events via the public handler methods below,
-    // so both paths are active until Task 9 drops the listener-attachment side.
-    const viewportController = new ViewportController({
-        container,
-        transform: viewportTransform,
-        onViewportChanged,
-        isPieceElement: (target) => renderer.pieceIdFromTarget(target) !== null,
-    });
+    const viewportController = new ViewportController(viewportTransform, onViewportChanged);
 
     const autoPan = panViewport
         ? new AutoPanController({
@@ -182,6 +174,5 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     return () => {
         autoPan?.stop();
         router.destroy();
-        viewportController.destroy();
     };
 }
