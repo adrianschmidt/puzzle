@@ -13,7 +13,7 @@ import { DragController } from './drag-controller.js';
 import type { ScreenDeltaToWorld } from './drag-controller.js';
 import { AutoPanController } from './auto-pan.js';
 import type { SelectionManager } from './selection-manager.js';
-import { loadOffsetDragPreference } from '../ui/offset-drag.js';
+import { loadOffsetDragPreference } from '../ui/index.js';
 
 export interface DragSetupOptions {
     /** The DOM container for the puzzle table (receives move/up events). */

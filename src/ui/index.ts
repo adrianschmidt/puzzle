@@ -1,3 +1,16 @@
+// Public barrel for the UI layer.
+//
+// Convention: any UI factory or helper consumed from outside `src/ui/`
+// (main.ts, interaction/, …) is re-exported here, and consumers import
+// via `./ui/index.js`. Direct deep imports between files inside
+// `src/ui/` are fine — those are internal collaborators (e.g.
+// `share-section` is consumed only by `info-modal`).
+//
+// Exception: `preference-store.ts` is intentionally not re-exported.
+// It is shared infrastructure that `game/` modules use directly, and
+// some of those modules are loaded transitively by UI dialogs through
+// this barrel — routing them through here would create an import cycle.
+
 export {
     shouldConfirmNewGame,
     createNewGameButton,
@@ -10,6 +23,18 @@ export type { CentreViewButtonOptions } from './centre-view-button.js';
 export { createGatherPiecesButton } from './gather-pieces-button.js';
 export type { GatherPiecesButtonOptions } from './gather-pieces-button.js';
 
+export { createSelectToolButton } from './select-tool-button.js';
+export type { SelectToolButtonOptions } from './select-tool-button.js';
+
+export { createDeselectButton } from './deselect-button.js';
+export type { DeselectButtonOptions } from './deselect-button.js';
+
+export { createRotateButtons } from './rotate-buttons.js';
+export type {
+    RotateButtonsOptions,
+    RotateButtonsHandle,
+} from './rotate-buttons.js';
+
 export {
     createAttributionElement,
     removeAttribution,
@@ -17,7 +42,11 @@ export {
 } from './attribution.js';
 
 export { createNewGameDialog, getSizeClass } from './new-game-dialog.js';
-export type { NewGameDialogOptions, NewGameSelection } from './new-game-dialog.js';
+export type {
+    NewGameDialogOptions,
+    NewGameSelection,
+    FractalDialogConfig,
+} from './new-game-dialog.js';
 
 export {
     BACKGROUND_COLOUR_PRESETS,
@@ -51,3 +80,20 @@ export {
     getActiveTolerance,
 } from './merge-tolerance.js';
 export type { MergeTolerancePreset } from './merge-tolerance.js';
+
+export { showCompletionOverlay } from './completion-overlay.js';
+export type { CompletionOverlayOptions } from './completion-overlay.js';
+
+export { showToast } from './toast.js';
+
+export {
+    showLoadingOverlay,
+    hideLoadingOverlay,
+    yieldForPaint,
+} from './loading-overlay.js';
+
+export {
+    OFFSET_DRAG_KEY,
+    loadOffsetDragPreference,
+    saveOffsetDragPreference,
+} from './offset-drag.js';
