@@ -724,3 +724,45 @@ describe('ViewportController', () => {
         });
     });
 });
+
+describe('ViewportController — public gesture handlers', () => {
+    function setup() {
+        const transform = new ViewportTransform();
+        const onChanged = vi.fn();
+        const container = document.createElement('div');
+        const vc = new ViewportController({
+            container,
+            transform,
+            onViewportChanged: onChanged,
+            isPieceElement: () => false,
+        });
+        return { vc, transform, onChanged };
+    }
+
+    it('handlePanStart + handlePanMove translates the transform by the pointer delta', () => {
+        const { vc, transform, onChanged } = setup();
+        vc.handlePanStart(fakePointerEvent({ clientX: 100, clientY: 200 }));
+        vc.handlePanMove(fakePointerEvent({ clientX: 110, clientY: 205 }));
+        expect(transform.getOffset()).toEqual({ x: 10, y: 5 });
+        expect(onChanged).toHaveBeenCalled();
+    });
+
+    it('handlePinchStart + handlePinchMove zooms by the distance ratio', () => {
+        const { vc, transform } = setup();
+        vc.handlePinchStart(
+            fakePointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }),
+            fakePointerEvent({ pointerId: 2, clientX: 200, clientY: 100 }),
+        );
+        vc.handlePinchMove(
+            fakePointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }),
+            fakePointerEvent({ pointerId: 2, clientX: 300, clientY: 100 }),
+        );
+        // distance went from 100 → 200, factor 2 → scale doubled
+        expect(transform.getScale()).toBeCloseTo(2.0, 5);
+    });
+
+    it('handlePanEnd does not throw', () => {
+        const { vc } = setup();
+        expect(() => vc.handlePanEnd()).not.toThrow();
+    });
+});
