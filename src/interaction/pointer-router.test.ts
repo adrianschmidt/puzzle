@@ -548,4 +548,21 @@ describe('PointerRouter — pointercancel', () => {
         expect(h.callbacks.onPieceDrag.cancel).toHaveBeenCalledTimes(1);
         expect(h.callbacks.onPinch.end).toHaveBeenCalledTimes(1);
     });
+
+    it('concurrent drag+pinch: cancel on non-drag finger emits onPinch.end; drag continues', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 }));
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(300);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        h.fire('pointercancel', fakePointerEvent({ pointerId: 2, pointerType: 'touch' }));
+
+        expect(h.callbacks.onPinch.end).toHaveBeenCalledTimes(1);
+        expect(h.callbacks.onPieceDrag.cancel).not.toHaveBeenCalled();
+
+        // Drag still alive
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 30, clientY: 0 }));
+        expect(h.callbacks.onPieceDrag.move).toHaveBeenCalled();
+    });
 });
