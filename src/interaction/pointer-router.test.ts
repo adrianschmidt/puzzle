@@ -369,3 +369,111 @@ describe('PointerRouter — pinch (from idle)', () => {
         expect(h.callbacks.onPinch.end).not.toHaveBeenCalled();
     });
 });
+
+describe('PointerRouter — pinch arbitration with active gestures', () => {
+    function piece(): ClassifyTarget { return () => ({ kind: 'piece', pieceId: 1 }); }
+    function background(): ClassifyTarget { return () => ({ kind: 'background' }); }
+
+    it('discards a piece-candidate when 2nd touch lands; starts pinch', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+        h.fire('pointerup', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+
+        expect(h.callbacks.onPieceTap).not.toHaveBeenCalled();
+        expect(h.callbacks.onPinch.start).toHaveBeenCalled();
+    });
+
+    it('discards a background-candidate when 2nd touch lands; starts pinch', () => {
+        const h = createHarness({ classifyTarget: background() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        expect(h.callbacks.onBackgroundPan.start).not.toHaveBeenCalled();
+        expect(h.callbacks.onPinch.start).toHaveBeenCalled();
+    });
+
+    it('cancels piece-drag and starts pinch when 2nd touch lands inside grace window', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        (h.container.hasPointerCapture as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 }));
+        // promote → drag-startedAt = 0 (nowMock)
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(100); // < 250ms
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        expect(h.callbacks.onPieceDrag.cancel).toHaveBeenCalledTimes(1);
+        expect(h.container.releasePointerCapture).toHaveBeenCalledWith(1);
+        expect(h.callbacks.onPinch.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps piece-drag and starts pinch concurrently when 2nd touch lands after grace', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 })); // promote
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(300); // ≥ 250ms
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        expect(h.callbacks.onPieceDrag.cancel).not.toHaveBeenCalled();
+        expect(h.callbacks.onPinch.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('emits onPieceDrag.move AND onPinch.move when drag-finger moves during concurrent', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 })); // promote
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(300);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+        h.callbacks.onPieceDrag.move.mockClear();
+        h.callbacks.onPinch.move.mockClear();
+
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 30, clientY: 0 }));
+
+        expect(h.callbacks.onPieceDrag.move).toHaveBeenCalledTimes(1);
+        expect(h.callbacks.onPinch.move).toHaveBeenCalledTimes(1);
+    });
+
+    it('drag-finger pointerup during concurrent: emits onPieceDrag.end then onPinch.end', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        (h.container.hasPointerCapture as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 }));
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(300);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        h.fire('pointerup', fakePointerEvent({ pointerId: 1, pointerType: 'touch' }));
+
+        expect(h.callbacks.onPieceDrag.end).toHaveBeenCalledTimes(1);
+        expect(h.callbacks.onPinch.end).toHaveBeenCalledTimes(1);
+    });
+
+    it('non-drag pinch finger pointerup during concurrent: emits onPinch.end; drag continues', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 }));
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(300);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        h.fire('pointerup', fakePointerEvent({ pointerId: 2, pointerType: 'touch' }));
+
+        expect(h.callbacks.onPinch.end).toHaveBeenCalledTimes(1);
+        expect(h.callbacks.onPieceDrag.end).not.toHaveBeenCalled();
+
+        // Drag still alive
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 30, clientY: 0 }));
+        expect(h.callbacks.onPieceDrag.move).toHaveBeenCalled();
+    });
+
+    it('cancels background-pan and starts pinch when 2nd touch lands (no grace)', () => {
+        const h = createHarness({ classifyTarget: background() });
+        (h.container.hasPointerCapture as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 })); // promote pan
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(5000); // doesn't matter
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        expect(h.callbacks.onBackgroundPan.cancel).toHaveBeenCalledTimes(1);
+        expect(h.container.releasePointerCapture).toHaveBeenCalledWith(1);
+        expect(h.callbacks.onPinch.start).toHaveBeenCalledTimes(1);
+    });
+});

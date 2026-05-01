@@ -240,9 +240,11 @@ export class PointerRouter {
      * touch pointers tracked) when the just-arrived pointerdown brings
      * the touch-pointer count to 2. Returns false otherwise.
      *
-     * Single-pointer state cleanup (cancel-with-grace, concurrent drag, etc.)
-     * is added in Task 5 — for now we silently discard any candidate state and
-     * reset to idle before starting the pinch.
+     * Resolves any active single-pointer state before starting the pinch:
+     * - candidates are silently discarded,
+     * - an active drag inside the grace window is cancelled,
+     * - an active drag outside the grace window survives concurrently,
+     * - an active pan is always cancelled.
      */
     private tryStartPinch(_evt: PointerEvent): boolean {
         if (this.pinch.kind !== 'inactive') return false;
@@ -250,9 +252,26 @@ export class PointerRouter {
         const touches = this.touchPointers();
         if (touches.length < 2) return false;
 
-        // Discard any active single-pointer candidate (Task 5 will cancel with
-        // grace windows and cancel events; for now a silent reset is enough).
-        this.state = { kind: 'idle' };
+        // Resolve the existing single-pointer state first.
+        if (this.state.kind === 'piece-candidate') {
+            this.state = { kind: 'idle' };
+        } else if (this.state.kind === 'background-candidate') {
+            this.state = { kind: 'idle' };
+        } else if (this.state.kind === 'piece-drag') {
+            const elapsed = this.now() - this.state.startedAt;
+            if (elapsed < PINCH_GRACE_MS) {
+                const { pointerId } = this.state;
+                this.releaseCapture(pointerId);
+                this.state = { kind: 'idle' };
+                this.callbacks.onPieceDrag.cancel();
+            }
+            // else: drag survives concurrently (state stays piece-drag)
+        } else if (this.state.kind === 'background-pan') {
+            const { pointerId } = this.state;
+            this.releaseCapture(pointerId);
+            this.state = { kind: 'idle' };
+            this.callbacks.onBackgroundPan.cancel();
+        }
 
         const [a, b] = touches.slice(0, 2);
         this.pinch = { kind: 'active', a: a.pointerId, b: b.pointerId };
