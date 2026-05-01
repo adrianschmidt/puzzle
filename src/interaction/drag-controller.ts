@@ -222,7 +222,7 @@ export class DragController {
         if (this.drag && this.downPointers.size > 1 && event.pointerId !== this.drag.pointerId) {
             const elapsed = this.now() - (this.firstPointerDownTime ?? 0);
             if (elapsed < PINCH_CANCEL_WINDOW_MS) {
-                this.cancelDrag();
+                this.cancelDragAndRestore();
             }
         }
     }
@@ -238,10 +238,16 @@ export class DragController {
     }
 
     /**
-     * Cancel the current drag and restore the piece to its starting position.
-     * Used when a second pointer is detected during drag (pinch-to-zoom).
+     * Cancel the current drag and restore the dragged group to its
+     * starting position. No-op if no drag is active. Fires the
+     * `onCancel` callback so consumers can tear down visual state
+     * symmetric to `bringToFront`.
+     *
+     * Used internally on pinch-to-zoom, and externally by setup-drag
+     * when a tap-to-toggle-selection gesture needs to undo the
+     * speculative drag started at pointerdown.
      */
-    private cancelDrag(): void {
+    cancelDragAndRestore(): void {
         if (!this.drag) return;
 
         const cancelledGroupId = this.drag.groupId;
