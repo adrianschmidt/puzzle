@@ -234,31 +234,16 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
             // This was a tap, not a drag — toggle selection
             const group = findGroupForPiece(tapCandidate.pieceId, getState().groups);
 
-            // Restore group to its pre-drag position (cancel the micro-drag)
-            const drag = controller.getActiveDrag();
-            if (drag) {
-                const currentGroup = getState().groups.find(g => g.id === drag.groupId);
-                if (currentGroup) {
-                    const restoreDelta = {
-                        x: drag.startPosition.x - currentGroup.position.x,
-                        y: drag.startPosition.y - currentGroup.position.y,
-                    };
-                    moveGroup(currentGroup, restoreDelta);
-                }
-            }
-
-            // Clear 'dragging' class from all groups that bringToFront marked
-            // (this wasn't a real drag, so no group should look "lifted")
-            for (const g of getState().groups) {
-                renderer.setGroupDragging(g.id, false);
-            }
+            // Undo the speculative drag started at pointerdown: restores
+            // the dragged group's position and fires `onCancel`, which
+            // clears the dragging visual on the dragged group + selection
+            // (the same set `bringToFront` marked).
+            controller.cancelDragAndRestore();
 
             selectionManager.toggle(group.id);
             renderer.setGroupSelected(group.id, selectionManager.isSelected(group.id));
             tapCandidate = null;
 
-            // Still need to clean up the drag controller state
-            controller.handlePointerUp(e);
             onStateChanged();
 
             if (container.hasPointerCapture(e.pointerId)) {

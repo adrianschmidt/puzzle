@@ -221,20 +221,34 @@ describe('setupDragHandling — tap vs drag (multi-select tool active)', () => {
         expect(h.state.groups[0].position).toEqual(startPos);
     });
 
-    it('a tap clears the dragging visual state on every group', () => {
+    it('a tap clears the dragging visual on the tapped group + selection (the same set bringToFront marked)', () => {
         const h = setup();
         h.selectionManager.toolActive = true;
+        // Pre-select groups 1 and 2 so bringToFront fans out to both.
+        // (expandToSelectionIfActive only fans out when the tapped group
+        // is itself part of the selection — otherwise it returns just [id].)
+        h.selectionManager.select(1);
+        h.selectionManager.select(2);
 
         h.renderer.triggerPiecePointerDown(
             10,
             fakePointerEvent({ clientX: 50, clientY: 50, pointerId: 1 }),
         );
+        // Confirm bringToFront marked exactly the dragged + selected groups as dragging.
+        const markedDragging = vi.mocked(h.renderer.setGroupDragging).mock.calls
+            .filter(([, on]) => on === true)
+            .map(([id]) => id);
+        expect(new Set(markedDragging)).toEqual(new Set([1, 2]));
+
+        vi.mocked(h.renderer.setGroupDragging).mockClear();
         h.container.fire('pointerup', fakePointerEvent({ clientX: 50, clientY: 50, pointerId: 1 }));
 
-        // Every group is marked not-dragging on tap (group ids 1, 2, 3)
-        for (const group of h.state.groups) {
-            expect(h.renderer.setGroupDragging).toHaveBeenCalledWith(group.id, false);
-        }
+        // Cleared on the same set, and not on the unrelated group 3.
+        const cleared = vi.mocked(h.renderer.setGroupDragging).mock.calls
+            .filter(([, on]) => on === false)
+            .map(([id]) => id);
+        expect(new Set(cleared)).toEqual(new Set([1, 2]));
+        expect(cleared).not.toContain(3);
     });
 
     it('movement exceeding TAP_THRESHOLD_PX is treated as a drag, not a tap', () => {
