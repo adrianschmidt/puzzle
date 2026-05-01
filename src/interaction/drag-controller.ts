@@ -83,11 +83,18 @@ export class DragController {
     private getViewportSize: () => { width: number; height: number };
     private screenDeltaToWorld: ScreenDeltaToWorld;
     private now: () => number;
-    /** Track all active pointers to detect multi-touch during drag */
-    private activePointers: Set<number> = new Set();
+    /**
+     * Pointers currently down on the document. Owned exclusively by
+     * `handleAnyPointerDown` (adds) and `handleAnyPointerUp` (removes) —
+     * the piece-level `handlePointerDown`/`handlePointerUp` handlers must
+     * not mutate this set, so the two paths can't disagree on what's down.
+     * Used to detect multi-touch (size > 1) and to gate 2nd-finger piece
+     * touches in `handlePointerDown`.
+     */
+    private downPointers: Set<number> = new Set();
     /**
      * Timestamp (ms) of the pointer-down that started the current touch
-     * sequence — i.e. when `activePointers` went from empty to non-empty.
+     * sequence — i.e. when `downPointers` went from empty to non-empty.
      * Used to decide whether a later 2nd touch is a pinch (cancel drag)
      * or a "hold-while-zooming" gesture (preserve drag). Reset to null
      * once all pointers lift.
@@ -130,7 +137,7 @@ export class DragController {
         // a request to drag another piece. Note this check relies on
         // `handleAnyPointerDown` having already added the first pointer
         // for the active touch sequence.
-        if (this.activePointers.size > 0 && !this.activePointers.has(event.pointerId)) {
+        if (this.downPointers.size > 0 && !this.downPointers.has(event.pointerId)) {
             return false;
         }
 
@@ -189,9 +196,6 @@ export class DragController {
      * Ends the drag and triggers the drop callback (for merge detection).
      */
     handlePointerUp(event: PointerEvent): void {
-        // Remove this pointer from tracking
-        this.activePointers.delete(event.pointerId);
-
         if (!this.drag) return;
         if (event.pointerId !== this.drag.pointerId) return;
 
@@ -204,17 +208,18 @@ export class DragController {
     /**
      * Handle any pointer-down event to track active pointers.
      * Should be called for all pointerdown events, not just piece hits.
+     * Sole writer of additions to `downPointers`.
      */
     handleAnyPointerDown(event: PointerEvent): void {
-        const wasEmpty = this.activePointers.size === 0;
-        this.activePointers.add(event.pointerId);
+        const wasEmpty = this.downPointers.size === 0;
+        this.downPointers.add(event.pointerId);
         if (wasEmpty) this.firstPointerDownTime = this.now();
 
         // 2nd finger landed during an active drag. Only cancel if we're
         // still inside the pinch grace window after the first pointer-down
         // — outside it, the user is intentionally holding the piece while
         // adding a 2nd finger to zoom, and we keep the drag.
-        if (this.drag && this.activePointers.size > 1 && event.pointerId !== this.drag.pointerId) {
+        if (this.drag && this.downPointers.size > 1 && event.pointerId !== this.drag.pointerId) {
             const elapsed = this.now() - (this.firstPointerDownTime ?? 0);
             if (elapsed < PINCH_CANCEL_WINDOW_MS) {
                 this.cancelDrag();
@@ -225,10 +230,11 @@ export class DragController {
     /**
      * Handle any pointer-up event to track active pointers.
      * Should be called for all pointerup events.
+     * Sole writer of removals from `downPointers`.
      */
     handleAnyPointerUp(event: PointerEvent): void {
-        this.activePointers.delete(event.pointerId);
-        if (this.activePointers.size === 0) this.firstPointerDownTime = null;
+        this.downPointers.delete(event.pointerId);
+        if (this.downPointers.size === 0) this.firstPointerDownTime = null;
     }
 
     /**
