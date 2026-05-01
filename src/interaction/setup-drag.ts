@@ -148,6 +148,14 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
     // Wire renderer's piece pointerdown to the controller.
     // The renderer calls this when any piece is clicked/touched.
     renderer.onPiecePointerDown((pieceId, event) => {
+        const startedNewDrag = controller.handlePointerDown(pieceId, event);
+
+        // 2nd-finger touches on a piece are reserved for pinch — we don't
+        // start a tap candidate, capture the pointer, or run auto-pan/offset
+        // setup. Any cancellation of the existing drag is owned by the
+        // container's pointerdown listener.
+        if (!startedNewDrag) return;
+
         if (selectionManager?.toolActive) {
             // In select mode: record this as a potential tap.
             // We still start the drag immediately (for smooth feel),
@@ -161,24 +169,22 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
             };
         }
 
-        controller.handlePointerDown(pieceId, event);
+        const drag = controller.getActiveDrag();
+        if (!drag) return;
 
         // Offset drag: shift single pieces upward so the finger doesn't
         // block the view. The offset is in screen pixels, converted to
         // world space so it stays consistent regardless of zoom level.
-        const drag = controller.getActiveDrag();
-        if (drag) {
-            const group = findGroup(drag.groupId, getState());
-            if (group.pieces.size === 1 && loadOffsetDragPreference()) {
-                const OFFSET_SCREEN_PX = 50;
-                const worldOffset = deltaToWorld({ x: 0, y: -OFFSET_SCREEN_PX });
-                moveGroup(group, worldOffset);
-                onStateChanged();
-            }
+        const group = findGroup(drag.groupId, getState());
+        if (group.pieces.size === 1 && loadOffsetDragPreference()) {
+            const OFFSET_SCREEN_PX = 50;
+            const worldOffset = deltaToWorld({ x: 0, y: -OFFSET_SCREEN_PX });
+            moveGroup(group, worldOffset);
+            onStateChanged();
         }
 
         // Start auto-pan tracking for this drag
-        if (drag && autoPan) {
+        if (autoPan) {
             autoPan.start(drag.groupId);
             autoPan.updatePointer({ x: event.clientX, y: event.clientY });
         }

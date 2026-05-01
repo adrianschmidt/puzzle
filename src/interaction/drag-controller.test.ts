@@ -891,4 +891,145 @@ describe('DragController', () => {
             expect(controller.getActiveDrag()!.groupId).toBe(1);
         });
     });
+
+    describe('pinch grace window', () => {
+        // PINCH_CANCEL_WINDOW_MS in drag-controller.ts is 250.
+        const WINDOW_MS = 250;
+
+        // Build a controller with an injectable clock so we can advance
+        // virtual time without waiting in real time.
+        function buildClockedController(): {
+            ctrl: DragController;
+            advance: (ms: number) => void;
+        } {
+            let t = 1000;
+            const ctrl = new DragController(
+                () => groups,
+                callbacks,
+                () => ({ width: 10000, height: 10000 }),
+                undefined,
+                () => t,
+            );
+            return {
+                ctrl,
+                advance: (ms: number) => { t += ms; },
+            };
+        }
+
+        // Mirror what the DOM does: piece's pointerdown fires first
+        // (target/bubble), then the container's pointerdown bubbles up.
+        function pointer1DownOnPiece(ctrl: DragController, pieceId: number, pointerId = 1) {
+            ctrl.handlePointerDown(pieceId, fakePointerEvent({ clientX: 100, clientY: 100, pointerId }));
+            ctrl.handleAnyPointerDown(fakePointerEvent({ clientX: 100, clientY: 100, pointerId }));
+        }
+
+        it('cancels the active drag when 2nd pointer arrives within the window', () => {
+            const { ctrl, advance } = buildClockedController();
+
+            pointer1DownOnPiece(ctrl, 10);
+            expect(ctrl.getActiveDrag()).not.toBeNull();
+
+            // 2nd finger lands well inside the grace window
+            advance(WINDOW_MS - 50);
+            ctrl.handleAnyPointerDown(fakePointerEvent({ pointerId: 2 }));
+
+            expect(ctrl.getActiveDrag()).toBeNull();
+        });
+
+        it('preserves the active drag when 2nd pointer arrives after the window', () => {
+            const { ctrl, advance } = buildClockedController();
+
+            pointer1DownOnPiece(ctrl, 10);
+
+            // User has been dragging for a while before adding a 2nd finger
+            advance(WINDOW_MS + 500);
+            ctrl.handleAnyPointerDown(fakePointerEvent({ pointerId: 2 }));
+
+            expect(ctrl.getActiveDrag()).not.toBeNull();
+            expect(ctrl.getActiveDrag()!.groupId).toBe(1);
+        });
+
+        it('cancels exactly at the boundary (just under window)', () => {
+            const { ctrl, advance } = buildClockedController();
+
+            pointer1DownOnPiece(ctrl, 10);
+            advance(WINDOW_MS - 1);
+            ctrl.handleAnyPointerDown(fakePointerEvent({ pointerId: 2 }));
+
+            expect(ctrl.getActiveDrag()).toBeNull();
+        });
+
+        it('preserves at exactly the window boundary', () => {
+            const { ctrl, advance } = buildClockedController();
+
+            pointer1DownOnPiece(ctrl, 10);
+            advance(WINDOW_MS);
+            ctrl.handleAnyPointerDown(fakePointerEvent({ pointerId: 2 }));
+
+            // Boundary is exclusive: elapsed === window means "outside"
+            expect(ctrl.getActiveDrag()).not.toBeNull();
+        });
+
+        it('starts a fresh window after every pointer lifts', () => {
+            const { ctrl, advance } = buildClockedController();
+
+            // First touch sequence — drag, then long delay, then 2nd finger
+            // lands. Outside window → drag preserved.
+            pointer1DownOnPiece(ctrl, 10);
+            advance(2000);
+            ctrl.handleAnyPointerDown(fakePointerEvent({ pointerId: 2 }));
+            expect(ctrl.getActiveDrag()).not.toBeNull();
+
+            // All fingers lift
+            ctrl.handleAnyPointerUp(fakePointerEvent({ pointerId: 2 }));
+            ctrl.handlePointerUp(fakePointerEvent({ pointerId: 1 }));
+            ctrl.handleAnyPointerUp(fakePointerEvent({ pointerId: 1 }));
+
+            // Brand-new sequence: window resets, so a quick 2nd finger
+            // again triggers cancellation.
+            advance(5000);
+            pointer1DownOnPiece(ctrl, 10, 3);
+            advance(50);
+            ctrl.handleAnyPointerDown(fakePointerEvent({ pointerId: 4 }));
+
+            expect(ctrl.getActiveDrag()).toBeNull();
+        });
+    });
+
+    describe('handlePointerDown — multi-touch gating', () => {
+        it('returns true when starting a fresh drag', () => {
+            const ok = controller.handlePointerDown(
+                10,
+                fakePointerEvent({ pointerId: 1 }),
+            );
+            expect(ok).toBe(true);
+        });
+
+        it('returns false and does not overwrite drag when another pointer is already down', () => {
+            // First finger — establishes the active drag for group 1
+            controller.handlePointerDown(10, fakePointerEvent({ pointerId: 1 }));
+            controller.handleAnyPointerDown(fakePointerEvent({ pointerId: 1 }));
+
+            // 2nd finger lands on a different piece
+            const ok = controller.handlePointerDown(
+                20,
+                fakePointerEvent({ pointerId: 2 }),
+            );
+
+            expect(ok).toBe(false);
+            // The original drag is untouched (cancellation, if any, is
+            // owned by handleAnyPointerDown — not by this method).
+            expect(controller.getActiveDrag()!.groupId).toBe(1);
+        });
+
+        it('does not call bringToFront when the call is ignored', () => {
+            controller.handlePointerDown(10, fakePointerEvent({ pointerId: 1 }));
+            controller.handleAnyPointerDown(fakePointerEvent({ pointerId: 1 }));
+            vi.mocked(callbacks.bringToFront).mockClear();
+
+            controller.handlePointerDown(20, fakePointerEvent({ pointerId: 2 }));
+
+            expect(callbacks.bringToFront).not.toHaveBeenCalled();
+        });
+    });
 });

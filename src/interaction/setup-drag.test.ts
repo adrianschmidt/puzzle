@@ -590,6 +590,36 @@ describe('setupDragHandling — pinch cancellation', () => {
         expect(h.state.groups[0].position).toEqual({ x: 140, y: 130 });
         expect(h.onDrop).toHaveBeenCalledWith(1);
     });
+
+    it('a 2nd-finger touch on a piece does not start a new drag', () => {
+        const h = setup();
+
+        // Pointer 1 down on piece 10 (group 1)
+        const downEvent1 = fakePointerEvent({ clientX: 100, clientY: 100, pointerId: 1 });
+        h.renderer.triggerPiecePointerDown(10, downEvent1);
+        h.container.fire('pointerdown', downEvent1);
+
+        // Group 2 (piece 20) starts at (200, 200) — record so we can
+        // confirm the would-be 2nd drag never moves it.
+        const group2Start = { ...h.state.groups[1].position };
+        h.renderer.bringGroupToFront = vi.fn(); // reset spy after pointer 1
+        h.container.setPointerCapture = vi.fn();
+
+        // Pointer 2 lands on piece 20 (different group). In the real DOM
+        // both the piece and container listeners fire; mirror that here.
+        const downEvent2 = fakePointerEvent({ clientX: 250, clientY: 250, pointerId: 2 });
+        h.renderer.triggerPiecePointerDown(20, downEvent2);
+        h.container.fire('pointerdown', downEvent2);
+
+        // Move pointer 2 a long way — if a 2nd drag had started, group 2
+        // would now be far from its starting position.
+        h.container.fire('pointermove', fakePointerEvent({ clientX: 600, clientY: 600, pointerId: 2 }));
+
+        expect(h.state.groups[1].position).toEqual(group2Start);
+        // No piece-2 work happened: no new bringToFront, no new capture.
+        expect(h.renderer.bringGroupToFront).not.toHaveBeenCalled();
+        expect(h.container.setPointerCapture).not.toHaveBeenCalled();
+    });
 });
 
 describe('setupDragHandling — pointer capture', () => {

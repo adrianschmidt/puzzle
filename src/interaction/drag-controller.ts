@@ -19,6 +19,15 @@ import { findGroupForPiece } from '../model/helpers.js';
  */
 const POINTER_MARGIN_PX = 40;
 
+/**
+ * Grace window after the first pointer-down during which a 2nd touch
+ * is treated as the start of a pinch and cancels the active drag. After
+ * this window, a 2nd touch is assumed to be an intentional "hold piece
+ * while zooming" gesture and the drag is preserved. Either way, the 2nd
+ * touch never starts a drag of its own.
+ */
+const PINCH_CANCEL_WINDOW_MS = 250;
+
 /** Snapshot of an active drag operation. */
 export interface DragState {
     /** The group being dragged. */
@@ -66,14 +75,24 @@ export class DragController {
     private callbacks: DragCallbacks;
     private getViewportSize: () => { width: number; height: number };
     private screenDeltaToWorld: ScreenDeltaToWorld;
+    private now: () => number;
     /** Track all active pointers to detect multi-touch during drag */
     private activePointers: Set<number> = new Set();
+    /**
+     * Timestamp (ms) of the pointer-down that started the current touch
+     * sequence — i.e. when `activePointers` went from empty to non-empty.
+     * Used to decide whether a later 2nd touch is a pinch (cancel drag)
+     * or a "hold-while-zooming" gesture (preserve drag). Reset to null
+     * once all pointers lift.
+     */
+    private firstPointerDownTime: number | null = null;
 
     constructor(
         groups: () => PieceGroup[],
         callbacks: DragCallbacks,
         getViewportSize?: () => { width: number; height: number },
         screenDeltaToWorld?: ScreenDeltaToWorld,
+        now?: () => number,
     ) {
         this.groups = groups;
         this.callbacks = callbacks;
@@ -82,6 +101,7 @@ export class DragController {
             height: window.visualViewport?.height ?? window.innerHeight,
         }));
         this.screenDeltaToWorld = screenDeltaToWorld ?? ((d) => d);
+        this.now = now ?? (() => performance.now());
     }
 
     /** Returns the current drag state (for testing / inspection). */
@@ -93,9 +113,20 @@ export class DragController {
      * Handle pointer-down on a piece.
      *
      * Identifies the group, starts tracking, and brings the group to front.
-     * Returns the element to call `setPointerCapture` on (the caller handles DOM).
+     * Returns `true` when a new drag was started, `false` when the call was
+     * ignored — e.g. a 2nd finger touched a piece while another pointer is
+     * already down. (Multi-touch is reserved for pinch; only the first
+     * pointer can grab a piece.)
      */
-    handlePointerDown(pieceId: number, event: PointerEvent): void {
+    handlePointerDown(pieceId: number, event: PointerEvent): boolean {
+        // Ignore 2nd-finger piece touches: those are pinch gestures, not
+        // a request to drag another piece. Note this check relies on
+        // `handleAnyPointerDown` having already added the first pointer
+        // for the active touch sequence.
+        if (this.activePointers.size > 0 && !this.activePointers.has(event.pointerId)) {
+            return false;
+        }
+
         const group = findGroupForPiece(pieceId, this.groups());
 
         const vp = this.getViewportSize();
@@ -111,6 +142,7 @@ export class DragController {
 
         this.callbacks.bringToFront(group.id);
         this.callbacks.requestRender();
+        return true;
     }
 
     /**
@@ -167,11 +199,19 @@ export class DragController {
      * Should be called for all pointerdown events, not just piece hits.
      */
     handleAnyPointerDown(event: PointerEvent): void {
+        const wasEmpty = this.activePointers.size === 0;
         this.activePointers.add(event.pointerId);
+        if (wasEmpty) this.firstPointerDownTime = this.now();
 
-        // If we're currently dragging and this is a second pointer, cancel the drag
+        // 2nd finger landed during an active drag. Only cancel if we're
+        // still inside the pinch grace window after the first pointer-down
+        // — outside it, the user is intentionally holding the piece while
+        // adding a 2nd finger to zoom, and we keep the drag.
         if (this.drag && this.activePointers.size > 1 && event.pointerId !== this.drag.pointerId) {
-            this.cancelDrag();
+            const elapsed = this.now() - (this.firstPointerDownTime ?? 0);
+            if (elapsed < PINCH_CANCEL_WINDOW_MS) {
+                this.cancelDrag();
+            }
         }
     }
 
@@ -181,6 +221,7 @@ export class DragController {
      */
     handleAnyPointerUp(event: PointerEvent): void {
         this.activePointers.delete(event.pointerId);
+        if (this.activePointers.size === 0) this.firstPointerDownTime = null;
     }
 
     /**
