@@ -80,6 +80,7 @@ describe('DragController', () => {
             expect(drag!.groupId).toBe(1);
             expect(drag!.lastPointer).toEqual({ x: 100, y: 200 });
             expect(drag!.pointerId).toBe(5);
+            expect(drag!.startPosition).toEqual({ x: 0, y: 0 });
         });
 
         it('should bring the group to front', () => {
@@ -830,6 +831,8 @@ describe('DragController', () => {
             expect(controller.getActiveDrag()).toBeNull();
             // Group should be restored to origin
             expect(callbacks.moveGroup).toHaveBeenCalledWith(1, { x: -50, y: -20 });
+            // Render must fire so the snap-back is visible immediately
+            expect(callbacks.requestRender).toHaveBeenCalled();
         });
 
         it('should be a no-op when no drag is active', () => {
