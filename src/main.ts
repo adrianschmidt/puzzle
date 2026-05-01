@@ -376,7 +376,6 @@ function applyViewportTransform(): void {
     renderer.setViewportTransform(state.scale, state.offset.x, state.offset.y);
 }
 
-
 const debouncedSave = createDebouncedSave();
 
 /**
