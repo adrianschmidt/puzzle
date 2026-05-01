@@ -451,20 +451,6 @@ describe('SvgDomRenderer', () => {
         });
     });
 
-    describe('getTableElement', () => {
-        it('returns the table element after init', () => {
-            renderer.init(container);
-
-            const table = renderer.getTableElement();
-            expect(table).not.toBeNull();
-            expect(table!.style.position).toBe('relative');
-        });
-
-        it('returns null before init', () => {
-            expect(renderer.getTableElement()).toBeNull();
-        });
-    });
-
     describe('setGroupDragging', () => {
         it('adds the dragging class when dragging is true', () => {
             renderer.init(container);

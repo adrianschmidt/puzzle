@@ -43,9 +43,6 @@ export interface Renderer {
      */
     disableViewportTransition(): void;
 
-    /** Returns the root table element (the rendering surface). */
-    getTableElement(): HTMLElement | null;
-
     /**
      * Mark a group as being dragged (visual feedback like lifted shadow).
      * Pass `false` to remove the dragging state.

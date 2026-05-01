@@ -72,7 +72,6 @@ function createFakeRenderer(): Renderer {
         setViewportTransform: vi.fn(),
         enableViewportTransition: vi.fn(),
         disableViewportTransition: vi.fn(),
-        getTableElement: vi.fn(() => null),
         setGroupDragging: vi.fn(),
         flashMergePulse: vi.fn(),
         setGroupSelected: vi.fn(),
