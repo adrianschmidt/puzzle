@@ -195,9 +195,9 @@ export class SvgDomRenderer implements Renderer {
 
     pieceIdFromTarget(target: EventTarget | null): number | null {
         if (!(target instanceof Element)) return null;
-        const svg = target.closest('svg[data-piece-id]');
+        const svg = target.closest('svg[data-piece-id]') as SVGElement | null;
         if (!svg) return null;
-        const id = Number((svg as HTMLElement).dataset.pieceId);
+        const id = Number(svg.dataset.pieceId);
         return Number.isFinite(id) ? id : null;
     }
 
