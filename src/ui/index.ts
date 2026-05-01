@@ -10,6 +10,25 @@
 // It is shared infrastructure that `game/` modules use directly, and
 // some of those modules are loaded transitively by UI dialogs through
 // this barrel — routing them through here would create an import cycle.
+//
+// Return-shape convention for UI factory functions:
+//
+//   1. Default — return a cleanup function `() => void`. Use this when
+//      the component fully self-manages its state from injected
+//      dependencies (e.g. a `SelectionManager` it subscribes to).
+//      Examples: `createSelectToolButton`, `createDeselectButton`,
+//      `createNewGameButton`, `createInfoButton`.
+//
+//   2. When external collaborators legitimately need to drive component
+//      state — return a handle of shape
+//      `{ ...handlers; destroy: () => void }`. The `destroy` method
+//      replaces the cleanup function. Example: `createRotateButtons`
+//      exposes `show()` / `hide()` because rotate-buttons visibility is
+//      driven by the host based on the active cut style, and there is
+//      no shared reactive source it could subscribe to.
+//
+// Prefer (1). Reach for (2) only when the component genuinely cannot
+// self-manage the state in question.
 
 export {
     shouldConfirmNewGame,
