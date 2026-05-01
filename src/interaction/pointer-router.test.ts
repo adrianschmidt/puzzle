@@ -6,6 +6,24 @@ import { describe, it, expect, vi } from 'vitest';
 import { PointerRouter } from './pointer-router.js';
 import type { ClassifyTarget } from './pointer-router.js';
 
+interface FakePointerInit {
+    pointerId?: number;
+    pointerType?: 'mouse' | 'touch' | 'pen';
+    clientX?: number;
+    clientY?: number;
+    target?: EventTarget | null;
+}
+
+function fakePointerEvent(o: FakePointerInit = {}): PointerEvent {
+    return {
+        pointerId: o.pointerId ?? 1,
+        pointerType: o.pointerType ?? 'mouse',
+        clientX: o.clientX ?? 0,
+        clientY: o.clientY ?? 0,
+        target: o.target ?? null,
+    } as PointerEvent;
+}
+
 interface FakeWheelInit {
     deltaY?: number;
     clientX?: number;
@@ -126,5 +144,147 @@ describe('PointerRouter — construction & wheel', () => {
         h.fire('wheel', evt);
         expect(h.callbacks.onWheelZoom).not.toHaveBeenCalled();
         expect(evt.preventDefault).not.toHaveBeenCalled();
+    });
+});
+
+describe('PointerRouter — piece tap', () => {
+    it('emits onPieceTap on pointerup before threshold is crossed', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 7 }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }));
+        const upEvt = fakePointerEvent({ pointerId: 1, clientX: 102, clientY: 101 });
+        h.fire('pointerup', upEvt);
+
+        expect(h.callbacks.onPieceTap).toHaveBeenCalledWith(7, upEvt);
+        expect(h.callbacks.onPieceDrag.start).not.toHaveBeenCalled();
+    });
+
+    it('does not capture pointer for a tap', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 7 }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1 }));
+        h.fire('pointerup', fakePointerEvent({ pointerId: 1 }));
+        expect(h.container.setPointerCapture).not.toHaveBeenCalled();
+    });
+});
+
+describe('PointerRouter — piece drag', () => {
+    it('emits onPieceDrag.start when movement crosses tap threshold', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 7 }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 100, clientY: 100 }));
+        const moveEvt = fakePointerEvent({ pointerId: 1, clientX: 110, clientY: 100 });
+        h.fire('pointermove', moveEvt);
+
+        expect(h.callbacks.onPieceDrag.start).toHaveBeenCalledWith(7, moveEvt);
+        expect(h.callbacks.onPieceTap).not.toHaveBeenCalled();
+    });
+
+    it('captures pointer at drag start', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 7 }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 42, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 42, clientX: 20, clientY: 0 }));
+
+        expect(h.container.setPointerCapture).toHaveBeenCalledWith(42);
+    });
+
+    it('emits onPieceDrag.move for subsequent moves once dragging', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 7 }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 20, clientY: 0 })); // promote
+        const second = fakePointerEvent({ pointerId: 1, clientX: 30, clientY: 0 });
+        h.fire('pointermove', second);
+
+        expect(h.callbacks.onPieceDrag.move).toHaveBeenCalledWith(second);
+    });
+
+    it('emits onPieceDrag.end and releases capture on pointerup', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 7 }) });
+        (h.container.hasPointerCapture as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 20, clientY: 0 })); // promote
+        const upEvt = fakePointerEvent({ pointerId: 1, clientX: 30, clientY: 0 });
+        h.fire('pointerup', upEvt);
+
+        expect(h.callbacks.onPieceDrag.end).toHaveBeenCalledWith(upEvt);
+        expect(h.container.releasePointerCapture).toHaveBeenCalledWith(1);
+    });
+
+    it('does not promote when movement stays below threshold', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 7 }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 5, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 7, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 5 }));
+
+        expect(h.callbacks.onPieceDrag.start).not.toHaveBeenCalled();
+        expect(h.callbacks.onPieceDrag.move).not.toHaveBeenCalled();
+    });
+
+    it('uses Euclidean distance for the threshold check', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 7 }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        // 6,6 ≈ 8.49 px — over the 8 px threshold
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 6, clientY: 6 }));
+
+        expect(h.callbacks.onPieceDrag.start).toHaveBeenCalled();
+    });
+});
+
+describe('PointerRouter — background pan', () => {
+    it('does not start pan on pointerdown alone', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'background' }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        expect(h.callbacks.onBackgroundPan.start).not.toHaveBeenCalled();
+    });
+
+    it('emits onBackgroundPan.start when movement crosses threshold and captures pointer', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'background' }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        const moveEvt = fakePointerEvent({ pointerId: 1, clientX: 20, clientY: 0 });
+        h.fire('pointermove', moveEvt);
+
+        expect(h.callbacks.onBackgroundPan.start).toHaveBeenCalledWith(moveEvt);
+        expect(h.container.setPointerCapture).toHaveBeenCalledWith(1);
+    });
+
+    it('emits onBackgroundPan.move for subsequent moves once panning', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'background' }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 20, clientY: 0 }));
+        const second = fakePointerEvent({ pointerId: 1, clientX: 30, clientY: 0 });
+        h.fire('pointermove', second);
+
+        expect(h.callbacks.onBackgroundPan.move).toHaveBeenCalledWith(second);
+    });
+
+    it('emits onBackgroundPan.end and releases capture on pointerup', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'background' }) });
+        (h.container.hasPointerCapture as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 20, clientY: 0 }));
+        const upEvt = fakePointerEvent({ pointerId: 1, clientX: 25, clientY: 0 });
+        h.fire('pointerup', upEvt);
+
+        expect(h.callbacks.onBackgroundPan.end).toHaveBeenCalledWith(upEvt);
+        expect(h.container.releasePointerCapture).toHaveBeenCalledWith(1);
+    });
+
+    it('background pointerup before threshold is silent (no event)', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'background' }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 2, clientY: 0 }));
+
+        expect(h.callbacks.onBackgroundPan.start).not.toHaveBeenCalled();
+        expect(h.callbacks.onBackgroundPan.end).not.toHaveBeenCalled();
+        expect(h.callbacks.onPieceTap).not.toHaveBeenCalled();
+    });
+
+    it('ignores pointerdown on ignore targets', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'ignore' }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 50, clientY: 0 }));
+        h.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 50, clientY: 0 }));
+
+        expect(h.callbacks.onPieceTap).not.toHaveBeenCalled();
+        expect(h.callbacks.onPieceDrag.start).not.toHaveBeenCalled();
+        expect(h.callbacks.onBackgroundPan.start).not.toHaveBeenCalled();
     });
 });
