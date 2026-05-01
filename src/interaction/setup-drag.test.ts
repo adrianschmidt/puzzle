@@ -89,6 +89,7 @@ function createFakeRenderer(): FakeRenderer {
         setGroupDragging: vi.fn(),
         flashMergePulse: vi.fn(),
         setGroupSelected: vi.fn(),
+        pieceIdFromTarget: vi.fn(() => null),
         destroy: vi.fn(),
         triggerPiecePointerDown(pieceId, event) {
             cb?.(pieceId, event);
