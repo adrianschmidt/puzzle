@@ -856,55 +856,6 @@ describe('DragController', () => {
             expect(callbacks.moveGroup).toHaveBeenCalledWith(1, { x: -50, y: -20 }); // Restore to (0, 0)
         });
 
-        it('should cancel drag on pointermove when second pointer is detected', () => {
-            const group = groups[0]; // Group 1 at position (0, 0)
-            
-            // Start drag
-            controller.handleAnyPointerDown(
-                fakePointerEvent({
-                    clientX: 100,
-                    clientY: 100,
-                    pointerId: 1,
-                }),
-            );
-            controller.handlePointerDown(
-                10,
-                fakePointerEvent({
-                    clientX: 100,
-                    clientY: 100,
-                    pointerId: 1,
-                }),
-            );
-
-            // Move to simulate dragging
-            controller.handlePointerMove(
-                fakePointerEvent({
-                    clientX: 120,
-                    clientY: 110,
-                    pointerId: 1,
-                }),
-            );
-
-            // Simulate the piece being moved
-            group.position = { x: 20, y: 10 };
-
-            // Clear call history
-            vi.mocked(callbacks.moveGroup).mockClear();
-
-            // Second pointer move (without explicit pointerdown)
-            controller.handlePointerMove(
-                fakePointerEvent({
-                    clientX: 200,
-                    clientY: 150,
-                    pointerId: 2,
-                }),
-            );
-
-            // Should cancel drag and restore position
-            expect(controller.getActiveDrag()).toBeNull();
-            expect(callbacks.moveGroup).toHaveBeenCalledWith(1, { x: -20, y: -10 }); // Restore to (0, 0)
-        });
-
         it('should clean up pointer tracking on pointerup', () => {
             controller.handleAnyPointerDown(
                 fakePointerEvent({ pointerId: 1 }),

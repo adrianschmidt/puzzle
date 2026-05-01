@@ -56,6 +56,9 @@ export type ScreenDeltaToWorld = (delta: Point) => Point;
  *
  * Call `handlePointerDown` from the renderer's piece-pointerdown callback.
  * Attach `handlePointerMove` and `handlePointerUp` to the table/container element.
+ * Also attach `handleAnyPointerDown`/`handleAnyPointerUp` to the container's
+ * `pointerdown`/`pointerup` so the controller sees every pointer (not just
+ * piece hits) and can cancel a drag the moment a 2nd finger lands.
  */
 export class DragController {
     private drag: DragState | null = null;
@@ -114,17 +117,10 @@ export class DragController {
      * Handle pointer-move on the table container.
      *
      * Computes delta from last pointer position and moves the group.
+     * Multi-touch detection lives in `handleAnyPointerDown` (not here)
+     * so a 2nd finger cancels the drag the instant it lands.
      */
     handlePointerMove(event: PointerEvent): void {
-        // Track all pointers, even if we're not dragging with them
-        this.activePointers.add(event.pointerId);
-
-        // Cancel drag if we detect a second pointer (pinch-to-zoom gesture)
-        if (this.drag && this.activePointers.size > 1) {
-            this.cancelDrag();
-            return;
-        }
-
         if (!this.drag) return;
         if (event.pointerId !== this.drag.pointerId) return;
 

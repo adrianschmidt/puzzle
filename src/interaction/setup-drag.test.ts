@@ -172,8 +172,9 @@ function setup(opts: {
 }
 
 describe('setupDragHandling — scaffolding', () => {
-    it('registers pointermove, pointerup, pointercancel listeners on the container', () => {
+    it('registers pointerdown, pointermove, pointerup, pointercancel listeners on the container', () => {
         const h = setup();
+        expect(h.container.addEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
         expect(h.container.addEventListener).toHaveBeenCalledWith('pointermove', expect.any(Function));
         expect(h.container.addEventListener).toHaveBeenCalledWith('pointerup', expect.any(Function));
         expect(h.container.addEventListener).toHaveBeenCalledWith('pointercancel', expect.any(Function));
@@ -182,6 +183,7 @@ describe('setupDragHandling — scaffolding', () => {
     it('cleanup removes the listeners it registered', () => {
         const h = setup();
         h.cleanup();
+        expect(h.container.removeEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
         expect(h.container.removeEventListener).toHaveBeenCalledWith('pointermove', expect.any(Function));
         expect(h.container.removeEventListener).toHaveBeenCalledWith('pointerup', expect.any(Function));
         expect(h.container.removeEventListener).toHaveBeenCalledWith('pointercancel', expect.any(Function));
@@ -516,18 +518,18 @@ describe('setupDragHandling — auto-pan integration', () => {
     it('calls AutoPanController.stop when the drag is cancelled by a second pointer (pinch)', () => {
         const h = setup();
 
-        h.renderer.triggerPiecePointerDown(
-            10,
-            fakePointerEvent({ clientX: 500, clientY: 500, pointerId: 1 }),
-        );
-        // Second pointer arriving on the container cancels the drag
-        h.container.fire('pointermove', fakePointerEvent({ clientX: 600, clientY: 600, pointerId: 2 }));
+        // Pointer 1 down on a piece. In the real DOM the same pointerdown
+        // bubbles to the container; mirror that so the controller's
+        // active-pointer set reflects what's physically on screen.
+        const downEvent1 = fakePointerEvent({ clientX: 500, clientY: 500, pointerId: 1 });
+        h.renderer.triggerPiecePointerDown(10, downEvent1);
+        h.container.fire('pointerdown', downEvent1);
 
-        // The next pointermove from pointer 1 will see drag cancelled
-        // (because activePointers.size > 1 triggers cancelDrag in the controller).
-        // setup-drag.ts catches that and stops auto-pan.
         stopSpy.mockClear();
-        h.container.fire('pointermove', fakePointerEvent({ clientX: 700, clientY: 700, pointerId: 1 }));
+
+        // 2nd finger lands → pinch cancellation now fires immediately,
+        // not on the next pointermove.
+        h.container.fire('pointerdown', fakePointerEvent({ clientX: 600, clientY: 600, pointerId: 2 }));
 
         expect(stopSpy).toHaveBeenCalled();
     });
@@ -554,6 +556,39 @@ describe('setupDragHandling — auto-pan integration', () => {
         h.cleanup();
 
         expect(stopSpy).toHaveBeenCalled();
+    });
+});
+
+describe('setupDragHandling — pinch cancellation', () => {
+    it('cancels the active drag when a 2nd pointerdown lands on the container', () => {
+        const h = setup();
+        const startPos = { ...h.state.groups[0].position };
+
+        // Pointer 1 down on a piece (mirror DOM bubbling to container)
+        const downEvent1 = fakePointerEvent({ clientX: 100, clientY: 100, pointerId: 1 });
+        h.renderer.triggerPiecePointerDown(10, downEvent1);
+        h.container.fire('pointerdown', downEvent1);
+
+        // Move a bit, then 2nd finger lands
+        h.container.fire('pointermove', fakePointerEvent({ clientX: 130, clientY: 115, pointerId: 1 }));
+        h.container.fire('pointerdown', fakePointerEvent({ clientX: 200, clientY: 150, pointerId: 2 }));
+
+        // Drag is cancelled and the group is restored to where it started
+        expect(h.state.groups[0].position).toEqual(startPos);
+    });
+
+    it('a single drag flow (down → move → up) is unaffected by the new listener', () => {
+        const h = setup();
+
+        const downEvent = fakePointerEvent({ clientX: 100, clientY: 100, pointerId: 1 });
+        h.renderer.triggerPiecePointerDown(10, downEvent);
+        h.container.fire('pointerdown', downEvent);
+        h.container.fire('pointermove', fakePointerEvent({ clientX: 140, clientY: 130, pointerId: 1 }));
+        h.container.fire('pointerup', fakePointerEvent({ clientX: 140, clientY: 130, pointerId: 1 }));
+
+        // Group moved by the drag delta (start was 100,100 → group at 100,100)
+        expect(h.state.groups[0].position).toEqual({ x: 140, y: 130 });
+        expect(h.onDrop).toHaveBeenCalledWith(1);
     });
 });
 

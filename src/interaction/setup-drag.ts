@@ -133,6 +133,18 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
     let tapCandidate: { pieceId: number; x: number; y: number; pointerId: number } | null = null;
     const TAP_THRESHOLD_PX = 8;
 
+    // Container-level pointerdown listener: feeds every pointerdown into
+    // the controller (regardless of whether it hit a piece) so multi-touch
+    // is detected the moment a 2nd finger lands, not on the next move.
+    const onAnyPointerDown = (e: PointerEvent) => {
+        controller.handleAnyPointerDown(e);
+        // If pinch-cancellation just fired, also stop auto-pan; otherwise
+        // it would keep panning until the user moved the first finger.
+        if (!controller.getActiveDrag() && autoPan?.isActive()) {
+            autoPan.stop();
+        }
+    };
+
     // Wire renderer's piece pointerdown to the controller.
     // The renderer calls this when any piece is clicked/touched.
     renderer.onPiecePointerDown((pieceId, event) => {
@@ -200,6 +212,10 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
     };
 
     const onPointerUp = (e: PointerEvent) => {
+        // Always release the pointer from the controller's active set so it
+        // mirrors what's physically on the screen, even for non-piece events.
+        controller.handleAnyPointerUp(e);
+
         // Check for tap-to-select before the controller clears drag state
         if (tapCandidate && e.pointerId === tapCandidate.pointerId && selectionManager?.toolActive) {
             // This was a tap, not a drag — toggle selection
@@ -251,6 +267,7 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
         }
     };
 
+    container.addEventListener('pointerdown', onAnyPointerDown);
     container.addEventListener('pointermove', onPointerMove);
     container.addEventListener('pointerup', onPointerUp);
     container.addEventListener('pointercancel', onPointerUp);
@@ -258,6 +275,7 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
     // Return cleanup function
     return () => {
         autoPan?.stop();
+        container.removeEventListener('pointerdown', onAnyPointerDown);
         container.removeEventListener('pointermove', onPointerMove);
         container.removeEventListener('pointerup', onPointerUp);
         container.removeEventListener('pointercancel', onPointerUp);
