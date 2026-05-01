@@ -182,5 +182,6 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     return () => {
         autoPan?.stop();
         router.destroy();
+        viewportController.destroy();
     };
 }

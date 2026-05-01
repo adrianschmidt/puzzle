@@ -168,4 +168,56 @@ describe('setupInteraction', () => {
         expect(selectionManager.isSelected(7)).toBe(true);
         expect(renderer.setGroupSelected).toHaveBeenCalledWith(7, true);
     });
+
+    it('a piece drag triggers setGroupDragging(true) on start and onDrop on end', () => {
+        const container = createFakeContainer();
+        const renderer = createFakeRenderer();
+        const onStateChanged = vi.fn();
+        const onDrop = vi.fn();
+        const state = makeState([makeGroup(7, [3])]);
+
+        setupInteraction({
+            container: container as unknown as HTMLElement,
+            renderer,
+            viewportTransform: new ViewportTransform(),
+            getState: () => state,
+            onStateChanged,
+            onDrop,
+            onViewportChanged: vi.fn(),
+        });
+
+        const pieceTarget = { _pieceId: 3 };
+        container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+        container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 })); // promote
+        expect(renderer.setGroupDragging).toHaveBeenCalledWith(7, true);
+
+        container.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 }));
+        expect(renderer.setGroupDragging).toHaveBeenCalledWith(7, false);
+        expect(onDrop).toHaveBeenCalledWith(7);
+    });
+
+    it('a pointercancel during drag clears dragging visual without calling onDrop', () => {
+        const container = createFakeContainer();
+        const renderer = createFakeRenderer();
+        const onDrop = vi.fn();
+        const state = makeState([makeGroup(7, [3])]);
+
+        setupInteraction({
+            container: container as unknown as HTMLElement,
+            renderer,
+            viewportTransform: new ViewportTransform(),
+            getState: () => state,
+            onStateChanged: vi.fn(),
+            onDrop,
+            onViewportChanged: vi.fn(),
+        });
+
+        const pieceTarget = { _pieceId: 3 };
+        container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+        container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 })); // promote
+        container.fire('pointercancel', fakePointerEvent({ pointerId: 1 }));
+
+        expect(renderer.setGroupDragging).toHaveBeenCalledWith(7, false);
+        expect(onDrop).not.toHaveBeenCalled();
+    });
 });
