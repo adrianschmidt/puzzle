@@ -36,6 +36,10 @@ export interface PointerRouterOptions {
         end: (evt: PointerEvent) => void;
         cancel: () => void;
     };
+    /**
+     * Pinch has no separate cancel — `end` fires for both clean lift and
+     * `pointercancel`, since the end-state is the same regardless of cause.
+     */
     onPinch: {
         start: (a: PointerEvent, b: PointerEvent) => void;
         move: (a: PointerEvent, b: PointerEvent) => void;
@@ -143,7 +147,7 @@ export class PointerRouter {
 
         // Try to start a pinch first — a 2nd touch landing supersedes any
         // single-pointer candidate logic.
-        if (this.tryStartPinch(evt)) return;
+        if (this.tryStartPinch()) return;
 
         if (this.state.kind !== 'idle') return;
 
@@ -201,8 +205,8 @@ export class PointerRouter {
     }
 
     private onPointerUp(evt: PointerEvent): void {
-        // Pinch end fires BEFORE we untrack, so toEvent has fresh data
-        // (and so the pinch-pair check sees the lifting pointer).
+        // Compute pair-membership BEFORE delete so the lifting pointer is
+        // still in `tracked` for the check.
         const wasPinchPair = this.pinch.kind === 'active' &&
             (evt.pointerId === this.pinch.a || evt.pointerId === this.pinch.b);
 
@@ -267,7 +271,7 @@ export class PointerRouter {
      * - an active drag outside the grace window survives concurrently,
      * - an active pan is always cancelled.
      */
-    private tryStartPinch(_evt: PointerEvent): boolean {
+    private tryStartPinch(): boolean {
         if (this.pinch.kind !== 'inactive') return false;
 
         const touches = this.touchPointers();
