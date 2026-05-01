@@ -6,8 +6,8 @@
  * Tests for ViewportController.
  *
  * Tests the helper functions (pure math) and the public gesture handler methods.
- * Listener-attachment tests were removed in Task 9 — PointerRouter now owns
- * all container listeners; ViewportController only contains gesture math.
+ * Listener-attachment is owned by PointerRouter; ViewportController only contains
+ * gesture math.
  */
 
 import { describe, it, expect, vi } from 'vitest';
