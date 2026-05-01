@@ -200,6 +200,8 @@ export class PointerRouter {
     }
 
     private onPointerUp(evt: PointerEvent): void {
+        // Order matters once Task 4 adds pinch handling: any tracked-pointer
+        // checks (e.g. wasPinchPair) must run BEFORE this delete.
         this.tracked.delete(evt.pointerId);
 
         if (this.state.kind === 'piece-candidate' && evt.pointerId === this.state.pointerId) {
