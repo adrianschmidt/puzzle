@@ -124,18 +124,124 @@ export class PointerRouter {
         this.callbacks.onWheelZoom(evt);
     }
 
-    // --- Pointer (stubs for now, filled in by later tasks) -------
+    // --- Pointer ---------------------------------------------------
 
-    private onPointerDown(_evt: PointerEvent): void {
-        // Task 3: will use tracked, state, tapThresholdPx, now
-        void this.tracked; void this.state; void this.tapThresholdPx; void this.now;
+    private onPointerDown(evt: PointerEvent): void {
+        const cls = this.classifyTarget(evt.target);
+        if (cls.kind === 'ignore') return;
+
+        // Track this pointer (used for pinch detection in later tasks).
+        this.tracked.set(evt.pointerId, {
+            pointerId: evt.pointerId,
+            pointerType: evt.pointerType,
+            targetKind: cls.kind,
+            pieceId: cls.kind === 'piece' ? cls.pieceId : null,
+            startX: evt.clientX,
+            startY: evt.clientY,
+            lastX: evt.clientX,
+            lastY: evt.clientY,
+        });
+
+        // Only the first pointer of a sequence can become a candidate.
+        // (Multi-pointer arbitration arrives in Task 5.)
+        if (this.state.kind !== 'idle') return;
+
+        if (cls.kind === 'piece') {
+            this.state = {
+                kind: 'piece-candidate',
+                pointerId: evt.pointerId,
+                pieceId: cls.pieceId,
+                startX: evt.clientX,
+                startY: evt.clientY,
+            };
+        } else {
+            this.state = {
+                kind: 'background-candidate',
+                pointerId: evt.pointerId,
+                startX: evt.clientX,
+                startY: evt.clientY,
+            };
+        }
     }
-    private onPointerMove(_evt: PointerEvent): void { /* Task 3 */ }
-    private onPointerUp(_evt: PointerEvent): void { /* Task 3 */ }
+
+    private onPointerMove(evt: PointerEvent): void {
+        const tracked = this.tracked.get(evt.pointerId);
+        if (tracked) {
+            tracked.lastX = evt.clientX;
+            tracked.lastY = evt.clientY;
+        }
+
+        if (this.state.kind === 'piece-candidate' && evt.pointerId === this.state.pointerId) {
+            if (this.exceedsTapThreshold(evt, this.state.startX, this.state.startY)) {
+                const { pieceId, pointerId } = this.state;
+                this.state = { kind: 'piece-drag', pointerId, pieceId, startedAt: this.now() };
+                this.container.setPointerCapture(pointerId);
+                this.callbacks.onPieceDrag.start(pieceId, evt);
+            }
+            return;
+        }
+        if (this.state.kind === 'background-candidate' && evt.pointerId === this.state.pointerId) {
+            if (this.exceedsTapThreshold(evt, this.state.startX, this.state.startY)) {
+                const { pointerId } = this.state;
+                this.state = { kind: 'background-pan', pointerId };
+                this.container.setPointerCapture(pointerId);
+                this.callbacks.onBackgroundPan.start(evt);
+            }
+            return;
+        }
+        if (this.state.kind === 'piece-drag' && evt.pointerId === this.state.pointerId) {
+            this.callbacks.onPieceDrag.move(evt);
+            return;
+        }
+        if (this.state.kind === 'background-pan' && evt.pointerId === this.state.pointerId) {
+            this.callbacks.onBackgroundPan.move(evt);
+            return;
+        }
+    }
+
+    private onPointerUp(evt: PointerEvent): void {
+        this.tracked.delete(evt.pointerId);
+
+        if (this.state.kind === 'piece-candidate' && evt.pointerId === this.state.pointerId) {
+            const { pieceId } = this.state;
+            this.state = { kind: 'idle' };
+            this.callbacks.onPieceTap(pieceId, evt);
+            return;
+        }
+        if (this.state.kind === 'background-candidate' && evt.pointerId === this.state.pointerId) {
+            this.state = { kind: 'idle' };
+            return; // silent — no onBackgroundTap in vocabulary yet
+        }
+        if (this.state.kind === 'piece-drag' && evt.pointerId === this.state.pointerId) {
+            this.releaseCapture(evt.pointerId);
+            this.state = { kind: 'idle' };
+            this.callbacks.onPieceDrag.end(evt);
+            return;
+        }
+        if (this.state.kind === 'background-pan' && evt.pointerId === this.state.pointerId) {
+            this.releaseCapture(evt.pointerId);
+            this.state = { kind: 'idle' };
+            this.callbacks.onBackgroundPan.end(evt);
+            return;
+        }
+    }
+
     private onPointerCancel(_evt: PointerEvent): void {
         // Task 6: will use pinch, PINCH_GRACE_MS
         void this.pinch; void PINCH_GRACE_MS;
     }
 
-    // Tracked-pointer + state-machine helpers used by later tasks live here too.
+    // --- Helpers ---------------------------------------------------
+
+    private exceedsTapThreshold(evt: PointerEvent, startX: number, startY: number): boolean {
+        const dx = evt.clientX - startX;
+        const dy = evt.clientY - startY;
+        return dx * dx + dy * dy >= this.tapThresholdPx * this.tapThresholdPx;
+    }
+
+    private releaseCapture(pointerId: number): void {
+        if (this.container.hasPointerCapture(pointerId)) {
+            this.container.releasePointerCapture(pointerId);
+        }
+    }
 }
