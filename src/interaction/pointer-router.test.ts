@@ -322,6 +322,7 @@ describe('PointerRouter — pinch (from idle)', () => {
         const [a, b] = h.callbacks.onPinch.move.mock.calls[0];
         // Both args are the latest known positions of the locked pair
         expect((a.pointerId === 1 ? a.clientX : b.clientX)).toBe(5);
+        expect((a.pointerId === 2 ? a.clientX : b.clientX)).toBe(100);
     });
 
     it('locks the pair: a 3rd touch does not replace pair members', () => {
@@ -335,6 +336,18 @@ describe('PointerRouter — pinch (from idle)', () => {
 
         h.fire('pointermove', fakePointerEvent({ pointerId: 3, pointerType: 'touch', clientX: 210, clientY: 0 }));
         expect(h.callbacks.onPinch.move).not.toHaveBeenCalled();
+    });
+
+    it('a single-pointer drag-move does not fire onPinch.move (pinch inactive)', () => {
+        const h = createHarness({ classifyTarget: pieceClassifier() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 })); // promote to drag
+        h.callbacks.onPinch.move.mockClear();
+
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 30, clientY: 0 }));
+
+        expect(h.callbacks.onPinch.move).not.toHaveBeenCalled();
+        expect(h.callbacks.onPieceDrag.move).toHaveBeenCalledTimes(1);
     });
 
     it('ends pinch when either pair member lifts', () => {
