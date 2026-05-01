@@ -1,7 +1,7 @@
 import './style.css';
 import type { GameState, GridSize } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
-import { setupDragHandling, ViewportTransform, ViewportController } from './interaction/index.js';
+import { setupInteraction, ViewportTransform } from './interaction/index.js';
 import {
     createNewGame,
     processDrop,
@@ -376,37 +376,6 @@ function applyViewportTransform(): void {
     renderer.setViewportTransform(state.scale, state.offset.x, state.offset.y);
 }
 
-/**
- * Check if an event target is a puzzle piece hit-area element
- * (either exact or expanded).
- */
-function isPieceElement(target: EventTarget | null): boolean {
-    if (!target || !(target instanceof Element)) {
-        return false;
-    }
-
-    const dataset = (target as HTMLElement).dataset;
-
-    // Piece hit-areas have data-hit-area="true" or data-hit-area-expanded="true"
-    if (dataset?.hitArea === 'true' || dataset?.hitAreaExpanded === 'true') {
-        return true;
-    }
-
-    // Also check parent SVG (clicking the image clipped to the piece)
-    const svg = target.closest('svg[data-piece-id]');
-
-    return svg !== null;
-}
-
-// Set up viewport controller (zoom & pan).
-// The constructor registers event listeners on the container.
-// The controller lives for the app lifetime — no cleanup needed.
-void new ViewportController({
-    container: app,
-    transform: viewportTransform,
-    onViewportChanged: applyViewportTransform,
-    isPieceElement,
-});
 
 const debouncedSave = createDebouncedSave();
 
@@ -453,9 +422,10 @@ function initGame(state: GameState): void {
         showCompletionOverlay();
     }
 
-    cleanupDrag = setupDragHandling({
+    cleanupDrag = setupInteraction({
         container: app,
         renderer,
+        viewportTransform,
         getState: () => gameState,
         onStateChanged: () => {
             renderer.renderState(gameState);
@@ -531,6 +501,7 @@ function initGame(state: GameState): void {
                 reorderGroupsAfterDrop(droppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
             }
         },
+        onViewportChanged: applyViewportTransform,
         screenDeltaToWorld: (delta) => viewportTransform.screenDeltaToWorld(delta),
         panViewport: (screenDelta) => {
             viewportTransform.pan(screenDelta);
