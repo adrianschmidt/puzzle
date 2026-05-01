@@ -54,6 +54,14 @@ export function touchMidpoint(a: TouchPoint, b: TouchPoint): Point {
     };
 }
 
+/**
+ * Synthesizes a minimal PointerEvent from a tracked touch point.
+ * Used by the internal listener delegation to call the public gesture handlers.
+ */
+function fakeEventFromTouch(t: { id: number; x: number; y: number }): PointerEvent {
+    return { pointerId: t.id, clientX: t.x, clientY: t.y, pointerType: 'touch' } as PointerEvent;
+}
+
 export class ViewportController {
     private container: HTMLElement;
     private transform: ViewportTransform;
@@ -105,25 +113,6 @@ export class ViewportController {
         this.container.removeEventListener('pointercancel', this.boundPointerUp);
     }
 
-    // --- Wheel zoom ---
-
-    private handleWheel(e: WheelEvent): void {
-        // Don't zoom when scrolling inside a UI element (e.g. info modal)
-        if (!this.isBackgroundElement(e.target) && !this.isPieceElement(e.target)) {
-            return;
-        }
-
-        e.preventDefault();
-
-        // Scale zoom factor based on deltaY magnitude for smooth trackpad/scroll experience.
-        // Trackpad pinch-to-zoom sends small deltaY values; mouse wheel sends larger ones.
-        // Clamp to prevent extreme jumps.
-        const delta = Math.max(-50, Math.min(50, e.deltaY));
-        const factor = 1 - delta * 0.005;
-        this.transform.zoom(factor, { x: e.clientX, y: e.clientY });
-        this.onViewportChanged();
-    }
-
     // --- Pointer events for pan and pinch ---
 
     private handlePointerDown(e: PointerEvent): void {
@@ -141,7 +130,7 @@ export class ViewportController {
 
                 // Cancel any active pan — pinch takes over
                 this.panPointerId = null;
-                this.panLastPoint = null;
+                this.handlePanEnd();
 
                 return;
             }
@@ -157,7 +146,7 @@ export class ViewportController {
         // Start panning (single pointer on empty space)
         if (this.panPointerId === null && this.activeTouches.size < 2) {
             this.panPointerId = e.pointerId;
-            this.panLastPoint = { x: e.clientX, y: e.clientY };
+            this.handlePanStart(e);
             this.container.setPointerCapture(e.pointerId);
         }
     }
@@ -173,20 +162,15 @@ export class ViewportController {
 
             // Handle pinch if 2 touches are active
             if (this.activeTouches.size === 2) {
-                this.handlePinchMove();
+                this.handlePinchMoveFromTouches();
 
                 return;
             }
         }
 
         // Handle pan
-        if (this.panPointerId === e.pointerId && this.panLastPoint) {
-            const dx = e.clientX - this.panLastPoint.x;
-            const dy = e.clientY - this.panLastPoint.y;
-            this.panLastPoint = { x: e.clientX, y: e.clientY };
-
-            this.transform.pan({ x: dx, y: dy });
-            this.onViewportChanged();
+        if (this.panPointerId === e.pointerId) {
+            this.handlePanMove(e);
         }
     }
 
@@ -197,8 +181,7 @@ export class ViewportController {
 
             // If we were in pinch mode and now have <2 fingers, end pinch
             if (this.lastPinchDist !== null) {
-                this.lastPinchDist = null;
-                this.lastPinchMidpoint = null;
+                this.handlePinchEnd();
             }
         }
 
@@ -209,7 +192,7 @@ export class ViewportController {
             }
 
             this.panPointerId = null;
-            this.panLastPoint = null;
+            this.handlePanEnd();
         }
     }
 
@@ -240,34 +223,84 @@ export class ViewportController {
 
     private startPinch(): void {
         const touches = Array.from(this.activeTouches.values());
-        this.lastPinchDist = touchDistance(touches[0], touches[1]);
-        this.lastPinchMidpoint = touchMidpoint(touches[0], touches[1]);
+        this.handlePinchStart(
+            fakeEventFromTouch(touches[0]),
+            fakeEventFromTouch(touches[1]),
+        );
     }
 
-    private handlePinchMove(): void {
-        if (this.lastPinchDist === null || this.lastPinchMidpoint === null) {
-            return;
-        }
-
+    private handlePinchMoveFromTouches(): void {
         const touches = Array.from(this.activeTouches.values());
-        const newDist = touchDistance(touches[0], touches[1]);
-        const newMidpoint = touchMidpoint(touches[0], touches[1]);
+        this.handlePinchMove(
+            fakeEventFromTouch(touches[0]),
+            fakeEventFromTouch(touches[1]),
+        );
+    }
 
-        // Zoom by the ratio of distances
+    // --- Public gesture handlers (called by PointerRouter in Task 9) ---
+
+    handlePanStart(evt: PointerEvent): void {
+        this.panLastPoint = { x: evt.clientX, y: evt.clientY };
+    }
+
+    handlePanMove(evt: PointerEvent): void {
+        if (!this.panLastPoint) return;
+        const dx = evt.clientX - this.panLastPoint.x;
+        const dy = evt.clientY - this.panLastPoint.y;
+        this.panLastPoint = { x: evt.clientX, y: evt.clientY };
+        this.transform.pan({ x: dx, y: dy });
+        this.onViewportChanged();
+    }
+
+    handlePanEnd(): void {
+        this.panLastPoint = null;
+    }
+
+    handlePinchStart(a: PointerEvent, b: PointerEvent): void {
+        const ta = { id: a.pointerId, x: a.clientX, y: a.clientY };
+        const tb = { id: b.pointerId, x: b.clientX, y: b.clientY };
+        this.lastPinchDist = touchDistance(ta, tb);
+        this.lastPinchMidpoint = touchMidpoint(ta, tb);
+    }
+
+    handlePinchMove(a: PointerEvent, b: PointerEvent): void {
+        if (this.lastPinchDist === null || this.lastPinchMidpoint === null) return;
+        const ta = { id: a.pointerId, x: a.clientX, y: a.clientY };
+        const tb = { id: b.pointerId, x: b.clientX, y: b.clientY };
+        const newDist = touchDistance(ta, tb);
+        const newMidpoint = touchMidpoint(ta, tb);
+
         const factor = newDist / this.lastPinchDist;
+        if (factor !== 0 && isFinite(factor)) this.transform.zoom(factor, newMidpoint);
 
-        if (factor !== 0 && isFinite(factor)) {
-            this.transform.zoom(factor, newMidpoint);
-        }
-
-        // Pan by midpoint movement
         const panDx = newMidpoint.x - this.lastPinchMidpoint.x;
         const panDy = newMidpoint.y - this.lastPinchMidpoint.y;
         this.transform.pan({ x: panDx, y: panDy });
 
         this.lastPinchDist = newDist;
         this.lastPinchMidpoint = newMidpoint;
+        this.onViewportChanged();
+    }
 
+    handlePinchEnd(): void {
+        this.lastPinchDist = null;
+        this.lastPinchMidpoint = null;
+    }
+
+    handleWheel(e: WheelEvent): void {
+        // Don't zoom when scrolling inside a UI element (e.g. info modal)
+        if (!this.isBackgroundElement(e.target) && !this.isPieceElement(e.target)) {
+            return;
+        }
+
+        e.preventDefault();
+
+        // Scale zoom factor based on deltaY magnitude for smooth trackpad/scroll experience.
+        // Trackpad pinch-to-zoom sends small deltaY values; mouse wheel sends larger ones.
+        // Clamp to prevent extreme jumps.
+        const delta = Math.max(-50, Math.min(50, e.deltaY));
+        const factor = 1 - delta * 0.005;
+        this.transform.zoom(factor, { x: e.clientX, y: e.clientY });
         this.onViewportChanged();
     }
 }
