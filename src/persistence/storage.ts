@@ -5,6 +5,7 @@
  * All serialization/deserialization goes through the serialization module.
  */
 
+import { diagnostics } from '../diagnostics.js';
 import type { GameState } from '../model/types.js';
 import {
     serializeState,
@@ -51,7 +52,7 @@ export function loadState(): GameState | undefined {
 
         return deserializeState(parsed);
     } catch (error) {
-        console.warn('Failed to restore saved game state:', error);
+        diagnostics.warn('Failed to restore saved game state:', error);
 
         return undefined;
     }

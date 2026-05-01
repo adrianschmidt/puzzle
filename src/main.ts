@@ -1,4 +1,5 @@
 import './style.css';
+import { diagnostics } from './diagnostics.js';
 import type { GameState, GridSize } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { setupInteraction, ViewportTransform } from './interaction/index.js';
@@ -582,7 +583,7 @@ async function startNewGame(
                     };
                 }
             } catch (error) {
-                console.warn('Failed to fetch Unsplash image, using fallback:', error);
+                diagnostics.warn('Failed to fetch Unsplash image, using fallback:', error);
             }
         }
 

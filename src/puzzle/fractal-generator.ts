@@ -21,6 +21,7 @@
  */
 
 import type { Edge, Piece, Size } from '../model/types.js';
+import { diagnostics } from '../diagnostics.js';
 import { fmt } from './composable/bezier-path.js';
 import { createSeededRandom } from './seeded-random.js';
 
@@ -549,7 +550,7 @@ function fillEmptyCells(
 
             if (!filled) {
                 // Neither diagonal has a tile in a piece — log for debugging
-                console.warn(`[fractal] Could not fill cell (${cx},${cy}). Corner tiles:`,
+                diagnostics.warn(`[fractal] Could not fill cell (${cx},${cy}). Corner tiles:`,
                     diagonals.map(([t1, t2]) =>
                         `(${t1.x},${t1.y}):pi=${tileToPiece.get(`${t1.x},${t1.y}`) ?? 'none'} ↔ (${t2.x},${t2.y}):pi=${tileToPiece.get(`${t2.x},${t2.y}`) ?? 'none'}`
                     ).join(', '));
@@ -1192,7 +1193,7 @@ export function generateFractalPuzzle(
 
                 const ownerPieceIdx = findDiagonalOwner(pieces, x, y, cols, rows);
                 if (ownerPieceIdx === -1) {
-                    console.warn(
+                    diagnostics.warn(
                         `[fractal] Orphan tile (${x},${y}) has no adjacent`
                         + ' piece; disc cannot be attached',
                     );

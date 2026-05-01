@@ -14,9 +14,9 @@
  * See issue #166 for the architecture.
  */
 
-import type { Piece, Size } from '../../model/types.js';
+import type { Piece, Point, Size } from '../../model/types.js';
 import { Curve } from './curve.js';
-import { buildDCEL } from './dcel.js';
+import { buildDCEL, getFaceEdges } from './dcel.js';
 import type { HalfEdge, Face } from './dcel.js';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
@@ -25,7 +25,7 @@ import { composePuzzle, DEFAULT_DISABLE_TABS } from '../composable/compose.js';
 import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
 import type { CollisionOptions } from './tab-merge.js';
 import { resolveExcessIntersections } from './collision.js';
-import { diagnostics, logFaceDetails } from './diagnostics.js';
+import { diagnostics } from '../../diagnostics.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -155,6 +155,43 @@ export function generateTopologyPuzzle(
 
     // Step 4: Compose final pieces — tabs are already in the geometry
     return composePuzzle(pieceDefs, template, random, { disableTabs: true });
+}
+
+// ---------------------------------------------------------------------------
+// DCEL face logging (used by tests via the diagnostics singleton)
+// ---------------------------------------------------------------------------
+
+function logFaceDetails(
+    stage: string,
+    faces: Face[],
+    computeArea: (face: Face) => number,
+): void {
+    if (!diagnostics.enabled) return;
+    const innerFaces = faces.filter(f => !f.isOuter);
+    diagnostics.log(stage, `Total faces: ${faces.length}, inner: ${innerFaces.length}`);
+
+    for (const face of innerFaces) {
+        const edges = getFaceEdges(face);
+        const area = computeArea(face);
+        const verts = edges.map(e => e.origin.position);
+        const bbox = computeBBox(verts);
+        diagnostics.log(stage, `Face ${face.id}: edges=${edges.length}, area=${area.toFixed(1)}, bbox=${bboxStr(bbox)}`);
+    }
+}
+
+function computeBBox(points: Point[]): { minX: number; minY: number; maxX: number; maxY: number } {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+    }
+    return { minX, minY, maxX, maxY };
+}
+
+function bboxStr(b: { minX: number; minY: number; maxX: number; maxY: number }): string {
+    return `[${b.minX.toFixed(0)},${b.minY.toFixed(0)}]→[${b.maxX.toFixed(0)},${b.maxY.toFixed(0)}]`;
 }
 
 // ---------------------------------------------------------------------------

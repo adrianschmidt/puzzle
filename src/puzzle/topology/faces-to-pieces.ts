@@ -12,7 +12,7 @@ import type { Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from '../composable/types.js';
 import type { HalfEdge, Face, DCELResult } from './dcel.js';
 import { getFaceEdges, countFaceEdges } from './dcel.js';
-import { diagnostics } from './diagnostics.js';
+import { diagnostics } from '../../diagnostics.js';
 
 // ---------------------------------------------------------------------------
 // Public API
