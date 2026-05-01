@@ -124,6 +124,18 @@ export class DragController {
     }
 
     /**
+     * True iff any pointer *other than* the given one is currently
+     * down. Used as a "reserve 2nd touch for pinch" gate before
+     * recording a piece pointerdown — a candidate started by a 2nd
+     * finger should never become a drag.
+     */
+    hasOtherPointerActive(pointerId: number): boolean {
+        if (this.downPointers.size === 0) return false;
+        if (this.downPointers.size === 1 && this.downPointers.has(pointerId)) return false;
+        return true;
+    }
+
+    /**
      * Handle pointer-down on a piece.
      *
      * Identifies the group, starts tracking, and brings the group to front.

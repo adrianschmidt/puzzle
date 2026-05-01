@@ -1,6 +1,14 @@
 /**
  * Wire up the DragController to a Renderer and the DOM container.
  *
+ * SPIKE: deferred drag-start. A piece pointerdown only records a
+ * "drag candidate"; the drag is started lazily once the pointer
+ * moves past the tap-vs-drag threshold. A pointerup with no
+ * promotion is classified as a tap (no rollback dance, because
+ * nothing was ever started). Used to evaluate the (b)-style
+ * pre-classified event model from issue #260 in a preview deploy
+ * before committing to a router design.
+ *
  * This is the glue between the pure-logic DragController and the
  * browser APIs (pointer capture, DOM events). Separated from the
  * controller to keep it testable.
@@ -57,6 +65,12 @@ function findGroup(groupId: number, state: GameState) {
 
     return group;
 }
+
+/** Minimal subset of PointerEvent fields the promotion path needs. */
+type PromotablePointerEvent = Pick<
+    PointerEvent,
+    'pointerId' | 'clientX' | 'clientY' | 'pointerType'
+>;
 
 /**
  * Set up drag handling for the puzzle.
@@ -138,46 +152,55 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
         screenDeltaToWorld,
     );
 
-    // Track whether a pointerdown moved far enough to count as a drag
-    // (vs a tap for selection toggle).
-    let tapCandidate: { pieceId: number; x: number; y: number; pointerId: number } | null = null;
+    // Movement threshold for promoting a candidate to an actual drag.
+    // Pointer-up before this threshold is crossed = tap.
     const TAP_THRESHOLD_PX = 8;
 
-    // Container-level pointerdown listener: feeds every pointerdown into
-    // the controller (regardless of whether it hit a piece) so multi-touch
-    // is detected the moment a 2nd finger lands, not on the next move.
-    // Auto-pan teardown on pinch cancellation is owned by the controller's
-    // `onCancel` callback below, so there's nothing else to do here.
-    const onAnyPointerDown = (e: PointerEvent) => {
-        controller.handleAnyPointerDown(e);
-    };
+    /**
+     * A pointer is down on a piece, but we haven't decided whether the
+     * user wants to drag or tap. Promoted to a drag on first move past
+     * `TAP_THRESHOLD_PX`; classified as a tap on pointerup.
+     */
+    let dragCandidate:
+        | { pieceId: number; x: number; y: number; pointerId: number }
+        | null = null;
 
-    // Wire renderer's piece pointerdown to the controller.
-    // The renderer calls this when any piece is clicked/touched.
-    renderer.onPiecePointerDown((pieceId, event) => {
-        const startedNewDrag = controller.handlePointerDown(pieceId, event);
+    /**
+     * Promote the current candidate to a real drag. Returns true when
+     * the controller accepted the start (i.e. we now own pointer capture
+     * and a drag is in progress), false when it was rejected (e.g. a 2nd
+     * finger had already landed and the controller's pinch gate fired).
+     */
+    function promoteCandidateToDrag(event: PromotablePointerEvent): boolean {
+        if (!dragCandidate) return false;
 
-        // 2nd-finger touches on a piece are reserved for pinch — we don't
-        // start a tap candidate, capture the pointer, or run auto-pan/offset
-        // setup. Any cancellation of the existing drag is owned by the
-        // container's pointerdown listener.
-        if (!startedNewDrag) return;
+        const { pieceId } = dragCandidate;
+        // Synthesize the minimum subset of PointerEvent the controller
+        // touches. Using the live move event means lastPointer is seeded
+        // at the promotion point, so the first 8px don't get applied
+        // retroactively — the piece picks up from the finger's current
+        // location, not the original pointerdown.
+        const synthetic = {
+            pointerId: event.pointerId,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            pointerType: event.pointerType,
+        } as PointerEvent;
 
-        if (selectionManager?.toolActive) {
-            // In select mode: record this as a potential tap.
-            // We still start the drag immediately (for smooth feel),
-            // but if the pointer barely moves, we treat it as a tap
-            // and toggle selection instead.
-            tapCandidate = {
-                pieceId,
-                x: event.clientX,
-                y: event.clientY,
-                pointerId: event.pointerId,
-            };
+        const startedNewDrag = controller.handlePointerDown(pieceId, synthetic);
+
+        if (!startedNewDrag) {
+            // Controller rejected (2nd-finger / pinch case). Drop the
+            // candidate; it can't become a drag this gesture.
+            dragCandidate = null;
+            return false;
         }
 
         const drag = controller.getActiveDrag();
-        if (!drag) return;
+        if (!drag) {
+            dragCandidate = null;
+            return false;
+        }
 
         // Offset drag: shift single pieces upward so the finger doesn't
         // block the view. The offset is in screen pixels, converted to
@@ -190,32 +213,80 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
             onStateChanged();
         }
 
-        // Start auto-pan tracking for this drag
         if (autoPan) {
             autoPan.start(drag.groupId);
             autoPan.updatePointer({ x: event.clientX, y: event.clientY });
         }
 
-        // Capture pointer on the container so we get move/up even
-        // if the pointer leaves the piece element.
         container.setPointerCapture(event.pointerId);
-    });
+        dragCandidate = null;
+        return true;
+    }
 
-    // Attach move and up handlers to the container.
-    const onPointerMove = (e: PointerEvent) => {
-        // If we have a tap candidate, check if movement exceeds threshold
-        if (tapCandidate && e.pointerId === tapCandidate.pointerId) {
-            const dx = e.clientX - tapCandidate.x;
-            const dy = e.clientY - tapCandidate.y;
-            if (dx * dx + dy * dy > TAP_THRESHOLD_PX * TAP_THRESHOLD_PX) {
-                // Moved too far — this is a drag, not a tap
-                tapCandidate = null;
-            }
+    // Container-level pointerdown: keeps the controller's downPointers
+    // set in sync with what's physically down. Required so multi-touch
+    // is detected the moment a 2nd finger lands and so the controller's
+    // 2nd-finger gate can reject piece pointerdowns from other fingers.
+    const onAnyPointerDown = (e: PointerEvent) => {
+        controller.handleAnyPointerDown(e);
+
+        // 2nd finger landed while a candidate is held but not promoted.
+        // Discard the candidate — the held finger is now part of a
+        // pinch (handled by ViewportController), not a drag.
+        if (
+            dragCandidate &&
+            e.pointerId !== dragCandidate.pointerId
+        ) {
+            dragCandidate = null;
+        }
+    };
+
+    // Wire renderer's piece pointerdown to record a candidate. We do
+    // NOT start a drag here — that's deferred until the pointer moves
+    // past TAP_THRESHOLD_PX (or a 2nd finger lands and discards the
+    // candidate, or pointerup happens and it's classified as a tap).
+    renderer.onPiecePointerDown((pieceId, event) => {
+        // 2nd-finger piece touches are reserved for pinch — never start
+        // a candidate from a finger that arrives while another is down.
+        if (controller.hasOtherPointerActive(event.pointerId)) {
+            return;
         }
 
+        dragCandidate = {
+            pieceId,
+            x: event.clientX,
+            y: event.clientY,
+            pointerId: event.pointerId,
+        };
+    });
+
+    const onPointerMove = (e: PointerEvent) => {
+        // Candidate path: check for promotion. Only the candidate's
+        // own pointer is allowed to promote it (other moves are
+        // unrelated — e.g. a 2nd finger that hasn't been classified yet).
+        if (dragCandidate && e.pointerId === dragCandidate.pointerId) {
+            const dx = e.clientX - dragCandidate.x;
+            const dy = e.clientY - dragCandidate.y;
+            if (dx * dx + dy * dy >= TAP_THRESHOLD_PX * TAP_THRESHOLD_PX) {
+                const promoted = promoteCandidateToDrag(e);
+                if (promoted) {
+                    // Feed the same move into the controller so the piece
+                    // tracks the finger from this point on. Without this,
+                    // the next move would be the first the controller
+                    // sees — fine in practice, but the explicit call
+                    // keeps the lastPointer/move loop tight.
+                    controller.handlePointerMove(e);
+                    if (autoPan) autoPan.updatePointer({ x: e.clientX, y: e.clientY });
+                }
+                return;
+            }
+            // Sub-threshold movement: stay a candidate.
+            return;
+        }
+
+        // Active-drag path
         controller.handlePointerMove(e);
 
-        // Update auto-pan pointer position if dragging
         if (controller.getActiveDrag() && autoPan) {
             autoPan.updatePointer({ x: e.clientX, y: e.clientY });
         } else if (autoPan?.isActive()) {
@@ -229,33 +300,26 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
         // mirrors what's physically on the screen, even for non-piece events.
         controller.handleAnyPointerUp(e);
 
-        // Check for tap-to-select before the controller clears drag state
-        if (tapCandidate && e.pointerId === tapCandidate.pointerId && selectionManager?.toolActive) {
-            // This was a tap, not a drag — toggle selection
-            const group = findGroupForPiece(tapCandidate.pieceId, getState().groups);
+        // Candidate path: pointerup before the threshold was crossed = tap.
+        // No rollback needed — nothing was started. Just classify and
+        // dispatch, then we're done.
+        if (dragCandidate && e.pointerId === dragCandidate.pointerId) {
+            const { pieceId } = dragCandidate;
+            dragCandidate = null;
 
-            // Undo the speculative drag started at pointerdown: restores
-            // the dragged group's position and fires `onCancel`, which
-            // clears the dragging visual on the dragged group + selection
-            // (the same set `bringToFront` marked).
-            controller.cancelDragAndRestore();
-
-            selectionManager.toggle(group.id);
-            renderer.setGroupSelected(group.id, selectionManager.isSelected(group.id));
-            tapCandidate = null;
-
-            onStateChanged();
-
-            if (container.hasPointerCapture(e.pointerId)) {
-                container.releasePointerCapture(e.pointerId);
+            if (selectionManager?.toolActive) {
+                const group = findGroupForPiece(pieceId, getState().groups);
+                selectionManager.toggle(group.id);
+                renderer.setGroupSelected(group.id, selectionManager.isSelected(group.id));
+                onStateChanged();
             }
+            // Outside select-mode, taps are no-ops in this spike.
             return;
         }
 
-        tapCandidate = null;
+        // Active-drag path
         controller.handlePointerUp(e);
 
-        // Stop auto-pan when drag ends
         if (!controller.getActiveDrag() && autoPan?.isActive()) {
             autoPan.stop();
         }
