@@ -10,8 +10,6 @@
  * full state machine and arbitration rules.
  */
 
-import type { Point as _Point } from '../model/types.js';
-
 export type ClassifyTarget = (target: EventTarget | null) =>
     | { kind: 'piece'; pieceId: number }
     | { kind: 'background' }
@@ -74,14 +72,14 @@ type PinchState =
 export class PointerRouter {
     private container: HTMLElement;
     private classifyTarget: ClassifyTarget;
-    private _tapThresholdPx: number;
-    private _now: () => number;
+    private tapThresholdPx: number;
+    private now: () => number;
     private callbacks: Pick<PointerRouterOptions,
         'onPieceTap' | 'onPieceDrag' | 'onBackgroundPan' | 'onPinch' | 'onWheelZoom'>;
 
-    private _tracked = new Map<number, TrackedPointer>();
-    private _state: State = { kind: 'idle' };
-    private _pinch: PinchState = { kind: 'inactive' };
+    private tracked = new Map<number, TrackedPointer>();
+    private state: State = { kind: 'idle' };
+    private pinch: PinchState = { kind: 'inactive' };
 
     private boundDown = (e: PointerEvent) => this.onPointerDown(e);
     private boundMove = (e: PointerEvent) => this.onPointerMove(e);
@@ -92,8 +90,8 @@ export class PointerRouter {
     constructor(opts: PointerRouterOptions) {
         this.container = opts.container;
         this.classifyTarget = opts.classifyTarget;
-        this._tapThresholdPx = opts.tapThresholdPx ?? DEFAULT_TAP_THRESHOLD_PX;
-        this._now = opts.now ?? (() => performance.now());
+        this.tapThresholdPx = opts.tapThresholdPx ?? DEFAULT_TAP_THRESHOLD_PX;
+        this.now = opts.now ?? (() => performance.now());
         this.callbacks = {
             onPieceTap: opts.onPieceTap,
             onPieceDrag: opts.onPieceDrag,
@@ -129,14 +127,14 @@ export class PointerRouter {
     // --- Pointer (stubs for now, filled in by later tasks) -------
 
     private onPointerDown(_evt: PointerEvent): void {
-        // Task 3: will use this._tracked, this._state, this._tapThresholdPx, this._now
-        void (this._tracked, this._state, this._tapThresholdPx, this._now, PINCH_GRACE_MS);
+        // Task 3: will use tracked, state, tapThresholdPx, now
+        void this.tracked; void this.state; void this.tapThresholdPx; void this.now;
     }
     private onPointerMove(_evt: PointerEvent): void { /* Task 3 */ }
     private onPointerUp(_evt: PointerEvent): void { /* Task 3 */ }
     private onPointerCancel(_evt: PointerEvent): void {
-        // Task 6: will use this._pinch
-        void this._pinch;
+        // Task 6: will use pinch, PINCH_GRACE_MS
+        void this.pinch; void PINCH_GRACE_MS;
     }
 
     // Tracked-pointer + state-machine helpers used by later tasks live here too.
