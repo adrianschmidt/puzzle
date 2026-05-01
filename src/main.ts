@@ -22,17 +22,25 @@ import {
     createBackgroundColourPicker,
     createInfoButton,
     createInfoModal,
+    createSelectToolButton,
+    createDeselectButton,
+    createRotateButtons,
+    getActiveTolerance,
+    createAttributionElement,
+    removeAttribution,
+    createNewGameDialog,
+    showCompletionOverlay as renderCompletionOverlay,
+    showToast,
+    showLoadingOverlay,
+    hideLoadingOverlay,
+    yieldForPaint,
+    type FractalDialogConfig,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
-import { createSelectToolButton } from './ui/select-tool-button.js';
-import { createDeselectButton } from './ui/deselect-button.js';
-import { createRotateButtons } from './ui/rotate-buttons.js';
 import { rotateGroup } from './game/rotate-group.js';
 import { rotatePoint } from './model/helpers.js';
-import { getActiveTolerance } from './ui/merge-tolerance.js';
 import { reorderGroupsAfterDrop } from './game/z-order.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
-import { createAttributionElement, removeAttribution } from './ui/attribution.js';
 import {
     loadSizePreference,
     saveSizePreference,
@@ -65,19 +73,11 @@ import {
     saveVibrantPreference,
     buildImageQuery,
 } from './game/image-categories.js';
-import { createNewGameDialog, type FractalDialogConfig } from './ui/new-game-dialog.js';
 import {
     parseLocationHash,
     type SharePayload,
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
-import { showCompletionOverlay as renderCompletionOverlay } from './ui/completion-overlay.js';
-import { showToast } from './ui/toast.js';
-import {
-    showLoadingOverlay,
-    hideLoadingOverlay,
-    yieldForPaint,
-} from './ui/loading-overlay.js';
 import { initAnalytics, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 
