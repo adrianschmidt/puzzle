@@ -288,3 +288,71 @@ describe('PointerRouter — background pan', () => {
         expect(h.callbacks.onBackgroundPan.start).not.toHaveBeenCalled();
     });
 });
+
+describe('PointerRouter — pinch (from idle)', () => {
+    function pieceClassifier(): ClassifyTarget {
+        return () => ({ kind: 'piece', pieceId: 1 });
+    }
+
+    it('starts a pinch when a 2nd touch pointer lands (both touches)', () => {
+        const h = createHarness({ classifyTarget: pieceClassifier() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        expect(h.callbacks.onPinch.start).toHaveBeenCalledTimes(1);
+        const [a, b] = h.callbacks.onPinch.start.mock.calls[0];
+        expect([a.pointerId, b.pointerId].sort()).toEqual([1, 2]);
+    });
+
+    it('does not start a pinch from mouse + touch', () => {
+        const h = createHarness({ classifyTarget: pieceClassifier() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        expect(h.callbacks.onPinch.start).not.toHaveBeenCalled();
+    });
+
+    it('emits onPinch.move when either pair member moves', () => {
+        const h = createHarness({ classifyTarget: pieceClassifier() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 5, clientY: 0 }));
+
+        expect(h.callbacks.onPinch.move).toHaveBeenCalledTimes(1);
+        const [a, b] = h.callbacks.onPinch.move.mock.calls[0];
+        // Both args are the latest known positions of the locked pair
+        expect((a.pointerId === 1 ? a.clientX : b.clientX)).toBe(5);
+    });
+
+    it('locks the pair: a 3rd touch does not replace pair members', () => {
+        const h = createHarness({ classifyTarget: pieceClassifier() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+        h.callbacks.onPinch.start.mockClear();
+
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 3, pointerType: 'touch', clientX: 200, clientY: 0 }));
+        expect(h.callbacks.onPinch.start).not.toHaveBeenCalled();
+
+        h.fire('pointermove', fakePointerEvent({ pointerId: 3, pointerType: 'touch', clientX: 210, clientY: 0 }));
+        expect(h.callbacks.onPinch.move).not.toHaveBeenCalled();
+    });
+
+    it('ends pinch when either pair member lifts', () => {
+        const h = createHarness({ classifyTarget: pieceClassifier() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+        h.fire('pointerup', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+
+        expect(h.callbacks.onPinch.end).toHaveBeenCalledTimes(1);
+    });
+
+    it('lifting a non-pair-member 3rd touch does not end pinch', () => {
+        const h = createHarness({ classifyTarget: pieceClassifier() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 3, pointerType: 'touch', clientX: 200, clientY: 0 }));
+        h.fire('pointerup', fakePointerEvent({ pointerId: 3, pointerType: 'touch', clientX: 200, clientY: 0 }));
+
+        expect(h.callbacks.onPinch.end).not.toHaveBeenCalled();
+    });
+});

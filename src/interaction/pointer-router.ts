@@ -130,7 +130,6 @@ export class PointerRouter {
         const cls = this.classifyTarget(evt.target);
         if (cls.kind === 'ignore') return;
 
-        // Track this pointer (used for pinch detection in later tasks).
         this.tracked.set(evt.pointerId, {
             pointerId: evt.pointerId,
             pointerType: evt.pointerType,
@@ -142,24 +141,23 @@ export class PointerRouter {
             lastY: evt.clientY,
         });
 
-        // Only the first pointer of a sequence can become a candidate.
-        // (Multi-pointer arbitration arrives in Task 5.)
+        // Try to start a pinch first — a 2nd touch landing supersedes any
+        // single-pointer candidate logic.
+        if (this.tryStartPinch(evt)) return;
+
         if (this.state.kind !== 'idle') return;
 
         if (cls.kind === 'piece') {
             this.state = {
                 kind: 'piece-candidate',
-                pointerId: evt.pointerId,
-                pieceId: cls.pieceId,
-                startX: evt.clientX,
-                startY: evt.clientY,
+                pointerId: evt.pointerId, pieceId: cls.pieceId,
+                startX: evt.clientX, startY: evt.clientY,
             };
         } else {
             this.state = {
                 kind: 'background-candidate',
                 pointerId: evt.pointerId,
-                startX: evt.clientX,
-                startY: evt.clientY,
+                startX: evt.clientX, startY: evt.clientY,
             };
         }
     }
@@ -171,6 +169,8 @@ export class PointerRouter {
             tracked.lastY = evt.clientY;
         }
 
+        // Single-pointer paths (unchanged from Task 3): piece-candidate,
+        // background-candidate, piece-drag, background-pan.
         if (this.state.kind === 'piece-candidate' && evt.pointerId === this.state.pointerId) {
             if (this.exceedsTapThreshold(evt, this.state.startX, this.state.startY)) {
                 const { pieceId, pointerId } = this.state;
@@ -178,59 +178,100 @@ export class PointerRouter {
                 this.container.setPointerCapture(pointerId);
                 this.callbacks.onPieceDrag.start(pieceId, evt);
             }
-            return;
-        }
-        if (this.state.kind === 'background-candidate' && evt.pointerId === this.state.pointerId) {
+        } else if (this.state.kind === 'background-candidate' && evt.pointerId === this.state.pointerId) {
             if (this.exceedsTapThreshold(evt, this.state.startX, this.state.startY)) {
                 const { pointerId } = this.state;
                 this.state = { kind: 'background-pan', pointerId };
                 this.container.setPointerCapture(pointerId);
                 this.callbacks.onBackgroundPan.start(evt);
             }
-            return;
-        }
-        if (this.state.kind === 'piece-drag' && evt.pointerId === this.state.pointerId) {
+        } else if (this.state.kind === 'piece-drag' && evt.pointerId === this.state.pointerId) {
             this.callbacks.onPieceDrag.move(evt);
-            return;
-        }
-        if (this.state.kind === 'background-pan' && evt.pointerId === this.state.pointerId) {
+        } else if (this.state.kind === 'background-pan' && evt.pointerId === this.state.pointerId) {
             this.callbacks.onBackgroundPan.move(evt);
-            return;
+        }
+
+        // Pinch path — pair member moved.
+        if (this.pinch.kind === 'active' &&
+            (evt.pointerId === this.pinch.a || evt.pointerId === this.pinch.b)) {
+            const ta = this.tracked.get(this.pinch.a);
+            const tb = this.tracked.get(this.pinch.b);
+            if (ta && tb) this.callbacks.onPinch.move(this.toEvent(ta), this.toEvent(tb));
         }
     }
 
     private onPointerUp(evt: PointerEvent): void {
-        // Order matters once Task 4 adds pinch handling: any tracked-pointer
-        // checks (e.g. wasPinchPair) must run BEFORE this delete.
+        // Pinch end fires BEFORE we untrack, so toEvent has fresh data
+        // (and so the pinch-pair check sees the lifting pointer).
+        const wasPinchPair = this.pinch.kind === 'active' &&
+            (evt.pointerId === this.pinch.a || evt.pointerId === this.pinch.b);
+
         this.tracked.delete(evt.pointerId);
 
         if (this.state.kind === 'piece-candidate' && evt.pointerId === this.state.pointerId) {
             const { pieceId } = this.state;
             this.state = { kind: 'idle' };
             this.callbacks.onPieceTap(pieceId, evt);
-            return;
-        }
-        if (this.state.kind === 'background-candidate' && evt.pointerId === this.state.pointerId) {
+        } else if (this.state.kind === 'background-candidate' && evt.pointerId === this.state.pointerId) {
             this.state = { kind: 'idle' };
-            return; // silent — no onBackgroundTap in vocabulary yet
-        }
-        if (this.state.kind === 'piece-drag' && evt.pointerId === this.state.pointerId) {
+        } else if (this.state.kind === 'piece-drag' && evt.pointerId === this.state.pointerId) {
             this.releaseCapture(evt.pointerId);
             this.state = { kind: 'idle' };
             this.callbacks.onPieceDrag.end(evt);
-            return;
-        }
-        if (this.state.kind === 'background-pan' && evt.pointerId === this.state.pointerId) {
+        } else if (this.state.kind === 'background-pan' && evt.pointerId === this.state.pointerId) {
             this.releaseCapture(evt.pointerId);
             this.state = { kind: 'idle' };
             this.callbacks.onBackgroundPan.end(evt);
-            return;
+        }
+
+        if (wasPinchPair) {
+            this.pinch = { kind: 'inactive' };
+            this.callbacks.onPinch.end();
         }
     }
 
     private onPointerCancel(_evt: PointerEvent): void {
         // Task 6: will use pinch, PINCH_GRACE_MS
         void this.pinch; void PINCH_GRACE_MS;
+    }
+
+    /**
+     * Returns true and starts a pinch (with the locked pair = first two
+     * touch pointers tracked) when the just-arrived pointerdown brings
+     * the touch-pointer count to 2. Returns false otherwise.
+     *
+     * Single-pointer state cleanup (cancel-with-grace, concurrent drag, etc.)
+     * is added in Task 5 — for now we silently discard any candidate state and
+     * reset to idle before starting the pinch.
+     */
+    private tryStartPinch(_evt: PointerEvent): boolean {
+        if (this.pinch.kind !== 'inactive') return false;
+
+        const touches = this.touchPointers();
+        if (touches.length < 2) return false;
+
+        // Discard any active single-pointer candidate (Task 5 will cancel with
+        // grace windows and cancel events; for now a silent reset is enough).
+        this.state = { kind: 'idle' };
+
+        const [a, b] = touches.slice(0, 2);
+        this.pinch = { kind: 'active', a: a.pointerId, b: b.pointerId };
+        this.callbacks.onPinch.start(this.toEvent(a), this.toEvent(b));
+        return true;
+    }
+
+    private touchPointers(): TrackedPointer[] {
+        return [...this.tracked.values()].filter(t => t.pointerType === 'touch');
+    }
+
+    /** Synthesize a PointerEvent-shape object from a TrackedPointer's last position. */
+    private toEvent(t: TrackedPointer): PointerEvent {
+        return {
+            pointerId: t.pointerId,
+            pointerType: t.pointerType,
+            clientX: t.lastX,
+            clientY: t.lastY,
+        } as PointerEvent;
     }
 
     // --- Helpers ---------------------------------------------------
