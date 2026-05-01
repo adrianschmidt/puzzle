@@ -433,6 +433,21 @@ describe('PointerRouter — pinch arbitration with active gestures', () => {
         expect(h.callbacks.onPinch.move).toHaveBeenCalledTimes(1);
     });
 
+    it('non-drag pinch-finger move during concurrent: emits onPinch.move only', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 })); // promote
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(300);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+        h.callbacks.onPieceDrag.move.mockClear();
+        h.callbacks.onPinch.move.mockClear();
+
+        h.fire('pointermove', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 110, clientY: 0 }));
+
+        expect(h.callbacks.onPinch.move).toHaveBeenCalledTimes(1);
+        expect(h.callbacks.onPieceDrag.move).not.toHaveBeenCalled();
+    });
+
     it('drag-finger pointerup during concurrent: emits onPieceDrag.end then onPinch.end', () => {
         const h = createHarness({ classifyTarget: piece() });
         (h.container.hasPointerCapture as ReturnType<typeof vi.fn>).mockReturnValue(true);
