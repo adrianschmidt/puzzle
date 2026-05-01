@@ -230,9 +230,30 @@ export class PointerRouter {
         }
     }
 
-    private onPointerCancel(_evt: PointerEvent): void {
-        // Task 6: will use pinch, PINCH_GRACE_MS
-        void this.pinch; void PINCH_GRACE_MS;
+    private onPointerCancel(evt: PointerEvent): void {
+        const wasPinchPair = this.pinch.kind === 'active' &&
+            (evt.pointerId === this.pinch.a || evt.pointerId === this.pinch.b);
+
+        this.tracked.delete(evt.pointerId);
+
+        if (this.state.kind === 'piece-candidate' && evt.pointerId === this.state.pointerId) {
+            this.state = { kind: 'idle' };
+        } else if (this.state.kind === 'background-candidate' && evt.pointerId === this.state.pointerId) {
+            this.state = { kind: 'idle' };
+        } else if (this.state.kind === 'piece-drag' && evt.pointerId === this.state.pointerId) {
+            this.releaseCapture(evt.pointerId);
+            this.state = { kind: 'idle' };
+            this.callbacks.onPieceDrag.cancel();
+        } else if (this.state.kind === 'background-pan' && evt.pointerId === this.state.pointerId) {
+            this.releaseCapture(evt.pointerId);
+            this.state = { kind: 'idle' };
+            this.callbacks.onBackgroundPan.cancel();
+        }
+
+        if (wasPinchPair) {
+            this.pinch = { kind: 'inactive' };
+            this.callbacks.onPinch.end();
+        }
     }
 
     /**
