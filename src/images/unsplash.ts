@@ -7,6 +7,8 @@
  * @see https://unsplash.com/documentation#get-a-random-photo
  */
 
+import { diagnostics } from '../diagnostics.js';
+
 /** The API endpoint for fetching a random photo. */
 export const UNSPLASH_RANDOM_URL = 'https://api.unsplash.com/photos/random';
 
@@ -174,7 +176,7 @@ export async function fetchRandomImage(
     const response = await fetchFn(url);
 
     if (!response.ok) {
-        console.warn(
+        diagnostics.warn(
             `Unsplash API error: ${response.status} ${response.statusText}`,
         );
 

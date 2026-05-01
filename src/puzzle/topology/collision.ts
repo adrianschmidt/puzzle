@@ -23,7 +23,7 @@
 import type { Point } from '../../model/types.js';
 import { Curve } from './curve.js';
 import type { BezierSegment } from './curve.js';
-import { diagnostics } from './diagnostics.js';
+import { diagnostics } from '../../diagnostics.js';
 
 // ---------------------------------------------------------------------------
 // Interfaces
