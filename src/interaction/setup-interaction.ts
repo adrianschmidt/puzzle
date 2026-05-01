@@ -82,11 +82,6 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                 }
             },
             requestRender: onStateChanged,
-            // Lifecycle teardown is owned by the router-hook layer
-            // below, so these can be no-ops. They are removed in Task 10
-            // when DragCallbacks is reduced.
-            onDrop: () => {},
-            onCancel: () => {},
         },
         undefined,
         screenDeltaToWorld,
