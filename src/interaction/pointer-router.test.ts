@@ -492,3 +492,60 @@ describe('PointerRouter — pinch arbitration with active gestures', () => {
         expect(h.callbacks.onPinch.start).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('PointerRouter — pointercancel', () => {
+    function piece(): ClassifyTarget { return () => ({ kind: 'piece', pieceId: 1 }); }
+    function background(): ClassifyTarget { return () => ({ kind: 'background' }); }
+
+    it('clears piece-candidate silently on pointercancel', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointercancel', fakePointerEvent({ pointerId: 1 }));
+        expect(h.callbacks.onPieceTap).not.toHaveBeenCalled();
+        expect(h.callbacks.onPieceDrag.cancel).not.toHaveBeenCalled();
+    });
+
+    it('emits onPieceDrag.cancel and releases capture on pointercancel during drag', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        (h.container.hasPointerCapture as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 20, clientY: 0 }));
+        h.fire('pointercancel', fakePointerEvent({ pointerId: 1 }));
+
+        expect(h.callbacks.onPieceDrag.cancel).toHaveBeenCalledTimes(1);
+        expect(h.container.releasePointerCapture).toHaveBeenCalledWith(1);
+    });
+
+    it('emits onBackgroundPan.cancel and releases capture on pointercancel during pan', () => {
+        const h = createHarness({ classifyTarget: background() });
+        (h.container.hasPointerCapture as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 20, clientY: 0 }));
+        h.fire('pointercancel', fakePointerEvent({ pointerId: 1 }));
+
+        expect(h.callbacks.onBackgroundPan.cancel).toHaveBeenCalledTimes(1);
+        expect(h.container.releasePointerCapture).toHaveBeenCalledWith(1);
+    });
+
+    it('emits onPinch.end when a pair member is cancelled', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+        h.fire('pointercancel', fakePointerEvent({ pointerId: 2, pointerType: 'touch' }));
+
+        expect(h.callbacks.onPinch.end).toHaveBeenCalledTimes(1);
+    });
+
+    it('concurrent drag+pinch: cancel on drag-finger emits onPieceDrag.cancel + onPinch.end', () => {
+        const h = createHarness({ classifyTarget: piece() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 20, clientY: 0 }));
+        (h.nowMock as unknown as { advance: (ms: number) => void }).advance(300);
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+        h.fire('pointercancel', fakePointerEvent({ pointerId: 1, pointerType: 'touch' }));
+
+        expect(h.callbacks.onPieceDrag.cancel).toHaveBeenCalledTimes(1);
+        expect(h.callbacks.onPinch.end).toHaveBeenCalledTimes(1);
+    });
+});
