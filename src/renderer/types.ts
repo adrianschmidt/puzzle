@@ -43,11 +43,7 @@ export interface Renderer {
      */
     disableViewportTransition(): void;
 
-    /**
-     * Returns the table element (the rendering surface).
-     * Used by the viewport controller to check if pointer events
-     * hit piece elements vs empty space.
-     */
+    /** Returns the root table element (the rendering surface). */
     getTableElement(): HTMLElement | null;
 
     /**
