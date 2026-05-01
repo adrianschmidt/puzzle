@@ -54,6 +54,7 @@ describe('DragController', () => {
             moveGroup: vi.fn(),
             bringToFront: vi.fn(),
             onDrop: vi.fn(),
+            onCancel: vi.fn(),
             requestRender: vi.fn(),
         };
 
@@ -854,6 +855,38 @@ describe('DragController', () => {
             // Drag should be cancelled and piece restored to original position
             expect(controller.getActiveDrag()).toBeNull();
             expect(callbacks.moveGroup).toHaveBeenCalledWith(1, { x: -50, y: -20 }); // Restore to (0, 0)
+        });
+
+        it('fires onCancel with the cancelled group id when pinch cancels the drag', () => {
+            // Start drag for group 1 via pointer 1, then 2nd pointer lands.
+            controller.handlePointerDown(10, fakePointerEvent({ pointerId: 1 }));
+            controller.handleAnyPointerDown(fakePointerEvent({ pointerId: 1 }));
+
+            controller.handleAnyPointerDown(fakePointerEvent({ pointerId: 2 }));
+
+            expect(callbacks.onCancel).toHaveBeenCalledTimes(1);
+            expect(callbacks.onCancel).toHaveBeenCalledWith(1);
+            // onDrop must NOT fire on cancellation (no merge to detect).
+            expect(callbacks.onDrop).not.toHaveBeenCalled();
+        });
+
+        it('does not fire onCancel when 2nd pointer arrives outside the grace window', () => {
+            let t = 0;
+            const ctrl = new DragController(
+                () => groups,
+                callbacks,
+                () => ({ width: 10000, height: 10000 }),
+                undefined,
+                () => t,
+            );
+
+            ctrl.handlePointerDown(10, fakePointerEvent({ pointerId: 1 }));
+            ctrl.handleAnyPointerDown(fakePointerEvent({ pointerId: 1 }));
+
+            t = 1000; // well past 250ms window
+            ctrl.handleAnyPointerDown(fakePointerEvent({ pointerId: 2 }));
+
+            expect(callbacks.onCancel).not.toHaveBeenCalled();
         });
 
         it('should clean up pointer tracking on pointerup', () => {

@@ -120,6 +120,16 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
                 }
                 onDrop(groupId);
             },
+            onCancel(groupId: number) {
+                // Mirror onDrop's teardown for everything except the
+                // merge-detection (a cancelled drag has already been
+                // restored to its starting position, so there's nothing
+                // to merge).
+                autoPan?.stop();
+                for (const id of expandToSelection(groupId)) {
+                    renderer.setGroupDragging(id, false);
+                }
+            },
             requestRender() {
                 onStateChanged();
             },
@@ -136,13 +146,10 @@ export function setupDragHandling(options: DragSetupOptions): () => void {
     // Container-level pointerdown listener: feeds every pointerdown into
     // the controller (regardless of whether it hit a piece) so multi-touch
     // is detected the moment a 2nd finger lands, not on the next move.
+    // Auto-pan teardown on pinch cancellation is owned by the controller's
+    // `onCancel` callback below, so there's nothing else to do here.
     const onAnyPointerDown = (e: PointerEvent) => {
         controller.handleAnyPointerDown(e);
-        // If pinch-cancellation just fired, also stop auto-pan; otherwise
-        // it would keep panning until the user moved the first finger.
-        if (!controller.getActiveDrag() && autoPan?.isActive()) {
-            autoPan.stop();
-        }
     };
 
     // Wire renderer's piece pointerdown to the controller.
