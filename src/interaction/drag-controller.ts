@@ -269,4 +269,7 @@ export class DragController {
         this.drag = null;
         this.callbacks.onCancel(cancelledGroupId);
     }
+
+    /** Temporary alias — Task 10 will rename cancelDragAndRestore to cancel. */
+    cancel(): void { this.cancelDragAndRestore(); }
 }

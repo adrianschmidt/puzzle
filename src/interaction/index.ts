@@ -10,3 +10,7 @@ export { ViewportController, touchDistance, touchMidpoint } from './viewport-con
 export type { ViewportControllerOptions } from './viewport-controller.js';
 export { AutoPanController, computeAutoPanVelocity, EDGE_ZONE_PX, MAX_PAN_SPEED_PX_PER_SEC } from './auto-pan.js';
 export type { AutoPanCallbacks } from './auto-pan.js';
+export { PointerRouter } from './pointer-router.js';
+export type { PointerRouterOptions, ClassifyTarget } from './pointer-router.js';
+export { setupInteraction } from './setup-interaction.js';
+export type { InteractionSetupOptions } from './setup-interaction.js';
