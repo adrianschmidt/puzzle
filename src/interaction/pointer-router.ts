@@ -169,8 +169,8 @@ export class PointerRouter {
             tracked.lastY = evt.clientY;
         }
 
-        // Single-pointer paths (unchanged from Task 3): piece-candidate,
-        // background-candidate, piece-drag, background-pan.
+        // Single-pointer gesture transitions: candidate-promotes-to-drag/pan
+        // once the tap threshold is crossed; active drag/pan dispatch move events.
         if (this.state.kind === 'piece-candidate' && evt.pointerId === this.state.pointerId) {
             if (this.exceedsTapThreshold(evt, this.state.startX, this.state.startY)) {
                 const { pieceId, pointerId } = this.state;
