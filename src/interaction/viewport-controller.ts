@@ -168,7 +168,7 @@ export class ViewportController {
             }
         }
 
-        // Handle pan
+        // handlePanMove guards on panLastPoint internally — outer check is sufficient.
         if (this.panPointerId === e.pointerId) {
             this.handlePanMove(e);
         }
@@ -243,6 +243,7 @@ export class ViewportController {
         this.panLastPoint = { x: evt.clientX, y: evt.clientY };
     }
 
+    /** Apply a pan delta from the previous pointer position to the current one. */
     handlePanMove(evt: PointerEvent): void {
         if (!this.panLastPoint) return;
         const dx = evt.clientX - this.panLastPoint.x;
@@ -263,6 +264,7 @@ export class ViewportController {
         this.lastPinchMidpoint = touchMidpoint(ta, tb);
     }
 
+    /** Update pinch state from the new positions of the locked pair; fires onViewportChanged. */
     handlePinchMove(a: PointerEvent, b: PointerEvent): void {
         if (this.lastPinchDist === null || this.lastPinchMidpoint === null) return;
         const ta = { id: a.pointerId, x: a.clientX, y: a.clientY };
@@ -282,6 +284,7 @@ export class ViewportController {
         this.onViewportChanged();
     }
 
+    /** Reset pinch tracking; safe to call regardless of state. */
     handlePinchEnd(): void {
         this.lastPinchDist = null;
         this.lastPinchMidpoint = null;
