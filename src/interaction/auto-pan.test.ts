@@ -160,4 +160,50 @@ describe('AutoPanController', () => {
         controller.stop();
         expect(cancelAnimationFrame).toHaveBeenCalled();
     });
+
+    describe('RAF lazy-rescheduling', () => {
+        let rafCallback: FrameRequestCallback | null;
+
+        beforeEach(() => {
+            rafCallback = null;
+            (requestAnimationFrame as unknown as ReturnType<typeof vi.fn>)
+                .mockImplementation((cb: FrameRequestCallback) => {
+                    rafCallback = cb;
+                    return 1;
+                });
+        });
+
+        it('does not reschedule RAF when velocity is zero', () => {
+            controller.start(42);
+            controller.updatePointer({ x: 500, y: 400 }); // centre — zero velocity
+            expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+
+            rafCallback!(16);
+
+            // Tick saw zero velocity and must not have requested another frame.
+            expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+        });
+
+        it('reschedules RAF while velocity is non-zero', () => {
+            controller.start(42);
+            controller.updatePointer({ x: 5, y: 400 }); // edge zone
+            expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+
+            rafCallback!(16);
+            expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
+
+            rafCallback!(32);
+            expect(requestAnimationFrame).toHaveBeenCalledTimes(3);
+        });
+
+        it('restarts RAF when pointer re-enters an edge zone after a zero-velocity tick', () => {
+            controller.start(42);
+            controller.updatePointer({ x: 500, y: 400 }); // centre
+            rafCallback!(16); // zero-velocity tick — does not reschedule
+            expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+
+            controller.updatePointer({ x: 5, y: 400 }); // now in edge zone
+            expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
+        });
+    });
 });
