@@ -55,12 +55,15 @@ export interface GroupBoundsOptions {
  * endpoints only) and layout (local-space, with path geometry) both call
  * into this via `options`.
  *
+ * Takes the `piecesById` index (typically `state.piecesById`) so the
+ * per-piece lookup inside the loop is O(1).
+ *
  * Returns Infinity-valued bounds when the group has no findable pieces;
  * sugar wrappers normalise that to zero-sized.
  */
 export function getGroupBounds(
     group: PieceGroup,
-    pieces: ReadonlyArray<Readonly<Piece>>,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
     options: GroupBoundsOptions,
 ): BoundingRect {
     let minX = Infinity;
@@ -79,7 +82,7 @@ export function getGroupBounds(
     };
 
     for (const [pieceId, offset] of group.pieces) {
-        const piece = pieces.find(p => p.id === pieceId);
+        const piece = piecesById.get(pieceId);
         if (!piece) continue;
 
         for (const edge of piece.edges) {
@@ -147,9 +150,9 @@ export function getGroupOffsetBounds(group: PieceGroup): BoundingRect {
  */
 export function getGroupLocalBounds(
     group: PieceGroup,
-    pieces: ReadonlyArray<Readonly<Piece>>,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
 ): { minX: number; minY: number; width: number; height: number } {
-    const b = getGroupBounds(group, pieces, {
+    const b = getGroupBounds(group, piecesById, {
         space: 'local',
         includePathGeometry: true,
     });
@@ -177,9 +180,9 @@ export function getGroupLocalBounds(
  */
 export function getGroupVisualBounds(
     group: PieceGroup,
-    pieces: ReadonlyArray<Readonly<Piece>>,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
 ): { minX: number; minY: number; width: number; height: number } {
-    const b = getGroupBounds(group, pieces, {
+    const b = getGroupBounds(group, piecesById, {
         space: 'world',
         includePathGeometry: true,
     });

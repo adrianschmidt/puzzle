@@ -21,14 +21,14 @@ export type RotationDirection = 'cw' | 'ccw';
  */
 export function rotateGroup(
     group: PieceGroup,
-    pieces: ReadonlyArray<Readonly<Piece>>,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
     direction: RotationDirection,
 ): PieceGroup {
     const delta = direction === 'cw' ? 1 : -1;
     const oldRotation = group.rotation;
     const newRotation = normaliseQuarterTurns(oldRotation + delta);
 
-    const bounds = getGroupLocalBounds(group, pieces);
+    const bounds = getGroupLocalBounds(group, piecesById);
     const centreLocal = {
         x: bounds.minX + bounds.width / 2,
         y: bounds.minY + bounds.height / 2,

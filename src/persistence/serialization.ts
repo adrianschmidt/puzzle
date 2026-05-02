@@ -14,6 +14,7 @@ import type {
     Point,
     Size,
 } from '../model/types.js';
+import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { getImageDimensions } from '../model/derive.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
@@ -138,6 +139,7 @@ export function deserializeState(data: SerializedGameState): GameState {
     validateSerializedState(data);
 
     const groups = data.groups.map(deserializeGroup);
+    const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
 
     // For v1 saves (no imageSize), derive it from piece data
     const imageSize = data.imageSize ?? deriveImageSize(data);
@@ -148,6 +150,9 @@ export function deserializeState(data: SerializedGameState): GameState {
     const state: GameState = {
         pieces: data.pieces,
         groups,
+        piecesById: buildPiecesById(data.pieces),
+        groupsById,
+        pieceToGroup,
         imageUrl: data.imageUrl,
         imageSize,
         gridSize,
@@ -282,6 +287,9 @@ function deriveImageSize(data: SerializedGameState): Size {
     const tempState: GameState = {
         pieces: data.pieces,
         groups: [],
+        piecesById: buildPiecesById(data.pieces),
+        groupsById: new Map(),
+        pieceToGroup: new Map(),
         imageUrl: '',
         imageSize: { width: 0, height: 0 },
         gridSize: { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },

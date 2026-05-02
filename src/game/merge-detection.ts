@@ -8,7 +8,7 @@
  */
 
 import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
-import { getBorderEdges, getWorldPosition } from '../model/helpers.js';
+import { getBorderEdges, getWorldPosition, tryGetGroup } from '../model/helpers.js';
 
 /**
  * Tolerance in pixels for edge alignment.
@@ -123,12 +123,12 @@ export function detectMerges(
     state: GameState,
     tolerance: number = MERGE_TOLERANCE_PX,
 ): MergeCandidate[] {
-    const movedGroup = state.groups.find((g) => g.id === movedGroupId);
+    const movedGroup = tryGetGroup(state, movedGroupId);
     if (!movedGroup) {
         return [];
     }
 
-    const borderEdges = getBorderEdges(movedGroup, state.pieces, state.groups);
+    const borderEdges = getBorderEdges(movedGroup, state);
     const candidates: MergeCandidate[] = [];
 
     for (const border of borderEdges) {

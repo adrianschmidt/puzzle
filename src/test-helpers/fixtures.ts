@@ -9,6 +9,14 @@
  */
 
 import type { Edge, GameState, Piece, Point } from '../model/types.js';
+import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
+
+/**
+ * Re-export `buildPiecesById` for tests that call helpers expecting the
+ * `piecesById` index (e.g. `getGroupBounds`, `getGroupVisualBounds`,
+ * `rotateGroup`) without going through `makeGameState`.
+ */
+export { buildPiecesById };
 
 export interface MakePieceOpts {
     id?: number;
@@ -112,11 +120,23 @@ export function makeRectPiece(opts: MakeRectPieceOpts = {}): Piece {
  *
  * Default: empty pieces/groups, 800×600 image, 8×6 grid, not completed.
  * Pass any subset of GameState fields to override.
+ *
+ * The `piecesById`, `groupsById`, and `pieceToGroup` indexes are derived
+ * from the final `pieces`/`groups` (overrides included) so callers don't
+ * have to keep them in sync manually. Override them explicitly only if
+ * a test needs to exercise an inconsistent state.
  */
 export function makeGameState(overrides: Partial<GameState> = {}): GameState {
+    const pieces = overrides.pieces ?? [];
+    const groups = overrides.groups ?? [];
+    const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
+
     const base: GameState = {
-        pieces: [],
-        groups: [],
+        pieces,
+        groups,
+        piecesById: buildPiecesById(pieces),
+        groupsById,
+        pieceToGroup,
         imageUrl: 'test.jpg',
         imageSize: { width: 800, height: 600 },
         gridSize: { cols: 8, rows: 6 },

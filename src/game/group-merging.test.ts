@@ -131,7 +131,8 @@ describe('mergeGroups', () => {
             rotation: 0,
         };
 
-        const result = mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
+        const state = makeGameState({ groups: [movedGroup, targetGroup] });
+        const result = mergeGroups(state, movedGroup, targetGroup, { x: 0, y: 0 });
 
         expect(result.pieces.has(0)).toBe(true);
         expect(result.pieces.has(1)).toBe(true);
@@ -155,7 +156,7 @@ describe('mergeGroups', () => {
             rotation: 0,
         };
 
-        mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
+        mergeGroups(makeGameState({ groups: [movedGroup, targetGroup] }), movedGroup, targetGroup, { x: 0, y: 0 });
 
         // After merge, piece 0 should be at offset (-200, 0) in target group
         // so its world pos = 300 + (-200) = 100, 50 + 0 = 50 ✓
@@ -180,7 +181,7 @@ describe('mergeGroups', () => {
         };
 
         // Snap delta: move moved group -5px in x to align
-        mergeGroups(movedGroup, targetGroup, { x: -5, y: 0 });
+        mergeGroups(makeGameState({ groups: [movedGroup, targetGroup] }), movedGroup, targetGroup, { x: -5, y: 0 });
 
         // After snap, moved group is at (100, 0)
         // Piece 0's offset in target: (100 - 200, 0 - 0) = (-100, 0)
@@ -207,7 +208,7 @@ describe('mergeGroups', () => {
             rotation: 0,
         };
 
-        mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
+        mergeGroups(makeGameState({ groups: [movedGroup, targetGroup] }), movedGroup, targetGroup, { x: 0, y: 0 });
 
         expect(targetGroup.pieces.size).toBe(3);
 
@@ -228,7 +229,8 @@ describe('mergeGroups', () => {
         const movedGroup = makeGroup(0, 0, { x: 0, y: 0 });
         const targetGroup = makeGroup(1, 1, { x: 100, y: 0 });
 
-        const result = mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
+        const state = makeGameState({ groups: [movedGroup, targetGroup] });
+        const result = mergeGroups(state, movedGroup, targetGroup, { x: 0, y: 0 });
 
         expect(result).toBe(targetGroup);
     });
@@ -248,7 +250,7 @@ describe('mergeGroups', () => {
         };
 
         // Snap delta corrects to (100, 0) → dx=-8, dy=5
-        mergeGroups(movedGroup, targetGroup, { x: -8, y: 5 });
+        mergeGroups(makeGameState({ groups: [movedGroup, targetGroup] }), movedGroup, targetGroup, { x: -8, y: 5 });
 
         // After snap moved is at (100, 0), offset = 100-200 = -100
         const offset0 = targetGroup.pieces.get(0)!;
@@ -284,7 +286,7 @@ describe('mergeGroups', () => {
             }
             worldBefore.set(2, getWorldPosition({ x: 0, y: 0 }, 2, targetGroup));
 
-            mergeGroups(movedGroup, targetGroup, { x: 0, y: 0 });
+            mergeGroups(makeGameState({ groups: [movedGroup, targetGroup] }), movedGroup, targetGroup, { x: 0, y: 0 });
 
             for (const [id, expected] of worldBefore) {
                 const after = getWorldPosition({ x: 0, y: 0 }, id, targetGroup);

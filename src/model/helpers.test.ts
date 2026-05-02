@@ -1,15 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
-    getMateEdge,
-    findGroupForPiece,
-    moveGroup,
     getBorderEdges,
+    getGroupForPiece,
+    getMateEdge,
     getWorldPosition,
     localToWorld,
+    moveGroup,
     normaliseQuarterTurns,
     rotatePoint,
 } from './helpers.js';
 import type { Piece, PieceGroup, Edge } from './types.js';
+import { makeGameState } from '../test-helpers/fixtures.js';
 
 /** Create a minimal edge for testing. */
 function edge(
@@ -46,7 +47,8 @@ function group(id: number, pieceIds: number[]): PieceGroup {
 describe('getMateEdge', () => {
     it('returns undefined for a border edge', () => {
         const p = piece(0, [edge(0)]);
-        const result = getMateEdge(p, p.edges[0], [p]);
+        const state = makeGameState({ pieces: [p] });
+        const result = getMateEdge(p, p.edges[0], state);
         expect(result).toBeUndefined();
     });
 
@@ -56,7 +58,7 @@ describe('getMateEdge', () => {
         const p0 = piece(0, [e1]);
         const p1 = piece(1, [e2]);
 
-        const result = getMateEdge(p0, e1, [p0, p1]);
+        const result = getMateEdge(p0, e1, makeGameState({ pieces: [p0, p1] }));
 
         expect(result).toBeDefined();
         expect(result!.piece.id).toBe(1);
@@ -67,7 +69,9 @@ describe('getMateEdge', () => {
         const e1 = edge(0, 1, 99); // references non-existent piece 99
         const p0 = piece(0, [e1]);
 
-        expect(() => getMateEdge(p0, e1, [p0])).toThrow('Piece 99 not found');
+        expect(() => getMateEdge(p0, e1, makeGameState({ pieces: [p0] }))).toThrow(
+            'Piece 99 not found',
+        );
     });
 
     it('throws if mate edge is not found on the mate piece', () => {
@@ -75,26 +79,28 @@ describe('getMateEdge', () => {
         const p0 = piece(0, [e1]);
         const p1 = piece(1, [edge(2)]); // piece 1 has edge 2, not edge 99
 
-        expect(() => getMateEdge(p0, e1, [p0, p1])).toThrow(
-            'Mate edge 99 not found on piece 1',
-        );
+        expect(() =>
+            getMateEdge(p0, e1, makeGameState({ pieces: [p0, p1] })),
+        ).toThrow('Mate edge 99 not found on piece 1');
     });
 });
 
-describe('findGroupForPiece', () => {
+describe('getGroupForPiece', () => {
     it('finds the group containing a piece', () => {
         const g1 = group(0, [0, 1]);
         const g2 = group(1, [2, 3]);
+        const state = makeGameState({ groups: [g1, g2] });
 
-        expect(findGroupForPiece(0, [g1, g2]).id).toBe(0);
-        expect(findGroupForPiece(2, [g1, g2]).id).toBe(1);
-        expect(findGroupForPiece(3, [g1, g2]).id).toBe(1);
+        expect(getGroupForPiece(state, 0).id).toBe(0);
+        expect(getGroupForPiece(state, 2).id).toBe(1);
+        expect(getGroupForPiece(state, 3).id).toBe(1);
     });
 
     it('throws if piece is not in any group', () => {
         const g1 = group(0, [0, 1]);
+        const state = makeGameState({ groups: [g1] });
 
-        expect(() => findGroupForPiece(99, [g1])).toThrow(
+        expect(() => getGroupForPiece(state, 99)).toThrow(
             'Piece 99 is not in any group',
         );
     });
@@ -140,7 +146,10 @@ describe('getBorderEdges', () => {
         const g1 = group(0, [0]);
         const g2 = group(1, [1]);
 
-        const borders = getBorderEdges(g1, [p0, p1], [g1, g2]);
+        const borders = getBorderEdges(
+            g1,
+            makeGameState({ pieces: [p0, p1], groups: [g1, g2] }),
+        );
 
         expect(borders).toHaveLength(1);
         expect(borders[0].piece.id).toBe(0);
@@ -158,7 +167,10 @@ describe('getBorderEdges', () => {
         const p1 = piece(1, [e2]);
         const g1 = group(0, [0, 1]); // both pieces in same group
 
-        const borders = getBorderEdges(g1, [p0, p1], [g1]);
+        const borders = getBorderEdges(
+            g1,
+            makeGameState({ pieces: [p0, p1], groups: [g1] }),
+        );
 
         expect(borders).toHaveLength(0);
     });
@@ -168,7 +180,10 @@ describe('getBorderEdges', () => {
         const p0 = piece(0, [borderEdge]);
         const g1 = group(0, [0]);
 
-        const borders = getBorderEdges(g1, [p0], [g1]);
+        const borders = getBorderEdges(
+            g1,
+            makeGameState({ pieces: [p0], groups: [g1] }),
+        );
 
         expect(borders).toHaveLength(0);
     });
@@ -191,7 +206,10 @@ describe('getBorderEdges', () => {
         const gA = group(0, [0, 1]);
         const gB = group(1, [2, 3]);
 
-        const borders = getBorderEdges(gA, [p0, p1, p2, p3], [gA, gB]);
+        const borders = getBorderEdges(
+            gA,
+            makeGameState({ pieces: [p0, p1, p2, p3], groups: [gA, gB] }),
+        );
 
         expect(borders).toHaveLength(2);
         expect(borders.map((b) => b.piece.id).sort()).toEqual([0, 1]);

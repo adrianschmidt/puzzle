@@ -52,13 +52,13 @@ export interface GatherResult {
  *
  * @param groups - Current groups with their positions (not mutated)
  * @param screenAspectRatio - Width/height ratio of the screen viewport
- * @param pieces - All pieces in the puzzle (for computing visual bounds)
+ * @param piecesById - All pieces in the puzzle, indexed by id (for visual bounds)
  * @returns Positions and layout bounds for zoom-to-fit
  */
 export function computeGatheredPositions(
     groups: ReadonlyArray<Readonly<PieceGroup>>,
     screenAspectRatio: number,
-    pieces: ReadonlyArray<Readonly<Piece>>,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
 ): GatherResult {
     const emptyResult: GatherResult = {
         positions: new Map(),
@@ -79,7 +79,7 @@ export function computeGatheredPositions(
 
     const layouts: GroupLayout[] = groups.map(group => ({
         group,
-        bounds: getGroupVisualBounds(group, pieces),
+        bounds: getGroupVisualBounds(group, piecesById),
     }));
 
     // Shuffle so grid position doesn't correlate with solved position

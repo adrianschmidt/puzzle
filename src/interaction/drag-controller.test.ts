@@ -7,8 +7,22 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DragController } from './drag-controller.js';
-import type { DragCallbacks } from './drag-controller.js';
+import type { DragCallbacks, DragGroupLookups } from './drag-controller.js';
 import type { PieceGroup } from '../model/types.js';
+
+/** Wrap a mutable groups array as the lookups interface DragController expects. */
+function lookupsFor(groups: () => PieceGroup[]): DragGroupLookups {
+    return {
+        getGroupForPiece(pieceId) {
+            const group = groups().find((g) => g.pieces.has(pieceId));
+            if (!group) throw new Error(`Piece ${pieceId} is not in any group`);
+            return group;
+        },
+        getGroupById(id) {
+            return groups().find((g) => g.id === id);
+        },
+    };
+}
 
 /** Create a minimal fake PointerEvent with the fields DragController uses. */
 function fakePointerEvent(
@@ -59,7 +73,7 @@ describe('DragController', () => {
         // Provide a large viewport so pointer clamping doesn't
         // affect existing test values.
         controller = new DragController(
-            () => groups,
+            lookupsFor(() => groups),
             callbacks,
             () => ({ width: 10000, height: 10000 }),
         );
@@ -348,7 +362,7 @@ describe('DragController', () => {
 
         beforeEach(() => {
             clampedController = new DragController(
-                () => groups,
+                lookupsFor(() => groups),
                 callbacks,
                 () => ({ width: VP_W, height: VP_H }),
             );
@@ -629,7 +643,7 @@ describe('DragController', () => {
         it('should handle viewport resize between moves', () => {
             let vpSize = { width: VP_W, height: VP_H };
             const resizableController = new DragController(
-                () => groups,
+                lookupsFor(() => groups),
                 callbacks,
                 () => vpSize,
             );
@@ -673,7 +687,7 @@ describe('DragController', () => {
         it('should convert screen deltas to world space when zoomed in', () => {
             // At scale 2, a 20px screen movement = 10px world movement
             const zoomedController = new DragController(
-                () => groups,
+                lookupsFor(() => groups),
                 callbacks,
                 () => ({ width: 10000, height: 10000 }),
                 (delta) => ({ x: delta.x / 2, y: delta.y / 2 }),

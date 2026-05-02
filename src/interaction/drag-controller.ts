@@ -14,7 +14,6 @@
  */
 
 import type { Point, PieceGroup } from '../model/types.js';
-import { findGroupForPiece } from '../model/helpers.js';
 
 /**
  * Margin in pixels. The pointer position is clamped so it stays
@@ -47,6 +46,18 @@ export interface DragCallbacks {
 }
 
 /**
+ * Group lookup hooks — the drag controller calls these to find groups by
+ * piece id (on pointer-down) and by id (on cancel). Backed by `state.pieceToGroup`
+ * and `state.groupsById` in production for O(1) lookup.
+ */
+export interface DragGroupLookups {
+    /** Look up the group containing a piece. Throws if the piece is unknown. */
+    getGroupForPiece(pieceId: number): PieceGroup;
+    /** Look up a group by id. Returns `undefined` if the group is gone. */
+    getGroupById(groupId: number): PieceGroup | undefined;
+}
+
+/**
  * Optional function to convert a screen-space delta to world-space.
  * When a viewport transform is active (zoom/pan), pointer deltas are
  * in screen pixels but group positions are in world coordinates.
@@ -62,18 +73,18 @@ export type ScreenDeltaToWorld = (delta: Point) => Point;
  */
 export class DragController {
     private drag: DragState | null = null;
-    private groups: () => PieceGroup[];
+    private lookups: DragGroupLookups;
     private callbacks: DragCallbacks;
     private getViewportSize: () => { width: number; height: number };
     private screenDeltaToWorld: ScreenDeltaToWorld;
 
     constructor(
-        groups: () => PieceGroup[],
+        lookups: DragGroupLookups,
         callbacks: DragCallbacks,
         getViewportSize?: () => { width: number; height: number },
         screenDeltaToWorld?: ScreenDeltaToWorld,
     ) {
-        this.groups = groups;
+        this.lookups = lookups;
         this.callbacks = callbacks;
         this.getViewportSize = getViewportSize ?? (() => ({
             width: window.visualViewport?.width ?? window.innerWidth,
@@ -95,7 +106,7 @@ export class DragController {
      * method always starts a drag for the given piece.
      */
     handlePointerDown(pieceId: number, event: PointerEvent): void {
-        const group = findGroupForPiece(pieceId, this.groups());
+        const group = this.lookups.getGroupForPiece(pieceId);
 
         const vp = this.getViewportSize();
         this.drag = {
@@ -166,7 +177,7 @@ export class DragController {
         if (!this.drag) return;
 
         // Restore group to its starting position.
-        const group = this.groups().find(g => g.id === this.drag!.groupId);
+        const group = this.lookups.getGroupById(this.drag.groupId);
         if (group) {
             const restoreDelta = {
                 x: this.drag.startPosition.x - group.position.x,

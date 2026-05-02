@@ -8,7 +8,13 @@
  */
 
 import type { GameState, PieceGroup, Point } from '../model/types.js';
-import { moveGroup, normaliseQuarterTurns, rotatePoint } from '../model/helpers.js';
+import {
+    getGroup,
+    moveGroup,
+    normaliseQuarterTurns,
+    removeGroup,
+    rotatePoint,
+} from '../model/helpers.js';
 import { detectMerges, type MergeCandidate } from './merge-detection.js';
 import { shouldSuppressMerge } from './pile-detection.js';
 
@@ -32,12 +38,18 @@ export interface MergeResult {
  * The moved group's pieces are absorbed into the target group,
  * with their offsets recalculated relative to the target group's position.
  *
+ * Updates `state.pieceToGroup` to point absorbed pieces at the target.
+ * The moved group itself is left intact — `processDrop` removes it via
+ * `removeGroup` afterwards.
+ *
+ * @param state - The game state (pieceToGroup index is mutated)
  * @param movedGroup - The group that was just dropped (will be absorbed)
  * @param targetGroup - The group to merge into (stays in place)
  * @param snapDelta - Position correction to apply to the moved group before merging
  * @returns The merged group (which is the mutated targetGroup)
  */
 export function mergeGroups(
+    state: GameState,
     movedGroup: PieceGroup,
     targetGroup: PieceGroup,
     snapDelta: Point,
@@ -61,6 +73,7 @@ export function mergeGroups(
             x: offset.x + localDelta.x,
             y: offset.y + localDelta.y,
         });
+        state.pieceToGroup.set(pieceId, targetGroup);
     }
 
     return targetGroup;
@@ -93,16 +106,6 @@ export function selectBestCandidate(candidates: MergeCandidate[]): MergeCandidat
     }
 
     return best;
-}
-
-/**
- * Remove a group from the game state's groups array.
- */
-function removeGroup(state: GameState, groupId: number): void {
-    const index = state.groups.findIndex((g) => g.id === groupId);
-    if (index !== -1) {
-        state.groups.splice(index, 1);
-    }
 }
 
 /**
@@ -148,7 +151,7 @@ export function processDrop(
         // then merge one at a time (since merging changes the group structure)
         const best = selectBestCandidate(candidates);
 
-        mergeGroups(best.movedGroup, best.targetGroup, best.snapDelta);
+        mergeGroups(state, best.movedGroup, best.targetGroup, best.snapDelta);
         removeGroup(state, best.movedGroup.id);
         totalMerges++;
 
@@ -160,13 +163,8 @@ export function processDrop(
         return null;
     }
 
-    const mergedGroup = state.groups.find((g) => g.id === currentGroupId);
-    if (!mergedGroup) {
-        throw new Error(`Merged group ${currentGroupId} not found after merge`);
-    }
-
     return {
-        group: mergedGroup,
+        group: getGroup(state, currentGroupId),
         mergeCount: totalMerges,
     };
 }

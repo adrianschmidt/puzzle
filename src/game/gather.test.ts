@@ -8,7 +8,7 @@ import {
     computeGatheredPositions,
     applyGatheredPositions,
 } from './gather.js';
-import { makeRectPiece } from '../test-helpers/fixtures.js';
+import { buildPiecesById, makeRectPiece } from '../test-helpers/fixtures.js';
 
 function makeGroup(id: number, x: number, y: number): PieceGroup {
     return { id, pieces: new Map([[id, { x: 0, y: 0 }]]), position: { x, y }, rotation: 0 };
@@ -26,14 +26,14 @@ const landscapeAspect = 800 / 600; // 1.33
 
 describe('computeGatheredPositions', () => {
     it('should return empty result for no groups', () => {
-        const { positions } = computeGatheredPositions([], landscapeAspect, []);
+        const { positions } = computeGatheredPositions([], landscapeAspect, new Map());
         expect(positions.size).toBe(0);
     });
 
     it('should return a position for a single group', () => {
         const pieces = [makeRectPiece({ id: 1, width: 100, height: 100 })];
         const groups = [makeGroup(1, 1000, 2000)];
-        const { positions } = computeGatheredPositions(groups, landscapeAspect, pieces);
+        const { positions } = computeGatheredPositions(groups, landscapeAspect, buildPiecesById(pieces));
 
         expect(positions.size).toBe(1);
         expect(positions.has(1)).toBe(true);
@@ -42,7 +42,7 @@ describe('computeGatheredPositions', () => {
     it('should produce positions for all groups', () => {
         const pieces = [makeRectPiece({ id: 1, width: 100, height: 100 }), makeRectPiece({ id: 2, width: 100, height: 100 }), makeRectPiece({ id: 3, width: 100, height: 100 })];
         const groups = [makeGroup(1, 0, 0), makeGroup(2, 500, 500), makeGroup(3, -200, 100)];
-        const { positions } = computeGatheredPositions(groups, landscapeAspect, pieces);
+        const { positions } = computeGatheredPositions(groups, landscapeAspect, buildPiecesById(pieces));
 
         expect(positions.size).toBe(3);
         expect(positions.has(1)).toBe(true);
@@ -53,7 +53,7 @@ describe('computeGatheredPositions', () => {
     it('should not stack pieces on top of each other', () => {
         const pieces = Array.from({ length: 6 }, (_, i) => makeRectPiece({ id: i, width: 100, height: 100 }));
         const groups = pieces.map(p => makeGroup(p.id, p.id * 10, p.id * 10));
-        const { positions } = computeGatheredPositions(groups, landscapeAspect, pieces);
+        const { positions } = computeGatheredPositions(groups, landscapeAspect, buildPiecesById(pieces));
 
         const posArray = Array.from(positions.values());
         for (let i = 0; i < posArray.length; i++) {
@@ -68,7 +68,7 @@ describe('computeGatheredPositions', () => {
     it('should return layout bounds that contain all positions', () => {
         const pieces = Array.from({ length: 4 }, (_, i) => makeRectPiece({ id: i, width: 100, height: 100 }));
         const groups = pieces.map(p => makeGroup(p.id, 0, 0));
-        const { positions, layoutBounds } = computeGatheredPositions(groups, landscapeAspect, pieces);
+        const { positions, layoutBounds } = computeGatheredPositions(groups, landscapeAspect, buildPiecesById(pieces));
 
         for (const pos of positions.values()) {
             expect(pos.x).toBeGreaterThanOrEqual(layoutBounds.x);
@@ -86,7 +86,7 @@ describe('computeGatheredPositions', () => {
             [1, { x: 100, y: 0 }],
         ]);
         const smallGroup = makeGroup(2, 500, 500);
-        const { positions } = computeGatheredPositions([bigGroup, smallGroup], landscapeAspect, pieces);
+        const { positions } = computeGatheredPositions([bigGroup, smallGroup], landscapeAspect, buildPiecesById(pieces));
 
         expect(positions.size).toBe(2);
     });
@@ -124,7 +124,7 @@ describe('computeGatheredPositions with tab paths', () => {
             { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]), position: { x: 200, y: 0 }, rotation: 0 },
         ];
 
-        const { layoutBounds } = computeGatheredPositions(groups, 1.33, [pieceWithTab, plainPiece]);
+        const { layoutBounds } = computeGatheredPositions(groups, 1.33, buildPiecesById([pieceWithTab, plainPiece]));
 
         // The layout should be taller than 100px to account for the 30px tab
         expect(layoutBounds.height).toBeGreaterThan(100);

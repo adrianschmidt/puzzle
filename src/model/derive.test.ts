@@ -7,6 +7,7 @@ import {
     getGridRows,
 } from './derive.js';
 import type { Edge, GameState, Piece } from './types.js';
+import { makeGameState } from '../test-helpers/fixtures.js';
 
 /** Create a minimal edge with start/end points. */
 function edge(
@@ -46,14 +47,7 @@ function rectPiece(
 
 /** Create a minimal GameState with the given pieces. */
 function gameState(pieces: Piece[]): GameState {
-    return {
-        pieces,
-        groups: [],
-        imageUrl: 'test.jpg',
-        imageSize: { width: 800, height: 600 },
-        gridSize: { cols: 8, rows: 6 },
-        completed: false,
-    };
+    return makeGameState({ pieces });
 }
 
 describe('getPieceBounds', () => {

@@ -1,11 +1,18 @@
 export type { Point, Size, Edge, Piece, PieceGroup, GameState } from './types.js';
 export {
-    getMateEdge,
-    findGroupForPiece,
-    moveGroup,
+    addGroup,
+    buildGroupIndexes,
+    buildPiecesById,
     getBorderEdges,
-    localToWorld,
+    getGroup,
+    getGroupForPiece,
+    getMateEdge,
+    getPiece,
     getWorldPosition,
+    localToWorld,
+    moveGroup,
+    removeGroup,
+    tryGetGroup,
 } from './helpers.js';
 export {
     getImageDimensions,
