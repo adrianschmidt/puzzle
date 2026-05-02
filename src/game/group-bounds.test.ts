@@ -10,7 +10,7 @@ import {
     getGroupLocalBounds,
     getGroupVisualBounds,
 } from './group-bounds.js';
-import { makePiece, makeRectPiece } from '../test-helpers/fixtures.js';
+import { buildPiecesById, makePiece, makeRectPiece } from '../test-helpers/fixtures.js';
 
 function makeGroup(id: number, x: number, y: number): PieceGroup {
     return { id, pieces: new Map([[id, { x: 0, y: 0 }]]), position: { x, y }, rotation: 0 };
@@ -73,7 +73,7 @@ describe('getGroupBounds (unified primitive)', () => {
         it('walks edge endpoints in piece-offset frame', () => {
             const piece = makeSquarePiece(0);
             const group = makeGroup(0, 200, 300); // position is ignored
-            const bounds = getGroupBounds(group, [piece], {
+            const bounds = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'local',
                 includePathGeometry: false,
             });
@@ -84,7 +84,7 @@ describe('getGroupBounds (unified primitive)', () => {
             const piece = makeSquarePiece(0);
             const group = makeGroup(0, 0, 0);
             group.rotation = 1; // 90° CW
-            const bounds = getGroupBounds(group, [piece], {
+            const bounds = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'local',
                 includePathGeometry: false,
             });
@@ -95,13 +95,13 @@ describe('getGroupBounds (unified primitive)', () => {
             const piece = makeTabbedPiece(0);
             const group = makeGroup(0, 0, 0);
 
-            const noPaths = getGroupBounds(group, [piece], {
+            const noPaths = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'local',
                 includePathGeometry: false,
             });
             expect(noPaths).toEqual({ minX: 0, minY: 0, maxX: 100, maxY: 100 });
 
-            const withPaths = getGroupBounds(group, [piece], {
+            const withPaths = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'local',
                 includePathGeometry: true,
             });
@@ -119,7 +119,7 @@ describe('getGroupBounds (unified primitive)', () => {
                 [1, { x: 100, y: 0 }],
             ]);
 
-            const bounds = getGroupBounds(group, [piece0, piece1], {
+            const bounds = getGroupBounds(group, buildPiecesById([piece0, piece1]), {
                 space: 'local',
                 includePathGeometry: false,
             });
@@ -132,7 +132,7 @@ describe('getGroupBounds (unified primitive)', () => {
             const piece = makeSquarePiece(0);
             const group = makeGroup(0, 50, 75);
 
-            const bounds = getGroupBounds(group, [piece], {
+            const bounds = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'world',
                 includePathGeometry: false,
             });
@@ -143,7 +143,7 @@ describe('getGroupBounds (unified primitive)', () => {
             const piece = makeSquarePiece(0);
             const group = makeGroup(0, -50, -30);
 
-            const bounds = getGroupBounds(group, [piece], {
+            const bounds = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'world',
                 includePathGeometry: false,
             });
@@ -159,7 +159,7 @@ describe('getGroupBounds (unified primitive)', () => {
                 rotation: 0,
             };
 
-            const bounds = getGroupBounds(group, [piece], {
+            const bounds = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'world',
                 includePathGeometry: false,
             });
@@ -178,7 +178,7 @@ describe('getGroupBounds (unified primitive)', () => {
                 rotation: 1,
             };
 
-            const bounds = getGroupBounds(group, [piece], {
+            const bounds = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'world',
                 includePathGeometry: false,
             });
@@ -197,14 +197,14 @@ describe('getGroupBounds (unified primitive)', () => {
                 rotation: 1,
             };
 
-            const noPaths = getGroupBounds(group, [piece], {
+            const noPaths = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'world',
                 includePathGeometry: false,
             });
             // Without path geometry, just the rotated square: x=[-100..0].
             expect(noPaths).toEqual({ minX: -100, minY: 0, maxX: 0, maxY: 100 });
 
-            const withPaths = getGroupBounds(group, [piece], {
+            const withPaths = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'world',
                 includePathGeometry: true,
             });
@@ -237,7 +237,7 @@ describe('getGroupLocalBounds', () => {
         const group = makeGroup(1, 0, 0);
         group.rotation = 1; // CW 90°
 
-        expect(getGroupLocalBounds(group, [piece])).toEqual({
+        expect(getGroupLocalBounds(group, buildPiecesById([piece]))).toEqual({
             minX: 0,
             minY: 0,
             width: 100,
@@ -251,8 +251,8 @@ describe('getGroupVisualBounds', () => {
         const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
 
-        expect(getGroupVisualBounds(group, [piece])).toEqual(
-            getGroupLocalBounds(group, [piece]),
+        expect(getGroupVisualBounds(group, buildPiecesById([piece]))).toEqual(
+            getGroupLocalBounds(group, buildPiecesById([piece])),
         );
     });
 
@@ -261,7 +261,7 @@ describe('getGroupVisualBounds', () => {
         const group = makeGroup(1, 0, 0);
         group.rotation = 1;
 
-        const bounds = getGroupVisualBounds(group, [piece]);
+        const bounds = getGroupVisualBounds(group, buildPiecesById([piece]));
 
         expect(bounds.width).toBeCloseTo(40);
         expect(bounds.height).toBeCloseTo(100);
@@ -272,7 +272,7 @@ describe('getGroupVisualBounds', () => {
         const group = makeGroup(1, 0, 0);
         group.rotation = 3;
 
-        const bounds = getGroupVisualBounds(group, [piece]);
+        const bounds = getGroupVisualBounds(group, buildPiecesById([piece]));
 
         expect(bounds.width).toBeCloseTo(40);
         expect(bounds.height).toBeCloseTo(100);
@@ -283,7 +283,7 @@ describe('getGroupVisualBounds', () => {
         const group = makeGroup(1, 0, 0);
         group.rotation = 2;
 
-        const bounds = getGroupVisualBounds(group, [piece]);
+        const bounds = getGroupVisualBounds(group, buildPiecesById([piece]));
 
         expect(bounds.width).toBeCloseTo(100);
         expect(bounds.height).toBeCloseTo(40);

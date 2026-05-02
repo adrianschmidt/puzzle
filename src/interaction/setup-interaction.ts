@@ -7,7 +7,7 @@
  */
 
 import type { GameState, Point } from '../model/types.js';
-import { moveGroup, findGroupForPiece } from '../model/helpers.js';
+import { getGroupForPiece, moveGroup, tryGetGroup } from '../model/helpers.js';
 import type { Renderer } from '../renderer/types.js';
 import { DragController } from './drag-controller.js';
 import type { ScreenDeltaToWorld } from './drag-controller.js';
@@ -52,7 +52,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
             panViewport,
             moveGroup(groupId, worldDelta) {
                 for (const id of expandToSelection(groupId)) {
-                    const group = getState().groups.find(g => g.id === id);
+                    const group = tryGetGroup(getState(), id);
                     if (group) moveGroup(group, worldDelta);
                 }
             },
@@ -66,11 +66,14 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         : null;
 
     const dragController = new DragController(
-        () => getState().groups,
+        {
+            getGroupForPiece: (pieceId) => getGroupForPiece(getState(), pieceId),
+            getGroupById: (id) => tryGetGroup(getState(), id),
+        },
         {
             moveGroup(groupId, delta) {
                 for (const id of expandToSelection(groupId)) {
-                    const group = getState().groups.find(g => g.id === id);
+                    const group = tryGetGroup(getState(), id);
                     if (group) moveGroup(group, delta);
                 }
             },
@@ -88,7 +91,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     );
 
     function applyOffsetDragIfSinglePiece(groupId: number): void {
-        const group = getState().groups.find(g => g.id === groupId);
+        const group = tryGetGroup(getState(), groupId);
         if (!group || group.pieces.size !== 1) return;
         if (!loadOffsetDragPreference()) return;
         const offset = deltaToWorld({ x: 0, y: -OFFSET_DRAG_SCREEN_PX });
@@ -112,7 +115,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
 
         onPieceTap: (pieceId, _evt) => {
             if (!selectionManager?.toolActive) return;
-            const group = findGroupForPiece(pieceId, getState().groups);
+            const group = getGroupForPiece(getState(), pieceId);
             selectionManager.toggle(group.id);
             renderer.setGroupSelected(group.id, selectionManager.isSelected(group.id));
             onStateChanged();

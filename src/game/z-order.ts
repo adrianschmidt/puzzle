@@ -7,6 +7,7 @@
  */
 
 import type { GameState, Piece, PieceGroup } from '../model/types.js';
+import { tryGetGroup } from '../model/helpers.js';
 import { getGroupBounds, type BoundingRect } from './group-bounds.js';
 
 /**
@@ -14,8 +15,11 @@ import { getGroupBounds, type BoundingRect } from './group-bounds.js';
  * Corner-only bounds are a fast, conservative approximation — good
  * enough for "is this small group fully covered by that big group".
  */
-function zOrderBounds(group: PieceGroup, pieces: Piece[]): BoundingRect {
-    return getGroupBounds(group, pieces, {
+function zOrderBounds(
+    group: PieceGroup,
+    piecesById: ReadonlyMap<number, Piece>,
+): BoundingRect {
+    return getGroupBounds(group, piecesById, {
         space: 'world',
         includePathGeometry: false,
     });
@@ -49,17 +53,17 @@ export function reorderGroupsAfterDrop(
     const groupsToRaise: { groupId: number; size: number }[] = [];
 
     for (const droppedId of droppedGroupIds) {
-        const droppedGroup = state.groups.find(g => g.id === droppedId);
+        const droppedGroup = tryGetGroup(state, droppedId);
         if (!droppedGroup) continue;
 
-        const droppedBounds = zOrderBounds(droppedGroup, state.pieces);
+        const droppedBounds = zOrderBounds(droppedGroup, state.piecesById);
 
         // Check all other groups that are smaller than the dropped group
         for (const otherGroup of state.groups) {
             if (otherGroup.id === droppedId) continue;
             if (otherGroup.pieces.size >= droppedGroup.pieces.size) continue;
 
-            const otherBounds = zOrderBounds(otherGroup, state.pieces);
+            const otherBounds = zOrderBounds(otherGroup, state.piecesById);
 
             // If the dropped group fully covers this smaller group, mark it for raising
             if (rectFullyContains(droppedBounds, otherBounds)) {

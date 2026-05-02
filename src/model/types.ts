@@ -105,12 +105,25 @@ export interface GridSize {
 
 /**
  * Complete game state — everything needed to render and persist a game.
+ *
+ * The `*ById` and `pieceToGroup` Maps are derived indexes that mirror
+ * `pieces` and `groups` for O(1) lookup on hot paths (drag, merge
+ * detection, pile detection). They are NOT serialized — `deserializeState`
+ * rebuilds them. Mutations to `groups` must go through the helpers in
+ * `model/helpers.ts` (`addGroup`, `removeGroup`, `mergeGroups`) so the
+ * indexes stay consistent.
  */
 export interface GameState {
     /** All pieces in the puzzle (immutable after generation). */
     pieces: Piece[];
     /** Current groups (mutates as pieces merge). */
     groups: PieceGroup[];
+    /** pieceId → Piece. Built once at construction; never mutates. */
+    piecesById: Map<number, Piece>;
+    /** groupId → PieceGroup. Kept in sync with `groups`. */
+    groupsById: Map<number, PieceGroup>;
+    /** pieceId → the group containing that piece. Kept in sync with `groups`. */
+    pieceToGroup: Map<number, PieceGroup>;
     /** URL of the puzzle image. */
     imageUrl: string;
     /** Pixel dimensions of the puzzle image. */

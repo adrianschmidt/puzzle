@@ -5,20 +5,128 @@
  * and know nothing about grids or specific puzzle shapes.
  */
 
-import type { Edge, Piece, PieceGroup, Point } from './types.js';
+import type { Edge, GameState, Piece, PieceGroup, Point } from './types.js';
 
 /**
- * Look up the pieces array by id.
- * Throws if the piece is not found.
+ * Build the `piecesById` index for a freshly constructed pieces array.
+ *
+ * Pieces are immutable after generation, so this Map is built once and
+ * never mutated. Used by `createNewGame`, `deserializeState`, and tests.
  */
-function findPiece(pieces: Piece[], pieceId: number): Piece {
-    const piece = pieces.find((p) => p.id === pieceId);
+export function buildPiecesById(pieces: Piece[]): Map<number, Piece> {
+    const map = new Map<number, Piece>();
+    for (const piece of pieces) {
+        map.set(piece.id, piece);
+    }
+    return map;
+}
 
+/**
+ * Build the `groupsById` and `pieceToGroup` indexes for a list of groups.
+ *
+ * Used at construction time and after wholesale group rebuilds. Incremental
+ * mutations should use `addGroup` / `removeGroup` / `mergeGroups` instead.
+ */
+export function buildGroupIndexes(groups: PieceGroup[]): {
+    groupsById: Map<number, PieceGroup>;
+    pieceToGroup: Map<number, PieceGroup>;
+} {
+    const groupsById = new Map<number, PieceGroup>();
+    const pieceToGroup = new Map<number, PieceGroup>();
+    for (const group of groups) {
+        groupsById.set(group.id, group);
+        for (const pieceId of group.pieces.keys()) {
+            pieceToGroup.set(pieceId, group);
+        }
+    }
+    return { groupsById, pieceToGroup };
+}
+
+/**
+ * Look up a piece by id. Throws if not found.
+ */
+export function getPiece(state: GameState, pieceId: number): Piece {
+    const piece = state.piecesById.get(pieceId);
     if (!piece) {
         throw new Error(`Piece ${pieceId} not found`);
     }
-
     return piece;
+}
+
+/**
+ * Look up a group by id. Throws if not found.
+ */
+export function getGroup(state: GameState, groupId: number): PieceGroup {
+    const group = state.groupsById.get(groupId);
+    if (!group) {
+        throw new Error(`Group ${groupId} not found`);
+    }
+    return group;
+}
+
+/**
+ * Look up a group by id, returning `undefined` if not found.
+ *
+ * Use when the absence of a group is a valid outcome (e.g. defensive
+ * checks during pointer events, where the dragged group may have been
+ * absorbed by a merge).
+ */
+export function tryGetGroup(
+    state: GameState,
+    groupId: number,
+): PieceGroup | undefined {
+    return state.groupsById.get(groupId);
+}
+
+/**
+ * Find the group that contains a given piece. Throws if the piece is
+ * not in any group.
+ */
+export function getGroupForPiece(
+    state: GameState,
+    pieceId: number,
+): PieceGroup {
+    const group = state.pieceToGroup.get(pieceId);
+    if (!group) {
+        throw new Error(`Piece ${pieceId} is not in any group`);
+    }
+    return group;
+}
+
+/**
+ * Add a group to the state, keeping the indexes in sync.
+ *
+ * All callers that grow `state.groups` must go through this helper.
+ */
+export function addGroup(state: GameState, group: PieceGroup): void {
+    state.groups.push(group);
+    state.groupsById.set(group.id, group);
+    for (const pieceId of group.pieces.keys()) {
+        state.pieceToGroup.set(pieceId, group);
+    }
+}
+
+/**
+ * Remove a group from the state, keeping the indexes in sync.
+ *
+ * Removes the `pieceToGroup` entries only for pieces still recorded as
+ * belonging to this group — pieces that have been re-pointed to a
+ * different group (e.g. after `mergeGroups`) are not touched.
+ */
+export function removeGroup(state: GameState, groupId: number): void {
+    const group = state.groupsById.get(groupId);
+    if (!group) return;
+
+    const index = state.groups.indexOf(group);
+    if (index !== -1) {
+        state.groups.splice(index, 1);
+    }
+    state.groupsById.delete(groupId);
+    for (const pieceId of group.pieces.keys()) {
+        if (state.pieceToGroup.get(pieceId) === group) {
+            state.pieceToGroup.delete(pieceId);
+        }
+    }
 }
 
 /**
@@ -30,13 +138,13 @@ function findPiece(pieces: Piece[], pieceId: number): Piece {
 export function getMateEdge(
     _piece: Piece,
     edge: Edge,
-    pieces: Piece[],
+    state: GameState,
 ): { piece: Piece; edge: Edge } | undefined {
     if (edge.matePieceId === -1 || edge.mateEdgeId === -1) {
         return undefined;
     }
 
-    const matePiece = findPiece(pieces, edge.matePieceId);
+    const matePiece = getPiece(state, edge.matePieceId);
     const mateEdge = matePiece.edges.find((e) => e.id === edge.mateEdgeId);
 
     if (!mateEdge) {
@@ -46,23 +154,6 @@ export function getMateEdge(
     }
 
     return { piece: matePiece, edge: mateEdge };
-}
-
-/**
- * Find the group that contains a given piece.
- * Throws if the piece is not in any group.
- */
-export function findGroupForPiece(
-    pieceId: number,
-    groups: PieceGroup[],
-): PieceGroup {
-    const group = groups.find((g) => g.pieces.has(pieceId));
-
-    if (!group) {
-        throw new Error(`Piece ${pieceId} is not in any group`);
-    }
-
-    return group;
 }
 
 /**
@@ -150,8 +241,7 @@ export function getWorldPosition(
  */
 export function getBorderEdges(
     group: PieceGroup,
-    pieces: Piece[],
-    allGroups: PieceGroup[],
+    state: GameState,
 ): Array<{
     piece: Piece;
     edge: Edge;
@@ -168,17 +258,17 @@ export function getBorderEdges(
     }> = [];
 
     for (const pieceId of group.pieces.keys()) {
-        const piece = findPiece(pieces, pieceId);
+        const piece = getPiece(state, pieceId);
 
         for (const edge of piece.edges) {
-            const mate = getMateEdge(piece, edge, pieces);
+            const mate = getMateEdge(piece, edge, state);
 
             if (!mate) {
                 continue; // border edge of the puzzle itself
             }
 
             // Is the mate in a different group?
-            const mateGroup = findGroupForPiece(mate.piece.id, allGroups);
+            const mateGroup = getGroupForPiece(state, mate.piece.id);
 
             if (mateGroup.id !== group.id) {
                 results.push({

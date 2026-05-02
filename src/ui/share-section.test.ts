@@ -4,10 +4,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { attachShareSection } from './share-section.js';
 import type { GameState } from '../model/types.js';
+import { makeGameState } from '../test-helpers/fixtures.js';
 
 function state(overrides: Partial<GameState> = {}): GameState {
-    return {
-        pieces: [],
+    return makeGameState({
         groups: [
             { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]),
               position: { x: 0, y: 0 }, rotation: 0 },
@@ -15,12 +15,11 @@ function state(overrides: Partial<GameState> = {}): GameState {
         imageUrl: 'blank',
         imageSize: { width: 1080, height: 720 },
         gridSize: { cols: 4, rows: 3 },
-        completed: false,
         seed: 1,
         cutStyle: 'classic',
         rotationMode: 'none',
         ...overrides,
-    };
+    });
 }
 
 describe('attachShareSection', () => {

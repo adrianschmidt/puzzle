@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Edge, Piece, PieceGroup } from '../model/types.js';
 import { rotateGroup } from './rotate-group.js';
 import { getGroupLocalBounds } from './group-bounds.js';
+import { buildPiecesById } from '../test-helpers/fixtures.js';
 
 function makeEdge(id: number, sx: number, sy: number, ex: number, ey: number): Edge {
     return {
@@ -39,7 +40,7 @@ describe('rotateGroup', () => {
             rotation: 3,
         };
 
-        rotateGroup(group, [piece], 'cw');
+        rotateGroup(group, buildPiecesById([piece]), 'cw');
         expect(group.rotation).toBe(0);
     });
 
@@ -52,7 +53,7 @@ describe('rotateGroup', () => {
             rotation: 0,
         };
 
-        rotateGroup(group, [piece], 'ccw');
+        rotateGroup(group, buildPiecesById([piece]), 'ccw');
         expect(group.rotation).toBe(3);
     });
 
@@ -65,13 +66,13 @@ describe('rotateGroup', () => {
             rotation: 0,
         };
 
-        const bounds = getGroupLocalBounds(group, [piece]);
+        const bounds = getGroupLocalBounds(group, buildPiecesById([piece]));
         const worldCentreBefore = {
             x: group.position.x + bounds.minX + bounds.width / 2,
             y: group.position.y + bounds.minY + bounds.height / 2,
         };
 
-        rotateGroup(group, [piece], 'cw');
+        rotateGroup(group, buildPiecesById([piece]), 'cw');
 
         // After rotation, the bbox is still a 100×100 region in local coords,
         // but the group's world-space centre must not have moved.
@@ -102,8 +103,8 @@ describe('rotateGroup', () => {
         };
         const startPosition = { ...group.position };
 
-        rotateGroup(group, [piece], 'cw');
-        rotateGroup(group, [piece], 'ccw');
+        rotateGroup(group, buildPiecesById([piece]), 'cw');
+        rotateGroup(group, buildPiecesById([piece]), 'ccw');
 
         expect(group.rotation).toBe(0);
         expect(group.position.x).toBeCloseTo(startPosition.x);
@@ -120,7 +121,7 @@ describe('rotateGroup', () => {
         };
         const startPosition = { ...group.position };
 
-        for (let i = 0; i < 4; i++) rotateGroup(group, [piece], 'cw');
+        for (let i = 0; i < 4; i++) rotateGroup(group, buildPiecesById([piece]), 'cw');
 
         expect(group.rotation).toBe(0);
         expect(group.position.x).toBeCloseTo(startPosition.x);
@@ -141,13 +142,13 @@ describe('rotateGroup', () => {
             rotation: 0,
         };
 
-        const boundsBefore = getGroupLocalBounds(group, [p0, p1]);
+        const boundsBefore = getGroupLocalBounds(group, buildPiecesById([p0, p1]));
         const worldCentreBefore = {
             x: group.position.x + boundsBefore.minX + boundsBefore.width / 2,
             y: group.position.y + boundsBefore.minY + boundsBefore.height / 2,
         };
 
-        rotateGroup(group, [p0, p1], 'cw');
+        rotateGroup(group, buildPiecesById([p0, p1]), 'cw');
 
         // Bounds are in un-rotated local space, so they are unchanged
         const localCentre = {

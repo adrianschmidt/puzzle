@@ -9,6 +9,7 @@ import {
     type SharePayload,
 } from './share-link.js';
 import type { GameState } from '../model/types.js';
+import { makeGameState } from '../test-helpers/fixtures.js';
 import { DEFAULT_DISABLE_TABS, composePuzzle } from '../puzzle/composable/compose.js';
 import { generateTopologyPuzzle } from '../puzzle/topology/generator.js';
 import { classicTabTemplate } from '../puzzle/composable/tab-shapes.js';
@@ -177,18 +178,15 @@ function encodeRaw(obj: unknown): string {
 }
 
 function buildState(partial: Partial<GameState>): GameState {
-    return {
-        pieces: [],
-        groups: [],
+    return makeGameState({
         imageUrl: 'blank',
         imageSize: { width: 1080, height: 720 },
         gridSize: { cols: 4, rows: 3 },
-        completed: false,
         seed: 42,
         cutStyle: 'classic',
         rotationMode: 'none',
         ...partial,
-    };
+    });
 }
 
 describe('gameStateToPayload', () => {

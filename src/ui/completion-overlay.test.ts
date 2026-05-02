@@ -4,10 +4,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { showCompletionOverlay } from './completion-overlay.js';
 import type { GameState } from '../model/types.js';
+import { makeGameState } from '../test-helpers/fixtures.js';
 
 function makeState(overrides: Partial<GameState> = {}): GameState {
-    return {
-        pieces: [],
+    return makeGameState({
         groups: [
             {
                 id: 0,
@@ -24,7 +24,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
         cutStyle: 'classic',
         rotationMode: 'none',
         ...overrides,
-    };
+    });
 }
 
 describe('showCompletionOverlay', () => {

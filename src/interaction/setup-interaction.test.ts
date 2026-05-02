@@ -19,6 +19,7 @@ import { ViewportTransform } from './viewport-transform.js';
 import { SelectionManager } from './selection-manager.js';
 import type { Renderer } from '../renderer/types.js';
 import type { GameState, PieceGroup } from '../model/types.js';
+import { makeGameState } from '../test-helpers/fixtures.js';
 
 vi.mock('../ui/offset-drag.js', () => ({
     loadOffsetDragPreference: vi.fn(() => false),
@@ -107,7 +108,7 @@ function makeGroup(id: number, pieceIds: number[], position = { x: 0, y: 0 }): P
 }
 
 function makeState(groups: PieceGroup[]): GameState {
-    return { groups } as unknown as GameState;
+    return makeGameState({ groups });
 }
 
 // ---------------------------------------------------------------------------

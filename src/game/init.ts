@@ -9,6 +9,7 @@
 import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
 import type { FractalConfig } from '../puzzle/fractal-generator.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
+import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
@@ -76,10 +77,14 @@ export function createNewGame(
     const pieces = strategy.generatePieces(generationGrid, puzzleSize, seed, ctx);
 
     const groups = createInitialGroups(pieces, puzzleSize, viewport, gridSize, options);
+    const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
 
     return {
         pieces,
         groups,
+        piecesById: buildPiecesById(pieces),
+        groupsById,
+        pieceToGroup,
         imageUrl,
         imageSize: puzzleSize,
         gridSize,

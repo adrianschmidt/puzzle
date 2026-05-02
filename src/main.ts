@@ -39,7 +39,7 @@ import {
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
 import { rotateGroup } from './game/rotate-group.js';
-import { rotatePoint } from './model/helpers.js';
+import { buildGroupIndexes, rotatePoint } from './model/helpers.js';
 import { reorderGroupsAfterDrop } from './game/z-order.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import {
@@ -208,7 +208,7 @@ function gatherAndZoomToFit(): void {
     const { positions, layoutBounds } = computeGatheredPositions(
         gameState.groups,
         aspectRatio,
-        gameState.pieces,
+        gameState.piecesById,
     );
 
     applyGatheredPositions(gameState.groups, positions);
@@ -251,7 +251,7 @@ function zoomToFitCompletedPuzzle(
     // visual bbox centre in world space so the animation stays smooth.
     let groupTransitionCleanup: (() => void) | null = null;
     if (completedGroup.rotation !== 0) {
-        const localBounds = getGroupLocalBounds(completedGroup, gameState.pieces);
+        const localBounds = getGroupLocalBounds(completedGroup, gameState.piecesById);
         const centreLocal = {
             x: localBounds.minX + localBounds.width / 2,
             y: localBounds.minY + localBounds.height / 2,
@@ -278,7 +278,7 @@ function zoomToFitCompletedPuzzle(
     }
 
     // Compute the visual bounds of the completed group in its current position
-    const groupBounds = getGroupVisualBounds(completedGroup, gameState.pieces);
+    const groupBounds = getGroupVisualBounds(completedGroup, gameState.piecesById);
 
     // Convert to world-space bounds (group-local space + group position)
     const worldBounds = {
@@ -357,6 +357,9 @@ function zoomToFitCompletedPuzzle(
     }
 
     gameState.groups = [solvedGroup];
+    const solvedIndexes = buildGroupIndexes(gameState.groups);
+    gameState.groupsById = solvedIndexes.groupsById;
+    gameState.pieceToGroup = solvedIndexes.pieceToGroup;
     gameState.completed = true;
     renderer.renderState(gameState);
 
@@ -727,9 +730,9 @@ const rotateButtons = createRotateButtons({
         if (!gameState || !selectionManager.hasSelection) return;
 
         for (const groupId of selectionManager.selectedGroupIds) {
-            const group = gameState.groups.find(g => g.id === groupId);
+            const group = gameState.groupsById.get(groupId);
             if (group) {
-                rotateGroup(group, gameState.pieces, direction);
+                rotateGroup(group, gameState.piecesById, direction);
             }
         }
 

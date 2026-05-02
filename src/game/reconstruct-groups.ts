@@ -10,6 +10,7 @@
  */
 
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
+import { buildGroupIndexes } from '../model/helpers.js';
 
 export function computeMergedOffsets(
     pieces: Piece[],
@@ -102,13 +103,18 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
         state.groups.push(group);
     });
 
+    // Rebuild indexes wholesale — easiest after a filter+push reshuffle.
+    const indexes = buildGroupIndexes(state.groups);
+    state.groupsById = indexes.groupsById;
+    state.pieceToGroup = indexes.pieceToGroup;
+
     // Apply solo rotations.
     if (progress.sr && progress.sr.length >= 2) {
         for (let i = 0; i + 1 < progress.sr.length; i += 2) {
             const pid = progress.sr[i];
             const rot = progress.sr[i + 1] as 0 | 1 | 2 | 3;
-            const g = state.groups.find((g) => g.pieces.size === 1 && g.pieces.has(pid));
-            if (g) g.rotation = rot;
+            const g = state.pieceToGroup.get(pid);
+            if (g && g.pieces.size === 1) g.rotation = rot;
         }
     }
 

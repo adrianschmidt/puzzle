@@ -5,21 +5,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createInfoModal } from './info-modal.js';
 import type { GameState } from '../model/types.js';
+import { makeGameState } from '../test-helpers/fixtures.js';
 
 function makeState(overrides?: Partial<GameState>): GameState {
-    return {
-        pieces: [],
-        groups: [],
-        imageUrl: 'test.jpg',
-        imageSize: { width: 800, height: 600 },
-        gridSize: { cols: 8, rows: 6 },
-        completed: false,
+    return makeGameState({
         seed: 12345,
         cutStyle: 'fractal',
         rotationMode: 'quarter-turn',
         fractalConfig: { borderless: true },
         ...overrides,
-    };
+    });
 }
 
 describe('createInfoModal', () => {

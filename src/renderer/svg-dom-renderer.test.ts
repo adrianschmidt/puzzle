@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SvgDomRenderer } from './svg-dom-renderer.js';
 import type { GameState, PieceGroup } from '../model/types.js';
-import { makeRectPiece } from '../test-helpers/fixtures.js';
+import { makeGameState, makeRectPiece } from '../test-helpers/fixtures.js';
 
 function makeGroup(id: number, pieceIds: number[], x = 0, y = 0): PieceGroup {
     return {
@@ -20,7 +20,7 @@ function make2x2State(): GameState {
     const pw = 100;
     const ph = 100;
 
-    return {
+    return makeGameState({
         pieces: [
             makeRectPiece({ id: 0, width: pw, height: ph, col: 0, row: 0 }),
             makeRectPiece({ id: 1, width: pw, height: ph, col: 1, row: 0 }),
@@ -36,8 +36,7 @@ function make2x2State(): GameState {
         imageUrl: 'test-puzzle.jpg',
         imageSize: { width: 200, height: 200 },
         gridSize: { cols: 2, rows: 2 },
-        completed: false,
-    };
+    });
 }
 
 describe('SvgDomRenderer', () => {

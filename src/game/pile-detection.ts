@@ -16,7 +16,8 @@
  * assembled), not a pile of loose singles.
  */
 
-import type { GameState, Piece, PieceGroup } from '../model/types.js';
+import type { GameState, PieceGroup } from '../model/types.js';
+import { tryGetGroup } from '../model/helpers.js';
 import { getGroupBounds, type BoundingRect } from './group-bounds.js';
 
 /**
@@ -38,8 +39,8 @@ export const OVERLAP_PADDING_PX = 20;
  * Pile detection has always used corner-only bounds — the
  * `OVERLAP_PADDING_PX` constant exists to compensate for tabs.
  */
-function pileBounds(group: PieceGroup, pieces: Piece[]): BoundingRect {
-    return getGroupBounds(group, pieces, {
+function pileBounds(group: PieceGroup, state: GameState): BoundingRect {
+    return getGroupBounds(group, state.piecesById, {
         space: 'world',
         includePathGeometry: false,
     });
@@ -72,24 +73,19 @@ export function padRect(rect: BoundingRect, padding: number): BoundingRect {
  */
 function getMateGroupIds(
     group: PieceGroup,
-    pieces: Piece[],
-    allGroups: PieceGroup[],
+    state: GameState,
 ): Set<number> {
     const mateGroupIds = new Set<number>();
 
     for (const pieceId of group.pieces.keys()) {
-        const piece = pieces.find((p) => p.id === pieceId);
+        const piece = state.piecesById.get(pieceId);
         if (!piece) continue;
 
         for (const edge of piece.edges) {
             if (edge.matePieceId === -1) continue;
 
-            // Find which group the mate piece is in
-            const mateGroup = allGroups.find(
-                (g) => g.id !== group.id && g.pieces.has(edge.matePieceId),
-            );
-
-            if (mateGroup) {
+            const mateGroup = state.pieceToGroup.get(edge.matePieceId);
+            if (mateGroup && mateGroup.id !== group.id) {
                 mateGroupIds.add(mateGroup.id);
             }
         }
@@ -122,7 +118,7 @@ export function shouldSuppressMerge(
     movedGroupId: number,
     state: GameState,
 ): boolean {
-    const movedGroup = state.groups.find((g) => g.id === movedGroupId);
+    const movedGroup = tryGetGroup(state, movedGroupId);
     if (!movedGroup) return false;
 
     // Don't suppress merges for larger assembled groups — players
@@ -130,12 +126,12 @@ export function shouldSuppressMerge(
     if (movedGroup.pieces.size > 1) return false;
 
     const movedBounds = padRect(
-        pileBounds(movedGroup, state.pieces),
+        pileBounds(movedGroup, state),
         OVERLAP_PADDING_PX,
     );
 
     // Which groups have matching edges with pieces in the moved group?
-    const mateGroupIds = getMateGroupIds(movedGroup, state.pieces, state.groups);
+    const mateGroupIds = getMateGroupIds(movedGroup, state);
 
     let mateOverlapCount = 0;
     let nonMateOverlapCount = 0;
@@ -143,7 +139,7 @@ export function shouldSuppressMerge(
     for (const otherGroup of state.groups) {
         if (otherGroup.id === movedGroupId) continue;
 
-        const otherBounds = pileBounds(otherGroup, state.pieces);
+        const otherBounds = pileBounds(otherGroup, state);
         if (!rectsOverlap(movedBounds, otherBounds)) continue;
 
         if (mateGroupIds.has(otherGroup.id)) {
