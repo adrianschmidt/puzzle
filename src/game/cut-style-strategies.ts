@@ -26,8 +26,8 @@ import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
 import {
     generateFractalPuzzle,
     scaleFractalGrid,
-} from '../puzzle/fractal-generator.js';
-import type { FractalConfig } from '../puzzle/fractal-generator.js';
+} from '../puzzle/fractal/index.js';
+import type { FractalConfig } from '../puzzle/fractal/index.js';
 import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { CutStyle } from './cut-styles.js';

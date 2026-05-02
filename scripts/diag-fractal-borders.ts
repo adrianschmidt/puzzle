@@ -8,7 +8,7 @@
  */
 
 import { writeFileSync, mkdirSync } from 'fs';
-import { generateFractalPuzzle } from '../src/puzzle/fractal-generator.js';
+import { generateFractalPuzzle } from '../src/puzzle/fractal/index.js';
 
 const palette = [
     '#ff9999', '#99ccff', '#99ff99', '#ffcc99',

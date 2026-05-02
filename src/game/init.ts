@@ -7,7 +7,7 @@
  */
 
 import type { GameState, PieceGroup, Piece, Size, GridSize } from '../model/types.js';
-import type { FractalConfig } from '../puzzle/fractal-generator.js';
+import type { FractalConfig } from '../puzzle/fractal/index.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { generateSeed } from '../puzzle/seeded-random.js';

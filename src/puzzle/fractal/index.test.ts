@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { generateFractalPuzzle, scaleFractalGrid } from './fractal-generator.js';
+import { generateFractalPuzzle, scaleFractalGrid } from './index.js';
 
 describe('generateFractalPuzzle', () => {
     const imageSize = { width: 400, height: 300 };
