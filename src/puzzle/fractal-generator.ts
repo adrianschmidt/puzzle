@@ -100,9 +100,8 @@ function connectionFromQuad(p1: Tile, quadrant: number, p2_taken: boolean): Diag
     return makeConnection(p1, p2, p2_taken);
 }
 
-function connectionEq(a: DiagonalConnection, b: DiagonalConnection): boolean {
-    return a.cell.x === b.cell.x && a.cell.y === b.cell.y
-        && a.slope === b.slope && a.p2_taken === b.p2_taken;
+function connectionKey(c: DiagonalConnection): string {
+    return `${c.cell.x},${c.cell.y},${c.slope},${c.p2_taken}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +210,7 @@ function makeArc(
 
 function addArcs(
     con: DiagonalConnection,
-    connections: DiagonalConnection[],
+    connectionSet: Set<string>,
     arcs: ArcData[],
     rad: number,
     frameOffset: number,
@@ -234,10 +233,10 @@ function addArcs(
         for (const q of p2quads) {
             const pct = connectionFromQuad(con.p2, q, true);
             const pcnt = connectionFromQuad(con.p2, q, false);
-            if (connections.find(c => connectionEq(c, pct))) {
-                addArcs(pct, connections, arcs, rad, frameOffset, false);
-            } else if (connections.find(c => connectionEq(c, pcnt))) {
-                addArcs(pcnt, connections, arcs, rad, frameOffset, false);
+            if (connectionSet.has(connectionKey(pct))) {
+                addArcs(pct, connectionSet, arcs, rad, frameOffset, false);
+            } else if (connectionSet.has(connectionKey(pcnt))) {
+                addArcs(pcnt, connectionSet, arcs, rad, frameOffset, false);
             } else {
                 arcs.push(makeArc(con.p2, rad, frameOffset, q, 0));
             }
@@ -262,10 +261,10 @@ function addArcs(
         for (const q of p1quads) {
             const pct = connectionFromQuad(con.p1, q, true);
             const pcnt = connectionFromQuad(con.p1, q, false);
-            if (connections.find(c => connectionEq(c, pct))) {
-                addArcs(pct, connections, arcs, rad, frameOffset, false);
-            } else if (connections.find(c => connectionEq(c, pcnt))) {
-                addArcs(pcnt, connections, arcs, rad, frameOffset, false);
+            if (connectionSet.has(connectionKey(pct))) {
+                addArcs(pct, connectionSet, arcs, rad, frameOffset, false);
+            } else if (connectionSet.has(connectionKey(pcnt))) {
+                addArcs(pcnt, connectionSet, arcs, rad, frameOffset, false);
             } else {
                 arcs.push(makeArc(con.p1, rad, frameOffset, q, 0));
             }
@@ -581,10 +580,14 @@ function convertToStandardPieces(
     borderless: boolean,
 ): Piece[] {
     // 1. Build main-contour arcs for each piece via the addArcs tree-walk.
+    //    addArcs probes for sibling connections by key, so build a Set
+    //    once per piece for O(1) membership instead of O(n) Array.find.
     const allPieceArcs: ArcData[][] = [];
     for (const p of fractalPieces) {
         const arcs: ArcData[] = [];
-        addArcs(p[0], p, arcs, rad, frameOffset, true);
+        const connectionSet = new Set<string>();
+        for (const c of p) connectionSet.add(connectionKey(c));
+        addArcs(p[0], connectionSet, arcs, rad, frameOffset, true);
         allPieceArcs.push(arcs);
     }
 
