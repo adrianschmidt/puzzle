@@ -153,37 +153,40 @@ export class AutoPanController {
             vp.height,
         );
 
-        if (velocity.x !== 0 || velocity.y !== 0) {
-            // Compute elapsed time for frame-rate-independent movement
-            const dt = this.lastTimestamp !== null
-                ? Math.min((timestamp - this.lastTimestamp) / 1000, 0.1) // cap at 100ms to avoid jumps
-                : 0;
+        if (velocity.x === 0 && velocity.y === 0) {
+            // Pointer is outside every edge zone — stop the loop.
+            // updatePointer() will restart it if the pointer re-enters one.
+            this.lastTimestamp = null;
+            return;
+        }
 
-            if (dt > 0) {
-                const screenDelta: Point = {
-                    x: -velocity.x * dt, // negate: positive velocity = pointer wants to go right
-                    y: -velocity.y * dt, // = viewport pans left (negative screen delta)
-                };
+        // Compute elapsed time for frame-rate-independent movement
+        const dt = this.lastTimestamp !== null
+            ? Math.min((timestamp - this.lastTimestamp) / 1000, 0.1) // cap at 100ms to avoid jumps
+            : 0;
 
-                // Pan the viewport
-                this.callbacks.panViewport(screenDelta);
+        if (dt > 0) {
+            const screenDelta: Point = {
+                x: -velocity.x * dt, // negate: positive velocity = pointer wants to go right
+                y: -velocity.y * dt, // = viewport pans left (negative screen delta)
+            };
 
-                // Also move the group in world space so the piece stays
-                // under the pointer. The viewport moved, but the pointer
-                // didn't, so without this the piece would appear to drift.
-                const worldDelta = this.callbacks.screenDeltaToWorld({
-                    x: -screenDelta.x,
-                    y: -screenDelta.y,
-                });
-                this.callbacks.moveGroup(this.activeGroupId, worldDelta);
+            // Pan the viewport
+            this.callbacks.panViewport(screenDelta);
 
-                this.callbacks.requestRender();
-            }
+            // Also move the group in world space so the piece stays
+            // under the pointer. The viewport moved, but the pointer
+            // didn't, so without this the piece would appear to drift.
+            const worldDelta = this.callbacks.screenDeltaToWorld({
+                x: -screenDelta.x,
+                y: -screenDelta.y,
+            });
+            this.callbacks.moveGroup(this.activeGroupId, worldDelta);
+
+            this.callbacks.requestRender();
         }
 
         this.lastTimestamp = timestamp;
-
-        // Continue the loop as long as we're active
         this.animFrameId = requestAnimationFrame(this.tick);
     };
 }
