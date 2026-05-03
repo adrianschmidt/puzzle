@@ -318,8 +318,9 @@ describe('setupInteraction', () => {
             });
 
             // Background-target pointerdown → small pointerup = background tap.
-            container.fire('pointerdown', fakePointerEvent({ target: null, pointerId: 1, clientX: 100, clientY: 100 }));
-            container.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 101, clientY: 100 }));
+            const bgTarget = container as unknown as EventTarget;
+            container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointerup', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 101, clientY: 100 }));
 
             expect(rotationFocus.focusedGroupId).toBeNull();
         });
@@ -343,8 +344,9 @@ describe('setupInteraction', () => {
                 rotationFocus,
             });
 
-            container.fire('pointerdown', fakePointerEvent({ target: null, pointerId: 1, clientX: 100, clientY: 100 }));
-            container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 130, clientY: 100 })); // promote pan
+            const bgTarget = container as unknown as EventTarget;
+            container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointermove', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 130, clientY: 100 })); // promote pan
 
             expect(rotationFocus.focusedGroupId).toBeNull();
         });
