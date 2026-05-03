@@ -147,14 +147,20 @@ export function createRotateButtons(
         placeButton(ccw, ccwLeft, topPx);
         placeButton(cw, cwLeft, topPx);
 
-        ccw.classList.add('rotate-button--fade-in');
-        cw.classList.add('rotate-button--fade-in');
-
         ccw.addEventListener('click', () => handleRotateClick('ccw'));
         cw.addEventListener('click', () => handleRotateClick('cw'));
 
         container.appendChild(ccw);
         container.appendChild(cw);
+
+        // Force a layout pass so the browser registers the buttons at the
+        // base rule's opacity:0 BEFORE we add --fade-in. Without this the
+        // browser sees both classes from the first paint and computes the
+        // static end-state (opacity 1), skipping the transition.
+        void ccw.offsetHeight;
+
+        ccw.classList.add('rotate-button--fade-in');
+        cw.classList.add('rotate-button--fade-in');
 
         active = {
             groupId,
