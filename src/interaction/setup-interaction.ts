@@ -17,6 +17,7 @@ import { AutoPanController } from './auto-pan.js';
 import { PointerRouter } from './pointer-router.js';
 import type { ClassifyTarget } from './pointer-router.js';
 import type { SelectionManager } from './selection-manager.js';
+import type { RotationFocus } from './rotation-focus.js';
 import { loadOffsetDragPreference } from '../ui/index.js';
 
 export interface InteractionSetupOptions {
@@ -30,6 +31,7 @@ export interface InteractionSetupOptions {
     screenDeltaToWorld?: ScreenDeltaToWorld;
     panViewport?: (screenDelta: Point) => void;
     selectionManager?: SelectionManager;
+    rotationFocus?: RotationFocus;
 }
 
 const OFFSET_DRAG_SCREEN_PX = 50;
@@ -38,6 +40,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     const {
         container, renderer, viewportTransform, getState, onStateChanged,
         onDrop, onViewportChanged, screenDeltaToWorld, panViewport, selectionManager,
+        rotationFocus,
     } = options;
 
     const deltaToWorld = screenDeltaToWorld ?? ((d: Point) => d);
@@ -102,6 +105,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     const classifyTarget: ClassifyTarget = (target) => {
         const pieceId = renderer.pieceIdFromTarget(target);
         if (pieceId !== null) return { kind: 'piece', pieceId };
+        if (target === null) return { kind: 'background' };
         if (target === container) return { kind: 'background' };
         if (target instanceof HTMLElement && target.dataset.puzzleTable === 'true') {
             return { kind: 'background' };
@@ -114,8 +118,9 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         classifyTarget,
 
         onPieceTap: (pieceId, _evt) => {
-            if (!selectionManager?.toolActive) return;
             const group = getGroupForPiece(getState(), pieceId);
+            rotationFocus?.setFocus(group.id);
+            if (!selectionManager?.toolActive) return;
             selectionManager.toggle(group.id);
             renderer.setGroupSelected(group.id, selectionManager.isSelected(group.id));
             onStateChanged();
@@ -123,6 +128,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
 
         onPieceDrag: {
             start: (pieceId, evt) => {
+                rotationFocus?.clearFocus();
                 dragController.handlePointerDown(pieceId, evt);
                 const drag = dragController.getActiveDrag();
                 if (!drag) return;
@@ -154,19 +160,32 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         },
 
         onBackgroundPan: {
-            start: (evt) => viewportController.handlePanStart(evt),
+            start: (evt) => {
+                rotationFocus?.clearFocus();
+                viewportController.handlePanStart(evt);
+            },
             move: (evt) => viewportController.handlePanMove(evt),
             end: () => viewportController.handlePanEnd(),
             cancel: () => viewportController.handlePanEnd(),
         },
 
         onPinch: {
-            start: (a, b) => viewportController.handlePinchStart(a, b),
+            start: (a, b) => {
+                rotationFocus?.clearFocus();
+                viewportController.handlePinchStart(a, b);
+            },
             move: (a, b) => viewportController.handlePinchMove(a, b),
             end: () => viewportController.handlePinchEnd(),
         },
 
-        onWheelZoom: (evt) => viewportController.handleWheel(evt),
+        onWheelZoom: (evt) => {
+            rotationFocus?.clearFocus();
+            viewportController.handleWheel(evt);
+        },
+
+        onBackgroundTap: () => {
+            rotationFocus?.clearFocus();
+        },
     });
 
     return () => {
