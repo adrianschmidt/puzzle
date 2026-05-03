@@ -269,11 +269,12 @@ describe('PointerRouter — background pan', () => {
         expect(h.container.releasePointerCapture).toHaveBeenCalledWith(1);
     });
 
-    it('background pointerup before threshold is silent (no event)', () => {
+    it('background pointerup before threshold fires onBackgroundTap, not pan or piece-tap', () => {
         const h = createHarness({ classifyTarget: () => ({ kind: 'background' }) });
         h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
         h.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 2, clientY: 0 }));
 
+        expect(h.callbacks.onBackgroundTap).toHaveBeenCalledOnce();
         expect(h.callbacks.onBackgroundPan.start).not.toHaveBeenCalled();
         expect(h.callbacks.onBackgroundPan.end).not.toHaveBeenCalled();
         expect(h.callbacks.onPieceTap).not.toHaveBeenCalled();
