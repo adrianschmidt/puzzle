@@ -105,7 +105,6 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     const classifyTarget: ClassifyTarget = (target) => {
         const pieceId = renderer.pieceIdFromTarget(target);
         if (pieceId !== null) return { kind: 'piece', pieceId };
-        if (target === null) return { kind: 'background' };
         if (target === container) return { kind: 'background' };
         if (target instanceof HTMLElement && target.dataset.puzzleTable === 'true') {
             return { kind: 'background' };
