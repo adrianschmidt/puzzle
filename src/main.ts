@@ -2,7 +2,7 @@ import './style.css';
 import { diagnostics } from './diagnostics.js';
 import type { GameState, GridSize } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
-import { setupInteraction, ViewportTransform } from './interaction/index.js';
+import { setupInteraction, ViewportTransform, RotationFocus } from './interaction/index.js';
 import {
     createNewGame,
     processDrop,
@@ -109,6 +109,7 @@ let currentCompletionHide: (() => void) | null = null;
 
 function showCompletionOverlay(): void {
     if (currentCompletionHide) return;
+    rotationFocus.clearFocus();
     currentCompletionHide = renderCompletionOverlay({
         container: app,
         state: gameState,
@@ -187,6 +188,9 @@ renderer.init(app);
 
 // Multi-select tool
 const selectionManager = new SelectionManager();
+
+// Floating rotate-buttons focus tracker
+const rotationFocus = new RotationFocus();
 
 // When selection changes, update group visuals
 selectionManager.onChange((selectedIds) => {
@@ -383,6 +387,26 @@ function applyViewportTransform(): void {
 const debouncedSave = createDebouncedSave();
 
 /**
+ * Project the visual bounds of the given group from world space into
+ * screen space, using the current viewport transform. Returns `null` if
+ * the group is no longer in the game state.
+ */
+function getFocusedGroupScreenBounds(
+    groupId: number,
+): { left: number; right: number; top: number; bottom: number } | null {
+    const group = gameState?.groupsById.get(groupId);
+    if (!group) return null;
+    const local = getGroupVisualBounds(group, gameState.piecesById);
+    const worldLeft = group.position.x + local.minX;
+    const worldTop = group.position.y + local.minY;
+    const worldRight = worldLeft + local.width;
+    const worldBottom = worldTop + local.height;
+    const tl = viewportTransform.worldToScreen({ x: worldLeft, y: worldTop });
+    const br = viewportTransform.worldToScreen({ x: worldRight, y: worldBottom });
+    return { left: tl.x, top: tl.y, right: br.x, bottom: br.y };
+}
+
+/**
  * Trigger a debounced auto-save of the current game state.
  */
 function autoSave(): void {
@@ -407,9 +431,7 @@ function updateAttribution(): void {
 function initGame(state: GameState): void {
     removeCompletionOverlay();
     selectionManager.clearAll();
-    // Rotation requires selecting groups before the rotate buttons engage;
-    // turn the multi-select tool on by default so this path is discoverable.
-    selectionManager.toolActive = state.rotationMode === 'quarter-turn';
+    rotationFocus.clearFocus();
 
     if (cleanupDrag) {
         cleanupDrag();
@@ -511,6 +533,7 @@ function initGame(state: GameState): void {
             applyViewportTransform();
         },
         selectionManager,
+        rotationFocus,
     });
 }
 
@@ -725,23 +748,22 @@ createDeselectButton({
 // Visibility is updated whenever initGame() runs.
 const rotateButtons = createRotateButtons({
     container: app,
-    selectionManager,
-    onRotate: (direction) => {
-        if (!gameState || !selectionManager.hasSelection) return;
+    rotationFocus,
+    onRotate: (groupId, direction) => {
+        if (!gameState) return;
+        const group = gameState.groupsById.get(groupId);
+        if (!group) return;
 
-        for (const groupId of selectionManager.selectedGroupIds) {
-            const group = gameState.groupsById.get(groupId);
-            if (group) {
-                rotateGroup(group, gameState.piecesById, direction);
-            }
-        }
+        rotateGroup(group, gameState.piecesById, direction);
 
         renderer.renderState(gameState);
+        // Re-apply selection visuals after re-render (rotation re-renders the group).
         for (const selectedId of selectionManager.selectedGroupIds) {
             renderer.setGroupSelected(selectedId, true);
         }
         autoSave();
     },
+    getFocusedGroupScreenBounds,
 });
 
 function updateRotateButtonsVisibility(): void {
