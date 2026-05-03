@@ -51,6 +51,7 @@ interface RouterHarness {
         onBackgroundPan: { start: ReturnType<typeof vi.fn>; move: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn>; cancel: ReturnType<typeof vi.fn> };
         onPinch: { start: ReturnType<typeof vi.fn>; move: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
         onWheelZoom: ReturnType<typeof vi.fn>;
+        onBackgroundTap: ReturnType<typeof vi.fn>;
     };
     nowMock: ReturnType<typeof vi.fn>;
     router: PointerRouter;
@@ -79,6 +80,7 @@ function createHarness(opts: { classifyTarget?: ClassifyTarget } = {}): RouterHa
         onBackgroundPan: { start: vi.fn(), move: vi.fn(), end: vi.fn(), cancel: vi.fn() },
         onPinch: { start: vi.fn(), move: vi.fn(), end: vi.fn() },
         onWheelZoom: vi.fn(),
+        onBackgroundTap: vi.fn(),
     };
 
     let nowValue = 0;
@@ -286,6 +288,70 @@ describe('PointerRouter — background pan', () => {
         expect(h.callbacks.onPieceTap).not.toHaveBeenCalled();
         expect(h.callbacks.onPieceDrag.start).not.toHaveBeenCalled();
         expect(h.callbacks.onBackgroundPan.start).not.toHaveBeenCalled();
+    });
+});
+
+describe('PointerRouter — background tap', () => {
+    function background(): ClassifyTarget { return () => ({ kind: 'background' }); }
+
+    it('fires onBackgroundTap when a background pointerdown→up stays under the threshold', () => {
+        const h = createHarness({ classifyTarget: background() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        const upEvt = fakePointerEvent({ pointerId: 1, clientX: 2, clientY: 1 });
+        h.fire('pointerup', upEvt);
+
+        expect(h.callbacks.onBackgroundTap).toHaveBeenCalledExactlyOnceWith(upEvt);
+    });
+
+    it('does NOT fire onBackgroundTap if movement crossed the threshold (becomes pan)', () => {
+        const h = createHarness({ classifyTarget: background() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 20, clientY: 0 }));
+        h.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 25, clientY: 0 }));
+
+        expect(h.callbacks.onBackgroundTap).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire onBackgroundTap on pointercancel', () => {
+        const h = createHarness({ classifyTarget: background() });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointercancel', fakePointerEvent({ pointerId: 1 }));
+
+        expect(h.callbacks.onBackgroundTap).not.toHaveBeenCalled();
+    });
+
+    it('does NOT fire onBackgroundTap on a piece tap', () => {
+        const h = createHarness({ classifyTarget: () => ({ kind: 'piece', pieceId: 1 }) });
+        h.fire('pointerdown', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+        h.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 0, clientY: 0 }));
+
+        expect(h.callbacks.onBackgroundTap).not.toHaveBeenCalled();
+    });
+
+    it('callback is optional (no error when not provided)', () => {
+        // Construct a router without onBackgroundTap by going through the
+        // PointerRouter constructor directly (the harness always supplies one).
+        const container = document.createElement('div');
+        container.setPointerCapture = vi.fn();
+        container.hasPointerCapture = vi.fn(() => false);
+        container.releasePointerCapture = vi.fn();
+
+        const router = new PointerRouter({
+            container,
+            classifyTarget: () => ({ kind: 'background' }),
+            onPieceTap: vi.fn(),
+            onPieceDrag: { start: vi.fn(), move: vi.fn(), end: vi.fn(), cancel: vi.fn() },
+            onBackgroundPan: { start: vi.fn(), move: vi.fn(), end: vi.fn(), cancel: vi.fn() },
+            onPinch: { start: vi.fn(), move: vi.fn(), end: vi.fn() },
+            onWheelZoom: vi.fn(),
+        });
+
+        expect(() => {
+            container.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientX: 0, clientY: 0 }));
+            container.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: 1, clientY: 0 }));
+        }).not.toThrow();
+
+        router.destroy();
     });
 });
 

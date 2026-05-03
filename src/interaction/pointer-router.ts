@@ -46,6 +46,8 @@ export interface PointerRouterOptions {
         end: () => void;
     };
     onWheelZoom: (evt: WheelEvent) => void;
+    /** Optional. Fired when a background pointerdown/up resolves without crossing the tap threshold. */
+    onBackgroundTap?: (evt: PointerEvent) => void;
 }
 
 const DEFAULT_TAP_THRESHOLD_PX = 8;
@@ -79,7 +81,7 @@ export class PointerRouter {
     private tapThresholdPx: number;
     private now: () => number;
     private callbacks: Pick<PointerRouterOptions,
-        'onPieceTap' | 'onPieceDrag' | 'onBackgroundPan' | 'onPinch' | 'onWheelZoom'>;
+        'onPieceTap' | 'onPieceDrag' | 'onBackgroundPan' | 'onPinch' | 'onWheelZoom' | 'onBackgroundTap'>;
 
     private tracked = new Map<number, TrackedPointer>();
     private state: State = { kind: 'idle' };
@@ -102,6 +104,7 @@ export class PointerRouter {
             onBackgroundPan: opts.onBackgroundPan,
             onPinch: opts.onPinch,
             onWheelZoom: opts.onWheelZoom,
+            onBackgroundTap: opts.onBackgroundTap,
         };
 
         this.container.addEventListener('pointerdown', this.boundDown);
@@ -218,6 +221,7 @@ export class PointerRouter {
             this.callbacks.onPieceTap(pieceId, evt);
         } else if (this.state.kind === 'background-candidate' && evt.pointerId === this.state.pointerId) {
             this.state = { kind: 'idle' };
+            this.callbacks.onBackgroundTap?.(evt);
         } else if (this.state.kind === 'piece-drag' && evt.pointerId === this.state.pointerId) {
             this.releaseCapture(evt.pointerId);
             this.state = { kind: 'idle' };
