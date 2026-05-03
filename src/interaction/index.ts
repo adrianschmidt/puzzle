@@ -2,6 +2,8 @@ export { DragController } from './drag-controller.js';
 export type { DragState, DragCallbacks, ScreenDeltaToWorld } from './drag-controller.js';
 export { SelectionManager } from './selection-manager.js';
 export type { SelectionChangeCallback } from './selection-manager.js';
+export { RotationFocus } from './rotation-focus.js';
+export type { RotationFocusChangeCallback } from './rotation-focus.js';
 export { ViewportTransform, clampScale, MIN_SCALE, MAX_SCALE, WHEEL_ZOOM_FACTOR } from './viewport-transform.js';
 export type { ViewportState } from './viewport-transform.js';
 export { ViewportController, touchDistance, touchMidpoint } from './viewport-controller.js';
