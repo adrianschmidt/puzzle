@@ -64,7 +64,7 @@ null`. Focus is set by piece taps and cleared by basically everything else.
 | Tap a piece (clean tap, no drag) | `setFocus(group.id)` |
 | Re-tap the same focused piece | No-op (focus already set; idle timer is not reset) |
 | Tap a different piece | `setFocus(other.id)` (transitions focus) |
-| Click a rotate button | Rotates that pair's group; resets the idle timer; if the pair was in slow fade-out, also `setFocus(group.id)` again to re-focus and snap opacity back to full |
+| Click a rotate button | Rotates that pair's group; resets the idle timer; if the pair was in slow fade-out, the rotate-buttons module internally cancels the fade and snaps opacity back to full (no roundtrip through `RotationFocus`) |
 | Idle for 5 seconds (no rotate-button click) | Pair starts a *slow* fade-out and stays clickable; focus is logically cleared once the fade completes |
 | Tap on background | `clearFocus()` |
 | Drag start (piece or background pan) | `clearFocus()` |
@@ -123,9 +123,10 @@ the user dismissed the buttons or just stepped away:
   with the fade-in, so the dismiss feels deliberate and immediate.
 - **Slow fade-out (~600–900 ms, pointer-events stay enabled)** — for *idle
   timer expiry*. The pair lingers visibly while it fades. If the user taps a
-  rotate button during this window, the click is honored: the pair re-focuses
-  its own group, cancels the fade and snaps back to full opacity, runs the
-  rotation, and restarts the 5-second timer.
+  rotate button during this window, the click is honored: the rotate-buttons
+  module cancels the fade, snaps opacity back to full, runs the rotation, and
+  restarts the 5-second timer. (The rescue stays internal to rotate-buttons —
+  `RotationFocus` was never cleared, so no `onChange` notification fires.)
 
 Switching pieces (A → B): pair A goes into quick fade-out (focus moved away),
 pair B fades in fresh. Independent DOM elements, so the cross-fade falls out
@@ -218,13 +219,14 @@ Internally:
       the computed screen position (clamped to viewport), fade in, start a
       5-second idle timer.
 - On rotate-button click:
-    - Invoke `onRotate(pair.groupId, direction)`. The pair owns its target so a
-      click on a slowly-fading pair still routes correctly.
-    - Reset the idle timer.
-    - Synchronously call `rotationFocus.setFocus(pair.groupId)`. For a healthy
-      pair this is a no-op (focus is already on this group); for a pair in slow
-      fade-out it re-establishes focus and (per the rule above) cancels the
-      fade.
+    - If the pair is in slow fade-out: cancel the scheduled removal, swap the
+      slow-fade-out class for the fade-in class (snaps opacity back to full),
+      and mark the pair visible. This rescue stays inside rotate-buttons —
+      `RotationFocus` is not touched, since `setFocus(sameId)` would dedupe
+      and not notify anyway.
+    - Reset the idle timer (5 seconds again).
+    - Invoke `onRotate(pair.groupId, direction)`. The pair owns its target so
+      a click on a slowly-fading pair still routes correctly.
     - Do not reposition the pair.
 - On `clearFocus()` from a *user-dismiss* event:
     - Apply `pointer-events: none` and the *quick* fade-out class.
@@ -290,7 +292,7 @@ Two help-text edits:
   clicks invoke `onRotate` and reset the idle timer; user-dismiss events
   trigger the quick fade-out with `pointer-events: none`; idle-timer expiry
   triggers the slow fade-out with pointer-events still enabled; clicking a
-  pair during slow fade-out cancels the fade and re-focuses the same group.
+  pair during slow fade-out cancels the fade and rescues the same pair.
 - `main.ts` integration coverage already in place via existing tests; update
   any test that asserted `toolActive === true` for rotation puzzles to assert
   it's `false`, and add coverage that tapping a piece on a rotation puzzle
