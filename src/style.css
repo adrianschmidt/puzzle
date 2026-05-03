@@ -244,15 +244,20 @@ html, body {
   transition: opacity 100ms ease-out;
 }
 
-/* Quick fade-out (user dismissed): symmetric with fade-in. */
+/*
+ * Two fade-out modes — same target opacity, different speeds and
+ * pointer-events. The asymmetry is intentional: quick fade-out is for
+ * "user dismissed" (so the pair must not absorb a stray click during the
+ * fade), while slow fade-out is for "idle timeout" (the user can rescue
+ * the pair by tapping a button during the fade — so pointer-events stay
+ * enabled).
+ */
 .rotate-button--fade-out-quick {
   opacity: 0;
   transition: opacity 100ms ease-out;
   pointer-events: none;
 }
 
-/* Slow fade-out (idle timer expired): pointer-events stay enabled
-   so a tap during the fade rescues the pair. */
 .rotate-button--fade-out-slow {
   opacity: 0;
   transition: opacity 750ms ease-out;
