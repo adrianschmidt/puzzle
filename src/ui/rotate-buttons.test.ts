@@ -204,7 +204,7 @@ describe('createRotateButtons', () => {
     });
 
     describe('user-dismiss → quick fade', () => {
-        it('clearFocus applies quick-fade-out class and disables pointer events', () => {
+        it('clearFocus applies the quick-fade-out class', () => {
             const handle = build();
             handle.show();
             rotationFocus.setFocus(7);
