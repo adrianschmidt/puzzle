@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { setupInteraction } from './setup-interaction.js';
 import { ViewportTransform } from './viewport-transform.js';
 import { SelectionManager } from './selection-manager.js';
+import { RotationFocus } from './rotation-focus.js';
 import type { Renderer } from '../renderer/types.js';
 import type { GameState, PieceGroup } from '../model/types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
@@ -218,5 +219,191 @@ describe('setupInteraction', () => {
 
         expect(renderer.setGroupDragging).toHaveBeenCalledWith(7, false);
         expect(onDrop).not.toHaveBeenCalled();
+    });
+
+    describe('rotation focus', () => {
+        it('a piece tap sets focus on that group, regardless of multi-select state', () => {
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const rotationFocus = new RotationFocus();
+            const state = makeState([makeGroup(7, [3])]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                rotationFocus,
+            });
+
+            const pieceTarget = { _pieceId: 3 } as unknown as EventTarget;
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget, clientX: 100, clientY: 100 }));
+            container.fire('pointerup', fakePointerEvent({ target: pieceTarget, clientX: 101, clientY: 100 }));
+
+            expect(rotationFocus.focusedGroupId).toBe(7);
+        });
+
+        it('a piece tap also still toggles multi-select when the tool is active', () => {
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const rotationFocus = new RotationFocus();
+            const selectionManager = new SelectionManager();
+            selectionManager.toolActive = true;
+            const state = makeState([makeGroup(7, [3])]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                selectionManager,
+                rotationFocus,
+            });
+
+            const pieceTarget = { _pieceId: 3 } as unknown as EventTarget;
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget, clientX: 100, clientY: 100 }));
+            container.fire('pointerup', fakePointerEvent({ target: pieceTarget, clientX: 101, clientY: 100 }));
+
+            expect(selectionManager.isSelected(7)).toBe(true);
+            expect(rotationFocus.focusedGroupId).toBe(7);
+        });
+
+        it('a piece drag start clears focus', () => {
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const rotationFocus = new RotationFocus();
+            rotationFocus.setFocus(7);
+            const state = makeState([makeGroup(7, [3])]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                rotationFocus,
+            });
+
+            const pieceTarget = { _pieceId: 3 };
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 }));
+
+            expect(rotationFocus.focusedGroupId).toBeNull();
+        });
+
+        it('a background tap clears focus', () => {
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const rotationFocus = new RotationFocus();
+            rotationFocus.setFocus(7);
+            const state = makeState([makeGroup(7, [3])]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                rotationFocus,
+            });
+
+            // Background-target pointerdown → small pointerup = background tap.
+            container.fire('pointerdown', fakePointerEvent({ target: null, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 101, clientY: 100 }));
+
+            expect(rotationFocus.focusedGroupId).toBeNull();
+        });
+
+        it('a background pan start clears focus', () => {
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const rotationFocus = new RotationFocus();
+            rotationFocus.setFocus(7);
+            const state = makeState([makeGroup(7, [3])]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                panViewport: vi.fn(),
+                rotationFocus,
+            });
+
+            container.fire('pointerdown', fakePointerEvent({ target: null, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 130, clientY: 100 })); // promote pan
+
+            expect(rotationFocus.focusedGroupId).toBeNull();
+        });
+
+        it('a wheel zoom clears focus', () => {
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const rotationFocus = new RotationFocus();
+            rotationFocus.setFocus(7);
+            const state = makeState([makeGroup(7, [3])]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                rotationFocus,
+            });
+
+            const pieceTarget = { _pieceId: 3 };
+            const wheelEvt = {
+                deltaY: -100,
+                clientX: 50,
+                clientY: 50,
+                target: pieceTarget,
+                preventDefault: vi.fn(),
+            } as unknown as WheelEvent;
+
+            container.fire('wheel', wheelEvt);
+
+            expect(rotationFocus.focusedGroupId).toBeNull();
+        });
+
+        it('a pinch start clears focus', () => {
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const rotationFocus = new RotationFocus();
+            rotationFocus.setFocus(7);
+            const state = makeState([makeGroup(7, [3])]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                rotationFocus,
+            });
+
+            const pieceTarget = { _pieceId: 3 };
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
+
+            expect(rotationFocus.focusedGroupId).toBeNull();
+        });
     });
 });
