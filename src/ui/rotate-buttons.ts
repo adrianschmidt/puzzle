@@ -1,33 +1,64 @@
 /**
- * Rotate buttons — CW and CCW 90° rotation for the currently-selected
- * groups. Visible only for the fractal cut style.
+ * Rotate buttons — a transient pair of CCW/CW buttons that flanks the
+ * group most recently tapped by the user. The pair fades in fast, sits
+ * for repeated rotations, and fades out softly after a 5-second idle
+ * window or instantly on any non-rotate action.
+ *
+ * The host is responsible for projecting the focused group's bounding
+ * box from world space into screen space (via getFocusedGroupScreenBounds);
+ * we just place the buttons next to it, clamped to viewport.
  */
 
-import type { SelectionManager } from '../interaction/selection-manager.js';
+import type { RotationFocus } from '../interaction/rotation-focus.js';
 import type { RotationDirection } from '../game/rotate-group.js';
-
-export interface RotateButtonsOptions {
-    container: HTMLElement;
-    selectionManager: SelectionManager;
-    /** Rotate all currently-selected groups by 90° in the given direction. */
-    onRotate: (direction: RotationDirection) => void;
-}
-
-export interface RotateButtonsHandle {
-    /** Show the buttons (e.g. after switching to a fractal puzzle). */
-    show: () => void;
-    /** Hide the buttons (e.g. after switching to a classic puzzle). */
-    hide: () => void;
-    /** Remove the buttons from the DOM. */
-    destroy: () => void;
-}
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/**
- * Build a circular-arrow SVG. `mirror=true` mirrors the icon horizontally
- * so the arrow curls counter-clockwise.
- */
+const BUTTON_SIZE_PX = 44;
+const BUTTON_GAP_PX = 8;
+const VIEWPORT_MARGIN_PX = 12;
+const IDLE_TIMEOUT_MS = 5000;
+const QUICK_FADE_MS = 100;
+const SLOW_FADE_MS = 750;
+
+export interface RotateButtonsOptions {
+    container: HTMLElement;
+    rotationFocus: RotationFocus;
+    /** Rotate the given group by 90° in the given direction. */
+    onRotate: (groupId: number, direction: RotationDirection) => void;
+    /**
+     * Project the focused group's visual bounds into screen-space.
+     * Return `null` when the group cannot be located (e.g. just removed).
+     */
+    getFocusedGroupScreenBounds: (
+        groupId: number,
+    ) => { left: number; right: number; top: number; bottom: number } | null;
+    /**
+     * Current viewport size in CSS pixels. Defaults to
+     * `visualViewport` (or `window.innerWidth/Height` as fallback).
+     */
+    getViewportSize?: () => { width: number; height: number };
+}
+
+export interface RotateButtonsHandle {
+    show: () => void;
+    hide: () => void;
+    destroy: () => void;
+}
+
+interface ActivePair {
+    groupId: number;
+    ccw: HTMLButtonElement;
+    cw: HTMLButtonElement;
+    idleTimerId: ReturnType<typeof setTimeout> | null;
+    /** Timeout that removes the pair after a fade-out completes. */
+    removalTimerId: ReturnType<typeof setTimeout> | null;
+    /** Fadeout-end listener — bound on the CCW button (either button works). */
+    transitionEndListener: ((e: Event) => void) | null;
+    /** Mode the pair is currently in. */
+    state: 'visible' | 'fade-out-quick' | 'fade-out-slow';
+}
+
 function makeRotateIcon(mirror: boolean): SVGElement {
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('width', '20');
@@ -53,76 +84,249 @@ function makeRotateIcon(mirror: boolean): SVGElement {
     return svg;
 }
 
-function makeButton(label: string, icon: SVGElement): HTMLButtonElement {
+function makeButton(modifier: 'ccw' | 'cw', label: string): HTMLButtonElement {
     const button = document.createElement('button');
-    button.className = 'rotate-button';
+    button.className = `rotate-button rotate-button--${modifier}`;
     button.type = 'button';
     button.setAttribute('aria-label', label);
-    button.appendChild(icon);
+    button.appendChild(makeRotateIcon(modifier === 'ccw'));
     return button;
+}
+
+function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+}
+
+function defaultViewportSize(): { width: number; height: number } {
+    return {
+        width: window.visualViewport?.width ?? window.innerWidth,
+        height: window.visualViewport?.height ?? window.innerHeight,
+    };
 }
 
 export function createRotateButtons(
     options: RotateButtonsOptions,
 ): RotateButtonsHandle {
-    const { container, selectionManager, onRotate } = options;
+    const {
+        container,
+        rotationFocus,
+        onRotate,
+        getFocusedGroupScreenBounds,
+        getViewportSize = defaultViewportSize,
+    } = options;
 
-    const ccwButton = makeButton(
-        'Rotate selection 90° counter-clockwise',
-        makeRotateIcon(true),
-    );
-    ccwButton.classList.add('rotate-button--ccw');
+    let shown = false;
+    let active: ActivePair | null = null;
+    let unsubscribeFocus: (() => void) | null = null;
 
-    const cwButton = makeButton(
-        'Rotate selection 90° clockwise',
-        makeRotateIcon(false),
-    );
-    cwButton.classList.add('rotate-button--cw');
-
-    function updateEnabled(): void {
-        const enabled = selectionManager.hasSelection;
-        ccwButton.disabled = !enabled;
-        cwButton.disabled = !enabled;
+    function placeButton(button: HTMLButtonElement, leftPx: number, topPx: number): void {
+        button.style.left = `${leftPx}px`;
+        button.style.top = `${topPx}px`;
     }
 
-    function handleCcw(): void {
-        if (!selectionManager.hasSelection) return;
-        onRotate('ccw');
+    function spawnPair(groupId: number): void {
+        const bounds = getFocusedGroupScreenBounds(groupId);
+        if (!bounds) return;
+        const viewport = getViewportSize();
+
+        const ccw = makeButton('ccw', 'Rotate selection 90° counter-clockwise');
+        const cw = makeButton('cw', 'Rotate selection 90° clockwise');
+
+        const midY = (bounds.top + bounds.bottom) / 2;
+        const naturalCcwLeft = bounds.left - BUTTON_GAP_PX - BUTTON_SIZE_PX;
+        const naturalCwLeft = bounds.right + BUTTON_GAP_PX;
+        const naturalTop = midY - BUTTON_SIZE_PX / 2;
+
+        const maxLeft = viewport.width - BUTTON_SIZE_PX - VIEWPORT_MARGIN_PX;
+        const maxTop = viewport.height - BUTTON_SIZE_PX - VIEWPORT_MARGIN_PX;
+
+        const ccwLeft = clamp(naturalCcwLeft, VIEWPORT_MARGIN_PX, maxLeft);
+        const cwLeft = clamp(naturalCwLeft, VIEWPORT_MARGIN_PX, maxLeft);
+        const topPx = clamp(naturalTop, VIEWPORT_MARGIN_PX, maxTop);
+
+        placeButton(ccw, ccwLeft, topPx);
+        placeButton(cw, cwLeft, topPx);
+
+        ccw.classList.add('rotate-button--fade-in');
+        cw.classList.add('rotate-button--fade-in');
+
+        ccw.addEventListener('click', () => handleRotateClick('ccw'));
+        cw.addEventListener('click', () => handleRotateClick('cw'));
+
+        container.appendChild(ccw);
+        container.appendChild(cw);
+
+        active = {
+            groupId,
+            ccw,
+            cw,
+            idleTimerId: null,
+            removalTimerId: null,
+            transitionEndListener: null,
+            state: 'visible',
+        };
+        startIdleTimer();
     }
 
-    function handleCw(): void {
-        if (!selectionManager.hasSelection) return;
-        onRotate('cw');
+    function handleRotateClick(direction: RotationDirection): void {
+        if (!active) return;
+        const groupId = active.groupId;
+
+        // Rescue from slow fade-out (clicking a slowly-fading pair counts as
+        // re-engagement — restore opacity, restart the idle timer).
+        if (active.state === 'fade-out-slow') {
+            cancelPairRemoval(active);
+            active.ccw.classList.remove('rotate-button--fade-out-slow');
+            active.cw.classList.remove('rotate-button--fade-out-slow');
+            active.ccw.classList.add('rotate-button--fade-in');
+            active.cw.classList.add('rotate-button--fade-in');
+            active.state = 'visible';
+        }
+
+        startIdleTimer();
+        onRotate(groupId, direction);
     }
 
-    ccwButton.addEventListener('click', handleCcw);
-    cwButton.addEventListener('click', handleCw);
+    function startIdleTimer(): void {
+        if (!active) return;
+        if (active.idleTimerId !== null) clearTimeout(active.idleTimerId);
+        active.idleTimerId = setTimeout(() => {
+            startSlowFadeOut();
+        }, IDLE_TIMEOUT_MS);
+    }
 
-    const removeListener = selectionManager.onChange(updateEnabled);
-    updateEnabled();
+    function clearIdleTimer(): void {
+        if (active && active.idleTimerId !== null) {
+            clearTimeout(active.idleTimerId);
+            active.idleTimerId = null;
+        }
+    }
 
-    // Hidden by default; show() is called by the host based on cut style.
-    ccwButton.style.display = 'none';
-    cwButton.style.display = 'none';
+    function startSlowFadeOut(): void {
+        if (!active) return;
+        clearIdleTimer();
+        active.state = 'fade-out-slow';
+        active.ccw.classList.remove('rotate-button--fade-in');
+        active.cw.classList.remove('rotate-button--fade-in');
+        active.ccw.classList.add('rotate-button--fade-out-slow');
+        active.cw.classList.add('rotate-button--fade-out-slow');
+        scheduleRemoval(SLOW_FADE_MS, /* clearFocusOnRemove */ true);
+    }
 
-    container.appendChild(ccwButton);
-    container.appendChild(cwButton);
+    function startQuickFadeOut(pair: ActivePair): void {
+        // Cancel any in-flight removal — could be a slow fade that's
+        // being upgraded to a quick fade because focus moved away.
+        cancelPairRemoval(pair);
+        if (pair.idleTimerId !== null) {
+            clearTimeout(pair.idleTimerId);
+            pair.idleTimerId = null;
+        }
+        pair.state = 'fade-out-quick';
+        pair.ccw.classList.remove('rotate-button--fade-in', 'rotate-button--fade-out-slow');
+        pair.cw.classList.remove('rotate-button--fade-in', 'rotate-button--fade-out-slow');
+        pair.ccw.classList.add('rotate-button--fade-out-quick');
+        pair.cw.classList.add('rotate-button--fade-out-quick');
+        schedulePairRemoval(pair, QUICK_FADE_MS, /* clearFocusOnRemove */ false);
+    }
+
+    function scheduleRemoval(fallbackMs: number, clearFocusOnRemove: boolean): void {
+        if (!active) return;
+        schedulePairRemoval(active, fallbackMs, clearFocusOnRemove);
+    }
+
+    function schedulePairRemoval(
+        pair: ActivePair,
+        fallbackMs: number,
+        clearFocusOnRemove: boolean,
+    ): void {
+        const onEnd = () => {
+            if (pair.removalTimerId !== null) {
+                clearTimeout(pair.removalTimerId);
+                pair.removalTimerId = null;
+            }
+            pair.transitionEndListener = null;
+            pair.ccw.removeEventListener('transitionend', onEnd);
+            pair.ccw.remove();
+            pair.cw.remove();
+            if (active === pair) active = null;
+            if (clearFocusOnRemove) rotationFocus.clearFocus();
+        };
+        pair.transitionEndListener = onEnd;
+        pair.ccw.addEventListener('transitionend', onEnd);
+        // Fallback in case transitionend doesn't fire (e.g. element was
+        // removed before the transition kicked in, or display: none).
+        pair.removalTimerId = setTimeout(onEnd, fallbackMs + 100);
+    }
+
+    function cancelPairRemoval(pair: ActivePair): void {
+        if (pair.removalTimerId !== null) {
+            clearTimeout(pair.removalTimerId);
+            pair.removalTimerId = null;
+        }
+        if (pair.transitionEndListener !== null) {
+            pair.ccw.removeEventListener('transitionend', pair.transitionEndListener);
+            pair.transitionEndListener = null;
+        }
+    }
+
+    function teardownActive(): void {
+        if (!active) return;
+        if (active.idleTimerId !== null) clearTimeout(active.idleTimerId);
+        if (active.removalTimerId !== null) clearTimeout(active.removalTimerId);
+        if (active.transitionEndListener !== null) {
+            active.ccw.removeEventListener('transitionend', active.transitionEndListener);
+        }
+        active.ccw.remove();
+        active.cw.remove();
+        active = null;
+    }
+
+    function handleFocusChange(focusedGroupId: number | null): void {
+        if (!shown) return;
+        if (focusedGroupId === null) {
+            // User dismissed: quick fade-out the current pair.
+            if (active) startQuickFadeOut(active);
+            return;
+        }
+        if (active && active.groupId === focusedGroupId) {
+            // Same group — no-op (RotationFocus only fires on change).
+            return;
+        }
+        if (active) {
+            // Switching pieces: quick-fade old, spawn new.
+            const old = active;
+            active = null;
+            startQuickFadeOut(old);
+        }
+        spawnPair(focusedGroupId);
+    }
 
     return {
         show() {
-            ccwButton.style.display = '';
-            cwButton.style.display = '';
+            if (shown) return;
+            shown = true;
+            unsubscribeFocus = rotationFocus.onChange(handleFocusChange);
+            // If focus is already set when shown, treat it like a focus event.
+            if (rotationFocus.focusedGroupId !== null) {
+                spawnPair(rotationFocus.focusedGroupId);
+            }
         },
         hide() {
-            ccwButton.style.display = 'none';
-            cwButton.style.display = 'none';
+            if (!shown) return;
+            shown = false;
+            if (unsubscribeFocus) {
+                unsubscribeFocus();
+                unsubscribeFocus = null;
+            }
+            teardownActive();
         },
         destroy() {
-            ccwButton.removeEventListener('click', handleCcw);
-            cwButton.removeEventListener('click', handleCw);
-            removeListener();
-            ccwButton.remove();
-            cwButton.remove();
+            if (unsubscribeFocus) {
+                unsubscribeFocus();
+                unsubscribeFocus = null;
+            }
+            shown = false;
+            teardownActive();
         },
     };
 }
