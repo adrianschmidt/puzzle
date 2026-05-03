@@ -109,6 +109,9 @@ let currentCompletionHide: (() => void) | null = null;
 
 function showCompletionOverlay(): void {
     if (currentCompletionHide) return;
+    // Clear focus so any visible rotate buttons quick-fade out before the
+    // celebratory zoom; without this the buttons would linger in front
+    // of (or under) the completion overlay during the animation.
     rotationFocus.clearFocus();
     currentCompletionHide = renderCompletionOverlay({
         container: app,

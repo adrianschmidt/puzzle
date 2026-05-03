@@ -318,6 +318,8 @@ describe('setupInteraction', () => {
             });
 
             // Background-target pointerdown → small pointerup = background tap.
+            // Cast the FakeContainer to EventTarget so the production
+            // classifyTarget's `target === container` reference check matches.
             const bgTarget = container as unknown as EventTarget;
             container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
             container.fire('pointerup', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 101, clientY: 100 }));
@@ -344,6 +346,8 @@ describe('setupInteraction', () => {
                 rotationFocus,
             });
 
+            // Cast the FakeContainer to EventTarget so the production
+            // classifyTarget's `target === container` reference check matches.
             const bgTarget = container as unknown as EventTarget;
             container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
             container.fire('pointermove', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 130, clientY: 100 })); // promote pan

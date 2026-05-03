@@ -267,6 +267,8 @@ export function createRotateButtons(
         pair.ccw.addEventListener('transitionend', onEnd);
         // Fallback in case transitionend doesn't fire (e.g. element was
         // removed before the transition kicked in, or display: none).
+        // The +100 buffer absorbs jitter from late layout / paint timing
+        // — the goal is to outlast a normal transition, not to race it.
         pair.removalTimerId = setTimeout(onEnd, fallbackMs + 100);
     }
 
