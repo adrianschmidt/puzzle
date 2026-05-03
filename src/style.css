@@ -202,10 +202,13 @@ html, body {
   background: rgba(100, 160, 255, 0.22);
 }
 
-/* Rotate CW/CCW buttons (bottom-left, fractal-only) */
+/*
+ * Rotate CW/CCW buttons — float next to the focused piece.
+ * `top`/`left` are set inline by rotate-buttons.ts based on the
+ * focused group's screen-space bounding box.
+ */
 .rotate-button {
   position: absolute;
-  bottom: 24px;
   z-index: 9999;
   width: 44px;
   height: 44px;
@@ -220,27 +223,39 @@ html, body {
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+  opacity: 0;
 }
 
-.rotate-button--ccw { left: 12px; }
-.rotate-button--cw { left: 64px; }
-
-.rotate-button:hover:not(:disabled) {
+.rotate-button:hover {
   background: var(--ui-overlay-hover);
   border-color: var(--ui-border-hover);
 }
 
-.rotate-button:active:not(:disabled) {
+.rotate-button:active {
   background: var(--ui-overlay-active);
 }
 
-.rotate-button:disabled {
-  opacity: 0.35;
-  cursor: default;
+/* Fade-in: snappy, near-instant. */
+.rotate-button--fade-in {
+  opacity: 1;
+  transition: opacity 100ms ease-out;
+}
+
+/* Quick fade-out (user dismissed): symmetric with fade-in. */
+.rotate-button--fade-out-quick {
+  opacity: 0;
+  transition: opacity 100ms ease-out;
+  pointer-events: none;
+}
+
+/* Slow fade-out (idle timer expired): pointer-events stay enabled
+   so a tap during the fade rescues the pair. */
+.rotate-button--fade-out-slow {
+  opacity: 0;
+  transition: opacity 750ms ease-out;
 }
 
 /* Deselect-all floating button (bottom-center) */
@@ -1120,13 +1135,9 @@ details.info-section[open] > .info-section-summary {
   }
 
   .rotate-button {
-    bottom: 16px;
     width: 36px;
     height: 36px;
   }
-
-  .rotate-button--ccw { left: 8px; }
-  .rotate-button--cw { left: 50px; }
 }
 
 .app-toast {
