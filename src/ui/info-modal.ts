@@ -131,7 +131,7 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(buttons, [
         '↺ ↻ ',
         ['strong', 'Rotate'],
-        ' (bottom-left, fractal only) — Rotate every selected group 90° counter-clockwise or clockwise',
+        ' (fractal puzzles with rotation) — Tap any piece to bring up the ↺ / ↻ buttons next to it; tap them to rotate that piece (and anything merged with it) 90°. They fade out after a few seconds or when you tap elsewhere.',
     ]);
     list.appendChild(buttons);
 
@@ -173,7 +173,7 @@ function buildCutStylesSection(): HTMLElement {
     ]);
     appendInlineLi(fractalSub, [
         ['strong', 'Enable rotation'],
-        ' — Pieces start at random 90° rotations; solve orientation as well as position. Multi-select is turned on by default so you can pick the pieces to rotate, then use the ↺ / ↻ buttons.',
+        ' — Pieces start at random 90° rotations; solve orientation as well as position. Tap a piece to reveal the ↺ / ↻ buttons next to it, then tap to rotate.',
     ]);
     fractalLi.appendChild(fractalSub);
     list.appendChild(fractalLi);
