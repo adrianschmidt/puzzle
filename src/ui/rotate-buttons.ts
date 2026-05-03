@@ -210,7 +210,7 @@ export function createRotateButtons(
         active.cw.classList.remove('rotate-button--fade-in');
         active.ccw.classList.add('rotate-button--fade-out-slow');
         active.cw.classList.add('rotate-button--fade-out-slow');
-        scheduleRemoval(SLOW_FADE_MS, /* clearFocusOnRemove */ true);
+        schedulePairRemoval(active, SLOW_FADE_MS, /* clearFocusOnRemove */ true);
     }
 
     function startQuickFadeOut(pair: ActivePair): void {
@@ -227,11 +227,6 @@ export function createRotateButtons(
         pair.ccw.classList.add('rotate-button--fade-out-quick');
         pair.cw.classList.add('rotate-button--fade-out-quick');
         schedulePairRemoval(pair, QUICK_FADE_MS, /* clearFocusOnRemove */ false);
-    }
-
-    function scheduleRemoval(fallbackMs: number, clearFocusOnRemove: boolean): void {
-        if (!active) return;
-        schedulePairRemoval(active, fallbackMs, clearFocusOnRemove);
     }
 
     function schedulePairRemoval(
