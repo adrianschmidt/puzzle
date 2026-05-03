@@ -62,7 +62,7 @@ null`. Focus is set by piece taps and cleared by basically everything else.
 | Event | Effect on focus |
 |---|---|
 | Tap a piece (clean tap, no drag) | `setFocus(group.id)` |
-| Re-tap the same focused piece | No-op for focus; resets the idle timer |
+| Re-tap the same focused piece | No-op (focus already set; idle timer is not reset) |
 | Tap a different piece | `setFocus(other.id)` (transitions focus) |
 | Click a rotate button | Rotates that pair's group; resets the idle timer; if the pair was in slow fade-out, also `setFocus(group.id)` again to re-focus and snap opacity back to full |
 | Idle for 5 seconds (no rotate-button click) | Pair starts a *slow* fade-out and stays clickable; focus is logically cleared once the fade completes |
