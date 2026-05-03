@@ -64,8 +64,8 @@ null`. Focus is set by piece taps and cleared by basically everything else.
 | Tap a piece (clean tap, no drag) | `setFocus(group.id)` |
 | Re-tap the same focused piece | No-op for focus; resets the idle timer |
 | Tap a different piece | `setFocus(other.id)` (transitions focus) |
-| Click a rotate button | Rotates the focused group; resets the idle timer; does **not** change focus |
-| Idle for 5 seconds (no rotate-button click) | `clearFocus()` |
+| Click a rotate button | Rotates that pair's group; resets the idle timer; if the pair was in slow fade-out, also `setFocus(group.id)` again to re-focus and snap opacity back to full |
+| Idle for 5 seconds (no rotate-button click) | Pair starts a *slow* fade-out and stays clickable; focus is logically cleared once the fade completes |
 | Tap on background | `clearFocus()` |
 | Drag start (piece or background pan) | `clearFocus()` |
 | Pinch start, wheel zoom | `clearFocus()` |
@@ -113,11 +113,28 @@ Animation:
 
 - **Fade in**: ~80–120 ms ease. Snappy enough to feel essentially instant,
   just smoothing the appearance.
-- **Fade out**: ~250–350 ms ease. Softer.
-- **Switching pieces (A → B)**: fade A out and fade B in in parallel —
-  independent DOM elements, so cross-fade falls out for free.
-- During fade-out a button-pair has `pointer-events: none`, so a clearly-going-
-  away pair can never absorb a click.
+
+Two distinct fade-out modes — the speed and behavior should make clear whether
+the user dismissed the buttons or just stepped away:
+
+- **Quick fade-out (~80–120 ms, pointer-events disabled)** — for *user-dismiss*
+  events: background tap, drag start, pan start, pinch start, wheel zoom, new
+  game, puzzle completion, and focus moving to a different piece. Symmetric
+  with the fade-in, so the dismiss feels deliberate and immediate.
+- **Slow fade-out (~600–900 ms, pointer-events stay enabled)** — for *idle
+  timer expiry*. The pair lingers visibly while it fades. If the user taps a
+  rotate button during this window, the click is honored: the pair re-focuses
+  its own group, cancels the fade and snaps back to full opacity, runs the
+  rotation, and restarts the 5-second timer.
+
+Switching pieces (A → B): pair A goes into quick fade-out (focus moved away),
+pair B fades in fresh. Independent DOM elements, so the cross-fade falls out
+for free.
+
+If a slow fade-out is in progress and a *user-dismiss* event arrives (e.g., the
+user taps a different piece while the pair is slowly fading), the pair
+upgrades from slow fade-out to quick fade-out + `pointer-events: none`, so a
+no-longer-meaningful click can't land.
 
 ### Interaction with multi-select
 
@@ -193,22 +210,46 @@ Internally:
 
 - When enabled (`show()` was called), subscribes to `rotationFocus.onChange`.
 - On `setFocus(id)`:
-    - Compute screen-space bounds.
-    - Build a fresh pair of button elements at the computed position
-      (clamped to viewport).
-    - Fade in.
-    - Start a 5-second idle timer.
+    - If a pair already exists for this same group (slow fade-out in progress),
+      cancel its fade, restore full opacity, and restart its 5-second timer.
+      Do not create a new pair.
+    - Otherwise: if a pair exists for a different group, send it to *quick
+      fade-out* (focus moved away). Build a fresh pair of button elements at
+      the computed screen position (clamped to viewport), fade in, start a
+      5-second idle timer.
 - On rotate-button click:
-    - Invoke `onRotate(direction)`.
+    - Invoke `onRotate(pair.groupId, direction)`. The pair owns its target so a
+      click on a slowly-fading pair still routes correctly.
     - Reset the idle timer.
-    - Do not move or destroy the buttons.
-- On `clearFocus()` (or idle-timer expiry):
-    - Apply `pointer-events: none` and the fade-out class.
-    - On `transitionend` (or fallback timeout), remove from DOM.
+    - Synchronously call `rotationFocus.setFocus(pair.groupId)`. For a healthy
+      pair this is a no-op (focus is already on this group); for a pair in slow
+      fade-out it re-establishes focus and (per the rule above) cancels the
+      fade.
+    - Do not reposition the pair.
+- On `clearFocus()` from a *user-dismiss* event:
+    - Apply `pointer-events: none` and the *quick* fade-out class.
+    - On `transitionend` (or fallback timeout), remove the pair from DOM.
+- On idle-timer expiry:
+    - Apply the *slow* fade-out class but keep `pointer-events` enabled.
+    - On `transitionend` (or fallback timeout) without re-focus, remove the
+      pair and emit `rotationFocus.clearFocus()` if not already cleared.
 - When `hide()` is called or the puzzle's `rotationMode` becomes `'none'`,
   unsubscribe and tear down any visible pair.
 - When `show()` is called and `rotationFocus` already has a focused group, the
   initial subscription is treated like a focus-set event (a pair fades in).
+
+Distinguishing dismiss types: `clearFocus()` callers need a way to signal which
+fade to use. Two clean shapes — pick one in implementation:
+
+- Add an optional `reason: 'dismiss' | 'idle-timeout'` argument to
+  `clearFocus()`, defaulting to `'dismiss'`. The rotate-buttons module reads
+  the reason from the change event.
+- Or: keep `RotationFocus` minimal (no reason), and have rotate-buttons own the
+  idle timer entirely — the timer fires the slow fade-out itself and only
+  emits `clearFocus()` once the fade completes. Then any externally-driven
+  `clearFocus()` is by definition a user-dismiss → quick fade-out.
+
+The second shape keeps `RotationFocus` simpler and is preferred.
 
 ### `main.ts`
 
@@ -246,8 +287,10 @@ Two help-text edits:
   drag start, background tap, pan start, pinch start, and wheel zoom all clear
   focus; piece tap also still toggles multi-select when the tool is active.
 - `rotate-buttons`: subscribing to focus shows/hides the pair; rotate-button
-  clicks invoke `onRotate` and reset the idle timer; idle timer expiry clears
-  focus; `hide()` removes any visible pair.
+  clicks invoke `onRotate` and reset the idle timer; user-dismiss events
+  trigger the quick fade-out with `pointer-events: none`; idle-timer expiry
+  triggers the slow fade-out with pointer-events still enabled; clicking a
+  pair during slow fade-out cancels the fade and re-focuses the same group.
 - `main.ts` integration coverage already in place via existing tests; update
   any test that asserted `toolActive === true` for rotation puzzles to assert
   it's `false`, and add coverage that tapping a piece on a rotation puzzle
