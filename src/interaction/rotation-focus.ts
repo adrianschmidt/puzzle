@@ -37,7 +37,10 @@ export class RotationFocus {
 
     private notify(): void {
         const value = this._focusedGroupId;
-        for (const listener of this.listeners) {
+        // Snapshot the listener list so that a subscriber that unsubscribes
+        // itself during the callback doesn't shift indices out from under
+        // the in-flight loop.
+        for (const listener of this.listeners.slice()) {
             listener(value);
         }
     }
