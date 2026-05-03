@@ -168,21 +168,32 @@ export function createRotateButtons(
         startIdleTimer();
     }
 
+    /**
+     * Restore an actively-fading pair to full opacity and clear its
+     * removal/idle timers. Used by both the click-rescue path (rotate
+     * button clicked during slow fade) and the re-focus path (user taps
+     * the same piece again during a quick fade-out).
+     */
+    function rescueActive(): void {
+        if (!active) return;
+        cancelPairRemoval(active);
+        if (active.idleTimerId !== null) {
+            clearTimeout(active.idleTimerId);
+            active.idleTimerId = null;
+        }
+        active.ccw.classList.remove('rotate-button--fade-out-slow', 'rotate-button--fade-out-quick');
+        active.cw.classList.remove('rotate-button--fade-out-slow', 'rotate-button--fade-out-quick');
+        active.ccw.classList.add('rotate-button--fade-in');
+        active.cw.classList.add('rotate-button--fade-in');
+        active.state = 'visible';
+    }
+
     function handleRotateClick(direction: RotationDirection): void {
         if (!active) return;
         const groupId = active.groupId;
-
-        // Rescue from slow fade-out (clicking a slowly-fading pair counts as
-        // re-engagement — restore opacity, restart the idle timer).
-        if (active.state === 'fade-out-slow') {
-            cancelPairRemoval(active);
-            active.ccw.classList.remove('rotate-button--fade-out-slow');
-            active.cw.classList.remove('rotate-button--fade-out-slow');
-            active.ccw.classList.add('rotate-button--fade-in');
-            active.cw.classList.add('rotate-button--fade-in');
-            active.state = 'visible';
-        }
-
+        // Rescue from slow fade-out (the pointer-events:none on quick-fade
+        // means clicks can only land on visible or slowly-fading pairs).
+        if (active.state !== 'visible') rescueActive();
         startIdleTimer();
         onRotate(groupId, direction);
     }
@@ -284,7 +295,15 @@ export function createRotateButtons(
             return;
         }
         if (active && active.groupId === focusedGroupId) {
-            // Same group — no-op (RotationFocus only fires on change).
+            // Same group. RotationFocus only fires on actual change, so this
+            // branch is reached when focus was cleared and re-set on the
+            // same piece (e.g. user taps background then taps same piece
+            // again within the quick-fade window). If the pair is mid-fade,
+            // rescue it; if visible, this is a true no-op.
+            if (active.state !== 'visible') {
+                rescueActive();
+                startIdleTimer();
+            }
             return;
         }
         if (active) {
