@@ -88,6 +88,21 @@ describe('share-link codec — optional fields', () => {
         };
         expect(decodePayload(encodePayload(payload))).toEqual(payload);
     });
+
+    it('round-trips classic config with quarter-turn rotation', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'classic', s: 1, r: 'quarter-turn',
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('round-trips composable config with quarter-turn rotation', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'composable', s: 1, r: 'quarter-turn',
+            cf: { ha: 0.2, hf: 1, va: 0.3, vf: 2, dt: false },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
 });
 
 describe('share-link codec — rejection paths', () => {
@@ -221,6 +236,17 @@ describe('gameStateToPayload', () => {
         expect(payload.c).toBe('fractal');
         expect(payload.r).toBe('quarter-turn');
         expect(payload.ff).toEqual({ bl: true });
+    });
+
+    it('emits r: quarter-turn for a rotated classic puzzle', () => {
+        const state = buildState({
+            cutStyle: 'classic',
+            rotationMode: 'quarter-turn',
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.c).toBe('classic');
+        expect(payload.r).toBe('quarter-turn');
+        expect(payload.ff).toBeUndefined();
     });
 
     it('includes composableConfig', () => {

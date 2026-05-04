@@ -201,6 +201,36 @@ describe('rotationMode', () => {
             expect([0, 1, 2, 3]).toContain(group.rotation);
         }
     });
+
+    it('assigns random rotations to classic-cut puzzles when rotationMode is "quarter-turn"', () => {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom([0.1, 0.3, 0.6, 0.9, 0.5]),
+            rotationMode: 'quarter-turn',
+            cutStyle: 'classic',
+        });
+
+        expect(state.rotationMode).toBe('quarter-turn');
+        expect(state.cutStyle).toBe('classic');
+        expect(state.groups.some((g) => g.rotation !== 0)).toBe(true);
+        for (const group of state.groups) {
+            expect([0, 1, 2, 3]).toContain(group.rotation);
+        }
+    });
+
+    it('assigns random rotations to composable-cut puzzles when rotationMode is "quarter-turn"', () => {
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom([0.1, 0.3, 0.6, 0.9, 0.5]),
+            rotationMode: 'quarter-turn',
+            cutStyle: 'composable',
+        });
+
+        expect(state.rotationMode).toBe('quarter-turn');
+        expect(state.cutStyle).toBe('composable');
+        expect(state.groups.some((g) => g.rotation !== 0)).toBe(true);
+        for (const group of state.groups) {
+            expect([0, 1, 2, 3]).toContain(group.rotation);
+        }
+    });
 });
 
 describe('randomizePositions', () => {
