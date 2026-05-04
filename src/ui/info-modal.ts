@@ -131,7 +131,7 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(buttons, [
         '↺ ↻ ',
         ['strong', 'Rotate'],
-        ' (fractal puzzles with rotation) — Tap any piece to bring up the ↺ / ↻ buttons next to it; tap them to rotate that piece (and anything merged with it) 90°. They fade out after a few seconds or when you tap elsewhere.',
+        ' (when rotation is enabled) — Tap any piece to bring up the ↺ / ↻ buttons next to it; tap them to rotate that piece (and anything merged with it) 90°. They fade out after a few seconds or when you tap elsewhere.',
     ]);
     list.appendChild(buttons);
 
@@ -170,10 +170,6 @@ function buildCutStylesSection(): HTMLElement {
     appendInlineLi(fractalSub, [
         ['strong', 'Borderless'],
         " — No pieces with flat edges, so it's not obvious which pieces make up the frame of the puzzle",
-    ]);
-    appendInlineLi(fractalSub, [
-        ['strong', 'Enable rotation'],
-        ' — Pieces start at random 90° rotations; solve orientation as well as position. Tap a piece to reveal the ↺ / ↻ buttons next to it, then tap to rotate.',
     ]);
     fractalLi.appendChild(fractalSub);
     list.appendChild(fractalLi);
