@@ -28,8 +28,6 @@ export interface ComposableSliderConfig {
 /** Fractal generator config passed through from the dialog. */
 export interface FractalDialogConfig {
     borderless: boolean;
-    /** Player opted into 90°-snap rotation (fractal only). */
-    rotationEnabled: boolean;
 }
 
 /** Everything the player chose in the new-game dialog. */
@@ -40,6 +38,8 @@ export interface NewGameSelection {
     composableConfig?: ComposableSliderConfig;
     /** Present only when the chosen cut style is fractal. */
     fractalConfig?: FractalDialogConfig;
+    /** Whether the player ticked the top-level "Enable rotation" checkbox. */
+    rotationEnabled: boolean;
     imageSource: string;
     imageCategory: string;
     vibrant: boolean;
@@ -56,6 +56,8 @@ export interface NewGameDialogOptions {
     savedComposableConfig?: ComposableSliderConfig;
     /** Previously saved fractal config (used to pre-populate controls). */
     savedFractalConfig?: FractalDialogConfig;
+    /** Previously saved rotation-enabled preference (defaults to false). */
+    savedRotationEnabled?: boolean;
     /** Previously saved image source preference. */
     savedImageSource?: string;
     /** Previously saved image category preference. */
@@ -172,13 +174,11 @@ function buildFractalOptionsSection(args: {
     section.className = 'fractal-options';
 
     const borderlessCheckbox = appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false);
-    const rotationCheckbox = appendCheckboxRow(section, 'Enable rotation', args.saved?.rotationEnabled ?? false);
 
     return {
         element: section,
         getValues: () => ({
             borderless: borderlessCheckbox.checked,
-            rotationEnabled: rotationCheckbox.checked,
         }),
         setVisible: (visible) => {
             section.style.display = visible ? 'block' : 'none';
@@ -412,6 +412,15 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         savedVibrant: options.savedVibrant,
     });
 
+    // Top-level "Enable rotation" row — applies to any cut style.
+    const rotationRow = document.createElement('div');
+    rotationRow.className = 'rotation-row';
+    const rotationCheckbox = appendCheckboxRow(
+        rotationRow,
+        'Enable rotation',
+        options.savedRotationEnabled ?? false,
+    );
+
     const sizeSection = buildSizeSection({
         selectedIndex,
         getCutStyleIndex: () => currentCutStyleIndex,
@@ -426,6 +435,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
                 fractalConfig: currentCutStyleIndex === fractalCutIndex
                     ? fractalSection.getValues()
                     : undefined,
+                rotationEnabled: rotationCheckbox.checked,
                 ...imageSourceSection.getValues(),
             });
         },
@@ -445,6 +455,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     composableSection.setVisible(currentCutStyleIndex === composableCutIndex);
 
     dialog.appendChild(cutStyleSection);
+    dialog.appendChild(rotationRow);
     dialog.appendChild(fractalSection.element);
     dialog.appendChild(imageSourceSection.element);
     dialog.appendChild(sizeSection.element);

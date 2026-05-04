@@ -18,20 +18,14 @@ describe('saveFractalConfigPreference / loadFractalConfigPreference', () => {
         expect(loadFractalConfigPreference()).toBeUndefined();
     });
 
-    it('round-trips a saved config', () => {
-        saveFractalConfigPreference({ borderless: true, rotationEnabled: true });
-        expect(loadFractalConfigPreference()).toEqual({
-            borderless: true,
-            rotationEnabled: true,
-        });
+    it('round-trips a saved config with borderless: true', () => {
+        saveFractalConfigPreference({ borderless: true });
+        expect(loadFractalConfigPreference()).toEqual({ borderless: true });
     });
 
-    it('round-trips borderless: false', () => {
-        saveFractalConfigPreference({ borderless: false, rotationEnabled: false });
-        expect(loadFractalConfigPreference()).toEqual({
-            borderless: false,
-            rotationEnabled: false,
-        });
+    it('round-trips a saved config with borderless: false', () => {
+        saveFractalConfigPreference({ borderless: false });
+        expect(loadFractalConfigPreference()).toEqual({ borderless: false });
     });
 
     it('returns undefined for invalid JSON', () => {
@@ -44,25 +38,19 @@ describe('saveFractalConfigPreference / loadFractalConfigPreference', () => {
         expect(loadFractalConfigPreference()).toBeUndefined();
     });
 
-    it('coerces truthy non-boolean values to true', () => {
+    it('coerces truthy non-boolean borderless values to true', () => {
         localStorage.setItem(
             FRACTAL_CONFIG_KEY,
-            JSON.stringify({ borderless: 1, rotationEnabled: 1 }),
+            JSON.stringify({ borderless: 1 }),
         );
-        expect(loadFractalConfigPreference()).toEqual({
-            borderless: true,
-            rotationEnabled: true,
-        });
+        expect(loadFractalConfigPreference()).toEqual({ borderless: true });
     });
 
-    it('defaults rotationEnabled to false for pre-rotation saves', () => {
+    it('silently ignores legacy rotationEnabled field on stored JSON', () => {
         localStorage.setItem(
             FRACTAL_CONFIG_KEY,
-            JSON.stringify({ borderless: true }),
+            JSON.stringify({ borderless: true, rotationEnabled: true }),
         );
-        expect(loadFractalConfigPreference()).toEqual({
-            borderless: true,
-            rotationEnabled: false,
-        });
+        expect(loadFractalConfigPreference()).toEqual({ borderless: true });
     });
 });

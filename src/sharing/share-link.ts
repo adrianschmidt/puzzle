@@ -28,7 +28,7 @@ export interface SharePayload {
     r: 'none' | 'quarter-turn';
     /** Composable-cut config. */
     cf?: { ha: number; hf: number; va: number; vf: number; dt: boolean };
-    /** Fractal-cut config (rotationEnabled is implicit via `r`). */
+    /** Fractal-cut config. */
     ff?: { bl: boolean };
     /** Optional progress snapshot. */
     pr?: {

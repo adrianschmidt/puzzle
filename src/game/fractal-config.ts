@@ -1,9 +1,12 @@
 /**
  * Fractal cut style configuration — types and persistence.
  *
- * The fractal cut style exposes a "borderless" toggle and an opt-in
- * 90°-snap rotation mode. Player choices are persisted as JSON in
- * localStorage.
+ * The fractal cut style exposes a "borderless" toggle. Player choices
+ * are persisted as JSON in localStorage.
+ *
+ * Rotation is no longer part of this config — it lives as its own
+ * top-level preference in `src/ui/rotation-preference.ts` because it
+ * applies to every cut style, not just fractal.
  */
 
 import { createJsonPreference } from '../ui/preference-store.js';
@@ -16,11 +19,6 @@ export const FRACTAL_CONFIG_KEY = 'puzzle-fractal-config';
  */
 export interface FractalConfigPreference {
     borderless: boolean;
-    /**
-     * Whether the player opted into 90°-snap rotation for a fractal puzzle.
-     * When true, groups start at a random rotation and rotate-buttons appear.
-     */
-    rotationEnabled: boolean;
 }
 
 function parseFractalConfig(raw: unknown): FractalConfigPreference | undefined {
@@ -32,7 +30,6 @@ function parseFractalConfig(raw: unknown): FractalConfigPreference | undefined {
 
     return {
         borderless: Boolean(config.borderless),
-        rotationEnabled: Boolean(config.rotationEnabled),
     };
 }
 
