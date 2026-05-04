@@ -116,3 +116,9 @@ export {
     loadOffsetDragPreference,
     saveOffsetDragPreference,
 } from './offset-drag.js';
+
+export {
+    ROTATION_ENABLED_PREFERENCE_KEY,
+    loadRotationEnabledPreference,
+    saveRotationEnabledPreference,
+} from './rotation-preference.js';
