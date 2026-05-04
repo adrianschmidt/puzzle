@@ -85,6 +85,7 @@ describe('createNewGameDialog', () => {
             cutStyleIndex: 0,
             composableConfig: undefined,
             fractalConfig: undefined,
+            rotationEnabled: false,
             imageSource: 'random',
             imageCategory: 'any',
             vibrant: false,
@@ -203,7 +204,8 @@ describe('createNewGameDialog', () => {
             sizeIndex: 0,
             cutStyleIndex: 1,
             composableConfig: undefined,
-            fractalConfig: { borderless: false, rotationEnabled: false },
+            fractalConfig: { borderless: false },
+            rotationEnabled: false,
             imageSource: 'random',
             imageCategory: 'any',
             vibrant: false,
@@ -233,10 +235,66 @@ describe('createNewGameDialog', () => {
             sizeIndex: 0,
             cutStyleIndex: 1,
             composableConfig: undefined,
-            fractalConfig: { borderless: false, rotationEnabled: false },
+            fractalConfig: { borderless: false },
+            rotationEnabled: false,
             imageSource: 'random',
             imageCategory: 'any',
             vibrant: false,
         });
+    });
+
+    it('exposes the top-level "Enable rotation" checkbox by default', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            onSelect: vi.fn(),
+        });
+
+        const checkbox = container.querySelector<HTMLInputElement>(
+            '.rotation-row input[type="checkbox"]',
+        );
+        expect(checkbox).not.toBeNull();
+        expect(checkbox!.checked).toBe(false);
+    });
+
+    it('passes rotationEnabled: true when the top-level checkbox is ticked, regardless of cut style', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: 0, // Classic
+            onSelect,
+        });
+
+        const checkbox = container.querySelector<HTMLInputElement>(
+            '.rotation-row input[type="checkbox"]',
+        )!;
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('change'));
+
+        const sizeButtons =
+            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
+        sizeButtons[0].click();
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({
+                cutStyleIndex: 0,
+                rotationEnabled: true,
+            }),
+        );
+    });
+
+    it('initialises the top-level checkbox from savedRotationEnabled', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+
+        const checkbox = container.querySelector<HTMLInputElement>(
+            '.rotation-row input[type="checkbox"]',
+        );
+        expect(checkbox?.checked).toBe(true);
     });
 });
