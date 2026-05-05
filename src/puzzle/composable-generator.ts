@@ -14,6 +14,20 @@
 import type { Piece, Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
 import { generateTopologyPuzzle } from './topology/generator.js';
+import {
+    createCompositeCollisionDetector,
+    createProximityCollisionDetector,
+    createSkipOnCollisionResolver,
+    createTabCollisionDetector,
+} from './topology/collision.js';
+
+/**
+ * Minimum pixel gap between a tab and any non-parent cut. Below this, the
+ * sliver of material between them is too thin to form a sound piece edge,
+ * so the tab is skipped. Tuned by eye — small enough to leave most tabs
+ * alone, large enough to kill the obvious slivers.
+ */
+const TAB_PROXIMITY_MIN_DISTANCE = 3;
 
 /**
  * Configuration for the composable generator.
@@ -50,5 +64,12 @@ export function generateComposablePuzzle(
         verticalAmplitude: config?.verticalAmplitude,
         verticalFrequency: config?.verticalFrequency,
         disableTabs: config?.disableTabs,
+        collision: {
+            detector: createCompositeCollisionDetector([
+                createTabCollisionDetector(),
+                createProximityCollisionDetector(TAB_PROXIMITY_MIN_DISTANCE),
+            ]),
+            resolver: createSkipOnCollisionResolver(),
+        },
     });
 }

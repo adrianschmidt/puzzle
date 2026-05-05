@@ -122,6 +122,86 @@ export function createTabCollisionDetector(
 }
 
 /**
+ * Proximity-based collision detector (issue #218).
+ *
+ * Returns true when the proposed curve passes within `minDistance` of any
+ * other curve, even if they never cross. Useful for preventing slivers of
+ * material between cuts that are too thin to form a sound piece edge.
+ *
+ * Implementation: samples the proposed curve densely and projects each
+ * sample onto every other curve via `nearestT`, tracking the minimum
+ * distance. Because intersection is the limit case of proximity
+ * (distance = 0), this detector also catches actual crossings.
+ *
+ * The parent curve (at `selfIndex`) is deliberately excluded: a tab always
+ * touches its parent at the splice points by construction, so a proximity
+ * check against it would fire unconditionally. Self-crossings elsewhere on
+ * the parent are still covered by the default tab collision detector
+ * (issue #222).
+ */
+export function createProximityCollisionDetector(
+    minDistance: number,
+    samplesPerSegment = 16,
+): CollisionDetector {
+    return {
+        hasCollision(proposed, existing, selfIndex) {
+            const samples = proposed.sample(samplesPerSegment);
+            const propBox = proposed.bbox;
+
+            for (let i = 0; i < existing.length; i++) {
+                if (i === selfIndex) continue;
+                const other = existing[i];
+
+                // Whole-curve bbox prefilter: if the two curves' boxes are
+                // further apart than `minDistance`, no sample can possibly
+                // be within range — skip this curve entirely. This is the
+                // big win; most existing curves are nowhere near the tab.
+                const otherBox = other.bbox;
+                const gapX = Math.max(
+                    propBox.minX - otherBox.maxX,
+                    0,
+                    otherBox.minX - propBox.maxX,
+                );
+                const gapY = Math.max(
+                    propBox.minY - otherBox.maxY,
+                    0,
+                    otherBox.minY - propBox.maxY,
+                );
+                if (Math.sqrt(gapX * gapX + gapY * gapY) >= minDistance) {
+                    continue;
+                }
+
+                for (const p of samples) {
+                    if (other.minDistanceFrom(p, minDistance) < minDistance) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        },
+    };
+}
+
+/**
+ * Combine multiple collision detectors into one. The composite reports a
+ * collision as soon as any wrapped detector does and short-circuits the
+ * rest. Useful when different detectors catch different classes of problem
+ * (e.g. intersection + proximity).
+ */
+export function createCompositeCollisionDetector(
+    detectors: CollisionDetector[],
+): CollisionDetector {
+    return {
+        hasCollision(proposed, existing, selfIndex) {
+            for (const d of detectors) {
+                if (d.hasCollision(proposed, existing, selfIndex)) return true;
+            }
+            return false;
+        },
+    };
+}
+
+/**
  * Default conflict resolver: skip the tab when a collision is detected.
  * The original (flat) segment is kept instead.
  */

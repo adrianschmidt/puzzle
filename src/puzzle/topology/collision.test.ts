@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
     createTabCollisionDetector,
+    createProximityCollisionDetector,
+    createCompositeCollisionDetector,
     createSkipOnCollisionResolver,
     detectExcessIntersections,
 } from './collision.js';
@@ -151,6 +153,118 @@ describe('createTabCollisionDetector', () => {
 
         const collides = detector.hasCollision(tabCurve, [parentCurve], 0);
         expect(collides).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// createProximityCollisionDetector
+// ---------------------------------------------------------------------------
+
+describe('createProximityCollisionDetector', () => {
+    it('returns false when proposed tab is far from every other curve', () => {
+        // Tab curve (a small arc) well above all other curves.
+        const proposed = Curve.fromBezierPath([
+            { x: 40, y: 100 }, { x: 50, y: 60 },
+            { x: 70, y: 60 }, { x: 80, y: 100 },
+        ]);
+        // Other curve is 50px away — nowhere near the 5px threshold.
+        const other = Curve.line({ x: 0, y: 150 }, { x: 200, y: 150 });
+
+        const detector = createProximityCollisionDetector(5);
+        // selfIndex = -1 means no curve is the parent (standalone tab).
+        expect(detector.hasCollision(proposed, [other], -1)).toBe(false);
+    });
+
+    it('returns true when the proposed tab comes within minDistance of another curve (no intersection)', () => {
+        // A cubic Bézier arc dipping toward y=95 (its peak, computed at
+        // t=0.5 for the symmetric control polygon below). A second line
+        // sits at y=100 running parallel underneath — closest approach
+        // ≈ 5 pixels and the two curves never actually cross.
+        const proposed = Curve.fromBezierPath([
+            { x: 40, y: 50 }, { x: 50, y: 110 },
+            { x: 70, y: 110 }, { x: 80, y: 50 },
+        ]);
+        const neighbour = Curve.line({ x: 0, y: 100 }, { x: 200, y: 100 });
+
+        // Sanity: no actual intersection.
+        expect(proposed.intersect(neighbour)).toHaveLength(0);
+
+        const detector = createProximityCollisionDetector(10);
+        expect(detector.hasCollision(proposed, [neighbour], -1)).toBe(true);
+    });
+
+    it('returns false when the gap is larger than minDistance', () => {
+        // Same geometry as above but with a smaller threshold.
+        const proposed = Curve.fromBezierPath([
+            { x: 40, y: 50 }, { x: 50, y: 110 },
+            { x: 70, y: 110 }, { x: 80, y: 50 },
+        ]);
+        const neighbour = Curve.line({ x: 0, y: 100 }, { x: 200, y: 100 });
+
+        const detector = createProximityCollisionDetector(2);
+        expect(detector.hasCollision(proposed, [neighbour], -1)).toBe(false);
+    });
+
+    it('reports intersections as proximity collisions (distance 0)', () => {
+        // Two crossing lines — a proximity detector at any positive
+        // threshold should fire because their minimum distance is zero.
+        const proposed = Curve.line({ x: 0, y: 0 }, { x: 100, y: 100 });
+        const crossing = Curve.line({ x: 0, y: 100 }, { x: 100, y: 0 });
+
+        const detector = createProximityCollisionDetector(1);
+        expect(detector.hasCollision(proposed, [crossing], -1)).toBe(true);
+    });
+
+    it('ignores the parent curve (selfIndex)', () => {
+        // A tab on a straight edge is always within 0 pixels of its
+        // parent at the splice points. The parent must be skipped so
+        // that property doesn't produce false positives.
+        const edge = Curve.line({ x: 0, y: 100 }, { x: 200, y: 100 });
+        const prepared = prepareTab(
+            edge, 0.5, true, triangleTabTemplate, seededRandom(42),
+        );
+        expect(prepared).not.toBeNull();
+
+        const detector = createProximityCollisionDetector(10);
+        // selfIndex = 0 → the edge IS the parent → skip it.
+        expect(
+            detector.hasCollision(prepared!.tabCurve, [edge], 0),
+        ).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// createCompositeCollisionDetector
+// ---------------------------------------------------------------------------
+
+describe('createCompositeCollisionDetector', () => {
+    const noColl: CollisionDetector = { hasCollision: () => false };
+    const yesColl: CollisionDetector = { hasCollision: () => true };
+    const dummyCurve = Curve.line({ x: 0, y: 0 }, { x: 1, y: 1 });
+
+    it('returns false when every detector reports no collision', () => {
+        const composite = createCompositeCollisionDetector([noColl, noColl]);
+        expect(composite.hasCollision(dummyCurve, [], -1)).toBe(false);
+    });
+
+    it('returns true when any detector reports a collision', () => {
+        const composite = createCompositeCollisionDetector([noColl, yesColl]);
+        expect(composite.hasCollision(dummyCurve, [], -1)).toBe(true);
+    });
+
+    it('short-circuits after the first true result', () => {
+        let secondCalled = false;
+        const tracker: CollisionDetector = {
+            hasCollision() { secondCalled = true; return false; },
+        };
+        const composite = createCompositeCollisionDetector([yesColl, tracker]);
+        composite.hasCollision(dummyCurve, [], -1);
+        expect(secondCalled).toBe(false);
+    });
+
+    it('returns false for an empty detector list', () => {
+        const composite = createCompositeCollisionDetector([]);
+        expect(composite.hasCollision(dummyCurve, [], -1)).toBe(false);
     });
 });
 
