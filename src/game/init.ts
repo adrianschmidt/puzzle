@@ -43,7 +43,7 @@ export interface InitOptions {
      * random rotation in {0,1,2,3} so the player must solve orientation
      * as well as position.
      */
-    rotationMode?: 'none' | 'quarter-turn';
+    rotationMode?: 'none' | 'quarter-turn' | 'free';
 }
 
 /**

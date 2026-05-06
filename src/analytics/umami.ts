@@ -30,7 +30,7 @@ const DEFAULT_SCRIPT_URL = 'https://cloud.umami.is/script.js';
 export interface NewGameData {
     source: 'fresh' | 'shared';
     cutStyle: string;
-    rotationMode: 'none' | 'quarter-turn';
+    rotationMode: 'none' | 'quarter-turn' | 'free';
     cols: number;
     rows: number;
     pieceCount: number;

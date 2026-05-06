@@ -63,7 +63,7 @@ describe('computeMergedOffsets', () => {
     });
 });
 
-function fresh(seed: number, rotationMode: 'none' | 'quarter-turn' = 'none'): GameState {
+function fresh(seed: number, rotationMode: 'none' | 'quarter-turn' | 'free' = 'none'): GameState {
     return createNewGame(
         'blank',
         { width: 400, height: 300 },
