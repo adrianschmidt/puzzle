@@ -765,7 +765,8 @@ const rotateButtons = createRotateButtons({
         const group = gameState.groupsById.get(groupId);
         if (!group) return;
 
-        rotateGroup(group, gameState.piecesById, direction);
+        const deltaDeg = direction === 'cw' ? 90 : -90;
+        rotateGroup(group, gameState.piecesById, deltaDeg);
 
         renderer.renderState(gameState);
         // Re-apply selection visuals after re-render (rotation re-renders the group).

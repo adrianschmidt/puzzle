@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRotateButtons } from './rotate-buttons.js';
 import { RotationFocus } from '../interaction/rotation-focus.js';
-import type { RotationDirection } from '../game/rotate-group.js';
+import type { RotationDirection } from './rotate-buttons.js';
 
 type Bounds = { left: number; right: number; top: number; bottom: number };
 
