@@ -8,7 +8,16 @@
  */
 
 import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
-import { getBorderEdges, getWorldPosition, tryGetGroup } from '../model/helpers.js';
+import {
+    getBorderEdges,
+    getWorldPosition,
+    localToWorld,
+    normaliseDegrees,
+    rotatePoint,
+    signedAngularDelta,
+    tryGetGroup,
+} from '../model/helpers.js';
+import { getGroupLocalBounds } from './group-bounds.js';
 
 /**
  * Tolerance in pixels for edge alignment.
@@ -16,6 +25,21 @@ import { getBorderEdges, getWorldPosition, tryGetGroup } from '../model/helpers.
  * this threshold, the pieces are considered aligned and will merge.
  */
 export const MERGE_TOLERANCE_PX = 18;
+
+/**
+ * Maximum angular misalignment (degrees) at which two groups can still
+ * merge. In quarter-turn mode the rotations are always exactly equal, so
+ * the tolerance is a no-op; in free mode it gives the player ±10° of
+ * slop on rotation.
+ */
+export const MERGE_ROTATION_TOLERANCE_DEG = 10;
+
+/**
+ * Float-comparison epsilon (degrees) for "is this rotation delta effectively
+ * zero?" checks — used by callers that want to short-circuit no-op rotation
+ * snaps when group rotations match within float jitter.
+ */
+export const SNAP_EPSILON_DEG = 1e-9;
 
 /**
  * A detected merge candidate: two groups whose edges are close enough.
@@ -38,6 +62,73 @@ export interface MergeCandidate {
      * into perfect alignment with the target group for this edge pair.
      */
     snapDelta: Point;
+}
+
+/**
+ * Per-snap, per-group cached quantities for `getWorldPositionAfterRotationSnap`.
+ * Independent of which point on which piece we're projecting, so we build
+ * it once per `checkEdgeAlignment` call and reuse it for both endpoints.
+ *
+ * `null` means the rotation delta is below `SNAP_EPSILON_DEG` and callers
+ * can take the no-snap fast path.
+ */
+interface RotationSnapContext {
+    /** Bbox centre in un-rotated local space — the rotation pivot. */
+    centreLocal: Point;
+    /** World-space pivot, fixed during the snap. */
+    worldCentre: Point;
+    /** Group rotation after applying the snap delta, normalised to [0, 360). */
+    newRotation: number;
+}
+
+function buildRotationSnapContext(
+    group: PieceGroup,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
+    extraDeg: number,
+): RotationSnapContext | null {
+    if (Math.abs(extraDeg) < SNAP_EPSILON_DEG) return null;
+    const bounds = getGroupLocalBounds(group, piecesById);
+    const centreLocal = {
+        x: bounds.minX + bounds.width / 2,
+        y: bounds.minY + bounds.height / 2,
+    };
+    return {
+        centreLocal,
+        worldCentre: localToWorld(centreLocal, group),
+        newRotation: normaliseDegrees(group.rotation + extraDeg),
+    };
+}
+
+/**
+ * World position of a piece-local point AS IF the group had been rotated
+ * by `extraDeg` around its bbox centre — the way `rotateGroup` performs a
+ * rotation snap. For a null `snapCtx` (caller saw `extraDeg ≈ 0`) this
+ * collapses to the existing `getWorldPosition` path, so quarter-turn-mode
+ * merges are unaffected.
+ */
+function getWorldPositionAfterRotationSnap(
+    pieceLocal: Point,
+    pieceId: number,
+    group: PieceGroup,
+    snapCtx: RotationSnapContext | null,
+): Point {
+    if (snapCtx === null) {
+        return getWorldPosition(pieceLocal, pieceId, group);
+    }
+
+    const offset = group.pieces.get(pieceId);
+    if (!offset) throw new Error(`Piece ${pieceId} not in group ${group.id}`);
+    const localInGroup = { x: offset.x + pieceLocal.x, y: offset.y + pieceLocal.y };
+
+    const offsetFromCentre = {
+        x: localInGroup.x - snapCtx.centreLocal.x,
+        y: localInGroup.y - snapCtx.centreLocal.y,
+    };
+    const rotated = rotatePoint(offsetFromCentre, snapCtx.newRotation);
+    return {
+        x: snapCtx.worldCentre.x + rotated.x,
+        y: snapCtx.worldCentre.y + rotated.y,
+    };
 }
 
 /**
@@ -67,19 +158,31 @@ export function checkEdgeAlignment(
     targetPiece: Piece,
     targetEdge: Edge,
     targetGroup: PieceGroup,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
     tolerance: number = MERGE_TOLERANCE_PX,
 ): { aligned: boolean; snapDelta: Point } {
-    // Two groups can only mate when rotated by the same amount.
-    // Without this gate, a 90°-rotated piece's edge endpoints happen to
-    // coincide with its unrotated neighbour's at symmetry points, which
-    // would let visibly mis-oriented pieces snap.
-    if (movedGroup.rotation !== targetGroup.rotation) {
+    // Two groups can only mate when their rotations are close enough.
+    // Exact equality is no longer required: in free-rotation mode a ±10°
+    // window lets the player land near the correct orientation and still
+    // trigger a merge. In quarter-turn mode the delta is always 0, so
+    // the tolerance is a no-op and behaviour is unchanged.
+    const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
+    if (Math.abs(rotDelta) > MERGE_ROTATION_TOLERANCE_DEG) {
         return { aligned: false, snapDelta: { x: 0, y: 0 } };
     }
 
-    // World positions of the moved edge endpoints
-    const movedStart = getWorldPosition(movedEdge.start, movedPiece.id, movedGroup);
-    const movedEnd = getWorldPosition(movedEdge.end, movedPiece.id, movedGroup);
+    // Simulate the rotation snap before measuring position alignment.
+    // This ensures the snap delta accounts for both the rotation correction
+    // and the position correction in one step. Build the snap context once
+    // and reuse it for both endpoints so we don't re-traverse the moved
+    // group's bbox for every call.
+    const snapCtx = buildRotationSnapContext(movedGroup, piecesById, rotDelta);
+    const movedStart = getWorldPositionAfterRotationSnap(
+        movedEdge.start, movedPiece.id, movedGroup, snapCtx,
+    );
+    const movedEnd = getWorldPositionAfterRotationSnap(
+        movedEdge.end, movedPiece.id, movedGroup, snapCtx,
+    );
 
     // World positions of the target edge endpoints
     // Mate edges run in opposite directions: start↔end are swapped
@@ -139,6 +242,7 @@ export function detectMerges(
             border.matePiece,
             border.mateEdge,
             border.mateGroup,
+            state.piecesById,
             tolerance,
         );
 
