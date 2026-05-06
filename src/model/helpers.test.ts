@@ -6,6 +6,7 @@ import {
     getWorldPosition,
     localToWorld,
     moveGroup,
+    normaliseDegrees,
     normaliseQuarterTurns,
     rotatePoint,
 } from './helpers.js';
@@ -357,5 +358,22 @@ describe('getWorldPosition', () => {
         };
 
         expect(getWorldPosition({ x: 0, y: 0 }, 5, g)).toEqual({ x: 40, y: 50 });
+    });
+});
+
+describe('normaliseDegrees', () => {
+    it('returns values in [0, 360) for any input', () => {
+        expect(normaliseDegrees(0)).toBe(0);
+        expect(normaliseDegrees(90)).toBe(90);
+        expect(normaliseDegrees(360)).toBe(0);
+        expect(normaliseDegrees(720)).toBe(0);
+        expect(normaliseDegrees(-90)).toBe(270);
+        expect(normaliseDegrees(-450)).toBe(270);
+    });
+
+    it('preserves fractional values', () => {
+        expect(normaliseDegrees(47.3)).toBeCloseTo(47.3);
+        expect(normaliseDegrees(360.5)).toBeCloseTo(0.5);
+        expect(normaliseDegrees(-0.5)).toBeCloseTo(359.5);
     });
 });

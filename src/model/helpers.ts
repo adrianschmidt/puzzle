@@ -192,6 +192,16 @@ export function normaliseQuarterTurns(q: number): 0 | 1 | 2 | 3 {
 }
 
 /**
+ * Normalise an unbounded degrees value into the range [0, 360).
+ *
+ * Accepts negative or large positive inputs and returns a non-negative
+ * value strictly less than 360. Preserves fractional precision.
+ */
+export function normaliseDegrees(deg: number): number {
+    return ((deg % 360) + 360) % 360;
+}
+
+/**
  * Project a point from a group's un-rotated local space into world space.
  *
  * Applies `group.rotation` around the group's own origin, then translates
