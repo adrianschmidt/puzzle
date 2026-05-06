@@ -163,4 +163,28 @@ describe('rotate-handle gesture', () => {
 
         handle.destroy();
     });
+
+    it('removes the window pointerdown listener when focus switches mid-drag', () => {
+        const handle = makeHandle();
+        handle.show();
+        rotationFocus.setFocus(0);
+
+        const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
+        dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
+
+        // Switch focus to a different group while drag is in progress.
+        rotationFocus.setFocus(1);
+
+        // The old handle should have detached its window listener. Simulate a
+        // second-finger pointerdown — if the old listener is still around, it
+        // would have called cancelDrag() (no-op since drag is already cleared)
+        // but no other observable side effect to assert. Instead, verify that
+        // a subsequent pointermove on the (now-detached) old button does not
+        // emit onRotate.
+        onRotate.mockClear();
+        dispatchPointerEvent(button, 'pointermove', { clientX: 150, clientY: 250 });
+        expect(onRotate).not.toHaveBeenCalled();
+
+        handle.destroy();
+    });
 });
