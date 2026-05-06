@@ -144,12 +144,13 @@ export interface GameState {
      * How (or whether) groups in this puzzle can be rotated by the player.
      *
      * - `'none'`: rotation is disabled; all groups stay at rotation 0.
-     * - `'quarter-turn'`: 90° snapped rotation via toolbar buttons.
+     * - `'quarter-turn'`: 90°-snapped rotation via toolbar buttons.
+     * - `'free'`: continuous rotation via a drag handle. Merge alignment
+     *   tolerates ±10° angular misalignment.
      *
-     * Future modes (e.g. `'free'` for arbitrary angles) slot in here without
-     * a schema break. Defaults to `'none'` when absent.
+     * Defaults to `'none'` when absent.
      */
-    rotationMode?: 'none' | 'quarter-turn';
+    rotationMode?: 'none' | 'quarter-turn' | 'free';
     /**
      * Composable-cut config (only set when cutStyle === 'composable').
      *

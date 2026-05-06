@@ -67,7 +67,7 @@ export interface SerializedGameState {
      * the rotation-mode field was added — those are migrated on load based on
      * cut style.
      */
-    rotationMode?: 'none' | 'quarter-turn';
+    rotationMode?: 'none' | 'quarter-turn' | 'free';
     /**
      * Composable-cut config (v8+; only set when cutStyle === 'composable').
      */
@@ -276,8 +276,12 @@ function resolveFractalConfig(
 function resolveRotationMode(
     data: SerializedGameState,
     groups: PieceGroup[],
-): 'none' | 'quarter-turn' {
-    if (data.rotationMode === 'quarter-turn' || data.rotationMode === 'none') {
+): 'none' | 'quarter-turn' | 'free' {
+    if (
+        data.rotationMode === 'quarter-turn' ||
+        data.rotationMode === 'none' ||
+        data.rotationMode === 'free'
+    ) {
         return data.rotationMode;
     }
 

@@ -25,7 +25,7 @@ export interface SharePayload {
     /** PRNG seed. */
     s: number;
     /** Rotation mode. */
-    r: 'none' | 'quarter-turn';
+    r: 'none' | 'quarter-turn' | 'free';
     /** Composable-cut config. */
     cf?: { ha: number; hf: number; va: number; vf: number; dt: boolean };
     /** Fractal-cut config. */
@@ -96,7 +96,7 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (!isTuple2Number(p.g)) return false;
     if (p.c !== 'classic' && p.c !== 'fractal' && p.c !== 'composable') return false;
     if (typeof p.s !== 'number') return false;
-    if (p.r !== 'none' && p.r !== 'quarter-turn') return false;
+    if (p.r !== 'none' && p.r !== 'quarter-turn' && p.r !== 'free') return false;
     return true;
 }
 

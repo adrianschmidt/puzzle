@@ -619,7 +619,7 @@ async function startNewGame(
             }
         }
 
-        const rotationMode: 'none' | 'quarter-turn' = rotationEnabled
+        const rotationMode: 'none' | 'quarter-turn' | 'free' = rotationEnabled
             ? 'quarter-turn'
             : 'none';
 
