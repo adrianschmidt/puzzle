@@ -93,7 +93,8 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
 
     // Push each reconstructed merged group.
     reconstructed.forEach((offsets, idx) => {
-        const rotation = (progress.mr?.[idx] ?? 0) as 0 | 1 | 2 | 3;
+        // Wire format is quarter-turn integer (v: 1); convert to degrees.
+        const rotation = (progress.mr?.[idx] ?? 0) * 90;
         const group: PieceGroup = {
             id: idCursor++,
             pieces: offsets,
@@ -112,7 +113,8 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
     if (progress.sr && progress.sr.length >= 2) {
         for (let i = 0; i + 1 < progress.sr.length; i += 2) {
             const pid = progress.sr[i];
-            const rot = progress.sr[i + 1] as 0 | 1 | 2 | 3;
+            // Wire format is quarter-turn integer (v: 1); convert to degrees.
+            const rot = (progress.sr[i + 1] ?? 0) * 90;
             const g = state.pieceToGroup.get(pid);
             if (g && g.pieces.size === 1) g.rotation = rot;
         }

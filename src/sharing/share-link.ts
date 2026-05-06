@@ -189,13 +189,17 @@ function extractProgress(state: GameState): SharePayload['pr'] | null {
     const pr: NonNullable<SharePayload['pr']> = { m };
 
     if (state.rotationMode === 'quarter-turn') {
-        pr.mr = merged.map((g) => g.rotation);
+        // Wire format for v: 1 share links is quarter-turn integers 0..3,
+        // matching what existing shared URLs in the wild encode. The internal
+        // representation switched to degrees in the rotation-as-degrees
+        // refactor, so we divide by 90 here.
+        pr.mr = merged.map((g) => Math.round(g.rotation / 90));
         const sr: number[] = [];
         for (const g of state.groups) {
             if (g.pieces.size !== 1) continue;
             if (g.rotation === 0) continue;
             const [pieceId] = g.pieces.keys();
-            sr.push(pieceId, g.rotation);
+            sr.push(pieceId, Math.round(g.rotation / 90));
         }
         if (sr.length > 0) pr.sr = sr;
     }

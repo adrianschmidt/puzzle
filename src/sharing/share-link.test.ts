@@ -309,9 +309,9 @@ describe('gameStateToPayload', () => {
             rotationMode: 'quarter-turn',
             groups: [
                 { id: 7, pieces: new Map([[5, { x: 0, y: 0 }], [6, { x: 0, y: 0 }]]),
-                  position: { x: 0, y: 0 }, rotation: 3 },
+                  position: { x: 0, y: 0 }, rotation: 270 },
                 { id: 3, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 0, y: 0 }]]),
-                  position: { x: 0, y: 0 }, rotation: 1 },
+                  position: { x: 0, y: 0 }, rotation: 90 },
             ],
         });
         const payload = gameStateToPayload(state, { includeProgress: true });
@@ -335,9 +335,9 @@ describe('gameStateToPayload', () => {
             rotationMode: 'quarter-turn',
             groups: [
                 { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
-                  position: { x: 0, y: 0 }, rotation: 2 },
+                  position: { x: 0, y: 0 }, rotation: 180 },
                 { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]),
-                  position: { x: 0, y: 0 }, rotation: 1 },
+                  position: { x: 0, y: 0 }, rotation: 90 },
                 { id: 3, pieces: new Map([[3, { x: 0, y: 0 }]]),
                   position: { x: 0, y: 0 }, rotation: 0 },
             ],
