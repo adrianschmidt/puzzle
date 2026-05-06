@@ -123,6 +123,21 @@ describe('SvgDomRenderer', () => {
             expect(groupEl.style.transform).toBe('translate(50px, 50px) rotate(0deg)');
         });
 
+        it('renders a group at non-zero degree rotation', () => {
+            renderer.init(container);
+            const state = make2x2State();
+            state.groups[0] = { ...state.groups[0], rotation: 90 };
+
+            renderer.renderState(state);
+
+            const groupEl = container.querySelector(
+                '[data-group-id="0"]',
+            ) as HTMLElement;
+            expect(groupEl).not.toBeNull();
+            expect(groupEl.style.transform).toContain('rotate(90deg)');
+            expect(groupEl.style.transform).not.toContain('rotate(8100deg)');
+        });
+
         it('each piece SVG has a clip-path in its defs', () => {
             renderer.init(container);
             const state = make2x2State();

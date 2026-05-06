@@ -241,7 +241,7 @@ export class SvgDomRenderer implements Renderer {
             this.groupElements.set(group.id, groupEl);
         }
 
-        const rotateDeg = group.rotation * 90;
+        const rotateDeg = group.rotation;
         groupEl.style.transformOrigin = '0 0';
         groupEl.style.transform =
             `translate(${group.position.x}px, ${group.position.y}px) rotate(${rotateDeg}deg)`;
