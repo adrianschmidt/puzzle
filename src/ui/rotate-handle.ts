@@ -304,6 +304,7 @@ export function createRotateHandle(
     }
 
     function startQuickFadeOut(handle: ActiveHandle): void {
+        handle.cancelDrag();
         cancelRemoval(handle);
         if (handle.idleTimerId !== null) {
             clearTimeout(handle.idleTimerId);
