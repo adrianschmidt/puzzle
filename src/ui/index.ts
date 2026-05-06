@@ -54,6 +54,12 @@ export type {
     RotateButtonsHandle,
 } from './rotate-buttons.js';
 
+export { createRotateHandle } from './rotate-handle.js';
+export type {
+    RotateHandleOptions,
+    RotateHandleHandle,
+} from './rotate-handle.js';
+
 export {
     createAttributionElement,
     removeAttribution,
