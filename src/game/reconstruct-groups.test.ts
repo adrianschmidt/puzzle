@@ -92,7 +92,7 @@ describe('applyProgress', () => {
         const ok = applyProgress(state, { m: [[0, 1]], mr: [2] });
         expect(ok).toBe(true);
         const merged = state.groups.find((g) => g.pieces.size === 2);
-        expect(merged!.rotation).toBe(2);
+        expect(merged!.rotation).toBe(180);
     });
 
     it('restores solo-piece rotations from sr', () => {
@@ -104,8 +104,8 @@ describe('applyProgress', () => {
         expect(ok).toBe(true);
         const soloFor = (pid: number) =>
             state.groups.find((g) => g.pieces.size === 1 && g.pieces.has(pid))!;
-        expect(soloFor(2).rotation).toBe(1);
-        expect(soloFor(5).rotation).toBe(3);
+        expect(soloFor(2).rotation).toBe(90);
+        expect(soloFor(5).rotation).toBe(270);
     });
 
     it('returns false if any group references a missing piece id', () => {
