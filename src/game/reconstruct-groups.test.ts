@@ -108,6 +108,57 @@ describe('applyProgress', () => {
         expect(soloFor(5).rotation).toBe(270);
     });
 
+    it('restores merged-group rotation in free mode (wire value is degrees, not quarter-turns)', () => {
+        const state = fresh(123, 'free');
+        const ok = applyProgress(state, { m: [[0, 1]], mr: [135] });
+        expect(ok).toBe(true);
+        const merged = state.groups.find((g) => g.pieces.size === 2);
+        expect(merged!.rotation).toBe(135);
+    });
+
+    it('restores solo-piece rotations in free mode from sr', () => {
+        const state = fresh(123, 'free');
+        for (const g of state.groups) g.rotation = 0;
+
+        const ok = applyProgress(state, { m: [], sr: [2, 47, 5, 312] });
+        expect(ok).toBe(true);
+        const soloFor = (pid: number) =>
+            state.groups.find((g) => g.pieces.size === 1 && g.pieces.has(pid))!;
+        expect(soloFor(2).rotation).toBe(47);
+        expect(soloFor(5).rotation).toBe(312);
+    });
+
+    it('normalises out-of-range free-mode mr values into [0, 360)', () => {
+        // The encoder always emits values in [0, 360), but a hand-edited
+        // share link could plant negatives or values ≥ 360. Mirror the
+        // encoder's clamp on read so they don't reach group.rotation.
+        const state = fresh(123, 'free');
+        const ok = applyProgress(state, { m: [[0, 1]], mr: [-90] });
+        expect(ok).toBe(true);
+        const merged = state.groups.find((g) => g.pieces.size === 2);
+        expect(merged!.rotation).toBe(270);
+    });
+
+    it('normalises out-of-range free-mode sr values into [0, 360)', () => {
+        const state = fresh(123, 'free');
+        for (const g of state.groups) g.rotation = 0;
+
+        const ok = applyProgress(state, { m: [], sr: [2, 720, 5, -45] });
+        expect(ok).toBe(true);
+        const soloFor = (pid: number) =>
+            state.groups.find((g) => g.pieces.size === 1 && g.pieces.has(pid))!;
+        expect(soloFor(2).rotation).toBe(0);
+        expect(soloFor(5).rotation).toBe(315);
+    });
+
+    it('quarter-turn mode is unchanged: mr: [2] decodes to 180°', () => {
+        const state = fresh(123, 'quarter-turn');
+        const ok = applyProgress(state, { m: [[0, 1]], mr: [2] });
+        expect(ok).toBe(true);
+        const merged = state.groups.find((g) => g.pieces.size === 2);
+        expect(merged!.rotation).toBe(180);
+    });
+
     it('returns false if any group references a missing piece id', () => {
         const state = fresh(123);
         const ok = applyProgress(state, { m: [[0, 999]] });
