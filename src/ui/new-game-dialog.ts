@@ -40,6 +40,12 @@ export interface NewGameSelection {
     fractalConfig?: FractalDialogConfig;
     /** Whether the player ticked the top-level "Enable rotation" checkbox. */
     rotationEnabled: boolean;
+    /**
+     * True iff cut style is composable AND rotation is enabled AND the user
+     * ticked the free-rotation sub-checkbox. Used by the host to pick
+     * `rotationMode: 'free'` instead of `'quarter-turn'`.
+     */
+    freeRotation: boolean;
     imageSource: string;
     imageCategory: string;
     vibrant: boolean;
@@ -58,6 +64,8 @@ export interface NewGameDialogOptions {
     savedFractalConfig?: FractalDialogConfig;
     /** Previously saved rotation-enabled preference (defaults to false). */
     savedRotationEnabled?: boolean;
+    /** Previously saved free-rotation-enabled preference (defaults to false). */
+    savedFreeRotationEnabled?: boolean;
     /** Previously saved image source preference. */
     savedImageSource?: string;
     /** Previously saved image category preference. */
@@ -421,6 +429,26 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         options.savedRotationEnabled ?? false,
     );
 
+    // Free rotation sub-checkbox — visible only when rotation is enabled AND
+    // the cut style is composable. State persists across visibility toggles.
+    const freeRotationRow = document.createElement('div');
+    freeRotationRow.className = 'free-rotation-row';
+    const freeRotationCheckbox = appendCheckboxRow(
+        freeRotationRow,
+        'Free rotation',
+        options.savedFreeRotationEnabled ?? false,
+    );
+
+    function updateFreeRotationVisibility(): void {
+        const visible =
+            rotationCheckbox.checked &&
+            currentCutStyleIndex === composableCutIndex;
+        freeRotationRow.style.display = visible ? 'block' : 'none';
+    }
+
+    rotationCheckbox.addEventListener('change', updateFreeRotationVisibility);
+    updateFreeRotationVisibility();
+
     const sizeSection = buildSizeSection({
         selectedIndex,
         getCutStyleIndex: () => currentCutStyleIndex,
@@ -436,6 +464,10 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
                     ? fractalSection.getValues()
                     : undefined,
                 rotationEnabled: rotationCheckbox.checked,
+                freeRotation:
+                    rotationCheckbox.checked &&
+                    currentCutStyleIndex === composableCutIndex &&
+                    freeRotationCheckbox.checked,
                 ...imageSourceSection.getValues(),
             });
         },
@@ -448,6 +480,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             sizeSection.updateLabels();
             fractalSection.setVisible(index === fractalCutIndex);
             composableSection.setVisible(index === composableCutIndex);
+            updateFreeRotationVisibility();
         },
     });
 
@@ -456,6 +489,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
 
     dialog.appendChild(cutStyleSection);
     dialog.appendChild(rotationRow);
+    dialog.appendChild(freeRotationRow);
     dialog.appendChild(fractalSection.element);
     dialog.appendChild(imageSourceSection.element);
     dialog.appendChild(sizeSection.element);
