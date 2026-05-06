@@ -14,9 +14,11 @@ import {
     normaliseDegrees,
     removeGroup,
     rotatePoint,
+    signedAngularDelta,
 } from '../model/helpers.js';
-import { detectMerges, type MergeCandidate } from './merge-detection.js';
+import { detectMerges, SNAP_EPSILON_DEG, type MergeCandidate } from './merge-detection.js';
 import { shouldSuppressMerge } from './pile-detection.js';
+import { rotateGroup } from './rotate-group.js';
 
 /** Maximum cascade depth to prevent infinite loops in degenerate cases. */
 const MAX_CASCADE_DEPTH = 50;
@@ -54,13 +56,24 @@ export function mergeGroups(
     targetGroup: PieceGroup,
     snapDelta: Point,
 ): PieceGroup {
-    // First, snap the moved group into perfect alignment
+    // Snap the moved group's rotation to the target's first. The pivot is
+    // the moved group's bbox centre (rotateGroup's invariant) — the
+    // snapDelta returned by merge-detection was computed assuming this
+    // snap would happen first.
+    //
+    // For quarter-turn merges the delta is always 0, so this is a no-op
+    // and behaviour is unchanged for classic/composable rotation modes.
+    const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
+    if (Math.abs(rotDelta) > SNAP_EPSILON_DEG) {
+        rotateGroup(movedGroup, state.piecesById, rotDelta);
+    }
+
+    // Then snap position into perfect alignment. Both groups now share the
+    // same rotation, so the local-frame piece-offset rebasing below is correct.
     moveGroup(movedGroup, snapDelta);
 
-    // Both groups share the same rotation (the mate gate ensures this),
-    // so their piece offsets are in the same un-rotated local space.
     // The raw position diff is in world space; inverse-rotate it so the
-    // offsets we add to each piece are in that same local space.
+    // offsets we add to each piece are in the target group's un-rotated local space.
     const rawDiff: Point = {
         x: movedGroup.position.x - targetGroup.position.x,
         y: movedGroup.position.y - targetGroup.position.y,
