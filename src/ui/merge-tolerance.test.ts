@@ -11,6 +11,7 @@ import {
     saveTolerancePreference,
     loadTolerancePreference,
     getActiveTolerance,
+    getActiveRotationTolerance,
     getSortedPresets,
     getReferencePieceWidth,
     getStyleSnapMultiplier,
@@ -26,11 +27,12 @@ describe('merge-tolerance', () => {
             expect(MERGE_TOLERANCE_PRESETS.length).toBeGreaterThanOrEqual(3);
         });
 
-        it('each preset has a label, description, fraction, and displayOrder', () => {
+        it('each preset has a label, description, fraction, rotationDegrees, and displayOrder', () => {
             for (const preset of MERGE_TOLERANCE_PRESETS) {
                 expect(preset.label).toBeTruthy();
                 expect(preset.description).toBeTruthy();
                 expect(preset.fraction).toBeGreaterThan(0);
+                expect(preset.rotationDegrees).toBeGreaterThan(0);
                 expect(typeof preset.displayOrder).toBe('number');
             }
         });
@@ -51,6 +53,18 @@ describe('merge-tolerance', () => {
             expect(MERGE_TOLERANCE_PRESETS[DEFAULT_TOLERANCE_INDEX].label).toBe(
                 'Normal',
             );
+        });
+
+        it('Strict preset has rotationDegrees = 10', () => {
+            expect(MERGE_TOLERANCE_PRESETS[0].rotationDegrees).toBe(10);
+        });
+
+        it('Forgiving preset has rotationDegrees = 40', () => {
+            expect(MERGE_TOLERANCE_PRESETS[1].rotationDegrees).toBe(40);
+        });
+
+        it('Normal preset has rotationDegrees = 20', () => {
+            expect(MERGE_TOLERANCE_PRESETS[2].rotationDegrees).toBe(20);
         });
     });
 
@@ -180,6 +194,28 @@ describe('merge-tolerance', () => {
             const classic = getActiveTolerance(1080, 8, 'classic');
             const fractal = getActiveTolerance(1080, 8, 'fractal');
             expect(classic).toBe(fractal);
+        });
+    });
+
+    describe('getActiveRotationTolerance', () => {
+        it('returns 20 for the default Normal preset', () => {
+            // Default index is Normal (2), rotationDegrees = 20
+            expect(getActiveRotationTolerance()).toBe(20);
+        });
+
+        it('returns 10 for the Strict preset', () => {
+            saveTolerancePreference(0);
+            expect(getActiveRotationTolerance()).toBe(10);
+        });
+
+        it('returns 40 for the Forgiving preset', () => {
+            saveTolerancePreference(1);
+            expect(getActiveRotationTolerance()).toBe(40);
+        });
+
+        it('returns Normal value after round-trip save/load', () => {
+            saveTolerancePreference(2); // Normal
+            expect(getActiveRotationTolerance()).toBe(20);
         });
     });
 });
