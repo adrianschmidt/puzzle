@@ -71,16 +71,18 @@ export interface PieceGroup {
     /** The group's position in world (table) coordinates. */
     position: Point;
     /**
-     * Rotation in quarter-turns clockwise (0, 1, 2, 3).
+     * Rotation in float degrees, normalised to `[0, 360)`.
      *
-     * Applied to the group's local-space geometry at render time
-     * and during world-position lookups. Piece offsets and edge
-     * endpoints stay in un-rotated local coordinates.
+     * Quarter-turn-mode puzzles store one of `{0, 90, 180, 270}`; free-mode
+     * puzzles store any float in the range. Applied to the group's local
+     * geometry at render time and during world-position lookups. Piece
+     * offsets and edge endpoints stay in un-rotated local coordinates.
      *
-     * Only surfaces in the UI for puzzle styles that enable it
-     * (currently Fractal); classic-style groups always have 0.
+     * Surfaces in the UI for puzzle styles that enable rotation (currently
+     * any cut style with `rotationMode !== 'none'`); puzzles with
+     * `rotationMode === 'none'` always have 0.
      */
-    rotation: 0 | 1 | 2 | 3;
+    rotation: number;
 }
 
 /**
