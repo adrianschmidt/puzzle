@@ -327,6 +327,54 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         expect(result.snapDelta.y).toBeCloseTo(0, 1);
     });
 
+    it('rejects a 15° delta with default tolerance but accepts with rotationTolerance=20', () => {
+        // rotDelta = signedAngularDelta(0, 15) = -15°
+        //
+        // worldCentre of group0 = rotatePoint({50,50}, 15°):
+        //   cos(15°)≈0.9659, sin(15°)≈0.2588
+        //   x = 50*0.9659 - 50*0.2588 ≈ 35.36
+        //   y = 50*0.2588 + 50*0.9659 ≈ 61.24
+        //
+        // After -15° snap of group0 (newRotation=0°), movedEdge.start={100,0}:
+        //   offsetFromCentre = {50,-50}, rotated by 0° = {50,-50}
+        //   world = {35.36+50, 61.24-50} = {85.36, 11.24}
+        //
+        // targetEdge.end={0,0}, group1 at pos=(85.36,11.24), rot=0° → targetEnd=(85.36,11.24) ✓
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+        const piecesById = new Map([[0, piece0], [1, piece1]]);
+
+        const group0: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 0 },
+            rotation: 15,
+        };
+        const group1: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 85.36, y: 11.24 },
+            rotation: 0,
+        };
+
+        // 15° > 10° default → rejected with default rotationTolerance
+        const rejectedResult = checkEdgeAlignment(
+            piece0, rightEdge, group0,
+            piece1, leftEdge, group1,
+            piecesById,
+        );
+        expect(rejectedResult.aligned).toBe(false);
+
+        // 15° < 20° → accepted when rotationTolerance=20 is passed
+        const acceptedResult = checkEdgeAlignment(
+            piece0, rightEdge, group0,
+            piece1, leftEdge, group1,
+            piecesById,
+            MERGE_TOLERANCE_PX,
+            20,
+        );
+        expect(acceptedResult.aligned).toBe(true);
+    });
+
     it('accepts pairs whose rotations match exactly (quarter-turn parity)', () => {
         // Both at rotation=90°. rotDelta=0, so getWorldPositionAfterRotationSnap
         // collapses to getWorldPosition — identical to pre-T4 behaviour.

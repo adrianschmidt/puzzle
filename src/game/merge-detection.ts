@@ -27,10 +27,10 @@ import { getGroupLocalBounds } from './group-bounds.js';
 export const MERGE_TOLERANCE_PX = 18;
 
 /**
- * Maximum angular misalignment (degrees) at which two groups can still
- * merge. In quarter-turn mode the rotations are always exactly equal, so
- * the tolerance is a no-op; in free mode it gives the player ±10° of
- * slop on rotation.
+ * Default angular tolerance (degrees) for free-mode merge alignment.
+ * Equals the Strict preset; Normal and Forgiving presets in
+ * `merge-tolerance.ts` override this via the `rotationTolerance`
+ * parameter on `detectMerges`/`checkEdgeAlignment`.
  */
 export const MERGE_ROTATION_TOLERANCE_DEG = 10;
 
@@ -160,14 +160,15 @@ export function checkEdgeAlignment(
     targetGroup: PieceGroup,
     piecesById: ReadonlyMap<number, Readonly<Piece>>,
     tolerance: number = MERGE_TOLERANCE_PX,
+    rotationTolerance: number = MERGE_ROTATION_TOLERANCE_DEG,
 ): { aligned: boolean; snapDelta: Point } {
     // Two groups can only mate when their rotations are close enough.
-    // Exact equality is no longer required: in free-rotation mode a ±10°
-    // window lets the player land near the correct orientation and still
-    // trigger a merge. In quarter-turn mode the delta is always 0, so
-    // the tolerance is a no-op and behaviour is unchanged.
+    // Exact equality is no longer required: in free-rotation mode the
+    // tolerance window lets the player land near the correct orientation
+    // and still trigger a merge. In quarter-turn mode the delta is always
+    // 0, so the tolerance is a no-op and behaviour is unchanged.
     const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
-    if (Math.abs(rotDelta) > MERGE_ROTATION_TOLERANCE_DEG) {
+    if (Math.abs(rotDelta) > rotationTolerance) {
         return { aligned: false, snapDelta: { x: 0, y: 0 } };
     }
 
@@ -225,6 +226,7 @@ export function detectMerges(
     movedGroupId: number,
     state: GameState,
     tolerance: number = MERGE_TOLERANCE_PX,
+    rotationTolerance: number = MERGE_ROTATION_TOLERANCE_DEG,
 ): MergeCandidate[] {
     const movedGroup = tryGetGroup(state, movedGroupId);
     if (!movedGroup) {
@@ -244,6 +246,7 @@ export function detectMerges(
             border.mateGroup,
             state.piecesById,
             tolerance,
+            rotationTolerance,
         );
 
         if (result.aligned) {

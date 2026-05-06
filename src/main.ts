@@ -29,6 +29,7 @@ import {
     createRotateButtons,
     createRotateHandle,
     getActiveTolerance,
+    getActiveRotationTolerance,
     createAttributionElement,
     removeAttribution,
     createNewGameDialog,
@@ -537,11 +538,12 @@ function initGame(state: GameState): void {
                 gameState.gridSize.cols,
                 gameState.cutStyle,
             );
+            const rotationTolerance = getActiveRotationTolerance();
 
             // Primary dragged group + any selected groups (multi-select mode).
             const droppedGroupIds = [...selectionManager.expandToSelectionIfActive(groupId)];
 
-            const result = processDrop(groupId, gameState, tolerance);
+            const result = processDrop(groupId, gameState, tolerance, rotationTolerance);
             if (result) {
                 applyMergeResult(result, droppedGroupIds);
                 autoSave();
@@ -828,8 +830,9 @@ const rotateHandle = createRotateHandle({
             gameState.gridSize.cols,
             gameState.cutStyle,
         );
+        const rotationTolerance = getActiveRotationTolerance();
 
-        const result = processDrop(groupId, gameState, tolerance);
+        const result = processDrop(groupId, gameState, tolerance, rotationTolerance);
         if (result) {
             applyMergeResult(result, [result.group.id]);
         }

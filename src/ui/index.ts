@@ -103,6 +103,7 @@ export {
     saveTolerancePreference,
     loadTolerancePreference,
     getActiveTolerance,
+    getActiveRotationTolerance,
 } from './merge-tolerance.js';
 export type { MergeTolerancePreset } from './merge-tolerance.js';
 

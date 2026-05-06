@@ -28,6 +28,12 @@ export interface MergeTolerancePreset {
     description: string;
     /** Tolerance as a fraction of the reference piece width. */
     fraction: number;
+    /**
+     * Maximum angular misalignment (in degrees) at which two free-rotation
+     * groups can still merge. In quarter-turn mode the rotations are always
+     * exactly equal, so this value is effectively a no-op there.
+     */
+    rotationDegrees: number;
     /** Sort order for display in the UI (lowest first). */
     displayOrder: number;
 }
@@ -43,18 +49,21 @@ export const MERGE_TOLERANCE_PRESETS: readonly MergeTolerancePreset[] = [
         label: 'Strict',
         description: 'Pieces must be very close to snap',
         fraction: 0.133,
+        rotationDegrees: 10,
         displayOrder: 0,
     },
     {
         label: 'Forgiving',
         description: 'Pieces snap from further away',
         fraction: 0.533,
+        rotationDegrees: 40,
         displayOrder: 2,
     },
     {
         label: 'Normal',
         description: 'Standard snapping distance',
         fraction: 0.333,
+        rotationDegrees: 20,
         displayOrder: 1,
     },
 ] as const;
@@ -153,4 +162,16 @@ export function getActiveTolerance(
     const styleMultiplier = getStyleSnapMultiplier(cutStyle);
 
     return preset.fraction * pieceWidth * styleMultiplier;
+}
+
+/**
+ * Get the current merge rotation tolerance in degrees.
+ *
+ * Read from the same Strict/Normal/Forgiving preset as the position
+ * tolerance, so a single user-facing setting controls both.
+ */
+export function getActiveRotationTolerance(): number {
+    const index = loadTolerancePreference();
+    const preset = getTolerancePreset(index);
+    return preset.rotationDegrees;
 }
