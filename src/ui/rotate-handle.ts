@@ -4,10 +4,11 @@
  * focused group continuously, with the angle from the group's bbox-centre
  * to the pointer kept constant for the duration of the drag.
  *
- * Gesture math is added in T11. This file currently implements the
- * lifecycle / placement / fade scaffolding only — visually the handle
- * appears and disappears in lockstep with `RotationFocus` but does not
- * yet respond to drag.
+ * A `pointerdown` on the button captures the pointer, records the pivot
+ * (group bbox-centre in world space) and initial angle, then emits
+ * `onRotate` with an additive delta on each `pointermove`. `pointerup`
+ * fires `onCommit`; `pointercancel` or a second window `pointerdown`
+ * cancels without committing.
  */
 
 import type { RotationFocus } from '../interaction/rotation-focus.js';
@@ -26,12 +27,12 @@ export interface RotateHandleOptions {
     rotationFocus: RotationFocus;
     /**
      * Emitted continuously during drag; the host applies the rotation
-     * to the live `PieceGroup` and re-renders. Filled in by T11.
+     * to the live `PieceGroup` and re-renders.
      */
     onRotate: (groupId: number, deltaDegrees: number) => void;
     /**
      * Emitted on drag end, after the final `onRotate`. The host runs
-     * merge-detection here. Filled in by T11.
+     * merge-detection here.
      */
     onCommit: (groupId: number) => void;
     /** Project the focused group's visual bounds into screen-space. */
@@ -39,6 +40,12 @@ export interface RotateHandleOptions {
         | { left: number; right: number; top: number; bottom: number }
         | null;
     getViewportSize?: () => { width: number; height: number };
+    /** Current rotation of the focused group, in degrees. */
+    getGroupRotation: (groupId: number) => number | null;
+    /** World position of the focused group's bbox centre. */
+    getGroupPivotWorld: (groupId: number) => { x: number; y: number } | null;
+    /** Convert a screen-space (clientX, clientY) point to world coordinates. */
+    screenToWorld: (clientX: number, clientY: number) => { x: number; y: number };
 }
 
 export interface RotateHandleHandle {
@@ -54,6 +61,8 @@ interface ActiveHandle {
     removalTimerId: ReturnType<typeof setTimeout> | null;
     transitionEndListener: ((e: Event) => void) | null;
     state: 'visible' | 'fade-out-quick' | 'fade-out-slow';
+    cancelDrag: () => void;
+    isDragging: () => boolean;
 }
 
 /**
@@ -120,7 +129,6 @@ export function createRotateHandle(
         getFocusedGroupScreenBounds,
         getViewportSize = defaultViewportSize,
     } = options;
-    void options.onRotate; void options.onCommit; // wired in T11
 
     let shown = false;
     let active: ActiveHandle | null = null;
@@ -152,6 +160,89 @@ export function createRotateHandle(
 
         container.appendChild(button);
 
+        // ── Gesture wiring ────────────────────────────────────────────────
+
+        let drag: {
+            pivot: { x: number; y: number };
+            initialRotation: number;
+            initialAngleRad: number;
+            pointerId: number;
+            extraPointerListener: (e: PointerEvent) => void;
+        } | null = null;
+
+        function finalizeDrag(commit: boolean): void {
+            if (!drag) return;
+            if (button.hasPointerCapture(drag.pointerId)) {
+                button.releasePointerCapture(drag.pointerId);
+            }
+            window.removeEventListener('pointerdown', drag.extraPointerListener, true);
+            const groupIdRef = active?.groupId;
+            drag = null;
+            if (commit && groupIdRef !== undefined) {
+                options.onCommit(groupIdRef);
+            }
+            startIdleTimer();
+        }
+
+        function cancelDrag(): void {
+            finalizeDrag(/* commit */ false);
+        }
+
+        button.addEventListener('pointerdown', (event) => {
+            if (drag !== null) return;
+            const pivot = options.getGroupPivotWorld(groupId);
+            const initialRotation = options.getGroupRotation(groupId);
+            if (!pivot || initialRotation === null) return;
+
+            const Q0 = options.screenToWorld(event.clientX, event.clientY);
+            const initialAngleRad = Math.atan2(Q0.y - pivot.y, Q0.x - pivot.x);
+
+            button.setPointerCapture(event.pointerId);
+
+            // Multi-finger cancel: any subsequent pointerdown anywhere on window
+            // (other than the captured pointer) ends the rotation drag.
+            const extraPointerListener = (e: PointerEvent): void => {
+                if (e.pointerId === event.pointerId) return;
+                cancelDrag();
+            };
+            window.addEventListener('pointerdown', extraPointerListener, true);
+
+            drag = {
+                pivot,
+                initialRotation,
+                initialAngleRad,
+                pointerId: event.pointerId,
+                extraPointerListener,
+            };
+
+            if (active && active.state !== 'visible') rescueActive();
+            clearIdleTimer();
+            event.preventDefault();
+        });
+
+        button.addEventListener('pointermove', (event) => {
+            if (!drag || event.pointerId !== drag.pointerId) return;
+            const Q = options.screenToWorld(event.clientX, event.clientY);
+            const angleRad = Math.atan2(Q.y - drag.pivot.y, Q.x - drag.pivot.x);
+            const deltaDeg = ((angleRad - drag.initialAngleRad) * 180) / Math.PI;
+            const targetRotation = drag.initialRotation + deltaDeg;
+            const currentRotation = options.getGroupRotation(groupId);
+            if (currentRotation === null) return;
+            options.onRotate(groupId, targetRotation - currentRotation);
+        });
+
+        button.addEventListener('pointerup', (event) => {
+            if (!drag || event.pointerId !== drag.pointerId) return;
+            finalizeDrag(/* commit */ true);
+        });
+
+        button.addEventListener('pointercancel', (event) => {
+            if (!drag || event.pointerId !== drag.pointerId) return;
+            finalizeDrag(/* commit */ false);
+        });
+
+        // ── End gesture wiring ────────────────────────────────────────────
+
         // Force a reflow so the browser registers the base-rule opacity:0
         // before the fade-in class lands (mirrors rotate-buttons.ts).
         void button.offsetHeight;
@@ -164,6 +255,8 @@ export function createRotateHandle(
             removalTimerId: null,
             transitionEndListener: null,
             state: 'visible',
+            cancelDrag,
+            isDragging: () => drag !== null,
         };
         startIdleTimer();
     }
@@ -198,6 +291,11 @@ export function createRotateHandle(
 
     function startSlowFadeOut(): void {
         if (!active) return;
+        // Idle timeout should never tear down an in-progress drag. Today the
+        // idle timer is cleared at pointerdown and re-armed at finalize, so
+        // this branch is unreachable; the guard makes the contract explicit
+        // and protects future callers that might re-arm the timer mid-drag.
+        if (active.isDragging()) return;
         clearIdleTimer();
         active.state = 'fade-out-slow';
         active.button.classList.remove('rotate-handle--fade-in');
@@ -254,6 +352,7 @@ export function createRotateHandle(
 
     function teardownActive(): void {
         if (!active) return;
+        active.cancelDrag(); // clean up any in-progress drag before removing the button
         if (active.idleTimerId !== null) clearTimeout(active.idleTimerId);
         if (active.removalTimerId !== null) clearTimeout(active.removalTimerId);
         if (active.transitionEndListener !== null) {
