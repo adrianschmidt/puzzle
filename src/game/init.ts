@@ -134,6 +134,8 @@ export function createInitialGroups(
     const pickInitialRotation: () => number =
         options.rotationMode === 'quarter-turn'
             ? () => Math.floor(random() * 4) * 90
+            : options.rotationMode === 'free'
+            ? () => random() * 360
             : () => 0;
 
     return pieces.map((piece, index) => ({
