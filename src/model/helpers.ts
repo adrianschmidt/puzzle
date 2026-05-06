@@ -188,13 +188,6 @@ export function rotatePoint(point: Point, degrees: number): Point {
 }
 
 /**
- * Normalise a signed/unbounded quarter-turn count into the range 0..3.
- */
-export function normaliseQuarterTurns(q: number): 0 | 1 | 2 | 3 {
-    return (((q % 4) + 4) % 4) as 0 | 1 | 2 | 3;
-}
-
-/**
  * Normalise an unbounded degrees value into the range [0, 360).
  *
  * Accepts negative or large positive inputs and returns a non-negative
