@@ -37,6 +37,8 @@ import {
     yieldForPaint,
     loadRotationEnabledPreference,
     saveRotationEnabledPreference,
+    loadFreeRotationEnabledPreference,
+    saveFreeRotationEnabledPreference,
     type FractalDialogConfig,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
@@ -558,6 +560,7 @@ async function startNewGame(
     fractalConfig?: FractalDialogConfig,
     vibrant: boolean = false,
     rotationEnabled: boolean = false,
+    freeRotation: boolean = false,
 ): Promise<void> {
     showLoadingOverlay();
     try {
@@ -619,9 +622,14 @@ async function startNewGame(
             }
         }
 
-        const rotationMode: 'none' | 'quarter-turn' | 'free' = rotationEnabled
-            ? 'quarter-turn'
-            : 'none';
+        let rotationMode: 'none' | 'quarter-turn' | 'free';
+        if (!rotationEnabled) {
+            rotationMode = 'none';
+        } else if (freeRotation && cutStyle === 'composable') {
+            rotationMode = 'free';
+        } else {
+            rotationMode = 'quarter-turn';
+        }
 
         const generatorFractalConfig = fractalConfig
             ? { borderless: fractalConfig.borderless }
@@ -678,6 +686,7 @@ createNewGameButton({
         const savedComposableConfig = loadComposableConfigPreference();
         const savedFractalConfig = loadFractalConfigPreference();
         const savedRotationEnabled = loadRotationEnabledPreference();
+        const savedFreeRotationEnabled = loadFreeRotationEnabledPreference();
         const savedImageSource = loadImageSourcePreference();
         const savedImageCategory = loadImageCategoryPreference();
         const savedVibrant = loadVibrantPreference();
@@ -688,10 +697,11 @@ createNewGameButton({
             savedComposableConfig: savedComposableConfig,
             savedFractalConfig: savedFractalConfig,
             savedRotationEnabled: savedRotationEnabled,
+            savedFreeRotationEnabled: savedFreeRotationEnabled,
             savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
             savedVibrant: savedVibrant,
-            onSelect: ({ sizeIndex, cutStyleIndex, composableConfig, fractalConfig, rotationEnabled, imageSource, imageCategory, vibrant }) => {
+            onSelect: ({ sizeIndex, cutStyleIndex, composableConfig, fractalConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
                 saveSizePreference(sizeIndex);
                 saveCutStylePreference(cutStyleIndex);
                 if (composableConfig) {
@@ -701,6 +711,7 @@ createNewGameButton({
                     saveFractalConfigPreference(fractalConfig);
                 }
                 saveRotationEnabledPreference(rotationEnabled);
+                saveFreeRotationEnabledPreference(freeRotation);
                 saveImageSourcePreference(imageSource);
                 saveImageCategoryPreference(imageCategory);
                 saveVibrantPreference(vibrant);
@@ -716,6 +727,7 @@ createNewGameButton({
                     fractalConfig,
                     vibrant,
                     rotationEnabled,
+                    freeRotation,
                 );
             },
         });
@@ -941,6 +953,7 @@ void (async () => {
         const preferredCutStyle = getCutStyleOption(loadCutStylePreference()).id;
         const preferredFractalConfig = loadFractalConfigPreference();
         const preferredRotationEnabled = loadRotationEnabledPreference();
+        const preferredFreeRotationEnabled = loadFreeRotationEnabledPreference();
         await startNewGame(
             toGridSize(option),
             preferredCutStyle,
@@ -950,6 +963,7 @@ void (async () => {
             preferredFractalConfig,
             undefined,
             preferredRotationEnabled,
+            preferredFreeRotationEnabled,
         );
     } finally {
         hideLoadingOverlay();
