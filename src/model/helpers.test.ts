@@ -8,6 +8,7 @@ import {
     moveGroup,
     normaliseDegrees,
     rotatePoint,
+    signedAngularDelta,
 } from './helpers.js';
 import type { Piece, PieceGroup, Edge } from './types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
@@ -354,5 +355,36 @@ describe('normaliseDegrees', () => {
         expect(normaliseDegrees(47.3)).toBeCloseTo(47.3);
         expect(normaliseDegrees(360.5)).toBeCloseTo(0.5);
         expect(normaliseDegrees(-0.5)).toBeCloseTo(359.5);
+    });
+});
+
+describe('signedAngularDelta', () => {
+    it('returns 0 for equal angles', () => {
+        expect(signedAngularDelta(0, 0)).toBe(0);
+        expect(signedAngularDelta(90, 90)).toBe(0);
+    });
+
+    it('returns the smallest signed delta in (-180, 180]', () => {
+        expect(signedAngularDelta(10, 0)).toBe(10);
+        expect(signedAngularDelta(0, 10)).toBe(-10);
+        expect(signedAngularDelta(170, 10)).toBe(160);
+        expect(signedAngularDelta(10, 170)).toBe(-160);
+    });
+
+    it('wraps correctly across the 0/360 boundary', () => {
+        expect(signedAngularDelta(359, 1)).toBe(-2);
+        expect(signedAngularDelta(1, 359)).toBe(2);
+        expect(signedAngularDelta(355, 5)).toBe(-10);
+        expect(signedAngularDelta(5, 355)).toBe(10);
+    });
+
+    it('returns +180 (not -180) for an exactly opposite pair', () => {
+        // Convention: (-180, 180]. Boundary value is +180, not -180.
+        expect(signedAngularDelta(180, 0)).toBe(180);
+    });
+
+    it('handles unnormalised inputs', () => {
+        expect(signedAngularDelta(720, 0)).toBe(0);
+        expect(signedAngularDelta(-90, 0)).toBe(-90);
     });
 });

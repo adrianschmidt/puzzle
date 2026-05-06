@@ -198,6 +198,21 @@ export function normaliseDegrees(deg: number): number {
 }
 
 /**
+ * Smallest signed angular delta from `b` to `a` in degrees, in the
+ * half-open range `(-180, 180]`.
+ *
+ * Wrap-aware: the delta between 359° and 1° is `-2`, not `-358`. Useful
+ * for tolerance comparisons (e.g. `Math.abs(signedAngularDelta(...)) < 10`).
+ *
+ * `a − b` is the convention: positive when `a` is "ahead" of `b` going
+ * clockwise.
+ */
+export function signedAngularDelta(a: number, b: number): number {
+    const raw = (((a - b) % 360) + 540) % 360 - 180;
+    return raw === -180 ? 180 : raw;
+}
+
+/**
  * Project a point from a group's un-rotated local space into world space.
  *
  * Applies `group.rotation` around the group's own origin, then translates
