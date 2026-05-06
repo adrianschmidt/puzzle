@@ -139,6 +139,63 @@ describe('share-link codec — rejection paths', () => {
         };
         expect(() => encodePayload(bad)).toThrow(/finite/i);
     });
+
+    // Without these guards a crafted link that satisfies the surface schema
+    // but feeds non-numeric or out-of-range data through `applyProgress`
+    // would crash with a `TypeError` (or quietly write garbage into
+    // `group.rotation`). These cases pin the rejection contract.
+    const baseValid = {
+        v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 0, r: 'none',
+    };
+
+    it('rejects pr that is not an object', () => {
+        expect(decodePayload(encodeRaw({ ...baseValid, pr: 'oops' }))).toBeNull();
+    });
+
+    it('rejects pr.m that is not an array', () => {
+        expect(decodePayload(encodeRaw({ ...baseValid, pr: { m: 'oops' } }))).toBeNull();
+    });
+
+    it('rejects pr.m entries that are not arrays', () => {
+        expect(decodePayload(encodeRaw({ ...baseValid, pr: { m: [42] } }))).toBeNull();
+    });
+
+    it('rejects pr.m piece IDs that are not integers', () => {
+        expect(decodePayload(encodeRaw({ ...baseValid, pr: { m: [[0, 1.5]] } }))).toBeNull();
+        expect(decodePayload(encodeRaw({ ...baseValid, pr: { m: [['a']] } }))).toBeNull();
+    });
+
+    it('rejects pr.mr that is not an array', () => {
+        expect(decodePayload(encodeRaw({
+            ...baseValid, pr: { m: [[0, 1]], mr: 'oops' },
+        }))).toBeNull();
+    });
+
+    it('rejects pr.mr that contains a non-finite number', () => {
+        expect(decodePayload(encodeRaw({
+            ...baseValid, pr: { m: [[0, 1]], mr: [null] },
+        }))).toBeNull();
+    });
+
+    it('rejects pr.sr with odd length', () => {
+        expect(decodePayload(encodeRaw({
+            ...baseValid, pr: { m: [[0, 1]], sr: [2, 90, 3] },
+        }))).toBeNull();
+    });
+
+    it('rejects pr.sr that contains a non-finite number', () => {
+        expect(decodePayload(encodeRaw({
+            ...baseValid, pr: { m: [[0, 1]], sr: [2, 'oops'] },
+        }))).toBeNull();
+    });
+
+    it('rejects pr.sr piece IDs that are not integers', () => {
+        // Even-indexed entries are piece IDs and must be integers, matching
+        // the pr.m guard. Odd indices are rotation values (any finite number).
+        expect(decodePayload(encodeRaw({
+            ...baseValid, pr: { m: [[0, 1]], sr: [2.5, 90] },
+        }))).toBeNull();
+    });
 });
 
 describe('buildShareUrl', () => {
@@ -347,6 +404,91 @@ describe('gameStateToPayload', () => {
         expect(payload.pr?.mr).toEqual([2]);
         // Solo rotations: only non-zero ones are encoded.
         expect(payload.pr?.sr).toEqual([2, 1]);
+    });
+});
+
+describe('free-mode rotation encoding', () => {
+    it('encodes free-mode merged-group rotations as integer 0..359 in mr', () => {
+        const state = buildState({
+            rotationMode: 'free',
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 47.3 },
+                { id: 2, pieces: new Map([[2, { x: 0, y: 0 }], [3, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 312.8 },
+                { id: 4, pieces: new Map([[4, { x: 0, y: 0 }], [5, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: true });
+        expect(payload.r).toBe('free');
+        expect(payload.pr?.mr).toEqual([47, 313, 0]);
+    });
+
+    it('wraps 360 to 0 when float rounds up to 360', () => {
+        const state = buildState({
+            rotationMode: 'free',
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 359.6 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: true });
+        expect(payload.pr?.mr).toEqual([0]);
+    });
+
+    it('encodes free-mode solo-piece rotations as integer 0..359 in sr, omitting zeros', () => {
+        const state = buildState({
+            rotationMode: 'free',
+            groups: [
+                // One merged group (needed to trigger extractProgress)
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+                // Solo pieces
+                { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 123.4 },
+                { id: 3, pieces: new Map([[3, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 0 },
+                { id: 4, pieces: new Map([[4, { x: 0, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 271.6 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: true });
+        // Piece 3 is at 0° — should be omitted.
+        expect(payload.pr?.sr).toEqual([2, 123, 4, 272]);
+    });
+
+    it('round-trips free-mode merged-group rotations within 0.5°', () => {
+        // Encode a payload directly with free-mode mr values.
+        const originalDegrees = [47, 180, 312];
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'classic', s: 1, r: 'free',
+            pr: { m: [[0, 1], [2, 3], [4, 5]], mr: originalDegrees },
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.pr?.mr).toEqual(originalDegrees);
+    });
+
+    it('round-trips free-mode sr pairs within 0.5°', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'classic', s: 1, r: 'free',
+            pr: { m: [[0, 1]], sr: [2, 47, 3, 312] },
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.pr?.sr).toEqual([2, 47, 3, 312]);
+    });
+
+    it('does not affect quarter-turn encoding (mr carries 0..3)', () => {
+        const state = buildState({
+            rotationMode: 'quarter-turn',
+            groups: [
+                { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
+                  position: { x: 0, y: 0 }, rotation: 270 },
+            ],
+        });
+        const payload = gameStateToPayload(state, { includeProgress: true });
+        expect(payload.r).toBe('quarter-turn');
+        expect(payload.pr?.mr).toEqual([3]);
     });
 });
 

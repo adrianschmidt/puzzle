@@ -7,6 +7,7 @@
  */
 
 import type { GameState } from '../model/types.js';
+import { normaliseDegrees } from '../model/helpers.js';
 import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
 
 export interface SharePayload {
@@ -97,12 +98,53 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (p.c !== 'classic' && p.c !== 'fractal' && p.c !== 'composable') return false;
     if (typeof p.s !== 'number') return false;
     if (p.r !== 'none' && p.r !== 'quarter-turn' && p.r !== 'free') return false;
+    if (p.pr !== undefined && !isValidProgress(p.pr)) return false;
     return true;
 }
 
 function isTuple2Number(x: unknown): x is [number, number] {
     return Array.isArray(x) && x.length === 2
         && typeof x[0] === 'number' && typeof x[1] === 'number';
+}
+
+/**
+ * A crafted link that satisfies the schema but feeds non-numeric or
+ * out-of-range data through `applyProgress` would crash with a
+ * `TypeError` (or write garbage into `group.rotation`). Reject obviously
+ * malformed shapes here before they reach the game state.
+ */
+function isValidProgress(x: unknown): boolean {
+    if (!x || typeof x !== 'object') return false;
+    const pr = x as Record<string, unknown>;
+    if (!Array.isArray(pr.m)) return false;
+    for (const inner of pr.m) {
+        if (!Array.isArray(inner)) return false;
+        for (const id of inner) {
+            if (!Number.isInteger(id)) return false;
+        }
+    }
+    if (pr.mr !== undefined) {
+        if (!Array.isArray(pr.mr)) return false;
+        for (const v of pr.mr) {
+            if (typeof v !== 'number' || !Number.isFinite(v)) return false;
+        }
+    }
+    if (pr.sr !== undefined) {
+        if (!Array.isArray(pr.sr)) return false;
+        if (pr.sr.length % 2 !== 0) return false;
+        for (let i = 0; i < pr.sr.length; i++) {
+            const v = pr.sr[i];
+            // Even indices are piece IDs (must be integers); odd indices
+            // are rotation values (any finite number — applyProgress
+            // normalises them in free mode).
+            if (i % 2 === 0) {
+                if (!Number.isInteger(v)) return false;
+            } else {
+                if (typeof v !== 'number' || !Number.isFinite(v)) return false;
+            }
+        }
+    }
+    return true;
 }
 
 export function buildShareUrl(baseUrl: string, payload: SharePayload): string {
@@ -200,6 +242,21 @@ function extractProgress(state: GameState): SharePayload['pr'] | null {
             if (g.rotation === 0) continue;
             const [pieceId] = g.pieces.keys();
             sr.push(pieceId, Math.round(g.rotation / 90));
+        }
+        if (sr.length > 0) pr.sr = sr;
+    } else if (state.rotationMode === 'free') {
+        // Free mode encodes integer degrees 0..359 directly. Solo pieces are
+        // virtually always at non-zero rotation, so the sparse `sr` encoding
+        // becomes effectively dense; keep the format for consistency with v: 1.
+        // The explicit % 360 guards against float arithmetic leaving g.rotation
+        // just outside [0, 360) — e.g. 359.6 → round → 360 → % 360 → 0.
+        pr.mr = merged.map((g) => normaliseDegrees(Math.round(g.rotation)));
+        const sr: number[] = [];
+        for (const g of state.groups) {
+            if (g.pieces.size !== 1) continue;
+            if (g.rotation === 0) continue;
+            const [pieceId] = g.pieces.keys();
+            sr.push(pieceId, normaliseDegrees(Math.round(g.rotation)));
         }
         if (sr.length > 0) pr.sr = sr;
     }

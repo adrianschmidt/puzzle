@@ -10,7 +10,7 @@
  */
 
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
-import { buildGroupIndexes } from '../model/helpers.js';
+import { buildGroupIndexes, normaliseDegrees } from '../model/helpers.js';
 
 export function computeMergedOffsets(
     pieces: Piece[],
@@ -91,10 +91,19 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
         return !absorbedIds.has(only);
     });
 
+    // When rotationMode is 'free', mr/sr carry integer degrees 0..359 directly.
+    // When rotationMode is 'quarter-turn', they carry 0..3 quarter-turn counts
+    // that must be multiplied by 90 to get degrees (existing wire format).
+    const isFree = state.rotationMode === 'free';
+
     // Push each reconstructed merged group.
     reconstructed.forEach((offsets, idx) => {
+        const wireValue = progress.mr?.[idx] ?? 0;
         // Wire format is quarter-turn integer (v: 1); convert to degrees.
-        const rotation = (progress.mr?.[idx] ?? 0) * 90;
+        // For free mode the wire value is already in degrees — normalise
+        // into [0, 360) to mirror the encoder side and clamp any
+        // out-of-range values from a hand-crafted link.
+        const rotation = isFree ? normaliseDegrees(wireValue) : wireValue * 90;
         const group: PieceGroup = {
             id: idCursor++,
             pieces: offsets,
@@ -113,8 +122,11 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
     if (progress.sr && progress.sr.length >= 2) {
         for (let i = 0; i + 1 < progress.sr.length; i += 2) {
             const pid = progress.sr[i];
+            const wireValue = progress.sr[i + 1] ?? 0;
             // Wire format is quarter-turn integer (v: 1); convert to degrees.
-            const rot = (progress.sr[i + 1] ?? 0) * 90;
+            // Free-mode wire values get normalised to [0, 360) to mirror
+            // the encoder.
+            const rot = isFree ? normaliseDegrees(wireValue) : wireValue * 90;
             const g = state.pieceToGroup.get(pid);
             if (g && g.pieces.size === 1) g.rotation = rot;
         }
