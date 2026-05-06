@@ -168,7 +168,7 @@ describe('checkEdgeAlignment', () => {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 100, y: 0 },
-            rotation: 1,
+            rotation: 90,
         };
 
         const result = checkEdgeAlignment(
@@ -184,7 +184,7 @@ describe('checkEdgeAlignment', () => {
         // Piece 0's right edge starts at (100,0) → world (0,100).
         // Piece 0's right edge ends at (100,100) → world (-100,100).
         // Piece 1's left edge (start (0,100), end (0,0)) with piece 1's
-        // rotation=1 around group 1's origin gives:
+        // rotation=90 around group 1's origin gives:
         //   start (0,100) → (-100, 0)
         //   end   (0,0)   → (0, 0)
         // To mate piece 0's right with piece 1's left, target_end must
@@ -198,13 +198,13 @@ describe('checkEdgeAlignment', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 0, y: 0 },
-            rotation: 1,
+            rotation: 90,
         };
         const group1: PieceGroup = {
             id: 1,
             pieces: new Map([[1, { x: 0, y: 0 }]]),
             position: { x: 0, y: 100 },
-            rotation: 1,
+            rotation: 90,
         };
 
         const result = checkEdgeAlignment(

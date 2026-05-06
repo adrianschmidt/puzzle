@@ -329,13 +329,13 @@ describe('shouldSuppressMerge', () => {
         // and vetoing a perfectly legitimate drop.
         //
         // Layout (visual / world space):
-        //   - Moved piece at visual AABB [0..100] × [0..100]  (rotation 1)
+        //   - Moved piece at visual AABB [0..100] × [0..100]  (rotation 90°)
         //   - Mate piece at visual AABB [-100..0] × [0..100]  (rotation 0,
         //     touching the moved piece's left edge)
         //   - Three non-mate pieces far to the right at x ≥ 150 — well
         //     outside the moved piece's visual bounds + padding.
         //
-        // Because rotation 1 translates un-rotated local [0..100]² to
+        // Because rotation 90° translates un-rotated local [0..100]² to
         // rotated-local [-100..0] × [0..100], the moved group's position
         // must be offset by (+100, 0) to place the visual AABB at [0..100]².
         // The rotation-ignorant implementation will compute the moved
@@ -357,7 +357,7 @@ describe('shouldSuppressMerge', () => {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 100, y: 0 },
-            rotation: 1,
+            rotation: 90,
         };
 
         // Mate group: un-rotated, positioned so its visual AABB is
