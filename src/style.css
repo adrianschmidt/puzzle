@@ -263,6 +263,58 @@ html, body {
   transition: opacity 750ms ease-out;
 }
 
+/*
+ * Free-rotation drag handle — single round button below the focused
+ * group's bbox. Mirrors `.rotate-button` styling but circular and
+ * single-instance.
+ */
+.rotate-handle {
+  position: absolute;
+  z-index: 9999;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-fg);
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0;
+}
+
+.rotate-handle:hover {
+  background: var(--ui-overlay-hover);
+  border-color: var(--ui-border-hover);
+}
+
+.rotate-handle:active {
+  background: var(--ui-overlay-active);
+}
+
+.rotate-handle--fade-in {
+  opacity: 1;
+  transition: opacity 100ms ease-out;
+}
+
+.rotate-handle--fade-out-quick {
+  opacity: 0;
+  transition: opacity 100ms ease-out;
+  pointer-events: none;
+}
+
+.rotate-handle--fade-out-slow {
+  opacity: 0;
+  transition: opacity 750ms ease-out;
+}
+
 /* Deselect-all floating button (bottom-center) */
 .deselect-button {
   position: absolute;
