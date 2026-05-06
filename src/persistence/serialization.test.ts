@@ -391,9 +391,32 @@ describe('deserializeState', () => {
         expect(restored.groups[1].rotation).toBe(3);
     });
 
-    it('coerces out-of-range rotation values to 0', () => {
-        const bad: SerializedGameState = {
-            version: STATE_VERSION,
+    it('coerces missing rotation to 0 (v5 and earlier saves)', () => {
+        const noRotation: SerializedGameState = {
+            version: 5,
+            pieces: [makeRectPiece({ id: 0 })],
+            groups: [
+                {
+                    id: 0,
+                    pieces: [[0, { x: 0, y: 0 }]],
+                    position: { x: 0, y: 0 },
+                    // rotation intentionally omitted
+                },
+            ],
+            imageUrl: 'test.jpg',
+            imageSize: { width: 800, height: 600 },
+            gridSize: { cols: 8, rows: 6 },
+            completed: false,
+        };
+
+        const restored = deserializeState(noRotation);
+        // 0 quarter-turns × 90 = 0 degrees
+        expect(restored.groups[0].rotation).toBe(0);
+    });
+
+    it('passes through arbitrary float rotation values in v9 saves', () => {
+        const v9: SerializedGameState = {
+            version: 9,
             pieces: [makeRectPiece({ id: 0 })],
             groups: [
                 {
@@ -409,8 +432,8 @@ describe('deserializeState', () => {
             completed: false,
         };
 
-        const restored = deserializeState(bad);
-        expect(restored.groups[0].rotation).toBe(0);
+        const restored = deserializeState(v9);
+        expect(restored.groups[0].rotation).toBe(7);
     });
 
     it('preserves gridSize in v3 round-trip', () => {
@@ -588,6 +611,54 @@ describe('deserializeState', () => {
 
         const restored = deserializeState(classicNoMode);
         expect(restored.rotationMode).toBe('none');
+    });
+
+    describe('rotation degrees migration (v8 → v9)', () => {
+        it('migrates v8 saves with quarter-turn rotation values to degrees', () => {
+            const v8Save: SerializedGameState = {
+                version: 8,
+                pieces: [
+                    makeRectPiece({ id: 0 }),
+                    makeRectPiece({ id: 1 }),
+                    makeRectPiece({ id: 2 }),
+                    makeRectPiece({ id: 3 }),
+                ],
+                groups: [
+                    { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 }, rotation: 0 },
+                    { id: 1, pieces: [[1, { x: 0, y: 0 }]], position: { x: 0, y: 0 }, rotation: 1 },
+                    { id: 2, pieces: [[2, { x: 0, y: 0 }]], position: { x: 0, y: 0 }, rotation: 2 },
+                    { id: 3, pieces: [[3, { x: 0, y: 0 }]], position: { x: 0, y: 0 }, rotation: 3 },
+                ],
+                imageUrl: 'test.jpg',
+                imageSize: { width: 800, height: 600 },
+                gridSize: { cols: 2, rows: 2 },
+                completed: false,
+            };
+
+            const state = deserializeState(v8Save);
+
+            expect(state.groups.find((g) => g.id === 0)!.rotation).toBe(0);
+            expect(state.groups.find((g) => g.id === 1)!.rotation).toBe(90);
+            expect(state.groups.find((g) => g.id === 2)!.rotation).toBe(180);
+            expect(state.groups.find((g) => g.id === 3)!.rotation).toBe(270);
+        });
+
+        it('passes through v9 saves with rotation already in degrees', () => {
+            const v9Save: SerializedGameState = {
+                version: 9,
+                pieces: [makeRectPiece({ id: 0 })],
+                groups: [
+                    { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 }, rotation: 47.3 },
+                ],
+                imageUrl: 'test.jpg',
+                imageSize: { width: 800, height: 600 },
+                gridSize: { cols: 1, rows: 1 },
+                completed: false,
+            };
+
+            const state = deserializeState(v9Save);
+            expect(state.groups[0].rotation).toBeCloseTo(47.3);
+        });
     });
 
     it('throws on group with no pieces', () => {

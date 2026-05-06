@@ -19,7 +19,7 @@ import { getImageDimensions } from '../model/derive.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 8;
+export const STATE_VERSION = 9;
 
 /**
  * Supported schema versions.
@@ -32,15 +32,21 @@ export const STATE_VERSION = 8;
  * - v6: adds rotation (0-3 quarter-turns) per group
  * - v7: adds generatorConfig (fractal/composable params) for reproducibility
  * - v8: replaces opaque generatorConfig with typed composableConfig / fractalConfig
+ * - v9: rotation is stored as float degrees (0–360); v8 and earlier saves are
+ *       migrated by multiplying their integer quarter-turn values by 90
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
     id: number;
     pieces: Array<[number, Point]>;
     position: Point;
-    /** Quarter-turns clockwise (0-3). Missing on v5 and earlier saves. */
+    /**
+     * Rotation. v9+ saves store float degrees in `[0, 360)`; v6–v8 stored
+     * a quarter-turn count `{0, 1, 2, 3}` and are migrated on load. Missing
+     * on v5 and earlier saves.
+     */
     rotation?: number;
 }
 
@@ -139,6 +145,15 @@ export function deserializeState(data: SerializedGameState): GameState {
     validateSerializedState(data);
 
     const groups = data.groups.map(deserializeGroup);
+
+    // v8 and earlier stored rotation as quarter-turn count {0,1,2,3}; v9+
+    // stores it as float degrees. Migrate older saves by multiplying.
+    if (data.version <= 8) {
+        for (const group of groups) {
+            group.rotation = group.rotation * 90;
+        }
+    }
+
     const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
 
     // For v1 saves (no imageSize), derive it from piece data
@@ -317,9 +332,15 @@ function deserializeGroup(group: SerializedPieceGroup): PieceGroup {
     };
 }
 
-/** v5 and earlier saves have no rotation; coerce unknown values to 0. */
-function normaliseStoredRotation(value: unknown): 0 | 1 | 2 | 3 {
-    if (value === 1 || value === 2 || value === 3) {
+/**
+ * v5 and earlier saves have no rotation; coerce missing/invalid values to 0.
+ *
+ * Returns the raw stored value (either quarter-turns for v ≤ 8 saves or
+ * degrees for v ≥ 9 saves). The caller is responsible for converting
+ * quarter-turn-era values to degrees by multiplying by 90.
+ */
+function normaliseStoredRotation(value: unknown): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
         return value;
     }
     return 0;
