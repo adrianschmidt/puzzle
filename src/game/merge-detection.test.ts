@@ -4,6 +4,7 @@ import {
     checkEdgeAlignment,
     detectMerges,
     MERGE_TOLERANCE_PX,
+    MERGE_ROTATION_TOLERANCE_DEG,
 } from './merge-detection.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
@@ -82,6 +83,7 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map(),
         );
 
         expect(result.aligned).toBe(true);
@@ -100,6 +102,7 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map(),
         );
 
         expect(result.aligned).toBe(true);
@@ -119,6 +122,7 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map(),
         );
 
         expect(result.aligned).toBe(false);
@@ -134,6 +138,7 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map(),
         );
 
         expect(result.aligned).toBe(true);
@@ -149,6 +154,7 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map(),
         );
 
         expect(result.aligned).toBe(true);
@@ -157,12 +163,11 @@ describe('checkEdgeAlignment', () => {
         expect(result.snapDelta.y).toBeCloseTo(10);
     });
 
-    it('rejects when the two groups have different rotations', () => {
+    it('rejects when the two groups have different rotations beyond tolerance', () => {
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
 
-        // Groups in identical world positions, but one is rotated.
-        // Without the rotation gate, endpoint distances at certain
-        // symmetry points could falsely register as aligned.
+        // Groups in identical world positions, but one is rotated 90°.
+        // 90° difference is well beyond the 10° tolerance.
         const group0 = makeGroup(0, 0, { x: 0, y: 0 });
         const group1: PieceGroup = {
             id: 1,
@@ -174,6 +179,7 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map(),
         );
 
         expect(result.aligned).toBe(false);
@@ -210,6 +216,10 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map([
+                [0, piece0],
+                [1, piece1],
+            ]),
         );
 
         expect(result.aligned).toBe(true);
@@ -227,6 +237,7 @@ describe('checkEdgeAlignment', () => {
         const strictResult = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map(),
             10,
         );
         expect(strictResult.aligned).toBe(false);
@@ -234,9 +245,166 @@ describe('checkEdgeAlignment', () => {
         const lenientResult = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
+            new Map(),
             20,
         );
         expect(lenientResult.aligned).toBe(true);
+    });
+});
+
+describe('checkEdgeAlignment with angular tolerance', () => {
+    it('exposes MERGE_ROTATION_TOLERANCE_DEG = 10', () => {
+        expect(MERGE_ROTATION_TOLERANCE_DEG).toBe(10);
+    });
+
+    it('rejects pairs whose rotations differ by more than the tolerance', () => {
+        // 15° > 10° tolerance → must reject regardless of position
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+        const piecesById = new Map([[0, piece0], [1, piece1]]);
+
+        const group0: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 0 },
+            rotation: 0,
+        };
+        const group1: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 100, y: 0 },
+            rotation: 15,
+        };
+
+        const result = checkEdgeAlignment(
+            piece0, rightEdge, group0,
+            piece1, leftEdge, group1,
+            piecesById,
+        );
+
+        expect(result.aligned).toBe(false);
+        expect(result.snapDelta).toEqual({ x: 0, y: 0 });
+    });
+
+    it('accepts pairs whose rotations differ by less than the tolerance', () => {
+        // movedGroup.rotation = 5°, targetGroup.rotation = 0°.
+        // rotDelta = signedAngularDelta(0, 5) = -5°, within tolerance.
+        //
+        // After a -5° snap around the bbox centre (50,50 local for a 100×100
+        // piece at offset (0,0)), the snapped world endpoints of the moved
+        // right-edge are at approximately (95.45, 4.17) and (95.45, 104.17).
+        // Placing targetGroup (rotation=0) at (95.45, 4.17) achieves perfect
+        // positional alignment post-snap.
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+        const piecesById = new Map([[0, piece0], [1, piece1]]);
+
+        // Derived: worldCentre of group0 = localToWorld({50,50}, rot=5°, pos=(0,0))
+        //  = rotatePoint({50,50},5°) = {45.45, 54.17}
+        // Snapped movedStart (rightEdge.start={100,0}):
+        //  offsetFromCentre = {50,-50}, rotated by 0° = {50,-50}
+        //  world = {45.45+50, 54.17-50} = {95.45, 4.17}
+        const group0: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 0 },
+            rotation: 5,
+        };
+        const group1: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 95.45, y: 4.17 },
+            rotation: 0,
+        };
+
+        const result = checkEdgeAlignment(
+            piece0, rightEdge, group0,
+            piece1, leftEdge, group1,
+            piecesById,
+        );
+
+        expect(result.aligned).toBe(true);
+        // Perfect alignment after snap → snapDelta is ~zero
+        expect(result.snapDelta.x).toBeCloseTo(0, 1);
+        expect(result.snapDelta.y).toBeCloseTo(0, 1);
+    });
+
+    it('accepts pairs whose rotations match exactly (quarter-turn parity)', () => {
+        // Both at rotation=90°. rotDelta=0, so getWorldPositionAfterRotationSnap
+        // collapses to getWorldPosition — identical to pre-T4 behaviour.
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+        const piecesById = new Map([[0, piece0], [1, piece1]]);
+
+        const group0: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 0 },
+            rotation: 90,
+        };
+        const group1: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 100 },
+            rotation: 90,
+        };
+
+        const result = checkEdgeAlignment(
+            piece0, rightEdge, group0,
+            piece1, leftEdge, group1,
+            piecesById,
+        );
+
+        expect(result.aligned).toBe(true);
+        expect(result.snapDelta.x).toBeCloseTo(0);
+        expect(result.snapDelta.y).toBeCloseTo(0);
+    });
+
+    it('correctly handles wrap-around (e.g. moved=355°, target=5°)', () => {
+        // signedAngularDelta(5, 355) = 5 - 355 = -350 → wrapped = 10°
+        // |10| === tolerance → should NOT be rejected (> not >=).
+        // Position group0 at rotation=355°, group1 at rotation=5°, with
+        // group1 positioned to align perfectly after the +10° snap of group0.
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+        const piecesById = new Map([[0, piece0], [1, piece1]]);
+
+        // rotDelta = signedAngularDelta(5, 355) = 10°
+        // After +10° snap of group0 (rot=355°→365°=5°), endpoints match target (rot=5°).
+        // If both groups effectively end up at rotation=5° with adjacent positions,
+        // use the existing rotation=5° adjacent layout.
+        //
+        // worldCentre of group0 = localToWorld({50,50}, rot=355°, pos=(0,0))
+        //  cos(355°)≈0.9962, sin(355°)≈-0.0872
+        //  rotatePoint({50,50},355°) = {50*0.9962-50*(-0.0872), 50*(-0.0872)+50*0.9962}
+        //                            = {49.81+4.36, -4.36+49.81} = {54.17, 45.45}
+        //
+        // After snap (newRotation=5°):
+        //  movedEdge.start={100,0}: offsetFromCentre={50,-50}
+        //  rotated by 5°: x=50*cos5-(-50)*sin5=49.81+4.36=54.17, y=50*sin5+(-50)*cos5=4.36-49.81=-45.45
+        //  world = {54.17+54.17, 45.45-45.45} = {108.34, 0}
+        //
+        // targetEdge.end={0,0}, group1 at pos=(108.34, 0), rot=5°:
+        //  targetEnd = localToWorld({0,0}, rot=5°, pos=(108.34,0)) = {108.34, 0}
+        //  → matches movedStart = {108.34, 0} ✓
+        const group0: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 0 },
+            rotation: 355,
+        };
+        const group1: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 108.34, y: 0 },
+            rotation: 5,
+        };
+
+        const result = checkEdgeAlignment(
+            piece0, rightEdge, group0,
+            piece1, leftEdge, group1,
+            piecesById,
+        );
+
+        expect(result.aligned).toBe(true);
+        expect(result.snapDelta.x).toBeCloseTo(0, 1);
+        expect(result.snapDelta.y).toBeCloseTo(0, 1);
     });
 });
 
