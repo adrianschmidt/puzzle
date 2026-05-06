@@ -7,7 +7,6 @@ import {
     localToWorld,
     moveGroup,
     normaliseDegrees,
-    normaliseQuarterTurns,
     rotatePoint,
 } from './helpers.js';
 import type { Piece, PieceGroup, Edge } from './types.js';
@@ -247,26 +246,6 @@ describe('rotatePoint (degrees)', () => {
         const b = rotatePoint(p, 270);
         expect(a.x).toBeCloseTo(b.x);
         expect(a.y).toBeCloseTo(b.y);
-    });
-});
-
-describe('normaliseQuarterTurns', () => {
-    it('leaves in-range values alone', () => {
-        expect(normaliseQuarterTurns(0)).toBe(0);
-        expect(normaliseQuarterTurns(1)).toBe(1);
-        expect(normaliseQuarterTurns(2)).toBe(2);
-        expect(normaliseQuarterTurns(3)).toBe(3);
-    });
-
-    it('wraps values above 3', () => {
-        expect(normaliseQuarterTurns(4)).toBe(0);
-        expect(normaliseQuarterTurns(7)).toBe(3);
-    });
-
-    it('wraps negative values', () => {
-        expect(normaliseQuarterTurns(-1)).toBe(3);
-        expect(normaliseQuarterTurns(-4)).toBe(0);
-        expect(normaliseQuarterTurns(-5)).toBe(3);
     });
 });
 
