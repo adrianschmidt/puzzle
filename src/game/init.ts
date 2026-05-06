@@ -131,9 +131,9 @@ export function createInitialGroups(
         random,
     );
 
-    const pickInitialRotation: () => 0 | 1 | 2 | 3 =
+    const pickInitialRotation: () => number =
         options.rotationMode === 'quarter-turn'
-            ? () => Math.floor(random() * 4) as 0 | 1 | 2 | 3
+            ? () => Math.floor(random() * 4) * 90
             : () => 0;
 
     return pieces.map((piece, index) => ({

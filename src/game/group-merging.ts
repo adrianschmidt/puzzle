@@ -11,7 +11,7 @@ import type { GameState, PieceGroup, Point } from '../model/types.js';
 import {
     getGroup,
     moveGroup,
-    normaliseQuarterTurns,
+    normaliseDegrees,
     removeGroup,
     rotatePoint,
 } from '../model/helpers.js';
@@ -65,10 +65,8 @@ export function mergeGroups(
         x: movedGroup.position.x - targetGroup.position.x,
         y: movedGroup.position.y - targetGroup.position.y,
     };
-    const inverseTurns = normaliseQuarterTurns(4 - targetGroup.rotation);
-    // TODO(rotation-as-degrees): the * 90 factor will go away in Task 6
-    // when group-merging is migrated to operate in degrees natively.
-    const localDelta = rotatePoint(rawDiff, inverseTurns * 90);
+    const inverseDeg = normaliseDegrees(-targetGroup.rotation);
+    const localDelta = rotatePoint(rawDiff, inverseDeg);
 
     for (const [pieceId, offset] of movedGroup.pieces) {
         targetGroup.pieces.set(pieceId, {

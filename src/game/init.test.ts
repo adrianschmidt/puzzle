@@ -196,9 +196,9 @@ describe('rotationMode', () => {
         expect(state.rotationMode).toBe('quarter-turn');
         // At least one group should have a non-zero rotation given varied inputs
         expect(state.groups.some((g) => g.rotation !== 0)).toBe(true);
-        // And every rotation should be a valid quarter-turn
+        // And every rotation should be a valid quarter-turn in degrees
         for (const group of state.groups) {
-            expect([0, 1, 2, 3]).toContain(group.rotation);
+            expect([0, 90, 180, 270]).toContain(group.rotation);
         }
     });
 
@@ -213,7 +213,7 @@ describe('rotationMode', () => {
         expect(state.cutStyle).toBe('classic');
         expect(state.groups.some((g) => g.rotation !== 0)).toBe(true);
         for (const group of state.groups) {
-            expect([0, 1, 2, 3]).toContain(group.rotation);
+            expect([0, 90, 180, 270]).toContain(group.rotation);
         }
     });
 
@@ -228,7 +228,7 @@ describe('rotationMode', () => {
         expect(state.cutStyle).toBe('composable');
         expect(state.groups.some((g) => g.rotation !== 0)).toBe(true);
         for (const group of state.groups) {
-            expect([0, 1, 2, 3]).toContain(group.rotation);
+            expect([0, 90, 180, 270]).toContain(group.rotation);
         }
     });
 });

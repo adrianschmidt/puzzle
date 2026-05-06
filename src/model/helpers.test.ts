@@ -287,7 +287,7 @@ describe('localToWorld', () => {
             id: 1,
             pieces: new Map(),
             position: { x: 100, y: 200 },
-            rotation: 1,
+            rotation: 90,
         };
         expect(localToWorld({ x: 10, y: 0 }, g)).toEqual({ x: 100, y: 210 });
     });
@@ -298,7 +298,7 @@ describe('localToWorld', () => {
             id: 1,
             pieces: new Map(),
             position: { x: 50, y: 50 },
-            rotation: 2,
+            rotation: 180,
         };
         expect(localToWorld({ x: 10, y: 5 }, g)).toEqual({ x: 40, y: 45 });
     });
@@ -341,7 +341,7 @@ describe('getWorldPosition', () => {
             id: 1,
             pieces: new Map([[5, { x: 0, y: 0 }]]),
             position: { x: 100, y: 200 },
-            rotation: 1,
+            rotation: 90,
         };
 
         // Local point (10, 0) rotated 90° CW → (0, 10); then + position
@@ -354,7 +354,7 @@ describe('getWorldPosition', () => {
             id: 1,
             pieces: new Map([[5, { x: 10, y: 0 }]]),
             position: { x: 50, y: 50 },
-            rotation: 2,
+            rotation: 180,
         };
 
         expect(getWorldPosition({ x: 0, y: 0 }, 5, g)).toEqual({ x: 40, y: 50 });

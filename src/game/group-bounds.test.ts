@@ -83,7 +83,7 @@ describe('getGroupBounds (unified primitive)', () => {
         it('ignores group rotation', () => {
             const piece = makeSquarePiece(0);
             const group = makeGroup(0, 0, 0);
-            group.rotation = 1; // 90° CW
+            group.rotation = 90; // 90° CW
             const bounds = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'local',
                 includePathGeometry: false,
@@ -175,7 +175,7 @@ describe('getGroupBounds (unified primitive)', () => {
                 id: 0,
                 pieces: new Map([[0, { x: 0, y: 0 }]]),
                 position: { x: 100, y: 100 },
-                rotation: 1,
+                rotation: 90,
             };
 
             const bounds = getGroupBounds(group, buildPiecesById([piece]), {
@@ -197,7 +197,7 @@ describe('getGroupBounds (unified primitive)', () => {
                 id: 0,
                 pieces: new Map([[0, { x: 0, y: 0 }]]),
                 position: { x: 0, y: 0 },
-                rotation: 1,
+                rotation: 90,
             };
 
             const noPaths = getGroupBounds(group, buildPiecesById([piece]), {
@@ -241,7 +241,7 @@ describe('getGroupLocalBounds', () => {
     it('ignores rotation and returns un-rotated bounds', () => {
         const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
-        group.rotation = 1; // CW 90°
+        group.rotation = 90; // CW 90°
 
         expect(getGroupLocalBounds(group, buildPiecesById([piece]))).toEqual({
             minX: 0,
@@ -265,7 +265,7 @@ describe('getGroupVisualBounds', () => {
     it('swaps width and height at rotation 1 (90° CW)', () => {
         const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
-        group.rotation = 1;
+        group.rotation = 90;
 
         const bounds = getGroupVisualBounds(group, buildPiecesById([piece]));
 
@@ -276,7 +276,7 @@ describe('getGroupVisualBounds', () => {
     it('swaps width and height at rotation 3 (270° CW)', () => {
         const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
-        group.rotation = 3;
+        group.rotation = 270;
 
         const bounds = getGroupVisualBounds(group, buildPiecesById([piece]));
 
@@ -287,7 +287,7 @@ describe('getGroupVisualBounds', () => {
     it('keeps width and height at rotation 2 (180°)', () => {
         const piece = makeRectPiece({ id: 1, width: 100, height: 40 });
         const group = makeGroup(1, 0, 0);
-        group.rotation = 2;
+        group.rotation = 180;
 
         const bounds = getGroupVisualBounds(group, buildPiecesById([piece]));
 
