@@ -265,7 +265,9 @@ function zoomToFitCompletedPuzzle(
             x: localBounds.minX + localBounds.width / 2,
             y: localBounds.minY + localBounds.height / 2,
         };
-        const rotatedCentre = rotatePoint(centreLocal, completedGroup.rotation);
+        // TODO(rotation-as-degrees): the * 90 factor will go away in Task 3
+        // when PieceGroup.rotation is widened to degrees natively.
+        const rotatedCentre = rotatePoint(centreLocal, completedGroup.rotation * 90);
 
         completedGroup.position = {
             x: completedGroup.position.x + rotatedCentre.x - centreLocal.x,

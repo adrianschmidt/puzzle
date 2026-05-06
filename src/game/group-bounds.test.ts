@@ -182,7 +182,10 @@ describe('getGroupBounds (unified primitive)', () => {
                 space: 'world',
                 includePathGeometry: false,
             });
-            expect(bounds).toEqual({ minX: 0, minY: 100, maxX: 100, maxY: 200 });
+            expect(bounds.minX).toBeCloseTo(0);
+            expect(bounds.minY).toBeCloseTo(100);
+            expect(bounds.maxX).toBeCloseTo(100);
+            expect(bounds.maxY).toBeCloseTo(200);
         });
 
         it('combines rotation and path geometry', () => {
@@ -202,15 +205,18 @@ describe('getGroupBounds (unified primitive)', () => {
                 includePathGeometry: false,
             });
             // Without path geometry, just the rotated square: x=[-100..0].
-            expect(noPaths).toEqual({ minX: -100, minY: 0, maxX: 0, maxY: 100 });
+            expect(noPaths.minX).toBeCloseTo(-100);
+            expect(noPaths.minY).toBeCloseTo(0);
+            expect(noPaths.maxX).toBeCloseTo(0);
+            expect(noPaths.maxY).toBeCloseTo(100);
 
             const withPaths = getGroupBounds(group, buildPiecesById([piece]), {
                 space: 'world',
                 includePathGeometry: true,
             });
             // Tab control points at x=30 push maxX out beyond the square.
-            expect(withPaths.maxX).toBe(30);
-            expect(withPaths.minX).toBe(-100);
+            expect(withPaths.maxX).toBeCloseTo(30);
+            expect(withPaths.minX).toBeCloseTo(-100);
         });
     });
 });
