@@ -6,7 +6,7 @@ import {
     processDrop,
 } from './group-merging.js';
 import type { MergeCandidate } from './merge-detection.js';
-import { getWorldPosition } from '../model/helpers.js';
+import { getWorldPosition, rotatePoint } from '../model/helpers.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
 // --- Test helpers ---
@@ -524,5 +524,97 @@ describe('processDrop', () => {
         expect(result).not.toBeNull();
         expect(result!.group.pieces.size).toBe(2);
         expect(state.groups).toContain(result!.group);
+    });
+});
+
+describe('mergeGroups with rotation snap', () => {
+    it('snaps the moved group rotation to the target rotation before merging', () => {
+        // Use a real piece with geometry so rotateGroup has a non-trivial bbox
+        // centre to pivot around. piece0 is a 100×100 square; when placed at
+        // offset (0,0) in a group, its bbox centre is (50,50) in local coords.
+        //
+        // Setup:
+        //   movedGroup:  rotation=92°, piece0 at offset (0,0)
+        //   targetGroup: rotation=90°, piece1 at offset (0,0)
+        //   snapDelta: {0, 0}  (position already aligned after rotation snap)
+        //
+        // rotateGroup snaps movedGroup from 92° to 90° while keeping its
+        // visual bbox centre fixed in world space.  The position shift is:
+        //   adj = rotatePoint({50,50}, 92°) − rotatePoint({50,50}, 90°)
+        //
+        // Without the rotation snap the world position of piece0 computed
+        // through targetGroup after merge would use the un-snapped (92°)
+        // movedGroup.position, which differs from the snapped position by
+        // that same adjustment — so the assertion below fails without the fix.
+        const { piece0, piece1 } = createAdjacentPiecePair();
+
+        const movedGroup: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 148.285, y: 98.225 },  // pre-positioned as if already snapped
+            rotation: 92,
+        };
+        const targetGroup: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 300, y: 100 },
+            rotation: 90,
+        };
+        const state = makeGameState({ pieces: [piece0, piece1], groups: [movedGroup, targetGroup] });
+
+        // Record what movedGroup's world-space position becomes after the
+        // expected rotation snap; piece0 at offset (0,0) means its world pos
+        // equals movedGroup.position itself (rotatePoint({0,0}) = {0,0}).
+        // After rotateGroup snap the position moves slightly; we capture it by
+        // performing the same rotation math the implementation will use:
+        const bboxCentre = { x: 50, y: 50 }; // piece0 centre in local coords
+        const rotOld = rotatePoint(bboxCentre, 92);
+        const rotNew = rotatePoint(bboxCentre, 90);
+        const expectedPositionAfterSnap = {
+            x: movedGroup.position.x + rotOld.x - rotNew.x,
+            y: movedGroup.position.y + rotOld.y - rotNew.y,
+        };
+
+        mergeGroups(state, movedGroup, targetGroup, { x: 0, y: 0 });
+
+        // targetGroup's rotation must not change.
+        expect(targetGroup.rotation).toBeCloseTo(90);
+
+        // The absorbed piece (id=0) must be in targetGroup.
+        expect(targetGroup.pieces.has(0)).toBe(true);
+
+        // World position of piece0 through targetGroup must equal the expected
+        // position after rotation snap (offset (0,0) ⇒ world pos = group pos).
+        const worldAfter = getWorldPosition({ x: 0, y: 0 }, 0, targetGroup);
+        expect(worldAfter.x).toBeCloseTo(expectedPositionAfterSnap.x);
+        expect(worldAfter.y).toBeCloseTo(expectedPositionAfterSnap.y);
+    });
+
+    it('is a no-op for already-aligned rotations', () => {
+        // Both groups at rotation 90°; same behaviour as the existing tests.
+        const movedGroup: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 100, y: 50 },
+            rotation: 90,
+        };
+        const targetGroup: PieceGroup = {
+            id: 1,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 300, y: 50 },
+            rotation: 90,
+        };
+
+        mergeGroups(makeGameState({ groups: [movedGroup, targetGroup] }), movedGroup, targetGroup, { x: 0, y: 0 });
+
+        // World position of piece0 through targetGroup should equal pre-merge
+        // world pos through movedGroup (no rotation change, no snap delta).
+        const worldPiece0 = getWorldPosition({ x: 0, y: 0 }, 0, targetGroup);
+        // Before merge, world pos = movedGroup.position + rotatePoint({0,0},90°) = (100,50)
+        expect(worldPiece0.x).toBeCloseTo(100);
+        expect(worldPiece0.y).toBeCloseTo(50);
+
+        // Rotation unchanged
+        expect(targetGroup.rotation).toBeCloseTo(90);
     });
 });
