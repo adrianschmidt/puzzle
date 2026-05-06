@@ -41,8 +41,8 @@ describe('rotate-handle gesture', () => {
         return createRotateHandle({
             container,
             rotationFocus,
-            onRotate,
-            onCommit,
+            onRotate: onRotate as (groupId: number, deltaDegrees: number) => void,
+            onCommit: onCommit as (groupId: number) => void,
             getFocusedGroupScreenBounds: () => ({ left: 100, right: 200, top: 100, bottom: 200 }),
             getViewportSize: () => ({ width: 800, height: 600 }),
             getGroupRotation: () => 0,
