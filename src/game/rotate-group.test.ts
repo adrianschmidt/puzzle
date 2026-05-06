@@ -5,17 +5,9 @@ import { getGroupLocalBounds } from './group-bounds.js';
 import { buildPiecesById } from '../test-helpers/fixtures.js';
 
 function makeEdge(id: number, sx: number, sy: number, ex: number, ey: number): Edge {
-    return {
-        id,
-        mateEdgeId: -1,
-        matePieceId: -1,
-        path: '',
-        start: { x: sx, y: sy },
-        end: { x: ex, y: ey },
-    };
+    return { id, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: sx, y: sy }, end: { x: ex, y: ey } };
 }
 
-/** 100×100 piece with four plain edges. */
 function makeSquarePiece(id: number): Piece {
     return {
         id,
@@ -31,20 +23,20 @@ function makeSquarePiece(id: number): Piece {
 }
 
 describe('rotateGroup', () => {
-    it('increments rotation clockwise, wrapping 3 → 0', () => {
+    it('rotates by +90° and normalises into [0, 360)', () => {
         const piece = makeSquarePiece(0);
         const group: PieceGroup = {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),
             position: { x: 0, y: 0 },
-            rotation: 3,
+            rotation: 270,
         };
 
-        rotateGroup(group, buildPiecesById([piece]), 'cw');
+        rotateGroup(group, buildPiecesById([piece]), 90);
         expect(group.rotation).toBe(0);
     });
 
-    it('decrements rotation counter-clockwise, wrapping 0 → 3', () => {
+    it('rotates by -90° and wraps 0 → 270', () => {
         const piece = makeSquarePiece(0);
         const group: PieceGroup = {
             id: 0,
@@ -53,11 +45,24 @@ describe('rotateGroup', () => {
             rotation: 0,
         };
 
-        rotateGroup(group, buildPiecesById([piece]), 'ccw');
-        expect(group.rotation).toBe(3);
+        rotateGroup(group, buildPiecesById([piece]), -90);
+        expect(group.rotation).toBe(270);
     });
 
-    it('preserves the world-space bbox centre across a CW rotation', () => {
+    it('accepts non-quarter-turn deltas (e.g. 47°)', () => {
+        const piece = makeSquarePiece(0);
+        const group: PieceGroup = {
+            id: 0,
+            pieces: new Map([[0, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 0 },
+            rotation: 0,
+        };
+
+        rotateGroup(group, buildPiecesById([piece]), 47);
+        expect(group.rotation).toBeCloseTo(47);
+    });
+
+    it('preserves the world-space bbox centre across a +90° rotation', () => {
         const piece = makeSquarePiece(0);
         const group: PieceGroup = {
             id: 0,
@@ -72,17 +77,13 @@ describe('rotateGroup', () => {
             y: group.position.y + bounds.minY + bounds.height / 2,
         };
 
-        rotateGroup(group, buildPiecesById([piece]), 'cw');
+        rotateGroup(group, buildPiecesById([piece]), 90);
 
-        // After rotation, the bbox is still a 100×100 region in local coords,
-        // but the group's world-space centre must not have moved.
-        // World centre after = position + R(centre_local).
-        // bounds minX/minY/width/height stay the same (they're in local space).
         const localCentre = {
             x: bounds.minX + bounds.width / 2,
             y: bounds.minY + bounds.height / 2,
         };
-        // R=1 (CW): (x,y) → (-y, x)
+        // 90° CW: (x,y) → (-y, x)
         const rotated = { x: -localCentre.y, y: localCentre.x };
         const worldCentreAfter = {
             x: group.position.x + rotated.x,
@@ -93,7 +94,7 @@ describe('rotateGroup', () => {
         expect(worldCentreAfter.y).toBeCloseTo(worldCentreBefore.y);
     });
 
-    it('is inverse-consistent: CW then CCW returns to the starting state', () => {
+    it('is inverse-consistent: +90 then -90 returns to the starting state', () => {
         const piece = makeSquarePiece(0);
         const group: PieceGroup = {
             id: 0,
@@ -103,15 +104,15 @@ describe('rotateGroup', () => {
         };
         const startPosition = { ...group.position };
 
-        rotateGroup(group, buildPiecesById([piece]), 'cw');
-        rotateGroup(group, buildPiecesById([piece]), 'ccw');
+        rotateGroup(group, buildPiecesById([piece]), 90);
+        rotateGroup(group, buildPiecesById([piece]), -90);
 
         expect(group.rotation).toBe(0);
         expect(group.position.x).toBeCloseTo(startPosition.x);
         expect(group.position.y).toBeCloseTo(startPosition.y);
     });
 
-    it('four CW rotations restore rotation and position', () => {
+    it('four +90° rotations restore rotation and position', () => {
         const piece = makeSquarePiece(0);
         const group: PieceGroup = {
             id: 0,
@@ -121,7 +122,7 @@ describe('rotateGroup', () => {
         };
         const startPosition = { ...group.position };
 
-        for (let i = 0; i < 4; i++) rotateGroup(group, buildPiecesById([piece]), 'cw');
+        for (let i = 0; i < 4; i++) rotateGroup(group, buildPiecesById([piece]), 90);
 
         expect(group.rotation).toBe(0);
         expect(group.position.x).toBeCloseTo(startPosition.x);
@@ -129,7 +130,6 @@ describe('rotateGroup', () => {
     });
 
     it('handles multi-piece groups by pivoting around the combined bbox centre', () => {
-        // Two pieces side-by-side: combined bbox 200×100, centre at local (100, 50)
         const p0 = makeSquarePiece(0);
         const p1 = makeSquarePiece(1);
         const group: PieceGroup = {
@@ -148,14 +148,12 @@ describe('rotateGroup', () => {
             y: group.position.y + boundsBefore.minY + boundsBefore.height / 2,
         };
 
-        rotateGroup(group, buildPiecesById([p0, p1]), 'cw');
+        rotateGroup(group, buildPiecesById([p0, p1]), 90);
 
-        // Bounds are in un-rotated local space, so they are unchanged
         const localCentre = {
             x: boundsBefore.minX + boundsBefore.width / 2,
             y: boundsBefore.minY + boundsBefore.height / 2,
         };
-        // R=1 CW
         const rotated = { x: -localCentre.y, y: localCentre.x };
         const worldCentreAfter = {
             x: group.position.x + rotated.x,

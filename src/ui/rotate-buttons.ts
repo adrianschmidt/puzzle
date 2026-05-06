@@ -10,7 +10,8 @@
  */
 
 import type { RotationFocus } from '../interaction/rotation-focus.js';
-import type { RotationDirection } from '../game/rotate-group.js';
+
+export type RotationDirection = 'cw' | 'ccw';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
