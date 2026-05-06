@@ -66,7 +66,9 @@ export function mergeGroups(
         y: movedGroup.position.y - targetGroup.position.y,
     };
     const inverseTurns = normaliseQuarterTurns(4 - targetGroup.rotation);
-    const localDelta = rotatePoint(rawDiff, inverseTurns);
+    // TODO(rotation-as-degrees): the * 90 factor will go away in Task 6
+    // when group-merging is migrated to operate in degrees natively.
+    const localDelta = rotatePoint(rawDiff, inverseTurns * 90);
 
     for (const [pieceId, offset] of movedGroup.pieces) {
         targetGroup.pieces.set(pieceId, {

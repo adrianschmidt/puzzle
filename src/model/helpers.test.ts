@@ -235,8 +235,9 @@ describe('rotatePoint (degrees)', () => {
     it('handles non-quarter-turn angles', () => {
         const p = { x: 1, y: 0 };
         const r = rotatePoint(p, 47);
-        expect(r.x).toBeCloseTo(Math.cos((47 * Math.PI) / 180));
-        expect(r.y).toBeCloseTo(Math.sin((47 * Math.PI) / 180));
+        // 47° clockwise rotation of (1, 0) around origin in screen-y-down coords.
+        expect(r.x).toBeCloseTo(0.6820, 3);
+        expect(r.y).toBeCloseTo(0.7314, 3);
     });
 
     it('handles negative and >360° inputs (no normalisation needed at this layer)', () => {
@@ -282,23 +283,23 @@ describe('localToWorld', () => {
 
     it('rotates around the group origin before translating', () => {
         // Local (10, 0) rotated 90° CW → (0, 10); + position (100, 200)
-        const g = {
+        const g: PieceGroup = {
             id: 1,
             pieces: new Map(),
             position: { x: 100, y: 200 },
-            rotation: 90,
-        } as unknown as PieceGroup;
+            rotation: 1,
+        };
         expect(localToWorld({ x: 10, y: 0 }, g)).toEqual({ x: 100, y: 210 });
     });
 
     it('handles 180° rotation', () => {
         // Local (10, 5) rotated 180° → (-10, -5); + position (50, 50)
-        const g = {
+        const g: PieceGroup = {
             id: 1,
             pieces: new Map(),
             position: { x: 50, y: 50 },
-            rotation: 180,
-        } as unknown as PieceGroup;
+            rotation: 2,
+        };
         expect(localToWorld({ x: 10, y: 5 }, g)).toEqual({ x: 40, y: 45 });
     });
 });
@@ -336,12 +337,12 @@ describe('getWorldPosition', () => {
 
     it('applies rotation to the local point before translating', () => {
         // Group at world (100, 200), rotated 90° CW, single piece at local (0,0)
-        const g = {
+        const g: PieceGroup = {
             id: 1,
             pieces: new Map([[5, { x: 0, y: 0 }]]),
             position: { x: 100, y: 200 },
-            rotation: 90,
-        } as unknown as PieceGroup;
+            rotation: 1,
+        };
 
         // Local point (10, 0) rotated 90° CW → (0, 10); then + position
         expect(getWorldPosition({ x: 10, y: 0 }, 5, g)).toEqual({ x: 100, y: 210 });
@@ -349,12 +350,12 @@ describe('getWorldPosition', () => {
 
     it('applies rotation with a non-zero piece offset', () => {
         // Offset + point = local (10, 0); rotated 180° → (-10, 0)
-        const g = {
+        const g: PieceGroup = {
             id: 1,
             pieces: new Map([[5, { x: 10, y: 0 }]]),
             position: { x: 50, y: 50 },
-            rotation: 180,
-        } as unknown as PieceGroup;
+            rotation: 2,
+        };
 
         expect(getWorldPosition({ x: 0, y: 0 }, 5, g)).toEqual({ x: 40, y: 50 });
     });

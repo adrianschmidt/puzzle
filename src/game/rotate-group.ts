@@ -34,9 +34,11 @@ export function rotateGroup(
         y: bounds.minY + bounds.height / 2,
     };
 
+    // TODO(rotation-as-degrees): the * 90 factors will go away in Task 4
+    // when rotateGroup is migrated to operate in degrees natively.
     // Preserve world-space centre: position' + R_new(C) = position + R_old(C)
-    const rotatedOld = rotatePoint(centreLocal, oldRotation);
-    const rotatedNew = rotatePoint(centreLocal, newRotation);
+    const rotatedOld = rotatePoint(centreLocal, oldRotation * 90);
+    const rotatedNew = rotatePoint(centreLocal, newRotation * 90);
     group.position = {
         x: group.position.x + rotatedOld.x - rotatedNew.x,
         y: group.position.y + rotatedOld.y - rotatedNew.y,

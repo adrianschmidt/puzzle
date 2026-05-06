@@ -213,7 +213,9 @@ export function normaliseDegrees(deg: number): number {
  * use `getWorldPosition` instead, which adds the piece offset first).
  */
 export function localToWorld(local: Point, group: PieceGroup): Point {
-    const rotated = rotatePoint(local, group.rotation);
+    // TODO(rotation-as-degrees): the * 90 factor will go away in Task 3
+    // when PieceGroup.rotation is widened to degrees natively.
+    const rotated = rotatePoint(local, group.rotation * 90);
 
     return {
         x: group.position.x + rotated.x,
