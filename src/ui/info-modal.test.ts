@@ -132,4 +132,19 @@ describe('createInfoModal', () => {
         );
         expect(firstSection?.classList.contains('share-section')).toBe(true);
     });
+
+    it('mentions Free rotation in both the How to Play and Cut Styles sections', () => {
+        createInfoModal({ container });
+
+        const sections = container.querySelectorAll<HTMLElement>('section.info-section');
+        const howToPlay = Array.from(sections).find(
+            (s) => s.querySelector('h3')?.textContent === 'How to Play',
+        );
+        const cutStyles = Array.from(sections).find(
+            (s) => s.querySelector('h3')?.textContent === 'Cut Styles',
+        );
+
+        expect(howToPlay?.textContent).toContain('Free rotation');
+        expect(cutStyles?.textContent).toContain('Free rotation');
+    });
 });

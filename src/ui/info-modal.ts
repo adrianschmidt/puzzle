@@ -131,7 +131,13 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(buttons, [
         '↺ ↻ ',
         ['strong', 'Rotate'],
-        ' (when rotation is enabled) — Tap any piece to bring up the ↺ / ↻ buttons next to it; tap them to rotate that piece (and anything merged with it) 90°. They fade out after a few seconds or when you tap elsewhere.',
+        ' (when rotation is enabled) — Tap any piece to bring up rotation controls next to it. With ',
+        ['strong', '90° rotation'],
+        ', the ↺ / ↻ buttons rotate the focused piece (and anything merged with it) by a quarter-turn. With ',
+        ['strong', 'Free rotation'],
+        " (composable puzzles only), a single round handle below the focused piece lets you drag to rotate continuously — the group follows your finger like a dial. Pieces snap together when their rotations are close to alignment; how close they need to be depends on your ",
+        ['strong', 'Snap distance'],
+        ' setting.',
     ]);
     list.appendChild(buttons);
 
@@ -174,10 +180,18 @@ function buildCutStylesSection(): HTMLElement {
     fractalLi.appendChild(fractalSub);
     list.appendChild(fractalLi);
 
-    appendInlineLi(list, [
+    const composableLi = document.createElement('li');
+    appendInline(composableLi, [
         ['strong', 'Composable'],
-        ' (experimental) — Customizable cuts with sliders in the new-game dialog',
+        ' (experimental) — Customizable cuts with sliders in the new-game dialog. Options:',
     ]);
+    const composableSub = document.createElement('ul');
+    appendInlineLi(composableSub, [
+        ['strong', 'Free rotation'],
+        ' (when rotation is also enabled) — Pieces rotate continuously to any angle instead of snapping to the four 90° orientations. Use the round drag handle below the focused piece.',
+    ]);
+    composableLi.appendChild(composableSub);
+    list.appendChild(composableLi);
 
     section.appendChild(list);
     return section;
