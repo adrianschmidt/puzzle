@@ -14,9 +14,38 @@
  *   returned as offsets relative to `group.position`.
  */
 
-import type { Piece, PieceGroup } from '../model/types.js';
+import type { Edge, Piece, PieceGroup } from '../model/types.js';
 import { localToWorld } from '../model/helpers.js';
 import { getPathBounds } from './path-bounds.js';
+
+/**
+ * Memoised path-bounds for an edge.
+ *
+ * `getPathBounds` is a regex-based parser; on a 50-piece group with four
+ * edges per piece, free-rotation drag would re-parse ~200 path strings on
+ * every pointermove. Edge objects are immutable for the lifetime of a
+ * puzzle (paths are baked at generation time and never reassigned), so we
+ * key the cache directly off the Edge reference. WeakMap means the cache
+ * drops automatically when a new puzzle replaces `state.piecesById`.
+ *
+ * The returned BoundingRect is shared with future callers — treat it as
+ * read-only.
+ */
+const edgePathBoundsCache = new WeakMap<
+    Edge,
+    { minX: number; minY: number; maxX: number; maxY: number }
+>();
+
+function cachedEdgePathBounds(
+    edge: Edge,
+): { minX: number; minY: number; maxX: number; maxY: number } {
+    let bounds = edgePathBoundsCache.get(edge);
+    if (!bounds) {
+        bounds = getPathBounds(edge.path, edge.start);
+        edgePathBoundsCache.set(edge, bounds);
+    }
+    return bounds;
+}
 
 /**
  * A simple axis-aligned bounding rectangle.
@@ -90,7 +119,7 @@ export function getGroupBounds(
             expand(offset.x + edge.end.x, offset.y + edge.end.y);
 
             if (options.includePathGeometry && edge.path) {
-                const pb = getPathBounds(edge.path, edge.start);
+                const pb = cachedEdgePathBounds(edge);
                 expand(offset.x + pb.minX, offset.y + pb.minY);
                 expand(offset.x + pb.maxX, offset.y + pb.maxY);
             }
