@@ -86,6 +86,7 @@ describe('createNewGameDialog', () => {
             composableConfig: undefined,
             fractalConfig: undefined,
             rotationEnabled: false,
+            freeRotation: false,
             imageSource: 'random',
             imageCategory: 'any',
             vibrant: false,
@@ -206,6 +207,7 @@ describe('createNewGameDialog', () => {
             composableConfig: undefined,
             fractalConfig: { borderless: false },
             rotationEnabled: false,
+            freeRotation: false,
             imageSource: 'random',
             imageCategory: 'any',
             vibrant: false,
@@ -237,6 +239,7 @@ describe('createNewGameDialog', () => {
             composableConfig: undefined,
             fractalConfig: { borderless: false },
             rotationEnabled: false,
+            freeRotation: false,
             imageSource: 'random',
             imageCategory: 'any',
             vibrant: false,
@@ -296,5 +299,227 @@ describe('createNewGameDialog', () => {
             '.rotation-row input[type="checkbox"]',
         );
         expect(checkbox?.checked).toBe(true);
+    });
+});
+
+// CUT_STYLE_OPTIONS order: 0=classic, 1=fractal, 2=composable
+const COMPOSABLE_INDEX = 2;
+const FRACTAL_INDEX = 1;
+const CLASSIC_INDEX = 0;
+
+describe('free rotation sub-checkbox', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    it('is hidden when "Enable rotation" is unchecked', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: false,
+            onSelect: vi.fn(),
+        });
+
+        const row = container.querySelector<HTMLElement>('.free-rotation-row');
+        expect(row).not.toBeNull();
+        expect(row!.style.display).toBe('none');
+    });
+
+    it('is hidden when cut style is not composable', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: FRACTAL_INDEX,
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+
+        const row = container.querySelector<HTMLElement>('.free-rotation-row');
+        expect(row).not.toBeNull();
+        expect(row!.style.display).toBe('none');
+    });
+
+    it('is hidden when rotation is enabled but classic cut style is active', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: CLASSIC_INDEX,
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+
+        const row = container.querySelector<HTMLElement>('.free-rotation-row');
+        expect(row).not.toBeNull();
+        expect(row!.style.display).toBe('none');
+    });
+
+    it('appears when rotation is enabled AND cut style is composable', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+
+        const row = container.querySelector<HTMLElement>('.free-rotation-row');
+        expect(row).not.toBeNull();
+        expect(row!.style.display).not.toBe('none');
+    });
+
+    it('becomes visible when user enables rotation while composable is active', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: false,
+            onSelect: vi.fn(),
+        });
+
+        const row = container.querySelector<HTMLElement>('.free-rotation-row')!;
+        expect(row.style.display).toBe('none');
+
+        const rotationCheckbox = container.querySelector<HTMLInputElement>(
+            '.rotation-row input[type="checkbox"]',
+        )!;
+        rotationCheckbox.checked = true;
+        rotationCheckbox.dispatchEvent(new Event('change'));
+
+        expect(row.style.display).not.toBe('none');
+    });
+
+    it('becomes hidden when user switches away from composable while rotation is on', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+
+        const row = container.querySelector<HTMLElement>('.free-rotation-row')!;
+        expect(row.style.display).not.toBe('none');
+
+        // Switch to Fractal
+        const cutStyleButtons =
+            container.querySelectorAll<HTMLButtonElement>('.cut-style-option');
+        cutStyleButtons[FRACTAL_INDEX].click();
+
+        expect(row.style.display).toBe('none');
+    });
+
+    it('produces freeRotation: true when both toggles are on at submit', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: true,
+            savedFreeRotationEnabled: true,
+            onSelect,
+        });
+
+        const sizeButtons =
+            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
+        sizeButtons[0].click();
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ freeRotation: true }),
+        );
+    });
+
+    it('produces freeRotation: false when the sub-checkbox is unchecked', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: true,
+            savedFreeRotationEnabled: false,
+            onSelect,
+        });
+
+        const sizeButtons =
+            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
+        sizeButtons[0].click();
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ freeRotation: false }),
+        );
+    });
+
+    it('produces freeRotation: false when rotation is off (even if sub-checkbox state was saved as on)', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: false,
+            savedFreeRotationEnabled: true,
+            onSelect,
+        });
+
+        const sizeButtons =
+            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
+        sizeButtons[0].click();
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ freeRotation: false }),
+        );
+    });
+
+    it('produces freeRotation: false when cut style is not composable', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: CLASSIC_INDEX,
+            savedRotationEnabled: true,
+            savedFreeRotationEnabled: true,
+            onSelect,
+        });
+
+        const sizeButtons =
+            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
+        sizeButtons[0].click();
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ freeRotation: false }),
+        );
+    });
+
+    it('initialises the sub-checkbox from savedFreeRotationEnabled', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: true,
+            savedFreeRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+
+        const checkbox = container.querySelector<HTMLInputElement>(
+            '.free-rotation-row input[type="checkbox"]',
+        );
+        expect(checkbox?.checked).toBe(true);
+    });
+
+    it('defaults the sub-checkbox to unchecked when savedFreeRotationEnabled is not provided', () => {
+        createNewGameDialog({
+            container,
+            selectedIndex: 1,
+            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+
+        const checkbox = container.querySelector<HTMLInputElement>(
+            '.free-rotation-row input[type="checkbox"]',
+        );
+        expect(checkbox?.checked).toBe(false);
     });
 });

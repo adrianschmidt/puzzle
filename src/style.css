@@ -687,6 +687,10 @@ html, body {
   margin-bottom: 0;
 }
 
+.free-rotation-row {
+  padding-left: 1.5em;
+}
+
 .dialog-row-label {
   font-size: 0.75rem;
   opacity: 0.8;
