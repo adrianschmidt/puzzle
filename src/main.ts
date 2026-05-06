@@ -11,6 +11,7 @@ import {
     applyGatheredPositions,
     getGroupLocalBounds,
     getGroupVisualBounds,
+    type MergeResult,
 } from './game/index.js';
 import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
 import {
@@ -26,6 +27,7 @@ import {
     createSelectToolButton,
     createDeselectButton,
     createRotateButtons,
+    createRotateHandle,
     getActiveTolerance,
     createAttributionElement,
     removeAttribution,
@@ -43,7 +45,7 @@ import {
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
 import { rotateGroup } from './game/rotate-group.js';
-import { buildGroupIndexes, rotatePoint } from './model/helpers.js';
+import { buildGroupIndexes, rotatePoint, localToWorld } from './model/helpers.js';
 import { reorderGroupsAfterDrop } from './game/z-order.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import {
@@ -421,6 +423,66 @@ function autoSave(): void {
 }
 
 /**
+ * Post-commit handling shared by piece-drag drops and rotate-handle commits.
+ * Both flows produce a `MergeResult`, then need the same selection prune,
+ * re-render, z-reorder, and win-detection sequence.
+ *
+ * `droppedGroupIds` is the caller-supplied list of groups whose z-order
+ * should be refreshed; absorbed IDs are remapped to the surviving merged
+ * group. Drag flows pass the multi-select expansion; rotate-handle
+ * commits pass just the result group.
+ */
+function applyMergeResult(
+    result: MergeResult,
+    droppedGroupIds: readonly number[],
+): void {
+    // Prune absorbed groups from selection. The surviving merged group
+    // inherits selection if any absorbed group was selected.
+    const validIds = new Set(gameState.groups.map(g => g.id));
+    const hadSelectedAbsorbed = [...selectionManager.selectedGroupIds]
+        .some(id => !validIds.has(id));
+    selectionManager.pruneStale(validIds);
+    if (hadSelectedAbsorbed) {
+        selectionManager.select(result.group.id);
+    }
+
+    // If the rotate-handle's anchor group was absorbed (free-rotation
+    // commit-merge), retarget focus to the survivor — otherwise the
+    // handle stays anchored to a now-deleted group until the idle timer
+    // expires, and the next pointerdown silently no-ops.
+    const focused = rotationFocus.focusedGroupId;
+    if (focused !== null && !validIds.has(focused)) {
+        rotationFocus.setFocus(result.group.id);
+    }
+
+    renderer.renderState(gameState);
+    renderer.flashMergePulse(result.group.id);
+    for (const selectedId of selectionManager.selectedGroupIds) {
+        renderer.setGroupSelected(selectedId, true);
+    }
+
+    // Remap absorbed IDs from the caller-supplied list to the surviving
+    // merged group so every entry still names a real group.
+    const remapped = droppedGroupIds.map(id =>
+        gameState.groups.some(g => g.id === id) ? id : result.group.id,
+    );
+    const unique = [...new Set(remapped)];
+    reorderGroupsAfterDrop(unique, gameState, (gId) => renderer.bringGroupToFront(gId));
+
+    if (checkAndMarkWin(gameState)) {
+        track('puzzle-completed', buildPuzzleCompletedData(gameState));
+        if (gameState.groups.length === 1) {
+            zoomToFitCompletedPuzzle(gameState.groups[0], () => {
+                showCompletionOverlay();
+            });
+        } else {
+            // Fallback: shouldn't happen if the puzzle just completed.
+            showCompletionOverlay();
+        }
+    }
+}
+
+/**
  * Update the attribution display based on the current game state.
  */
 function updateAttribution(): void {
@@ -448,7 +510,7 @@ function initGame(state: GameState): void {
     gameState = state;
     renderer.renderState(gameState);
     updateAttribution();
-    updateRotateButtonsVisibility();
+    updateRotationUiVisibility();
 
     if (gameState.completed) {
         showCompletionOverlay();
@@ -481,55 +543,10 @@ function initGame(state: GameState): void {
 
             const result = processDrop(groupId, gameState, tolerance);
             if (result) {
-                // Prune stale group IDs from selection (absorbed groups no longer exist).
-                // The surviving group inherits selection if any merged group was selected.
-                const validIds = new Set(gameState.groups.map(g => g.id));
-                const hadSelectedAbsorbed = [...selectionManager.selectedGroupIds]
-                    .some(id => !validIds.has(id));
-                selectionManager.pruneStale(validIds);
-                if (hadSelectedAbsorbed) {
-                    selectionManager.select(result.group.id);
-                }
-
-                renderer.renderState(gameState);
-                renderer.flashMergePulse(result.group.id);
-                // Re-apply selection visuals after re-render
-                for (const selectedId of selectionManager.selectedGroupIds) {
-                    renderer.setGroupSelected(selectedId, true);
-                }
-
-                // Update the dropped groups list to use the merged result group
-                const finalDroppedGroupIds = droppedGroupIds.map(id => {
-                    // If this group was absorbed into the merged result, use the result group
-                    if (!gameState.groups.some(g => g.id === id)) {
-                        return result.group.id;
-                    }
-                    return id;
-                });
-
-                // Remove duplicates
-                const uniqueDroppedGroupIds = [...new Set(finalDroppedGroupIds)];
-
-                // Apply z-reorder after merge
-                reorderGroupsAfterDrop(uniqueDroppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
-
+                applyMergeResult(result, droppedGroupIds);
                 autoSave();
-
-                if (checkAndMarkWin(gameState)) {
-                    track('puzzle-completed', buildPuzzleCompletedData(gameState));
-                    // Animate zoom to fit the completed puzzle, then show overlay
-                    if (gameState.groups.length === 1) {
-                        zoomToFitCompletedPuzzle(gameState.groups[0], () => {
-                            showCompletionOverlay();
-                        });
-                    } else {
-                        // Fallback: show overlay immediately if multiple groups (shouldn't happen)
-                        showCompletionOverlay();
-                    }
-                    autoSave();
-                }
             } else {
-                // No merge occurred, apply z-reorder to the original dropped groups
+                // No merge: z-reorder the original dropped groups as-is.
                 reorderGroupsAfterDrop(droppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
             }
         },
@@ -788,11 +805,61 @@ const rotateButtons = createRotateButtons({
     getFocusedGroupScreenBounds,
 });
 
-function updateRotateButtonsVisibility(): void {
+const rotateHandle = createRotateHandle({
+    container: app,
+    rotationFocus,
+    onRotate: (groupId, deltaDegrees) => {
+        if (!gameState) return;
+        const group = gameState.groupsById.get(groupId);
+        if (!group) return;
+        rotateGroup(group, gameState.piecesById, deltaDegrees);
+        renderer.renderState(gameState);
+        // Re-apply selection visuals after re-render.
+        for (const selectedId of selectionManager.selectedGroupIds) {
+            renderer.setGroupSelected(selectedId, true);
+        }
+        // Don't autoSave on every drag tick — autoSave fires on commit.
+    },
+    onCommit: (groupId) => {
+        if (!gameState) return;
+
+        const tolerance = getActiveTolerance(
+            gameState.imageSize.width,
+            gameState.gridSize.cols,
+            gameState.cutStyle,
+        );
+
+        const result = processDrop(groupId, gameState, tolerance);
+        if (result) {
+            applyMergeResult(result, [result.group.id]);
+        }
+        autoSave();
+    },
+    getFocusedGroupScreenBounds,
+    getGroupRotation: (groupId) => gameState?.groupsById.get(groupId)?.rotation ?? null,
+    getGroupPivotWorld: (groupId) => {
+        const group = gameState?.groupsById.get(groupId);
+        if (!group || !gameState) return null;
+        const bounds = getGroupLocalBounds(group, gameState.piecesById);
+        const centreLocal = {
+            x: bounds.minX + bounds.width / 2,
+            y: bounds.minY + bounds.height / 2,
+        };
+        return localToWorld(centreLocal, group);
+    },
+    screenToWorld: (clientX, clientY) => viewportTransform.screenToWorld({ x: clientX, y: clientY }),
+});
+
+function updateRotationUiVisibility(): void {
     if (gameState?.rotationMode === 'quarter-turn') {
         rotateButtons.show();
+        rotateHandle.hide();
+    } else if (gameState?.rotationMode === 'free') {
+        rotateButtons.hide();
+        rotateHandle.show();
     } else {
         rotateButtons.hide();
+        rotateHandle.hide();
     }
 }
 
