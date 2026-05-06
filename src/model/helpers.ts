@@ -170,18 +170,21 @@ export function moveGroup(
 }
 
 /**
- * Rotate a point by `quarterTurns` 90°-clockwise steps around the origin.
+ * Rotate a point by `degrees` clockwise around the origin.
  *
- * Used for converting between a group's un-rotated local space and
- * its rotated world projection. `quarterTurns` must be 0, 1, 2, or 3.
+ * Used for converting between a group's un-rotated local space and its
+ * rotated world projection. Accepts any float (positive, negative, or out
+ * of `[0, 360)` range) — callers that need a normalised group rotation
+ * should pass values through `normaliseDegrees` themselves.
  */
-export function rotatePoint(point: Point, quarterTurns: 0 | 1 | 2 | 3): Point {
-    switch (quarterTurns) {
-        case 0: return { x: point.x, y: point.y };
-        case 1: return { x: -point.y, y: point.x };
-        case 2: return { x: -point.x, y: -point.y };
-        case 3: return { x: point.y, y: -point.x };
-    }
+export function rotatePoint(point: Point, degrees: number): Point {
+    const rad = (degrees * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    return {
+        x: point.x * cos - point.y * sin,
+        y: point.x * sin + point.y * cos,
+    };
 }
 
 /**
