@@ -231,6 +231,37 @@ describe('rotationMode', () => {
             expect([0, 90, 180, 270]).toContain(group.rotation);
         }
     });
+
+    it('assigns random float-degree rotations when rotationMode is "free"', () => {
+        // random() always returns 0.5, so every group should be at exactly 180°
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom([0.5]),
+            rotationMode: 'free',
+        });
+
+        expect(state.rotationMode).toBe('free');
+        for (const group of state.groups) {
+            expect(group.rotation).toBeCloseTo(180);
+        }
+    });
+
+    it('produces float angles in [0, 360) for free mode with a varying PRNG', () => {
+        const seq = [0.0, 0.13, 0.5, 0.789, 0.999];
+        const state = createNewGame('test.jpg', IMAGE_SIZE, VIEWPORT, DEFAULT_GRID, {
+            random: seededRandom(seq),
+            rotationMode: 'free',
+        });
+
+        expect(state.rotationMode).toBe('free');
+        // At least one group should have a non-quarter-turn rotation
+        const quarterTurns = new Set([0, 90, 180, 270]);
+        expect(state.groups.some((g) => !quarterTurns.has(g.rotation))).toBe(true);
+        // Every rotation should be in [0, 360)
+        for (const group of state.groups) {
+            expect(group.rotation).toBeGreaterThanOrEqual(0);
+            expect(group.rotation).toBeLessThan(360);
+        }
+    });
 });
 
 describe('randomizePositions', () => {
