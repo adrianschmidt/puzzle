@@ -82,27 +82,30 @@ function makeBidirectionalRotateIcon(): SVGElement {
     svg.setAttribute('stroke-linecap', 'round');
     svg.setAttribute('stroke-linejoin', 'round');
 
-    // ~330° arc going around the bottom from (9,4.5) to (15,4.5), leaving
-    // a small gap at the top of the radius-8 circle centred at (12,12).
-    // large-arc=1 picks the long way around; sweep=0 (CCW in screen coords)
-    // forces the centre to sit below the chord, so the arc loops around the
-    // bottom rather than escaping above the viewBox.
+    // 270° arc with a 90° gap at the top of a radius-8 circle centred at
+    // (12, 12). Endpoints at (6, 6) [≈10:30] and (18, 6) [≈1:30]. sweep=0
+    // (CCW in screen coords) places the centre below the chord so the arc
+    // loops around the bottom; large-arc=1 takes the long way.
     const arc = document.createElementNS(SVG_NS, 'path');
-    arc.setAttribute('d', 'M9 4.5 A 8 8 0 1 0 15 4.5');
+    arc.setAttribute('d', 'M6 6 A 8 8 0 1 0 18 6');
     svg.appendChild(arc);
 
-    // Left arrowhead: V apex at (6,2), legs back to (4.5,6) and (9,4.5).
-    // The (9,4.5) leg merges with the arc's start — apex points up-and-left
-    // (CCW exit direction).
-    const headLeft = document.createElementNS(SVG_NS, 'polyline');
-    headLeft.setAttribute('points', '4.5 6 6 2 9 4.5');
+    // Filled triangle arrowheads at the gap, apexes at (3, 3) and (21, 3) —
+    // pointing tangentially outward (up-and-left for the CCW exit, up-and-
+    // right for the CW exit). Filled triangles read more clearly as
+    // directional arrows than stroked Vs at this size, and the contrast in
+    // style with the stroke-only quarter-turn rotate buttons reinforces
+    // that this is a different kind of control.
+    const headLeft = document.createElementNS(SVG_NS, 'polygon');
+    headLeft.setAttribute('points', '3 3, 5 7, 7 5');
+    headLeft.setAttribute('fill', 'currentColor');
+    headLeft.setAttribute('stroke', 'none');
     svg.appendChild(headLeft);
 
-    // Right arrowhead: V apex at (18,2), legs back to (15,4.5) and (19.5,6).
-    // The (15,4.5) leg merges with the arc's end — apex points up-and-right
-    // (CW exit direction).
-    const headRight = document.createElementNS(SVG_NS, 'polyline');
-    headRight.setAttribute('points', '15 4.5 18 2 19.5 6');
+    const headRight = document.createElementNS(SVG_NS, 'polygon');
+    headRight.setAttribute('points', '21 3, 19 7, 17 5');
+    headRight.setAttribute('fill', 'currentColor');
+    headRight.setAttribute('stroke', 'none');
     svg.appendChild(headRight);
 
     return svg;
