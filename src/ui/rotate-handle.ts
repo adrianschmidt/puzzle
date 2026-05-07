@@ -82,10 +82,13 @@ function makeBidirectionalRotateIcon(): SVGElement {
     svg.setAttribute('stroke-linecap', 'round');
     svg.setAttribute('stroke-linejoin', 'round');
 
-    // ~330° arc: large-arc sweep (flag=1) from (9,4.5) to (15,4.5), leaving
+    // ~330° arc going around the bottom from (9,4.5) to (15,4.5), leaving
     // a small gap at the top of the radius-8 circle centred at (12,12).
+    // large-arc=1 picks the long way around; sweep=0 (CCW in screen coords)
+    // forces the centre to sit below the chord, so the arc loops around the
+    // bottom rather than escaping above the viewBox.
     const arc = document.createElementNS(SVG_NS, 'path');
-    arc.setAttribute('d', 'M9 4.5 A 8 8 0 1 1 15 4.5');
+    arc.setAttribute('d', 'M9 4.5 A 8 8 0 1 0 15 4.5');
     svg.appendChild(arc);
 
     // Left arrowhead: V apex at (6,2), legs back to (4.5,6) and (9,4.5).
