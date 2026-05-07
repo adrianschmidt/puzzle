@@ -66,9 +66,11 @@ interface ActiveHandle {
 }
 
 /**
- * Two opposing curved arrows forming a closed circle — signals that the
- * group can rotate freely in either direction. Stroke styling matches the
- * existing rotate-button SVG so the two button variants visually rhyme.
+ * Two opposing crescent arrows in a pinwheel — signals that the group can
+ * rotate freely in either direction. One crescent sits in the upper-left,
+ * the other in the lower-right; each arrowhead uses the corner-style
+ * polyline matching the existing rotate-buttons icon. Stroke styling matches
+ * those buttons so the two variants visually rhyme.
  */
 function makeBidirectionalRotateIcon(): SVGElement {
     const svg = document.createElementNS(SVG_NS, 'svg');
@@ -81,20 +83,22 @@ function makeBidirectionalRotateIcon(): SVGElement {
     svg.setAttribute('stroke-linecap', 'round');
     svg.setAttribute('stroke-linejoin', 'round');
 
-    // Top half arc + arrowhead (clockwise direction).
+    // Upper-left crescent: arc going CW from (4,14) to (14,4).
     const arc1 = document.createElementNS(SVG_NS, 'path');
-    arc1.setAttribute('d', 'M3 12 A9 9 0 0 1 21 12');
+    arc1.setAttribute('d', 'M4 14 A8 8 0 0 1 14 4');
     svg.appendChild(arc1);
+    // Corner-style arrowhead at (14,4) — two lines meeting at the arc endpoint.
     const head1 = document.createElementNS(SVG_NS, 'polyline');
-    head1.setAttribute('points', '21 5 21 12 14 12');
+    head1.setAttribute('points', '14 8 14 4 10 4');
     svg.appendChild(head1);
 
-    // Bottom half arc + arrowhead (counter-clockwise direction).
+    // Lower-right crescent: arc going CW from (20,10) to (10,20).
     const arc2 = document.createElementNS(SVG_NS, 'path');
-    arc2.setAttribute('d', 'M21 12 A9 9 0 0 1 3 12');
+    arc2.setAttribute('d', 'M20 10 A8 8 0 0 1 10 20');
     svg.appendChild(arc2);
+    // Corner-style arrowhead at (10,20).
     const head2 = document.createElementNS(SVG_NS, 'polyline');
-    head2.setAttribute('points', '3 19 3 12 10 12');
+    head2.setAttribute('points', '10 16 10 20 14 20');
     svg.appendChild(head2);
 
     return svg;
