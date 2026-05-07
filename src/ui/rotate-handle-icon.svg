@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+  <!-- 270° arc, 90° gap at top of a radius-8 circle centred at (12, 12). -->
+  <path d="M6 6 A 8 8 0 1 0 18 6" />
+  <!-- Left arrowhead: filled triangle, apex (2, 2), wider base across the gap edge. -->
+  <polygon points="2 2, 5 8, 8 5" fill="currentColor" stroke="none" />
+  <!-- Right arrowhead: mirror — apex (22, 2). -->
+  <polygon points="22 2, 19 8, 16 5" fill="currentColor" stroke="none" />
+</svg>

@@ -12,8 +12,7 @@
  */
 
 import type { RotationFocus } from '../interaction/rotation-focus.js';
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
+import iconSvgSource from './rotate-handle-icon.svg?raw';
 
 const BUTTON_SIZE_PX = 44;
 const BUTTON_GAP_PX = 8;
@@ -66,49 +65,15 @@ interface ActiveHandle {
 }
 
 /**
- * A nearly-complete circle (~330°) with a gap at the top, and two V-shaped
- * arrowheads at the gap ends pointing outward in opposite tangential
- * directions (up-and-left for the CCW exit, up-and-right for the CW exit).
- * Reads unambiguously as "rotates either way."
+ * Returns the bidirectional rotation icon, loaded from
+ * `rotate-handle-icon.svg`. Edit the SVG file directly to iterate on the
+ * design — this function just parses the bundled text into a live
+ * SVGElement via DOMParser.
  */
 function makeBidirectionalRotateIcon(): SVGElement {
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('width', '20');
-    svg.setAttribute('height', '20');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '2');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
-
-    // 270° arc with a 90° gap at the top of a radius-8 circle centred at
-    // (12, 12). Endpoints at (6, 6) [≈10:30] and (18, 6) [≈1:30]. sweep=0
-    // (CCW in screen coords) places the centre below the chord so the arc
-    // loops around the bottom; large-arc=1 takes the long way.
-    const arc = document.createElementNS(SVG_NS, 'path');
-    arc.setAttribute('d', 'M6 6 A 8 8 0 1 0 18 6');
-    svg.appendChild(arc);
-
-    // Filled triangle arrowheads at the gap, apexes at (3, 3) and (21, 3) —
-    // pointing tangentially outward (up-and-left for the CCW exit, up-and-
-    // right for the CW exit). Filled triangles read more clearly as
-    // directional arrows than stroked Vs at this size, and the contrast in
-    // style with the stroke-only quarter-turn rotate buttons reinforces
-    // that this is a different kind of control.
-    const headLeft = document.createElementNS(SVG_NS, 'polygon');
-    headLeft.setAttribute('points', '3 3, 5 7, 7 5');
-    headLeft.setAttribute('fill', 'currentColor');
-    headLeft.setAttribute('stroke', 'none');
-    svg.appendChild(headLeft);
-
-    const headRight = document.createElementNS(SVG_NS, 'polygon');
-    headRight.setAttribute('points', '21 3, 19 7, 17 5');
-    headRight.setAttribute('fill', 'currentColor');
-    headRight.setAttribute('stroke', 'none');
-    svg.appendChild(headRight);
-
-    return svg;
+    const doc = new DOMParser().parseFromString(iconSvgSource, 'image/svg+xml');
+    const root = doc.documentElement;
+    return document.importNode(root, /* deep */ true) as unknown as SVGElement;
 }
 
 function makeButton(): HTMLButtonElement {
