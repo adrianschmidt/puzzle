@@ -66,11 +66,10 @@ interface ActiveHandle {
 }
 
 /**
- * Two opposing crescent arrows in a pinwheel — signals that the group can
- * rotate freely in either direction. One crescent sits in the upper-left,
- * the other in the lower-right; each arrowhead uses the corner-style
- * polyline matching the existing rotate-buttons icon. Stroke styling matches
- * those buttons so the two variants visually rhyme.
+ * A nearly-complete circle (~330°) with a gap at the top, and two V-shaped
+ * arrowheads at the gap ends pointing outward in opposite tangential
+ * directions (up-and-left for the CCW exit, up-and-right for the CW exit).
+ * Reads unambiguously as "rotates either way."
  */
 function makeBidirectionalRotateIcon(): SVGElement {
     const svg = document.createElementNS(SVG_NS, 'svg');
@@ -83,23 +82,25 @@ function makeBidirectionalRotateIcon(): SVGElement {
     svg.setAttribute('stroke-linecap', 'round');
     svg.setAttribute('stroke-linejoin', 'round');
 
-    // Upper-left crescent: arc going CW from (4,14) to (14,4).
-    const arc1 = document.createElementNS(SVG_NS, 'path');
-    arc1.setAttribute('d', 'M4 14 A8 8 0 0 1 14 4');
-    svg.appendChild(arc1);
-    // Corner-style arrowhead at (14,4) — two lines meeting at the arc endpoint.
-    const head1 = document.createElementNS(SVG_NS, 'polyline');
-    head1.setAttribute('points', '14 8 14 4 10 4');
-    svg.appendChild(head1);
+    // ~330° arc: large-arc sweep (flag=1) from (9,4.5) to (15,4.5), leaving
+    // a small gap at the top of the radius-8 circle centred at (12,12).
+    const arc = document.createElementNS(SVG_NS, 'path');
+    arc.setAttribute('d', 'M9 4.5 A 8 8 0 1 1 15 4.5');
+    svg.appendChild(arc);
 
-    // Lower-right crescent: arc going CW from (20,10) to (10,20).
-    const arc2 = document.createElementNS(SVG_NS, 'path');
-    arc2.setAttribute('d', 'M20 10 A8 8 0 0 1 10 20');
-    svg.appendChild(arc2);
-    // Corner-style arrowhead at (10,20).
-    const head2 = document.createElementNS(SVG_NS, 'polyline');
-    head2.setAttribute('points', '10 16 10 20 14 20');
-    svg.appendChild(head2);
+    // Left arrowhead: V apex at (6,2), legs back to (4.5,6) and (9,4.5).
+    // The (9,4.5) leg merges with the arc's start — apex points up-and-left
+    // (CCW exit direction).
+    const headLeft = document.createElementNS(SVG_NS, 'polyline');
+    headLeft.setAttribute('points', '4.5 6 6 2 9 4.5');
+    svg.appendChild(headLeft);
+
+    // Right arrowhead: V apex at (18,2), legs back to (15,4.5) and (19.5,6).
+    // The (15,4.5) leg merges with the arc's end — apex points up-and-right
+    // (CW exit direction).
+    const headRight = document.createElementNS(SVG_NS, 'polyline');
+    headRight.setAttribute('points', '15 4.5 18 2 19.5 6');
+    svg.appendChild(headRight);
 
     return svg;
 }
