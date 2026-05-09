@@ -8,6 +8,8 @@
 import type { BaseCutGenerator, TabGenerator } from './plugin-types.js';
 import { sineCutGenerator } from './sine-cut-generator.js';
 import { classicTabGenerator } from './classic-tab-generator.js';
+import { vennCutGenerator } from './venn-cut-generator.js';
+import { noneTabGenerator } from './none-tab-generator.js';
 
 const baseCutGenerators = new Map<string, BaseCutGenerator>();
 const tabGenerators = new Map<string, TabGenerator>();
@@ -43,3 +45,7 @@ export function listTabGeneratorIds(): string[] {
 // Pre-register the framework defaults
 registerBaseCutGenerator(sineCutGenerator);
 registerTabGenerator(classicTabGenerator);
+
+// Register additional generators
+registerBaseCutGenerator(vennCutGenerator);
+registerTabGenerator(noneTabGenerator);
