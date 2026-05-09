@@ -96,12 +96,7 @@ describe('composable: fused-piece regression', () => {
             16, 12, { width: 1080, height: 720 }, 124741785,
             {
                 baseCutGenerator: 'sine',
-                baseCutConfig: {
-                    horizontalAmplitude: 0.13,
-                    horizontalFrequency: 7.1,
-                    verticalAmplitude: 0.08,
-                    verticalFrequency: 6.9,
-                },
+                baseCutConfig: { ha: 0.13, hf: 7.1, va: 0.08, vf: 6.9 },
                 tabGenerator: 'classic',
                 tabConfig: {},
             },
@@ -114,12 +109,7 @@ describe('composable: fused-piece regression', () => {
             16, 12, { width: 1080, height: 720 }, 3215341677,
             {
                 baseCutGenerator: 'sine',
-                baseCutConfig: {
-                    horizontalAmplitude: 0.45,
-                    horizontalFrequency: 8,
-                    verticalAmplitude: 0.45,
-                    verticalFrequency: 6,
-                },
+                baseCutConfig: { ha: 0.45, hf: 8, va: 0.45, vf: 6 },
                 tabGenerator: 'classic',
                 tabConfig: {},
             },
@@ -377,8 +367,8 @@ describe('sineCutGenerator', () => {
             random,
             {
                 cols: 3, rows: 2,
-                horizontalAmplitude: 0.1, horizontalFrequency: 1,
-                verticalAmplitude: 0.1, verticalFrequency: 1,
+                ha: 0.1, hf: 1,
+                va: 0.1, vf: 1,
             },
         );
         // 4 borders + (rows-1) horizontals + (cols-1) verticals = 4 + 1 + 2 = 7
@@ -400,8 +390,8 @@ describe('sineCutGenerator', () => {
             random,
             {
                 cols: 2, rows: 2,
-                horizontalAmplitude: 0, horizontalFrequency: 1,
-                verticalAmplitude: 1, verticalFrequency: 0,
+                ha: 0, hf: 1,
+                va: 1, vf: 0,
             },
         );
         // Border + horizontal + vertical = 4 + 1 + 1 = 6
@@ -448,17 +438,23 @@ import type { Size } from '../../model/types.js';
 import { Curve } from './curve.js';
 import type { BaseCutGenerator } from './plugin-types.js';
 
+/**
+ * Field names match the share-link's compact convention (`ha` for
+ * horizontalAmplitude, etc.). This keeps the share-link's bgc shape
+ * and the generator's expected config shape identical, so no field-
+ * name translation is needed at the share-link boundary.
+ */
 export interface SineCutConfig {
     cols: number;
     rows: number;
     /** Horizontal cut amplitude, fraction of piece height (0–0.5). */
-    horizontalAmplitude: number;
+    ha: number;
     /** Horizontal cut frequency in waves over the puzzle width. */
-    horizontalFrequency: number;
+    hf: number;
     /** Vertical cut amplitude, fraction of piece width (0–0.5). */
-    verticalAmplitude: number;
+    va: number;
     /** Vertical cut frequency in waves over the puzzle height. */
-    verticalFrequency: number;
+    vf: number;
 }
 
 export const sineCutGenerator: BaseCutGenerator = {
@@ -469,8 +465,8 @@ export const sineCutGenerator: BaseCutGenerator = {
         const { cols, rows } = cfg;
         const pieceWidth = frame.width / cols;
         const pieceHeight = frame.height / rows;
-        const hPixelAmp = (cfg.horizontalAmplitude * pieceHeight) / 2;
-        const vPixelAmp = (cfg.verticalAmplitude * pieceWidth) / 2;
+        const hPixelAmp = (cfg.ha * pieceHeight) / 2;
+        const vPixelAmp = (cfg.va * pieceWidth) / 2;
 
         const curves: Curve[] = [
             Curve.line({ x: 0, y: 0 }, { x: frame.width, y: 0 }),
@@ -487,19 +483,19 @@ export const sineCutGenerator: BaseCutGenerator = {
 
         for (let r = 1; r < rows; r++) {
             const y = r * pieceHeight;
-            const useWave = hPixelAmp > 0 && cfg.horizontalFrequency > 0;
+            const useWave = hPixelAmp > 0 && cfg.hf > 0;
             curves.push(useWave
                 ? generateSineCurve({ x: 0, y }, { x: frame.width, y },
-                    hPixelAmp, cfg.horizontalFrequency, rowPhases[r])
+                    hPixelAmp, cfg.hf, rowPhases[r])
                 : Curve.line({ x: 0, y }, { x: frame.width, y }),
             );
         }
         for (let c = 1; c < cols; c++) {
             const x = c * pieceWidth;
-            const useWave = vPixelAmp > 0 && cfg.verticalFrequency > 0;
+            const useWave = vPixelAmp > 0 && cfg.vf > 0;
             curves.push(useWave
                 ? generateSineCurve({ x, y: 0 }, { x, y: frame.height },
-                    vPixelAmp, cfg.verticalFrequency, colPhases[c])
+                    vPixelAmp, cfg.vf, colPhases[c])
                 : Curve.line({ x, y: 0 }, { x, y: frame.height }),
             );
         }
@@ -577,8 +573,7 @@ with:
 ```ts
 const curves = sineCutGenerator.generate(imageSize, random, {
     cols, rows,
-    horizontalAmplitude: hAmp, horizontalFrequency: hFreq,
-    verticalAmplitude: vAmp, verticalFrequency: vFreq,
+    ha: hAmp, hf: hFreq, va: vAmp, vf: vFreq,
 });
 ```
 
@@ -1199,6 +1194,19 @@ Replace the body of `generateTopologyPuzzle` with the new pipeline. Old internal
 
 In `src/puzzle/topology/generator.ts`, replace the body of `generateTopologyPuzzle` with the new pipeline. The new function body:
 
+First, update `TopologyGeneratorConfig` (top of `topology/generator.ts`) to drop the per-sine-parameter fields and accept opaque base/tab configs:
+
+```ts
+export interface TopologyGeneratorConfig {
+    baseCutGeneratorId?: string;        // default 'sine'
+    baseCutConfig?: Record<string, unknown>;
+    tabGeneratorId?: string;            // default 'classic'; 'none' to skip
+    tabConfig?: Record<string, unknown>;
+}
+```
+
+Then the function body:
+
 ```ts
 export function generateTopologyPuzzle(
     cols: number,
@@ -1212,26 +1220,25 @@ export function generateTopologyPuzzle(
 
     // 1. Generate the cuts.
     const baseCutGenerator = getBaseCutGenerator(baseCutId);
-    const curves = baseCutGenerator.generate(imageSize, random, {
+    // Sine grid needs cols/rows. Other generators ignore them.
+    const baseCutCfg = {
         cols, rows,
-        horizontalAmplitude: config?.horizontalAmplitude ?? 0.15,
-        horizontalFrequency: config?.horizontalFrequency ?? 1.5,
-        verticalAmplitude: config?.verticalAmplitude ?? 0.15,
-        verticalFrequency: config?.verticalFrequency ?? 1.5,
-    });
+        ...(config?.baseCutConfig ?? {}),
+    };
+    const curves = baseCutGenerator.generate(imageSize, random, baseCutCfg);
 
     // 2. Build the topology graph in a single intersection pass.
     const graph = buildDCEL({ curves });
 
     // 3. Apply tabs per edge with collision rejection.
-    if (!(config?.disableTabs ?? false)) {
+    if (tabId !== 'none') {
         const tabGenerator = getTabGenerator(tabId);
         applyTabs(graph, tabGenerator, random);
     }
 
-    // 4. Faces → piece definitions. (The `expectedPieceCount` arg
+    // 4. Faces → piece definitions. The `expectedPieceCount` arg
     //    drives the existing mergeSmallFaces logic; it stays for now
-    //    and is removed in Plan 3 once auto-grouping replaces it.)
+    //    and is removed in Plan 3 once auto-grouping replaces it.
     const pieceDefs = facesToPieceDefinitions(graph, cols * rows);
 
     // 5. Compose final pieces. Tabs are already in the geometry of
@@ -1300,7 +1307,7 @@ export interface ComposableConfig {
 }
 ```
 
-Update `generateComposablePuzzle` to forward the new shape:
+Update `generateComposablePuzzle` to forward the new shape opaquely:
 
 ```ts
 export function generateComposablePuzzle(
@@ -1311,20 +1318,11 @@ export function generateComposablePuzzle(
     config?: ComposableConfig,
 ): Piece[] {
     const random = createSeededRandom(seed);
-    const baseCutId = config?.baseCutGenerator ?? 'sine';
-    const tabId = config?.tabGenerator ?? 'classic';
-    const baseCfg = config?.baseCutConfig ?? {};
-
     return generateTopologyPuzzle(cols, rows, imageSize, random, {
-        baseCutGeneratorId: baseCutId,
-        tabGeneratorId: tabId,
-        // Sine-grid back-compat: spread the legacy fields if the caller
-        // still uses them; the sine generator reads them from baseCutConfig.
-        horizontalAmplitude: (baseCfg as any).horizontalAmplitude,
-        horizontalFrequency: (baseCfg as any).horizontalFrequency,
-        verticalAmplitude: (baseCfg as any).verticalAmplitude,
-        verticalFrequency: (baseCfg as any).verticalFrequency,
-        disableTabs: tabId === 'none',
+        baseCutGeneratorId: config?.baseCutGenerator ?? 'sine',
+        baseCutConfig: config?.baseCutConfig,
+        tabGeneratorId: config?.tabGenerator ?? 'classic',
+        tabConfig: config?.tabConfig,
     });
 }
 ```
@@ -1356,7 +1354,7 @@ After:
 ```ts
 { composableConfig: {
     baseCutGenerator: 'sine',
-    baseCutConfig: { horizontalAmplitude: 0.15, horizontalFrequency: 1.5, verticalAmplitude: 0.15, verticalFrequency: 1.5 },
+    baseCutConfig: { ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5 },
     tabGenerator: 'classic',
     tabConfig: {},
 }}

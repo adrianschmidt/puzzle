@@ -112,18 +112,14 @@ Create `src/puzzle/topology/auto-group.test.ts`:
 ```ts
 import { describe, it, expect } from 'vitest';
 import { autoGroupSmallPieces } from './auto-group.js';
-import type { Piece, PieceGroup } from '../../model/types.js';
 
 describe('autoGroupSmallPieces', () => {
     it('returns a single group per piece when no piece is below threshold', () => {
-        const pieces = makePieces([
-            { id: 0, area: 100 },
-            { id: 1, area: 100 },
-            { id: 2, area: 100 },
-        ], adjacency([
-            [0, 1], [1, 2],
-        ]));
-        const groups = autoGroupSmallPieces(pieces, 50);
+        const ctx = makeCtx(
+            [{ id: 0, area: 100 }, { id: 1, area: 100 }, { id: 2, area: 100 }],
+            [[0, 1], [1, 2]],
+        );
+        const groups = autoGroupSmallPieces(ctx, 50);
         expect(groups).toHaveLength(3);
         for (const g of groups) {
             expect(g.pieceIds).toHaveLength(1);
@@ -131,54 +127,58 @@ describe('autoGroupSmallPieces', () => {
     });
 
     it('groups a small piece with its largest neighbour', () => {
-        const pieces = makePieces([
-            { id: 0, area: 100 },     // big
-            { id: 1, area: 5 },       // small (below threshold)
-            { id: 2, area: 200 },     // bigger neighbour
-        ], adjacency([
-            [0, 1], [1, 2],
-        ]));
-        const groups = autoGroupSmallPieces(pieces, 50);
+        const ctx = makeCtx(
+            [{ id: 0, area: 100 }, { id: 1, area: 5 }, { id: 2, area: 200 }],
+            [[0, 1], [1, 2]],
+        );
+        const groups = autoGroupSmallPieces(ctx, 50);
         expect(groups).toHaveLength(2);
         const grouped = groups.find(g => g.pieceIds.includes(1))!;
         expect(grouped.pieceIds).toContain(2);   // joined with the larger neighbour
         expect(grouped.pieceIds).not.toContain(0);
     });
 
-    it('tie-breaks by lowest face id when neighbours are equal', () => {
-        const pieces = makePieces([
-            { id: 0, area: 100 },     // tie
-            { id: 1, area: 5 },       // small
-            { id: 2, area: 100 },     // tie
-        ], adjacency([
-            [0, 1], [1, 2],
-        ]));
-        const groups = autoGroupSmallPieces(pieces, 50);
+    it('tie-breaks by lowest piece id when neighbours are equal', () => {
+        const ctx = makeCtx(
+            [{ id: 0, area: 100 }, { id: 1, area: 5 }, { id: 2, area: 100 }],
+            [[0, 1], [1, 2]],
+        );
+        const groups = autoGroupSmallPieces(ctx, 50);
         const grouped = groups.find(g => g.pieceIds.includes(1))!;
         expect(grouped.pieceIds).toContain(0);   // lowest id wins
         expect(grouped.pieceIds).not.toContain(2);
     });
 
     it('cascades: two adjacent tiny pieces collapse into one neighbour', () => {
-        const pieces = makePieces([
-            { id: 0, area: 100 },
-            { id: 1, area: 5 },
-            { id: 2, area: 5 },
-            { id: 3, area: 100 },
-        ], adjacency([
-            [0, 1], [1, 2], [2, 3],
-        ]));
-        const groups = autoGroupSmallPieces(pieces, 50);
+        const ctx = makeCtx(
+            [{ id: 0, area: 100 }, { id: 1, area: 5 }, { id: 2, area: 5 }, { id: 3, area: 100 }],
+            [[0, 1], [1, 2], [2, 3]],
+        );
+        const groups = autoGroupSmallPieces(ctx, 50);
         expect(groups).toHaveLength(2);
         // The two tiny ones end up with one of the big ones; either is OK
         // as long as the result is deterministic for fixed input.
     });
 });
 
-// Test helpers — substitute with real ones when this is wired into the
-// production code path. The harness needs piece areas + adjacency graph.
-function makePieces(...): Piece[] { /* ... */ }
-function adjacency(...): Map<number, number[]> { /* ... */ }
+// Test helper — builds an AutoGroupContext shape directly.
+function makeCtx(
+    pieces: { id: number; area: number }[],
+    edges: [number, number][],
+) {
+    const areas = new Map(pieces.map(p => [p.id, p.area]));
+    const neighbours = new Map<number, Set<number>>();
+    for (const p of pieces) neighbours.set(p.id, new Set());
+    for (const [a, b] of edges) {
+        neighbours.get(a)!.add(b);
+        neighbours.get(b)!.add(a);
+    }
+    return {
+        pieceIds: pieces.map(p => p.id),
+        areas,
+        neighbours,
+    };
+}
 ```
 
 - [ ] **Step 2: Implement**
@@ -191,7 +191,7 @@ Create `src/puzzle/topology/auto-group.ts`:
  *
  * Iterates pieces in ascending area order. For each piece below
  * `minArea`, joins it to the largest non-already-grouped neighbour
- * (tie-break: lowest piece id). Cascades naturally — small piece
+ * (tie-break: lowest piece id). Cascades naturally — a small piece
  * absorbed into another small piece's group counts as that group's
  * area for subsequent iterations.
  *
@@ -200,13 +200,14 @@ Create `src/puzzle/topology/auto-group.ts`:
  * caller (the existing init.ts / new-game flow).
  */
 
-import type { Piece, PieceGroup } from '../../model/types.js';
+import type { PieceGroup } from '../../model/types.js';
 
 export interface AutoGroupContext {
-    pieces: Piece[];
-    /** For piece p, the area of p's polygon in pixels². */
+    /** Ids of all pieces in the puzzle. */
+    pieceIds: number[];
+    /** For piece id p, the area of p's polygon in pixels². */
     areas: Map<number, number>;
-    /** For piece p, the ids of pieces sharing a non-border edge with p. */
+    /** For piece id p, the ids of pieces sharing a non-border edge with p. */
     neighbours: Map<number, Set<number>>;
 }
 
@@ -217,9 +218,9 @@ export function autoGroupSmallPieces(
     // Disjoint-set over piece ids. Initially each piece is its own root.
     const parent = new Map<number, number>();
     const groupArea = new Map<number, number>();
-    for (const p of ctx.pieces) {
-        parent.set(p.id, p.id);
-        groupArea.set(p.id, ctx.areas.get(p.id)!);
+    for (const id of ctx.pieceIds) {
+        parent.set(id, id);
+        groupArea.set(id, ctx.areas.get(id)!);
     }
 
     function find(x: number): number {
@@ -230,8 +231,8 @@ export function autoGroupSmallPieces(
     function union(a: number, b: number): void {
         const ra = find(a), rb = find(b);
         if (ra === rb) return;
-        // Always make the larger-id root the parent so behaviour is stable
-        // regardless of insertion order.
+        // Lower-id root wins, so behaviour is stable regardless of
+        // input ordering.
         const winner = Math.min(ra, rb);
         const loser = ra === winner ? rb : ra;
         parent.set(loser, winner);
@@ -239,18 +240,18 @@ export function autoGroupSmallPieces(
     }
 
     // Pieces in ascending area order, deterministic by id on ties.
-    const sorted = [...ctx.pieces].sort((a, b) => {
-        const da = ctx.areas.get(a.id)! - ctx.areas.get(b.id)!;
-        return da !== 0 ? da : a.id - b.id;
+    const sorted = [...ctx.pieceIds].sort((a, b) => {
+        const da = ctx.areas.get(a)! - ctx.areas.get(b)!;
+        return da !== 0 ? da : a - b;
     });
 
-    for (const piece of sorted) {
-        const root = find(piece.id);
+    for (const id of sorted) {
+        const root = find(id);
         if (groupArea.get(root)! >= minArea) continue;
 
-        // Pick the largest neighbour group; tie-break by lowest id.
+        // Pick the largest neighbour group; tie-break by lowest root id.
         let bestRoot = -1, bestArea = -1;
-        for (const nid of ctx.neighbours.get(piece.id) ?? []) {
+        for (const nid of ctx.neighbours.get(id) ?? []) {
             const nroot = find(nid);
             if (nroot === root) continue;
             const a = groupArea.get(nroot)!;
@@ -266,10 +267,10 @@ export function autoGroupSmallPieces(
 
     // Collect groups by root.
     const byRoot = new Map<number, number[]>();
-    for (const p of ctx.pieces) {
-        const r = find(p.id);
+    for (const id of ctx.pieceIds) {
+        const r = find(id);
         if (!byRoot.has(r)) byRoot.set(r, []);
-        byRoot.get(r)!.push(p.id);
+        byRoot.get(r)!.push(id);
     }
     return [...byRoot.entries()].map(([rootId, pieceIds]) => ({
         id: rootId,
@@ -348,7 +349,11 @@ for (const def of pieceDefs) {
 ```ts
 const pieces = composePuzzle(pieceDefs, classicTabTemplate, random, { disableTabs: true });
 const autoGroups = autoGroupSmallPieces(
-    { pieces, areas, neighbours },
+    {
+        pieceIds: pieceDefs.map(d => d.id),
+        areas,
+        neighbours,
+    },
     minPieceArea,
 );
 return { pieces, autoGroups };
