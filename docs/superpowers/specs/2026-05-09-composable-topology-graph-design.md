@@ -271,6 +271,10 @@ in parallel with the existing one until step 7 deletes the old paths.
    Implement the C-style framework. Port `classicTabTemplate` to the new
    `TabGenerator` interface. `disableTabs: false` works through the new
    path. The two original repro seeds produce 192 pieces.
+   - Sub-task: extend the share-link format to the new
+     `cf: { bg, bgc, tg, tgc, mpa? }` shape. Add the legacy-shape
+     translator. Existing share links still decode and produce working
+     (but not identical) puzzles.
 4. **Multi-component + holes.** DCEL component detection, `PieceDefinition`
    grows `innerBoundaries`, `composePuzzle` handles them, renderer hit-
    tests respect holes.
@@ -283,15 +287,50 @@ in parallel with the existing one until step 7 deletes the old paths.
    `mergeSmallFaces`, the orphan-pair logic in `findExcessPairs`, the
    tip-piece tests. The Composable framework now has a single code path.
 
+### Share-link format extension
+
+With multiple `BaseCutGenerator`s and `TabGenerator`s, a share link can no
+longer assume Composable means "sine-grid + classic tabs." It must record
+which plugins to invoke plus their configs.
+
+The current `SharePayload.cf` field — `{ ha, hf, va, vf, dt }` — encodes
+sine-grid parameters and a "tabs on/off" boolean. The new shape, for
+`c === 'composable'`:
+
+```ts
+cf?: {
+    bg: string;                    // BaseCutGenerator id (e.g. 'sine', 'venn')
+    bgc: Record<string, unknown>;  // generator-specific config (opaque to framework)
+    tg: string | 'none';           // TabGenerator id (e.g. 'classic', 'none')
+    tgc: Record<string, unknown>;  // generator-specific config
+    mpa?: number;                  // minPieceArea override (optional)
+}
+```
+
+The framework maintains a registry of generator ids → implementations.
+Decoding looks up the ids, validates the configs against generator-specific
+schemas, and runs the pipeline. An unknown id is a decode failure.
+
 ### Existing share links
 
 Existing share links will not reproduce identical puzzles after this
 refactor — both the PRNG call count and the topology pipeline change for a
 given seed. Given the puzzle currently has effectively no users beyond the
 maintainer, this is acceptable; we don't carry the old generator behind a
-version switch. The share-link format itself doesn't need a version bump
-because the *encoding* is unchanged; only the seed→puzzle function
-changes.
+version switch.
+
+Old share links (with the `{ ha, hf, va, vf, dt }` shape) **must still
+parse and produce a working puzzle** — just not the same puzzle they
+produced before the refactor. The decoder detects the legacy shape and
+translates it: `bg: 'sine'`, `bgc: { ha, hf, va, vf }`, `tg: dt ?
+'none' : 'classic'`. The translation lives in the share-link decoder, not
+in the generator framework, so the framework itself never sees the legacy
+shape.
+
+The share-link payload version (`v: 1`) does not need to bump — the field
+shape changes within `cf`, and a strict decoder rejecting unknown fields
+would already reject the old shape. Whether to bump `v` to `2` is a
+defensive call; the spec doesn't require it.
 
 ## Out of scope
 
