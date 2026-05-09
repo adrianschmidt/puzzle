@@ -131,17 +131,19 @@ describe('serializeState', () => {
         const state = makeGameState({
             cutStyle: 'composable',
             composableConfig: {
-                horizontalAmplitude: 0.15,
-                verticalFrequency: 2,
-                disableTabs: false,
+                baseCutGenerator: 'sine',
+                baseCutConfig: { ha: 0.15, vf: 2 },
+                tabGenerator: 'classic',
+                tabConfig: {},
             },
         });
         const serialized = serializeState(state);
 
         expect(serialized.composableConfig).toEqual({
-            horizontalAmplitude: 0.15,
-            verticalFrequency: 2,
-            disableTabs: false,
+            baseCutGenerator: 'sine',
+            baseCutConfig: { ha: 0.15, vf: 2 },
+            tabGenerator: 'classic',
+            tabConfig: {},
         });
         expect(serialized.fractalConfig).toBeUndefined();
     });
@@ -158,17 +160,19 @@ describe('serializeState', () => {
         const state = makeGameState({
             cutStyle: 'composable',
             composableConfig: {
-                horizontalAmplitude: 0.15,
-                verticalFrequency: 2,
-                disableTabs: false,
+                baseCutGenerator: 'sine',
+                baseCutConfig: { ha: 0.15, vf: 2 },
+                tabGenerator: 'classic',
+                tabConfig: {},
             },
         });
         const restored = deserializeState(serializeState(state));
 
         expect(restored.composableConfig).toEqual({
-            horizontalAmplitude: 0.15,
-            verticalFrequency: 2,
-            disableTabs: false,
+            baseCutGenerator: 'sine',
+            baseCutConfig: { ha: 0.15, vf: 2 },
+            tabGenerator: 'classic',
+            tabConfig: {},
         });
     });
 
@@ -326,14 +330,51 @@ describe('deserializeState', () => {
 
         const restored = deserializeState(v7Serialized);
 
+        // v7 → v10: legacy fields project onto sine baseCutConfig + tabGenerator='none'.
         expect(restored.composableConfig).toEqual({
-            horizontalAmplitude: 0.2,
-            horizontalFrequency: 1.5,
-            verticalAmplitude: 0.1,
-            verticalFrequency: 2,
-            disableTabs: true,
+            baseCutGenerator: 'sine',
+            baseCutConfig: { ha: 0.2, hf: 1.5, va: 0.1, vf: 2 },
+            tabGenerator: 'none',
+            tabConfig: {},
         });
         expect(restored.fractalConfig).toBeUndefined();
+    });
+
+    it('migrates v9 composableConfig (legacy long-name fields) to v10 opaque shape', () => {
+        const v9Serialized: SerializedGameState = {
+            version: 9,
+            pieces: [makeRectPiece({ id: 0 })],
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+            imageUrl: 'v9-composable.jpg',
+            imageSize: { width: 800, height: 600 },
+            gridSize: { cols: 8, rows: 6 },
+            cutStyle: 'composable',
+            rotationMode: 'none',
+            completed: false,
+            // Cast: v9 composableConfig used the legacy long-name shape, but
+            // SerializedGameState already advertises the new (v10) opaque
+            // shape via GameState['composableConfig']. The migration path
+            // accepts the legacy keys at runtime regardless of the static
+            // type.
+            composableConfig: {
+                horizontalAmplitude: 0.13,
+                horizontalFrequency: 7.1,
+                verticalAmplitude: 0.08,
+                verticalFrequency: 6.9,
+                disableTabs: false,
+            } as unknown as GameState['composableConfig'],
+        };
+
+        const restored = deserializeState(v9Serialized);
+
+        expect(restored.composableConfig).toEqual({
+            baseCutGenerator: 'sine',
+            baseCutConfig: { ha: 0.13, hf: 7.1, va: 0.08, vf: 6.9 },
+            tabGenerator: 'classic',
+            tabConfig: {},
+        });
     });
 
     it('ignores v7 generatorConfig for classic puzzles (no typed shape)', () => {

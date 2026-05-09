@@ -155,14 +155,15 @@ export interface GameState {
      * Composable-cut config (only set when cutStyle === 'composable').
      *
      * Needed to reproduce the puzzle from its seed and surfaced in the
-     * Debug panel for bug reports.
+     * Debug panel for bug reports. Mirrors the {@link ComposableConfig}
+     * shape from the composable generator, inlined here so this module
+     * stays free of cross-package imports from the puzzle layer.
      */
     composableConfig?: {
-        horizontalAmplitude?: number;
-        horizontalFrequency?: number;
-        verticalAmplitude?: number;
-        verticalFrequency?: number;
-        disableTabs?: boolean;
+        baseCutGenerator?: string;
+        baseCutConfig?: Record<string, unknown>;
+        tabGenerator?: string;
+        tabConfig?: Record<string, unknown>;
     };
     /**
      * Fractal-cut config (only set when cutStyle === 'fractal').

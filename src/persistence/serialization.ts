@@ -19,7 +19,7 @@ import { getImageDimensions } from '../model/derive.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 9;
+export const STATE_VERSION = 10;
 
 /**
  * Supported schema versions.
@@ -34,8 +34,12 @@ export const STATE_VERSION = 9;
  * - v8: replaces opaque generatorConfig with typed composableConfig / fractalConfig
  * - v9: rotation is stored as float degrees (0–360); v8 and earlier saves are
  *       migrated by multiplying their integer quarter-turn values by 90
+ * - v10: composableConfig switched from legacy `horizontalAmplitude`/… fields
+ *        to the opaque `{baseCutGenerator, baseCutConfig, tabGenerator, tabConfig}`
+ *        shape that the topology refactor introduced. v9 and earlier saves are
+ *        migrated on load (see `migrateLegacyComposableConfig`).
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
@@ -204,38 +208,75 @@ export function deserializeState(data: SerializedGameState): GameState {
 /**
  * Resolve the composable config from a serialized state.
  *
- * v8+ stores it directly. v7 saves stored an opaque `generatorConfig` whose
- * shape depends on `cutStyle`; for composable puzzles, migrate those fields
- * into the typed shape.
+ * The on-disk shape changed at v10 from the legacy long-named fields
+ * (`horizontalAmplitude`, `horizontalFrequency`, …) to the opaque
+ * `{baseCutGenerator, baseCutConfig, tabGenerator, tabConfig}` shape that
+ * the topology refactor introduced.
+ *
+ * - v10+ saves store the new shape directly; pass it through.
+ * - v8/v9 saves stored the legacy shape under `composableConfig`; migrate.
+ * - v7 saves stored an opaque `generatorConfig` with the same legacy
+ *   field names; migrate those too.
+ *
+ * v6 and earlier saves never carry composable config (the cut style did
+ * not exist yet, or the field had not been added).
  */
 function resolveComposableConfig(
     data: SerializedGameState,
 ): GameState['composableConfig'] | undefined {
     if (data.composableConfig) {
-        return data.composableConfig;
+        const cfg = data.composableConfig as Record<string, unknown>;
+        // v10+ saves already use the new shape. Detect by the presence of
+        // any new-shape field (any one is sufficient — the keys are
+        // disjoint from the legacy field names).
+        if (
+            'baseCutGenerator' in cfg ||
+            'baseCutConfig' in cfg ||
+            'tabGenerator' in cfg ||
+            'tabConfig' in cfg
+        ) {
+            return data.composableConfig;
+        }
+        // Legacy v8/v9 shape — migrate to the new opaque shape.
+        return migrateLegacyComposableConfig(cfg);
     }
 
     if (data.cutStyle !== 'composable' || !data.generatorConfig) {
         return undefined;
     }
 
-    const gc = data.generatorConfig;
-    const config: NonNullable<GameState['composableConfig']> = {};
-    if (typeof gc.horizontalAmplitude === 'number') {
-        config.horizontalAmplitude = gc.horizontalAmplitude;
+    return migrateLegacyComposableConfig(data.generatorConfig);
+}
+
+/**
+ * Build the opaque {@link GameState.composableConfig} shape from a record
+ * carrying the legacy `horizontalAmplitude`/`horizontalFrequency`/
+ * `verticalAmplitude`/`verticalFrequency`/`disableTabs` fields. Used for
+ * v7/v8/v9 → v10 migration.
+ */
+function migrateLegacyComposableConfig(
+    legacy: Record<string, unknown>,
+): NonNullable<GameState['composableConfig']> {
+    const baseCutConfig: Record<string, unknown> = {};
+    if (typeof legacy.horizontalAmplitude === 'number') {
+        baseCutConfig.ha = legacy.horizontalAmplitude;
     }
-    if (typeof gc.horizontalFrequency === 'number') {
-        config.horizontalFrequency = gc.horizontalFrequency;
+    if (typeof legacy.horizontalFrequency === 'number') {
+        baseCutConfig.hf = legacy.horizontalFrequency;
     }
-    if (typeof gc.verticalAmplitude === 'number') {
-        config.verticalAmplitude = gc.verticalAmplitude;
+    if (typeof legacy.verticalAmplitude === 'number') {
+        baseCutConfig.va = legacy.verticalAmplitude;
     }
-    if (typeof gc.verticalFrequency === 'number') {
-        config.verticalFrequency = gc.verticalFrequency;
+    if (typeof legacy.verticalFrequency === 'number') {
+        baseCutConfig.vf = legacy.verticalFrequency;
     }
-    if (typeof gc.disableTabs === 'boolean') {
-        config.disableTabs = gc.disableTabs;
-    }
+
+    const config: NonNullable<GameState['composableConfig']> = {
+        baseCutGenerator: 'sine',
+        baseCutConfig,
+        tabGenerator: legacy.disableTabs === true ? 'none' : 'classic',
+        tabConfig: {},
+    };
     return config;
 }
 

@@ -189,17 +189,29 @@ export function gameStateToPayload(
     }
 
     if (cutStyle === 'composable' && state.composableConfig) {
+        // The v1 wire format `cf` predates the BaseCutGenerator/TabGenerator
+        // refactor and carries the legacy sine-only fields. Project the
+        // opaque generator-config shape onto those fields here. Task 11
+        // will extend `cf` to carry the new shape directly.
+        //
         // Defaults mirror the topology generator (src/puzzle/topology/generator.ts)
-        // so the recipient reproduces the same cuts even if the sharer's state
-        // has undefined sub-fields.
+        // so the recipient reproduces the same cuts even if sub-fields are
+        // missing from the base-cut config.
         const c = state.composableConfig;
-        payload.cf = {
-            ha: c.horizontalAmplitude ?? 0.15,
-            hf: c.horizontalFrequency ?? 1.5,
-            va: c.verticalAmplitude ?? 0.15,
-            vf: c.verticalFrequency ?? 1.5,
-            dt: c.disableTabs ?? DEFAULT_DISABLE_TABS,
-        };
+        const bgc = (c.baseCutConfig ?? {}) as Record<string, unknown>;
+        const ha = typeof bgc.ha === 'number' ? bgc.ha : 0.15;
+        const hf = typeof bgc.hf === 'number' ? bgc.hf : 1.5;
+        const va = typeof bgc.va === 'number' ? bgc.va : 0.15;
+        const vf = typeof bgc.vf === 'number' ? bgc.vf : 1.5;
+        // tabGenerator === 'none' means the sender disabled tabs; everything
+        // else (including the canonical 'classic' default) means tabs enabled.
+        const tabGen = c.tabGenerator;
+        const dt = tabGen === 'none'
+            ? true
+            : tabGen === undefined
+                ? DEFAULT_DISABLE_TABS
+                : false;
+        payload.cf = { ha, hf, va, vf, dt };
     }
 
     if (cutStyle === 'fractal' && state.fractalConfig) {

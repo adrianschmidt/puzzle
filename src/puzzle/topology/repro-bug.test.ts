@@ -19,7 +19,6 @@ describe('composable: fused-piece regression', () => {
         const pieces = generateComposablePuzzle(
             16, 12, { width: 1080, height: 720 }, 124741785,
             {
-                // @ts-expect-error -- new ComposableConfig shape lands at Task 9; until then these fields are unknown
                 baseCutGenerator: 'sine',
                 baseCutConfig: { ha: 0.13, hf: 7.1, va: 0.08, vf: 6.9 },
                 tabGenerator: 'classic',
@@ -33,7 +32,6 @@ describe('composable: fused-piece regression', () => {
         const pieces = generateComposablePuzzle(
             16, 12, { width: 1080, height: 720 }, 3215341677,
             {
-                // @ts-expect-error -- new ComposableConfig shape lands at Task 9; until then these fields are unknown
                 baseCutGenerator: 'sine',
                 baseCutConfig: { ha: 0.45, hf: 8, va: 0.45, vf: 6 },
                 tabGenerator: 'classic',
