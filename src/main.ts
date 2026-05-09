@@ -124,6 +124,59 @@ if (appVersion) {
 
 let currentCompletionHide: (() => void) | null = null;
 
+/**
+ * Convert the new-game dialog's slider values (legacy `horizontalAmplitude`
+ * etc. field names) into the generator's opaque `ComposableConfig` shape.
+ *
+ * The dialog continues to expose four named sliders + a "disable tabs"
+ * checkbox; the generator side now identifies plug-ins by id and treats
+ * each plug-in's config as opaque. This adapter sits at the boundary so
+ * the rest of the call chain handles only the canonical generator shape.
+ */
+function sliderConfigToGeneratorConfig(slider: {
+    horizontalAmplitude: number;
+    horizontalFrequency: number;
+    verticalAmplitude: number;
+    verticalFrequency: number;
+    disableTabs: boolean;
+}): import('./puzzle/composable-generator.js').ComposableConfig {
+    return {
+        baseCutGenerator: 'sine',
+        baseCutConfig: {
+            ha: slider.horizontalAmplitude,
+            hf: slider.horizontalFrequency,
+            va: slider.verticalAmplitude,
+            vf: slider.verticalFrequency,
+        },
+        tabGenerator: slider.disableTabs ? 'none' : 'classic',
+        tabConfig: {},
+    };
+}
+
+/**
+ * Translate a legacy share-link `cf` payload (the v1 wire format with
+ * `ha`/`hf`/`va`/`vf`/`dt` fields) into the new opaque `ComposableConfig`
+ * shape that {@link createNewGame} now stores on `state.composableConfig`.
+ *
+ * Task 11 will extend the share-link wire format to carry the new shape
+ * directly; until then, every shared puzzle uses the legacy fields, so
+ * the decode path on this side translates here.
+ */
+function legacyShareLinkCfToGeneratorConfig(cf: {
+    ha: number;
+    hf: number;
+    va: number;
+    vf: number;
+    dt: boolean;
+}): import('./puzzle/composable-generator.js').ComposableConfig {
+    return {
+        baseCutGenerator: 'sine',
+        baseCutConfig: { ha: cf.ha, hf: cf.hf, va: cf.va, vf: cf.vf },
+        tabGenerator: cf.dt ? 'none' : 'classic',
+        tabConfig: {},
+    };
+}
+
 function showCompletionOverlay(): void {
     if (currentCompletionHide) return;
     // Clear focus so any visible rotate buttons quick-fade out before the
@@ -750,7 +803,9 @@ createNewGameButton({
                 void startNewGame(
                     toGridSize(option),
                     cutStyle,
-                    composableConfig,
+                    composableConfig
+                        ? sliderConfigToGeneratorConfig(composableConfig)
+                        : undefined,
                     imageSource,
                     imageCategory,
                     fractalConfig,
@@ -939,13 +994,7 @@ async function loadSharedPuzzle(
             rotationMode: payload.r,
             fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
             composableConfig: payload.cf
-                ? {
-                    horizontalAmplitude: payload.cf.ha,
-                    horizontalFrequency: payload.cf.hf,
-                    verticalAmplitude: payload.cf.va,
-                    verticalFrequency: payload.cf.vf,
-                    disableTabs: payload.cf.dt,
-                  }
+                ? legacyShareLinkCfToGeneratorConfig(payload.cf)
                 : undefined,
         });
 

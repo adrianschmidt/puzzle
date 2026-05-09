@@ -310,8 +310,10 @@ describe('gameStateToPayload', () => {
         const state = buildState({
             cutStyle: 'composable',
             composableConfig: {
-                horizontalAmplitude: 0.2, horizontalFrequency: 1,
-                verticalAmplitude: 0.3, verticalFrequency: 2, disableTabs: false,
+                baseCutGenerator: 'sine',
+                baseCutConfig: { ha: 0.2, hf: 1, va: 0.3, vf: 2 },
+                tabGenerator: 'classic',
+                tabConfig: {},
             },
         });
         const payload = gameStateToPayload(state, { includeProgress: false });
@@ -543,13 +545,14 @@ describe('disableTabs default agreement (#285)', () => {
         expect(DEFAULT_DISABLE_TABS).toBe(false);
     });
 
-    it('share-link encodes an undefined disableTabs as the canonical default', () => {
+    it('share-link encodes an undefined tabGenerator as the canonical default', () => {
         const state = buildState({
             cutStyle: 'composable',
             composableConfig: {
-                horizontalAmplitude: 0.1, horizontalFrequency: 1,
-                verticalAmplitude: 0.1, verticalFrequency: 1,
-                // disableTabs intentionally left undefined
+                baseCutGenerator: 'sine',
+                baseCutConfig: { ha: 0.1, hf: 1, va: 0.1, vf: 1 },
+                // tabGenerator intentionally left undefined — receiver should
+                // fall back to the canonical default (DEFAULT_DISABLE_TABS).
             },
         });
         const payload = gameStateToPayload(state, { includeProgress: false });

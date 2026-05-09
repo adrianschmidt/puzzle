@@ -15,8 +15,12 @@ describe('createNewGame — cut-style configs on GameState', () => {
     });
 
     it('stores composableConfig when cutStyle is composable', () => {
-        const cfg = { horizontalAmplitude: 0.2, horizontalFrequency: 1,
-                      verticalAmplitude: 0.3, verticalFrequency: 2, disableTabs: false };
+        const cfg = {
+            baseCutGenerator: 'sine',
+            baseCutConfig: { ha: 0.2, hf: 1, va: 0.3, vf: 2 },
+            tabGenerator: 'classic',
+            tabConfig: {},
+        };
         const state = createNewGame(
             'blank',
             { width: 1080, height: 720 },
