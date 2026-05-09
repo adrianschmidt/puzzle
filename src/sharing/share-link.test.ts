@@ -59,7 +59,12 @@ describe('share-link codec — optional fields', () => {
     it('round-trips composable config', () => {
         const payload: SharePayload = {
             v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'composable', s: 1, r: 'none',
-            cf: { ha: 0.2, hf: 1, va: 0.3, vf: 2, dt: false },
+            cf: {
+                bg: 'sine',
+                bgc: { ha: 0.2, hf: 1, va: 0.3, vf: 2 },
+                tg: 'classic',
+                tgc: {},
+            },
         };
         expect(decodePayload(encodePayload(payload))).toEqual(payload);
     });
@@ -99,9 +104,67 @@ describe('share-link codec — optional fields', () => {
     it('round-trips composable config with quarter-turn rotation', () => {
         const payload: SharePayload = {
             v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'composable', s: 1, r: 'quarter-turn',
-            cf: { ha: 0.2, hf: 1, va: 0.3, vf: 2, dt: false },
+            cf: {
+                bg: 'sine',
+                bgc: { ha: 0.2, hf: 1, va: 0.3, vf: 2 },
+                tg: 'classic',
+                tgc: {},
+            },
         };
         expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+});
+
+describe('share-link: composable v2 cf shape', () => {
+    it('round-trips the new {bg, bgc, tg, tgc} shape', () => {
+        const payload: SharePayload = {
+            v: 1,
+            i: 'blank',
+            is: [600, 400],
+            g: [4, 3],
+            c: 'composable',
+            s: 12345,
+            r: 'none',
+            cf: {
+                bg: 'sine',
+                bgc: { ha: 0.2, hf: 1.5, va: 0.2, vf: 1.5 },
+                tg: 'classic',
+                tgc: {},
+            },
+        } as SharePayload;
+        const encoded = encodePayload(payload);
+        const decoded = decodePayload(encoded);
+        expect(decoded).toEqual(payload);
+    });
+});
+
+describe('share-link: legacy composable cf shape', () => {
+    it('decodes a legacy {ha, hf, va, vf, dt} payload as the new shape', () => {
+        const legacy = {
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 12345, r: 'none',
+            cf: { ha: 0.2, hf: 1.5, va: 0.2, vf: 1.5, dt: false },
+        };
+        const encoded = encodePayload(legacy as unknown as SharePayload);
+        const decoded = decodePayload(encoded);
+        expect(decoded).not.toBeNull();
+        expect(decoded!.cf).toEqual({
+            bg: 'sine',
+            bgc: { ha: 0.2, hf: 1.5, va: 0.2, vf: 1.5 },
+            tg: 'classic',
+            tgc: {},
+        });
+    });
+
+    it('decodes a legacy payload with dt=true as tg="none"', () => {
+        const legacy = {
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 12345, r: 'none',
+            cf: { ha: 0.2, hf: 1.5, va: 0.2, vf: 1.5, dt: true },
+        };
+        const encoded = encodePayload(legacy as unknown as SharePayload);
+        const decoded = decodePayload(encoded);
+        expect(decoded!.cf!.tg).toBe('none');
     });
 });
 
@@ -317,7 +380,12 @@ describe('gameStateToPayload', () => {
             },
         });
         const payload = gameStateToPayload(state, { includeProgress: false });
-        expect(payload.cf).toEqual({ ha: 0.2, hf: 1, va: 0.3, vf: 2, dt: false });
+        expect(payload.cf).toEqual({
+            bg: 'sine',
+            bgc: { ha: 0.2, hf: 1, va: 0.3, vf: 2 },
+            tg: 'classic',
+            tgc: {},
+        });
     });
 
     it('omits progress when includeProgress is false', () => {
@@ -385,7 +453,10 @@ describe('gameStateToPayload', () => {
         });
         const payload = gameStateToPayload(state, { includeProgress: false });
         expect(payload.cf).toEqual({
-            ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5, dt: DEFAULT_DISABLE_TABS,
+            bg: 'sine',
+            bgc: {},
+            tg: 'classic',
+            tgc: {},
         });
     });
 
@@ -556,7 +627,10 @@ describe('disableTabs default agreement (#285)', () => {
             },
         });
         const payload = gameStateToPayload(state, { includeProgress: false });
-        expect(payload.cf?.dt).toBe(DEFAULT_DISABLE_TABS);
+        // The new wire format encodes tabGenerator id directly. When the
+        // sender omits it, encode as the canonical default — 'classic' for
+        // tabs-enabled, 'none' for tabs-disabled.
+        expect(payload.cf?.tg).toBe(DEFAULT_DISABLE_TABS ? 'none' : 'classic');
     });
 
     it('topology generator treats undefined tabGeneratorId identically to the canonical default', () => {
