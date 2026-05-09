@@ -5,6 +5,11 @@
  * find which inner face of which other component contains it, and
  * attach the component's outer-loop start as an inner boundary on
  * the containing face.
+ *
+ * Only single-level hole nesting is exercised by current tests
+ * (frame + free-floating circle, frame + two-circle Venn). Deeper
+ * nesting (a hole containing another hole) may behave correctly via
+ * natural fall-through of the same logic, but is not verified.
  */
 
 import type { TopologyGraph, Face, HalfEdge } from './dcel.js';
@@ -40,14 +45,21 @@ export function assignHoles(graph: TopologyGraph, components: Component[]): void
 }
 
 function findLocalOuterFace(component: Component, graph: TopologyGraph): Face | null {
-    // Find the face within this component with the most-negative signed area
-    // (= the local outer face).
+    // Find the face within this component with the most-negative signed
+    // area (= the local outer face, by analogy with the global outer face).
+    //
+    // Uses SAMPLED curve points for the shoelace formula so that faces
+    // whose boundaries are curved arcs with very few vertices (e.g. a
+    // circle split into 2 arcs has just 2 vertices, vertex-based shoelace
+    // collapses to zero) get a meaningful signed area. This is essential
+    // for circle-based components like Venn where every face's vertex
+    // count is small.
     let bestFace: Face | null = null;
     let mostNegative = Infinity;
     for (const faceId of component.faces) {
         const face = graph.faces.find(f => f.id === faceId);
         if (!face) continue;
-        const area = computeSignedArea(face);
+        const area = sampledSignedArea(face);
         if (area < mostNegative) {
             mostNegative = area;
             bestFace = face;
@@ -112,19 +124,26 @@ function polygonArea(polygon: Point[]): number {
 }
 
 /**
- * Compute the signed area of a face by walking its half-edge boundary.
- * Uses the shoelace formula on the half-edge endpoints.
- *
- * Local helper (kept private here to avoid widening dcel.ts's public API).
+ * Compute the signed area of a face using SAMPLED points along each
+ * half-edge curve, not just the half-edge endpoints. Required for faces
+ * bounded by curves with few vertices (e.g. a 2-vertex circle), where
+ * vertex-only shoelace collapses to zero.
  */
-function computeSignedArea(face: Face): number {
-    let area = 0;
-    let current = face.outerEdge;
+function sampledSignedArea(face: Face): number {
+    const points: { x: number; y: number }[] = [];
+    let current: HalfEdge = face.outerEdge;
     do {
-        const a = current.origin.position;
-        const b = current.twin.origin.position;
-        area += (a.x * b.y - b.x * a.y);
+        // sample(8) returns [start, ...8 interior+end]; appending all
+        // produces a connected polyline around the boundary. Endpoints
+        // are duplicated between adjacent edges, but shoelace is robust
+        // to repeated points.
+        points.push(...current.curve.sample(8));
         current = current.next;
     } while (current !== face.outerEdge);
+
+    let area = 0;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        area += points[j].x * points[i].y - points[i].x * points[j].y;
+    }
     return area / 2;
 }
