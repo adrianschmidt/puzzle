@@ -443,9 +443,21 @@ function splitCurvesAtIntersections(
 // ---------------------------------------------------------------------------
 
 /**
- * Split any closed curves (where start === end) at t=0.5 to create two
- * distinct half-edges. This ensures closed curves like circles form separate
- * components in the DCEL half-edge graph.
+ * Split any still-closed curves (where start === end within
+ * VERTEX_MERGE_TOLERANCE) at t=0.5 to create two distinct half-edges.
+ *
+ * Runs AFTER intersection-splitting because closed curves that cross
+ * other curves are already split at the crossings into open arcs and
+ * don't need this treatment. Only truly free-floating closed inputs
+ * (e.g. an isolated `Curve.circle` that doesn't cross anything else)
+ * survive intersection-splitting still-closed and need to be cracked
+ * here so the DCEL doesn't reject them as zero-length self-loops.
+ *
+ * The t=0.5 split is arbitrary; for a 4-segment kappa-circle it lands
+ * at the leftmost cardinal point, which is fine. For other closed
+ * curves with non-uniform segment distribution it could land in a
+ * numerically awkward spot, but no current generator emits such
+ * inputs.
  */
 function splitClosedCurves(segments: Curve[]): Curve[] {
     const result: Curve[] = [];
