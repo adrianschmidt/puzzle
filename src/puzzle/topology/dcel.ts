@@ -123,7 +123,10 @@ export function buildDCEL(cutSet: CutSet): TopologyGraph {
     );
 
     // Step 2: Split curves at intersection points → segments
-    const segments = splitCurvesAtIntersections(curves, allIntersections);
+    let segments = splitCurvesAtIntersections(curves, allIntersections);
+
+    // Step 2b: Split closed curves (start === end) at t=0.5 to create two half-edges
+    segments = splitClosedCurves(segments);
 
     // Step 3: Build vertices with merging
     const vertexMap = new VertexPool();
@@ -420,6 +423,32 @@ function splitCurvesAtIntersections(
     }
 
     return allSegments;
+}
+
+// ---------------------------------------------------------------------------
+// Step 2b: Split closed curves
+// ---------------------------------------------------------------------------
+
+/**
+ * Split any closed curves (where start === end) at t=0.5 to create two
+ * distinct half-edges. This ensures closed curves like circles form separate
+ * components in the DCEL half-edge graph.
+ */
+function splitClosedCurves(segments: Curve[]): Curve[] {
+    const result: Curve[] = [];
+
+    for (const segment of segments) {
+        const startDist = pointDist(segment.start, segment.end);
+        if (startDist < VERTEX_MERGE_TOLERANCE) {
+            // This is a closed curve; split it at t=0.5
+            const [first, second] = segment.splitAt(0.5);
+            result.push(first, second);
+        } else {
+            result.push(segment);
+        }
+    }
+
+    return result;
 }
 
 // ---------------------------------------------------------------------------
