@@ -24,6 +24,8 @@ const CROSSING_ENDPOINT_TOLERANCE = 2;   // px — ignore intersections at endpo
 export interface ApplyTabsOptions {
     /** Optional eligibility filter (default: every internal edge). */
     policy?: TabPolicy;
+    /** Tab-generator-specific config, forwarded to TabGenerator.generate. */
+    tabConfig?: unknown;
 }
 
 export function applyTabs(
@@ -33,6 +35,7 @@ export function applyTabs(
     options: ApplyTabsOptions = {},
 ): void {
     const policy = options.policy ?? defaultTabPolicy;
+    const tabConfig = options.tabConfig ?? {};
 
     // Build the canonical list of shared edges (one entry per twin pair).
     // Skip pairs where either side is the outer face.
@@ -52,11 +55,10 @@ export function applyTabs(
         const view: TopologyEdge = {
             id: he.id,
             length: he.curve.arcLength(),
-            isBorder: false,
         };
         if (!policy(view)) continue;
 
-        const candidate = generator.generate(he.curve, random, {});
+        const candidate = generator.generate(he.curve, random, tabConfig);
         if (!candidate) continue;
 
         if (!endpointsMatch(candidate, he.curve)) continue;

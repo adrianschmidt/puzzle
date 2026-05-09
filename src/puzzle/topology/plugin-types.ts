@@ -79,11 +79,13 @@ export type TabPolicy = (edge: TopologyEdge) => boolean;
 /**
  * Lightweight view of a half-edge, exposed to TabPolicy.
  * Doesn't expose neighbours or curves — keeps policies simple.
+ *
+ * Border edges (where one side is the outer face) are filtered out
+ * before the policy is invoked, so a policy only ever sees internal
+ * edges.
  */
 export interface TopologyEdge {
     readonly id: number;
     /** Arc length of the edge's current curve, in pixels. */
     readonly length: number;
-    /** True if either side of the edge is the outer (unbounded) face. */
-    readonly isBorder: boolean;
 }

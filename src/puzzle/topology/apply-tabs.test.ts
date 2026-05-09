@@ -83,6 +83,32 @@ describe('applyTabs', () => {
         expect(internalEdge.curve).toBe(curveBefore);
     });
 
+    it('honors a custom TabPolicy that filters by length', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(3, 3) });
+        let calls = 0;
+        const generator: TabGenerator = {
+            id: 'count',
+            generate: () => { calls++; return null; },
+        };
+        // Edges in a 3×3 grid of 100-unit cells are 100 units long.
+        // A policy that requires length > 200 should skip every edge.
+        applyTabs(graph, generator, makeSeededRandom(1), {
+            policy: (e) => e.length > 200,
+        });
+        expect(calls).toBe(0);
+
+        // Inverse: policy admits every edge.
+        let calls2 = 0;
+        const generator2: TabGenerator = {
+            id: 'count2',
+            generate: () => { calls2++; return null; },
+        };
+        applyTabs(graph, generator2, makeSeededRandom(1), {
+            policy: () => true,
+        });
+        expect(calls2).toBe(12); // 3×3 grid: (3-1)*3 horizontals + 3*(3-1) verticals = 6 + 6 = 12 internal edges
+    });
+
     it('accepts a tab candidate that does not cross any other edge', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
