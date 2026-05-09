@@ -10,7 +10,7 @@
 
 import type { Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from '../composable/types.js';
-import type { HalfEdge, Face, DCELResult } from './dcel.js';
+import type { HalfEdge, Face, TopologyGraph } from './dcel.js';
 import { getFaceEdges, countFaceEdges } from './dcel.js';
 import { diagnostics } from '../../diagnostics.js';
 
@@ -25,7 +25,7 @@ import { diagnostics } from '../../diagnostics.js';
  * @returns Array of PieceDefinitions ready for composePuzzle()
  */
 export function facesToPieceDefinitions(
-    dcel: DCELResult,
+    dcel: TopologyGraph,
     expectedPieceCount?: number,
 ): PieceDefinition[] {
     // Merge degenerate lens-shaped and tiny tip faces into adjacent faces
@@ -208,7 +208,7 @@ function extractCurvePoints(he: HalfEdge, bbox: BBox): Point[] | undefined {
  *
  * Mutates the DCEL in-place.
  */
-function mergeSmallFaces(dcel: DCELResult, expectedPieceCount?: number): void {
+function mergeSmallFaces(dcel: TopologyGraph, expectedPieceCount?: number): void {
     // A face is merged if:
     // 1. It has ≤2 edges (degenerate lens face), OR
     // 2. Its area is tiny relative to ALL its non-outer neighbors

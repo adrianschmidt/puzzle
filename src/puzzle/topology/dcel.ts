@@ -81,9 +81,16 @@ export interface CutSet {
 }
 
 /**
- * The result of building a DCEL from a set of curves.
+ * A topology graph: vertices (intersection points), half-edges
+ * (oriented arcs between vertices, each carrying a curve), and faces
+ * (regions enclosed by half-edge cycles).
+ *
+ * Implemented as a DCEL (Doubly-Connected Edge List). Built once from
+ * a set of input cuts, then never re-derived — subsequent stages
+ * (tab application, face → piece extraction) operate on this graph
+ * directly.
  */
-export interface DCELResult {
+export interface TopologyGraph {
     vertices: Vertex[];
     halfEdges: HalfEdge[];
     faces: Face[];
@@ -107,7 +114,7 @@ const VERTEX_MERGE_TOLERANCE = 3;
  * @param cutSet - The input curves (with optional non-intersecting hints)
  * @returns The complete DCEL with vertices, half-edges, and faces
  */
-export function buildDCEL(cutSet: CutSet): DCELResult {
+export function buildDCEL(cutSet: CutSet): TopologyGraph {
     const { curves, nonIntersectingGroups } = cutSet;
 
     // Step 1: Find all intersections
