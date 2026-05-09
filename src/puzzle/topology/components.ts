@@ -6,7 +6,7 @@
  * floating closed curve is its own component, separate from the frame.
  */
 
-import type { TopologyGraph, HalfEdge, Face } from './dcel.js';
+import type { TopologyGraph, HalfEdge } from './dcel.js';
 
 export interface Component {
     /** All half-edges in this component. */
