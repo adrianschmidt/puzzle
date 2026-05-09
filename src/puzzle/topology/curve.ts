@@ -121,6 +121,30 @@ export class Curve {
         return new Curve(segments);
     }
 
+    /**
+     * Construct a circular curve as four cubic Bézier segments using
+     * the standard kappa = 4*(sqrt(2)-1)/3 approximation.
+     *
+     * Starts at the rightmost point (centre + (radius, 0)) and goes CCW.
+     */
+    static circle(center: Point, radius: number): Curve {
+        const k = 0.5522847498307933;  // 4*(sqrt(2)-1)/3
+        const r = radius, kr = k * r;
+        const cx = center.x, cy = center.y;
+        const right  = { x: cx + r,  y: cy };
+        const top    = { x: cx,      y: cy - r };
+        const left   = { x: cx - r,  y: cy };
+        const bottom = { x: cx,      y: cy + r };
+
+        return Curve.fromBezierPath([
+            right,
+            { x: cx + r,  y: cy + kr }, { x: cx + kr, y: cy + r },  bottom,
+            { x: cx - kr, y: cy + r  }, { x: cx - r,  y: cy + kr }, left,
+            { x: cx - r,  y: cy - kr }, { x: cx - kr, y: cy - r  }, top,
+            { x: cx + kr, y: cy - r  }, { x: cx + r,  y: cy - kr }, right,
+        ]);
+    }
+
     // -- Accessors ---------------------------------------------------------
 
     /** The start point of the curve. */
