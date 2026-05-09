@@ -14,6 +14,7 @@ import { DEFAULT_DISABLE_TABS, composePuzzle } from '../puzzle/composable/compos
 import { generateTopologyPuzzle } from '../puzzle/topology/generator.js';
 import { classicTabTemplate } from '../puzzle/composable/tab-shapes.js';
 import type { PieceDefinition } from '../puzzle/composable/types.js';
+import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
 
 describe('share-link codec — minimal round-trip', () => {
     it('round-trips a minimal starting payload (no attribution, no progress)', () => {
@@ -165,6 +166,34 @@ describe('share-link: legacy composable cf shape', () => {
         const encoded = encodePayload(legacy as unknown as SharePayload);
         const decoded = decodePayload(encoded);
         expect(decoded!.cf!.tg).toBe('none');
+    });
+});
+
+describe('share-link: legacy → working puzzle smoke test', () => {
+    it('a legacy-shape link decodes and produces a non-empty piece array', () => {
+        const legacy = {
+            v: 1, i: 'blank', is: [1080, 720], g: [16, 12],
+            c: 'composable', s: 124741785, r: 'none',
+            cf: { ha: 0.13, hf: 7.1, va: 0.08, vf: 6.9, dt: false },
+        };
+        const encoded = encodePayload(legacy as unknown as SharePayload);
+        const decoded = decodePayload(encoded)!;
+
+        const pieces = generateComposablePuzzle(
+            decoded.g[0], decoded.g[1],
+            { width: decoded.is[0], height: decoded.is[1] },
+            decoded.s,
+            {
+                baseCutGenerator: decoded.cf!.bg,
+                baseCutConfig: decoded.cf!.bgc,
+                tabGenerator: decoded.cf!.tg,
+                tabConfig: decoded.cf!.tgc,
+            },
+        );
+
+        expect(pieces.length).toBeGreaterThan(0);
+        // We don't assert exactly 192 — old links won't necessarily
+        // produce the same puzzle. We just assert "produces a puzzle."
     });
 });
 
