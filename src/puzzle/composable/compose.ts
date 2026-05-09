@@ -91,14 +91,12 @@ export function composePuzzle(
         );
 
         // Forward inner-boundary loops, converting each EdgeDefinition
-        // to an Edge with the same logic as the outer boundary. The
-        // `shape` string still only encodes the outer boundary at this
-        // stage; multi-subpath rendering arrives in a later task.
+        // to an Edge with the same logic as the outer boundary.
         const innerBoundaries: Edge[][] | undefined = pieceDef.innerBoundaries?.map(loop =>
             loop.map(edgeDef => buildEdge(edgeDef, tabPaths)),
         );
 
-        const shape = buildShape(edges);
+        const shape = buildShape(edges, innerBoundaries);
 
         const piece: Piece = {
             id: pieceDef.id,
@@ -250,7 +248,18 @@ function transformToEdge(
 // SVG path helpers
 // ---------------------------------------------------------------------------
 
-function buildShape(edges: Edge[]): string {
+function buildShape(outerEdges: Edge[], innerLoops?: Edge[][]): string {
+    let d = subPath(outerEdges);
+    if (innerLoops) {
+        for (const loop of innerLoops) {
+            const sub = subPath(loop);
+            if (sub) d += ' ' + sub;
+        }
+    }
+    return d;
+}
+
+function subPath(edges: Edge[]): string {
     if (edges.length === 0) return '';
     const first = edges[0];
     const parts = [`M ${fmt(first.start.x)} ${fmt(first.start.y)}`];
