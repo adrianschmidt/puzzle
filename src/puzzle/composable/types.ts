@@ -17,6 +17,12 @@ export interface PieceDefinition {
     id: number;
     /** Edges ordered clockwise around the piece. */
     edges: EdgeDefinition[];
+    /**
+     * Inner-boundary edge loops, one per hole. Each loop is a
+     * sequence of EdgeDefinitions with the same orientation
+     * convention as `edges`. Empty/undefined for faces without holes.
+     */
+    innerBoundaries?: EdgeDefinition[][];
     /** Offset to position the source image behind the piece. */
     imageOffset: Point;
 }

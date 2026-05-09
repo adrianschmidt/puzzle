@@ -51,6 +51,13 @@ export interface Piece {
     id: number;
     /** All edges of this piece, defining its shape boundary and connectivity. */
     edges: Edge[];
+    /**
+     * Inner-boundary edge loops, one per hole. Empty/undefined for
+     * pieces without holes. Forwarded from PieceDefinition by the
+     * composable pipeline. Currently used only by the Venn-style
+     * topologies; classic grid puzzles always have undefined.
+     */
+    innerBoundaries?: Edge[][];
     /** Full SVG clip-path `d` attribute built from all edges. */
     shape: string;
     /** Offset to position the source image behind the clip-path (piece-local coords). */
