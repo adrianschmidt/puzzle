@@ -176,4 +176,31 @@ describe('composePuzzle', () => {
             expect(rightEdge.matePieceId).toBe(1);
         });
     });
+
+    describe('inner boundaries', () => {
+        it('emits a multi-subpath SVG path for pieces with inner boundaries', () => {
+            const pieceDefs: PieceDefinition[] = [{
+                id: 0,
+                edges: [
+                    // outer rectangle 0,0 → 100,0 → 100,100 → 0,100 → 0,0
+                    { id: 0, start: { x: 0, y: 0 }, end: { x: 100, y: 0 }, mateEdgeId: -1, matePieceId: -1 },
+                    { id: 1, start: { x: 100, y: 0 }, end: { x: 100, y: 100 }, mateEdgeId: -1, matePieceId: -1 },
+                    { id: 2, start: { x: 100, y: 100 }, end: { x: 0, y: 100 }, mateEdgeId: -1, matePieceId: -1 },
+                    { id: 3, start: { x: 0, y: 100 }, end: { x: 0, y: 0 }, mateEdgeId: -1, matePieceId: -1 },
+                ],
+                innerBoundaries: [[
+                    // inner triangle hole: (40,40)→(60,40)→(50,60)→(40,40)
+                    { id: 4, start: { x: 40, y: 40 }, end: { x: 60, y: 40 }, mateEdgeId: -1, matePieceId: -1 },
+                    { id: 5, start: { x: 60, y: 40 }, end: { x: 50, y: 60 }, mateEdgeId: -1, matePieceId: -1 },
+                    { id: 6, start: { x: 50, y: 60 }, end: { x: 40, y: 40 }, mateEdgeId: -1, matePieceId: -1 },
+                ]],
+                imageOffset: { x: 0, y: 0 },
+            }];
+
+            const pieces = composePuzzle(pieceDefs, template, createSeededRandom(1), { disableTabs: true });
+            expect(pieces).toHaveLength(1);
+            // The shape path should contain two `M ... Z` sub-paths.
+            expect(pieces[0].shape).toMatch(/M.*Z.*M.*Z/);
+        });
+    });
 });
