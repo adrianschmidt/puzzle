@@ -198,6 +198,17 @@ export function gameStateToPayload(
         // so the recipient reproduces the same cuts even if sub-fields are
         // missing from the base-cut config.
         const c = state.composableConfig;
+        // Defensive guard: the v1 `cf` wire format only carries sine-shaped
+        // parameters. Silently projecting a non-sine generator (e.g. a future
+        // Venn generator) onto these fields would produce a sine grid on the
+        // recipient's side, corrupting the shared puzzle. Task 11 will lift
+        // this restriction by extending the wire format.
+        if (c.baseCutGenerator && c.baseCutGenerator !== 'sine') {
+            throw new Error(
+                `Cannot share '${c.baseCutGenerator}' puzzles via the v1 cf wire format. `
+                + `Task 11 will lift this restriction by extending the wire format.`,
+            );
+        }
         const bgc = (c.baseCutConfig ?? {}) as Record<string, unknown>;
         const ha = typeof bgc.ha === 'number' ? bgc.ha : 0.15;
         const hf = typeof bgc.hf === 'number' ? bgc.hf : 1.5;
