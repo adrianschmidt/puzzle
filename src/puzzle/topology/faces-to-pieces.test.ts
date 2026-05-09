@@ -415,3 +415,23 @@ describe('facesToPieceDefinitions: lens-face merging', () => {
         expect(pieces.length).toBeGreaterThanOrEqual(cols * rows);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Piece with hole (free-floating circle inside a frame)
+// ---------------------------------------------------------------------------
+
+describe('facesToPieceDefinitions: piece with hole', () => {
+    it('attaches the free-floating circle as an innerBoundaries loop on the frame piece', () => {
+        const W = 600, H = 400;
+        const pieces = buildPipeline([
+            Curve.line({ x: 0, y: 0 }, { x: W, y: 0 }),
+            Curve.line({ x: W, y: 0 }, { x: W, y: H }),
+            Curve.line({ x: W, y: H }, { x: 0, y: H }),
+            Curve.line({ x: 0, y: H }, { x: 0, y: 0 }),
+            Curve.circle({ x: 300, y: 200 }, 50),
+        ]);
+        const withHoles = pieces.filter(p => p.innerBoundaries && p.innerBoundaries.length > 0);
+        expect(withHoles).toHaveLength(1);
+        expect(withHoles[0].innerBoundaries!).toHaveLength(1);
+    });
+});
