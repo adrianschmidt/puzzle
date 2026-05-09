@@ -8,7 +8,6 @@
 
 import type { GameState } from '../model/types.js';
 import { normaliseDegrees } from '../model/helpers.js';
-import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -27,8 +26,19 @@ export interface SharePayload {
     s: number;
     /** Rotation mode. */
     r: 'none' | 'quarter-turn' | 'free';
-    /** Composable-cut config. */
-    cf?: { ha: number; hf: number; va: number; vf: number; dt: boolean };
+    /** Composable cut config. */
+    cf?: {
+        /** BaseCutGenerator id. */
+        bg: string;
+        /** Generator-specific config (opaque). */
+        bgc: Record<string, unknown>;
+        /** TabGenerator id ('none' to disable tabs). */
+        tg: string;
+        /** Tab-generator-specific config (opaque). */
+        tgc: Record<string, unknown>;
+        /** Optional minPieceArea override (Plan 3 will use this). */
+        mpa?: number;
+    };
     /** Fractal-cut config. */
     ff?: { bl: boolean };
     /** Optional progress snapshot. */
@@ -54,9 +64,14 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
     check(payload.is[0], 'is[0]'); check(payload.is[1], 'is[1]');
     check(payload.g[0], 'g[0]');   check(payload.g[1], 'g[1]');
     check(payload.s, 's');
-    if (payload.cf) {
-        check(payload.cf.ha, 'cf.ha'); check(payload.cf.hf, 'cf.hf');
-        check(payload.cf.va, 'cf.va'); check(payload.cf.vf, 'cf.vf');
+    if (payload.cf && payload.c === 'composable') {
+        const bgc = (payload.cf.bgc ?? {}) as Record<string, unknown>;
+        for (const key of Object.keys(bgc)) {
+            const v = bgc[key];
+            if (typeof v === 'number' && !Number.isFinite(v)) {
+                throw new Error(`Share payload cf.bgc.${key} must be finite (got ${v})`);
+            }
+        }
     }
 }
 
@@ -64,11 +79,39 @@ export function decodePayload(encoded: string): SharePayload | null {
     try {
         const json = base64UrlDecode(encoded);
         const parsed = JSON.parse(json) as unknown;
-        if (!isValidPayload(parsed)) return null;
-        return parsed;
+        const translated = translateLegacyComposable(parsed);
+        if (!isValidPayload(translated)) return null;
+        return translated;
     } catch {
         return null;
     }
+}
+
+/**
+ * Translate a legacy composable cf shape (with ha/hf/va/vf/dt fields)
+ * into the new shape (bg/bgc/tg/tgc) so the framework only ever sees
+ * the new format.
+ */
+function translateLegacyComposable(parsed: unknown): unknown {
+    if (!parsed || typeof parsed !== 'object') return parsed;
+    const p = parsed as Record<string, unknown>;
+    if (p.c !== 'composable') return parsed;
+    if (!p.cf || typeof p.cf !== 'object') return parsed;
+
+    const cf = p.cf as Record<string, unknown>;
+    const isLegacy = ('ha' in cf || 'hf' in cf || 'va' in cf || 'vf' in cf || 'dt' in cf)
+                  && !('bg' in cf);
+    if (!isLegacy) return parsed;
+
+    return {
+        ...p,
+        cf: {
+            bg: 'sine',
+            bgc: { ha: cf.ha, hf: cf.hf, va: cf.va, vf: cf.vf },
+            tg: cf.dt === true ? 'none' : 'classic',
+            tgc: {},
+        },
+    };
 }
 
 function base64UrlEncode(text: string): string {
@@ -98,7 +141,19 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (p.c !== 'classic' && p.c !== 'fractal' && p.c !== 'composable') return false;
     if (typeof p.s !== 'number') return false;
     if (p.r !== 'none' && p.r !== 'quarter-turn' && p.r !== 'free') return false;
+    if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
     if (p.pr !== undefined && !isValidProgress(p.pr)) return false;
+    return true;
+}
+
+function isValidComposableCf(cf: unknown): boolean {
+    if (!cf || typeof cf !== 'object') return false;
+    const c = cf as Record<string, unknown>;
+    if (typeof c.bg !== 'string') return false;
+    if (typeof c.bgc !== 'object' || c.bgc === null) return false;
+    if (typeof c.tg !== 'string') return false;
+    if (typeof c.tgc !== 'object' || c.tgc === null) return false;
+    if (c.mpa !== undefined && typeof c.mpa !== 'number') return false;
     return true;
 }
 
@@ -189,40 +244,17 @@ export function gameStateToPayload(
     }
 
     if (cutStyle === 'composable' && state.composableConfig) {
-        // The v1 wire format `cf` predates the BaseCutGenerator/TabGenerator
-        // refactor and carries the legacy sine-only fields. Project the
-        // opaque generator-config shape onto those fields here. Task 11
-        // will extend `cf` to carry the new shape directly.
-        //
-        // Defaults mirror the topology generator (src/puzzle/topology/generator.ts)
-        // so the recipient reproduces the same cuts even if sub-fields are
-        // missing from the base-cut config.
+        // Write the opaque generator/config shape directly to the wire.
+        // Defaults: sine base-cut generator and classic tab generator
+        // (matching src/puzzle/topology/generator.ts) so recipients reproduce
+        // the same cuts when the sender omitted sub-fields.
         const c = state.composableConfig;
-        // Defensive guard: the v1 `cf` wire format only carries sine-shaped
-        // parameters. Silently projecting a non-sine generator (e.g. a future
-        // Venn generator) onto these fields would produce a sine grid on the
-        // recipient's side, corrupting the shared puzzle. Task 11 will lift
-        // this restriction by extending the wire format.
-        if (c.baseCutGenerator && c.baseCutGenerator !== 'sine') {
-            throw new Error(
-                `Cannot share '${c.baseCutGenerator}' puzzles via the v1 cf wire format. `
-                + `Task 11 will lift this restriction by extending the wire format.`,
-            );
-        }
-        const bgc = (c.baseCutConfig ?? {}) as Record<string, unknown>;
-        const ha = typeof bgc.ha === 'number' ? bgc.ha : 0.15;
-        const hf = typeof bgc.hf === 'number' ? bgc.hf : 1.5;
-        const va = typeof bgc.va === 'number' ? bgc.va : 0.15;
-        const vf = typeof bgc.vf === 'number' ? bgc.vf : 1.5;
-        // tabGenerator === 'none' means the sender disabled tabs; everything
-        // else (including the canonical 'classic' default) means tabs enabled.
-        const tabGen = c.tabGenerator;
-        const dt = tabGen === 'none'
-            ? true
-            : tabGen === undefined
-                ? DEFAULT_DISABLE_TABS
-                : false;
-        payload.cf = { ha, hf, va, vf, dt };
+        payload.cf = {
+            bg: c.baseCutGenerator ?? 'sine',
+            bgc: (c.baseCutConfig ?? {}) as Record<string, unknown>,
+            tg: c.tabGenerator ?? 'classic',
+            tgc: (c.tabConfig ?? {}) as Record<string, unknown>,
+        };
     }
 
     if (cutStyle === 'fractal' && state.fractalConfig) {

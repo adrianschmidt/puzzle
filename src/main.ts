@@ -154,26 +154,19 @@ function sliderConfigToGeneratorConfig(slider: {
 }
 
 /**
- * Translate a legacy share-link `cf` payload (the v1 wire format with
- * `ha`/`hf`/`va`/`vf`/`dt` fields) into the new opaque `ComposableConfig`
- * shape that {@link createNewGame} now stores on `state.composableConfig`.
- *
- * Task 11 will extend the share-link wire format to carry the new shape
- * directly; until then, every shared puzzle uses the legacy fields, so
- * the decode path on this side translates here.
+ * Project a decoded share-link `cf` block onto the framework's
+ * {@link ComposableConfig} shape. This is a 1:1 rename — `decodePayload`
+ * already translates legacy share-link payloads (v1 `ha`/`hf`/`va`/`vf`/`dt`
+ * fields) to the current `bg`/`bgc`/`tg`/`tgc` shape on the way in.
  */
-function legacyShareLinkCfToGeneratorConfig(cf: {
-    ha: number;
-    hf: number;
-    va: number;
-    vf: number;
-    dt: boolean;
-}): import('./puzzle/composable-generator.js').ComposableConfig {
+function shareCfToComposableConfig(
+    cf: NonNullable<import('./sharing/share-link.js').SharePayload['cf']>,
+): import('./puzzle/composable-generator.js').ComposableConfig {
     return {
-        baseCutGenerator: 'sine',
-        baseCutConfig: { ha: cf.ha, hf: cf.hf, va: cf.va, vf: cf.vf },
-        tabGenerator: cf.dt ? 'none' : 'classic',
-        tabConfig: {},
+        baseCutGenerator: cf.bg,
+        baseCutConfig: cf.bgc,
+        tabGenerator: cf.tg,
+        tabConfig: cf.tgc,
     };
 }
 
@@ -994,7 +987,7 @@ async function loadSharedPuzzle(
             rotationMode: payload.r,
             fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
             composableConfig: payload.cf
-                ? legacyShareLinkCfToGeneratorConfig(payload.cf)
+                ? shareCfToComposableConfig(payload.cf)
                 : undefined,
         });
 
