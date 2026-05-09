@@ -95,7 +95,7 @@ export function generateTopologyPuzzle(
     //    topology is unchanged — only edge curves are swapped.
     if (tabId !== 'none') {
         const tabGenerator = getTabGenerator(tabId);
-        applyTabs(graph, tabGenerator, random);
+        applyTabs(graph, tabGenerator, random, { tabConfig: config?.tabConfig });
     }
 
     // 4. Faces → piece definitions. The expectedPieceCount drives

@@ -1,11 +1,18 @@
 /**
- * Composable puzzle generator.
+ * Composable puzzle generator (entry point).
  *
- * Uses the topology-driven architecture:
- *   1. Generate border + internal cut lines as Curves
- *   2. Optionally merge tabs into internal cuts
- *   3. Build DCEL → find faces → extract PieceDefinitions
- *   4. Compose final Piece[] via the composition layer
+ * Thin wrapper that creates a seeded PRNG and forwards an opaque
+ * `ComposableConfig` to the topology pipeline. The topology layer
+ * (see `topology/generator.ts`) does the real work:
+ *
+ *   1. Look up the BaseCutGenerator by id and call it to produce
+ *      input cuts.
+ *   2. Build the topology graph in a single intersection pass.
+ *   3. Apply the TabGenerator per shared internal edge with
+ *      framework-owned collision rejection.
+ *   4. Convert faces → PieceDefinitions → final Piece[] via
+ *      composePuzzle (with disableTabs:true since tabs are already
+ *      in the edge geometry).
  *
  * See issue #127 for the composable design,
  * and #166 for the topology-driven approach.
