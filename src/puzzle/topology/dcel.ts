@@ -20,6 +20,8 @@
 import type { Point } from '../../model/types.js';
 import { Curve } from './curve.js';
 import type { CurveIntersection } from './curve.js';
+import { findComponents } from './components.js';
+import { assignHoles } from './holes.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,6 +67,12 @@ export interface Face {
     outerEdge: HalfEdge;
     /** Whether this is the unbounded outer face. */
     isOuter: boolean;
+    /**
+     * Inner-boundary loop starting half-edges. Empty for faces
+     * without holes. One half-edge per loop; walk via .next to
+     * collect the full loop.
+     */
+    innerBoundaries: HalfEdge[];
 }
 
 /**
@@ -165,7 +173,12 @@ export function buildDCEL(cutSet: CutSet): TopologyGraph {
     // Step 7: Identify the outer face (largest area, negative signed area = CW)
     const outerFace = identifyOuterFace(faces);
 
-    return { vertices, halfEdges, faces, outerFace };
+    // Step 8: Detect connected components and assign holes (inner
+    // boundaries) for non-primary components contained in inner faces.
+    const result: TopologyGraph = { vertices, halfEdges, faces, outerFace };
+    const components = findComponents(result);
+    assignHoles(result, components);
+    return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -583,6 +596,7 @@ function discoverFaces(halfEdges: HalfEdge[]): Face[] {
             id: nextFaceId++,
             outerEdge: he,
             isOuter: false,
+            innerBoundaries: [],
         };
 
         let current = he;
