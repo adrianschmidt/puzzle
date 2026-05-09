@@ -303,6 +303,7 @@ export class SvgDomRenderer implements Renderer {
 
         const path = document.createElementNS(svgNS, 'path');
         path.setAttribute('d', piece.shape);
+        path.setAttribute('fill-rule', 'evenodd');
         clipPath.appendChild(path);
         defs.appendChild(clipPath);
         svg.appendChild(defs);
@@ -351,6 +352,7 @@ export class SvgDomRenderer implements Renderer {
         hitArea.setAttribute('d', piece.shape);
         hitArea.setAttribute('fill', 'rgba(0,0,0,0)');
         hitArea.setAttribute('stroke', 'none');
+        hitArea.setAttribute('fill-rule', 'evenodd');
         hitArea.setAttribute('pointer-events', 'fill');
         hitArea.dataset.hitArea = 'true';
         svg.appendChild(hitArea);
@@ -402,6 +404,7 @@ export class SvgDomRenderer implements Renderer {
         const fillPath = document.createElementNS(svgNS, 'path');
         fillPath.setAttribute('d', piece.shape);
         fillPath.setAttribute('fill', 'white');
+        fillPath.setAttribute('fill-rule', 'evenodd');
         fillPath.setAttribute('stroke', 'black');
         fillPath.setAttribute('stroke-width', '1');
         fillPath.setAttribute('pointer-events', 'none');

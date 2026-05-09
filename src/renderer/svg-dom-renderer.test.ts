@@ -351,6 +351,61 @@ describe('SvgDomRenderer', () => {
         });
     });
 
+    describe('fill-rule for pieces with holes', () => {
+        it('sets fill-rule=evenodd on clip-path, hit-area, and debug fill for a piece with nested subpaths', () => {
+            renderer.init(container);
+
+            // Create a piece with a hole: outer square M..Z and inner triangle M..Z
+            // This creates two subpaths, which with evenodd fill-rule should produce a hole
+            const pieceWithHole = {
+                id: 0,
+                edges: [],
+                shape: 'M 0 0 L 100 0 L 100 100 L 0 100 Z M 40 40 L 60 40 L 50 60 Z',
+                imageOffset: { x: 0, y: 0 },
+            };
+
+            const state = makeGameState({
+                pieces: [pieceWithHole],
+                groups: [makeGroup(0, [0], 0, 0)],
+                imageUrl: 'test.jpg',
+                imageSize: { width: 200, height: 200 },
+                gridSize: { cols: 2, rows: 2 },
+            });
+
+            renderer.renderState(state);
+
+            const svg = container.querySelector('svg[data-piece-id="0"]') as SVGSVGElement;
+            expect(svg).not.toBeNull();
+
+            // Check clip-path has fill-rule=evenodd
+            const clipPath = svg.querySelector('clipPath#clip-piece-0') as SVGClipPathElement;
+            expect(clipPath).not.toBeNull();
+            const clipPathPath = clipPath.querySelector('path') as SVGPathElement;
+            expect(clipPathPath.getAttribute('fill-rule')).toBe('evenodd');
+
+            // Check hit-area has fill-rule=evenodd
+            const hitArea = svg.querySelector('[data-hit-area="true"]') as SVGPathElement;
+            expect(hitArea).not.toBeNull();
+            expect(hitArea.getAttribute('fill-rule')).toBe('evenodd');
+
+            // Check debug fill has fill-rule=evenodd
+            const debugFill = svg.querySelector('[data-piece-fill="true"]') as SVGPathElement;
+            expect(debugFill).not.toBeNull();
+            expect(debugFill.getAttribute('fill-rule')).toBe('evenodd');
+        });
+
+        it('sets fill-rule=evenodd on hit-area for a simple rectangular piece too', () => {
+            renderer.init(container);
+            const state = make2x2State();
+
+            renderer.renderState(state);
+
+            const svg = container.querySelector('svg[data-piece-id="0"]') as SVGSVGElement;
+            const hitArea = svg.querySelector('[data-hit-area="true"]') as SVGPathElement;
+            expect(hitArea.getAttribute('fill-rule')).toBe('evenodd');
+        });
+    });
+
     describe('expanded hit area', () => {
         it('creates an expanded hit-area path for each piece', () => {
             renderer.init(container);
