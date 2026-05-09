@@ -1,31 +1,27 @@
 /**
  * Topology-driven puzzle generator.
  *
- * Generates puzzle pieces using the full topology pipeline:
- *   1. Create border + internal cut lines as Curves
- *   2. Optionally merge tabs into internal cuts
- *   3. Build DCEL → find faces → extract PieceDefinitions
- *   4. Feed into composePuzzle() for final Piece[]
+ * Single-pass pipeline:
+ *   1. BaseCutGenerator → input cuts (Curves)
+ *   2. buildDCEL → topology graph (single intersection pass)
+ *   3. applyTabs → per-edge tab application with collision rejection
+ *   4. facesToPieceDefinitions → PieceDefinition[]
+ *   5. composePuzzle → final Piece[]
  *
- * Replaces the grid-based composable generator with a topology-driven
- * approach where pieces are defined by the enclosed regions of
- * intersecting cut lines.
- *
- * See issue #166 for the architecture.
+ * The base-cut and tab generators are looked up from the registry by
+ * id, so the same code path serves the sine grid, Venn diagrams, and
+ * any future plug-ins. See issue #166 for the architecture.
  */
 
 import type { Piece, Point, Size } from '../../model/types.js';
 import { buildDCEL, getFaceEdges } from './dcel.js';
-import type { HalfEdge, Face } from './dcel.js';
+import type { Face, HalfEdge } from './dcel.js';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
-import type { TabTemplate } from '../composable/tab-shapes.js';
-import { composePuzzle, DEFAULT_DISABLE_TABS } from '../composable/compose.js';
-import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
-import type { CollisionOptions } from './tab-merge.js';
-import { resolveExcessIntersections } from './collision.js';
+import { composePuzzle } from '../composable/compose.js';
+import { applyTabs } from './apply-tabs.js';
+import { getBaseCutGenerator, getTabGenerator } from './generator-registry.js';
 import { diagnostics } from '../../diagnostics.js';
-import { sineCutGenerator } from './sine-cut-generator.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,23 +29,21 @@ import { sineCutGenerator } from './sine-cut-generator.js';
 
 /**
  * Configuration for the topology generator.
- * All parameters are optional — sensible defaults are used.
+ *
+ * The base-cut and tab generators are referenced by id (looked up
+ * via the registry); their parameters are passed as opaque records
+ * that each generator validates internally. Use `tabGeneratorId:
+ * 'none'` to skip tab application entirely.
  */
 export interface TopologyGeneratorConfig {
-    /** Horizontal cut wave amplitude (0–0.5, fraction of piece height). Default: 0.15 */
-    horizontalAmplitude?: number;
-    /** Horizontal cut wave frequency in Hz (0–10). Default: 1.5 */
-    horizontalFrequency?: number;
-    /** Vertical cut wave amplitude (0–0.5, fraction of piece width). Default: 0.15 */
-    verticalAmplitude?: number;
-    /** Vertical cut wave frequency in Hz (0–10). Default: 1.5 */
-    verticalFrequency?: number;
-    /** When true, skip tab generation — all shared edges are flat lines. Default: false */
-    disableTabs?: boolean;
-    /** Tab shape template. Default: classicTabTemplate */
-    tabTemplate?: TabTemplate;
-    /** Collision detection and resolution options for tabs. */
-    collision?: CollisionOptions;
+    /** Base-cut generator id (default: 'sine'). */
+    baseCutGeneratorId?: string;
+    /** Opaque config forwarded to the base-cut generator. */
+    baseCutConfig?: Record<string, unknown>;
+    /** Tab generator id (default: 'classic'; pass 'none' to skip). */
+    tabGeneratorId?: string;
+    /** Opaque config forwarded to the tab generator. */
+    tabConfig?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,18 +67,17 @@ export function generateTopologyPuzzle(
     random: () => number,
     config?: TopologyGeneratorConfig,
 ): Piece[] {
-    const hAmp = config?.horizontalAmplitude ?? 0.15;
-    const hFreq = config?.horizontalFrequency ?? 1.5;
-    const vAmp = config?.verticalAmplitude ?? 0.15;
-    const vFreq = config?.verticalFrequency ?? 1.5;
-    const disableTabs = config?.disableTabs ?? DEFAULT_DISABLE_TABS;
-    const template = config?.tabTemplate ?? classicTabTemplate;
+    const baseCutId = config?.baseCutGeneratorId ?? 'sine';
+    const tabId = config?.tabGeneratorId ?? 'classic';
 
-    // Step 1: Generate border and internal cut lines as Curves
-    const curves = sineCutGenerator.generate(imageSize, random, {
+    // 1. Generate the cuts. The sine grid needs cols/rows; other
+    //    generators that ignore them aren't harmed by their presence.
+    const baseCutGenerator = getBaseCutGenerator(baseCutId);
+    const baseCutCfg = {
         cols, rows,
-        ha: hAmp, hf: hFreq, va: vAmp, vf: vFreq,
-    });
+        ...(config?.baseCutConfig ?? {}),
+    };
+    const curves = baseCutGenerator.generate(imageSize, random, baseCutCfg);
 
     diagnostics.log('cuts', `Generated ${curves.length} curves (4 border + ${curves.length - 4} internal)`, {
         curveSegments: curves.map((c, i) => ({
@@ -95,38 +88,19 @@ export function generateTopologyPuzzle(
         })),
     });
 
-    // Step 1b: Resolve excess intersections between base cuts.
-    // High-amplitude sine waves can cross more times than expected,
-    // creating tiny lens-shaped regions. We splice out the lens
-    // segment from one curve so the other curve is the sole path
-    // through that region. This avoids near-coincident paths that
-    // cause phantom intersections. (See issues #219, #220.)
-    let finalCurves = resolveExcessIntersections(curves, 4);
+    // 2. Build the topology graph in a single intersection pass.
+    const graph = buildDCEL({ curves });
 
-    diagnostics.log('splice', `After splice: ${finalCurves.length} curves (was ${curves.length})`, {
-        curveSegments: finalCurves.map((c, i) => ({
-            index: i,
-            segments: c.segments.length,
-            start: c.start,
-            end: c.end,
-        })),
-    });
-
-    // Step 2: Merge tabs into cut lines BEFORE topology computation.
-    // This ensures piece clip paths include tab protrusions/sockets.
-    // The DCEL then sees the full tab-modified geometry.
-    if (!disableTabs) {
-        const borderIndices = new Set([0, 1, 2, 3]);
-        finalCurves = mergeTabsIntoCuts(
-            finalCurves, borderIndices, template, DEFAULT_TAB_PLACEMENT, random,
-            config?.collision,
-        );
+    // 3. Apply tabs per edge with collision rejection. The graph's
+    //    topology is unchanged — only edge curves are swapped.
+    if (tabId !== 'none') {
+        const tabGenerator = getTabGenerator(tabId);
+        applyTabs(graph, tabGenerator, random);
     }
 
-    // Step 3: Build DCEL on (possibly tab-modified) cuts → faces → pieces
-    const dcel = buildDCEL({ curves: finalCurves });
-
-    // Log DCEL state before face merging
+    // 4. Faces → piece definitions. The expectedPieceCount drives
+    //    mergeSmallFaces (kept for now; removed in Plan 3 once
+    //    auto-grouping replaces it).
     const computeArea = (face: { outerEdge: HalfEdge }) => {
         let area = 0;
         let current = face.outerEdge;
@@ -138,16 +112,17 @@ export function generateTopologyPuzzle(
         } while (current !== face.outerEdge);
         return area / 2;
     };
-    logFaceDetails('dcel-pre-merge', dcel.faces, computeArea as (face: Face) => number);
+    logFaceDetails('dcel-pre-merge', graph.faces, computeArea as (face: Face) => number);
 
-    const expectedPieceCount = cols * rows;
-    const pieceDefs = facesToPieceDefinitions(dcel, expectedPieceCount);
+    const pieceDefs = facesToPieceDefinitions(graph, cols * rows);
 
-    logFaceDetails('dcel-post-merge', dcel.faces, computeArea as (face: Face) => number);
+    logFaceDetails('dcel-post-merge', graph.faces, computeArea as (face: Face) => number);
     diagnostics.log('pieces', `Generated ${pieceDefs.length} piece definitions`);
 
-    // Step 4: Compose final pieces — tabs are already in the geometry
-    return composePuzzle(pieceDefs, template, random, { disableTabs: true });
+    // 5. Compose final pieces. Tabs (when enabled) are already in the
+    //    edge geometry, so disable the composition layer's own tab
+    //    logic.
+    return composePuzzle(pieceDefs, classicTabTemplate, random, { disableTabs: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -186,4 +161,3 @@ function computeBBox(points: Point[]): { minX: number; minY: number; maxX: numbe
 function bboxStr(b: { minX: number; minY: number; maxX: number; maxY: number }): string {
     return `[${b.minX.toFixed(0)},${b.minY.toFixed(0)}]→[${b.maxX.toFixed(0)},${b.maxY.toFixed(0)}]`;
 }
-

@@ -556,12 +556,14 @@ describe('disableTabs default agreement (#285)', () => {
         expect(payload.cf?.dt).toBe(DEFAULT_DISABLE_TABS);
     });
 
-    it('topology generator treats undefined disableTabs identically to the canonical default', () => {
+    it('topology generator treats undefined tabGeneratorId identically to the canonical default', () => {
         const args = {
             cols: 3, rows: 3,
             imageSize: { width: 90, height: 90 },
-            shared: { horizontalAmplitude: 0.1, horizontalFrequency: 1,
-                      verticalAmplitude: 0.1, verticalFrequency: 1 },
+            shared: {
+                baseCutGeneratorId: 'sine' as const,
+                baseCutConfig: { ha: 0.1, hf: 1, va: 0.1, vf: 1 },
+            },
         };
         const fromUndefined = generateTopologyPuzzle(
             args.cols, args.rows, args.imageSize, seededRandom(42),
@@ -569,7 +571,8 @@ describe('disableTabs default agreement (#285)', () => {
         );
         const fromExplicit = generateTopologyPuzzle(
             args.cols, args.rows, args.imageSize, seededRandom(42),
-            { ...args.shared, disableTabs: DEFAULT_DISABLE_TABS },
+            // The canonical default is `tabs enabled` → tabGeneratorId 'classic'
+            { ...args.shared, tabGeneratorId: DEFAULT_DISABLE_TABS ? 'none' : 'classic' },
         );
         expect(fromUndefined.map((p) => p.shape))
             .toEqual(fromExplicit.map((p) => p.shape));

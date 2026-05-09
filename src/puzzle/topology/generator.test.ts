@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateTopologyPuzzle } from './generator.js';
+import type { TopologyGeneratorConfig } from './generator.js';
 
 function seededRandom(seed: number): () => number {
     let s = seed;
@@ -9,12 +10,37 @@ function seededRandom(seed: number): () => number {
     };
 }
 
+/**
+ * Build a TopologyGeneratorConfig with sine-grid amplitudes/frequencies
+ * and a flag for whether tabs should be applied. Mirrors the legacy
+ * config shape so the tests remain readable after the new opaque
+ * configuration replaced the per-parameter fields.
+ */
+function sineConfig(opts: {
+    ha?: number;
+    hf?: number;
+    va?: number;
+    vf?: number;
+    disableTabs?: boolean;
+}): TopologyGeneratorConfig {
+    return {
+        baseCutGeneratorId: 'sine',
+        baseCutConfig: {
+            ha: opts.ha ?? 0.15,
+            hf: opts.hf ?? 1.5,
+            va: opts.va ?? 0.15,
+            vf: opts.vf ?? 1.5,
+        },
+        tabGeneratorId: opts.disableTabs ? 'none' : 'classic',
+    };
+}
+
 describe('generateTopologyPuzzle', () => {
     it('generates correct piece count for a 2×2 grid', () => {
         const pieces = generateTopologyPuzzle(
             2, 2, { width: 100, height: 100 },
             seededRandom(42),
-            { horizontalAmplitude: 0, verticalAmplitude: 0, disableTabs: true },
+            sineConfig({ ha: 0, va: 0, disableTabs: true }),
         );
         expect(pieces).toHaveLength(4);
     });
@@ -23,7 +49,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             3, 3, { width: 90, height: 90 },
             seededRandom(42),
-            { horizontalAmplitude: 0, verticalAmplitude: 0, disableTabs: true },
+            sineConfig({ ha: 0, va: 0, disableTabs: true }),
         );
         expect(pieces).toHaveLength(9);
     });
@@ -32,7 +58,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             4, 6, { width: 400, height: 600 },
             seededRandom(42),
-            { horizontalAmplitude: 0, verticalAmplitude: 0, disableTabs: true },
+            sineConfig({ ha: 0, va: 0, disableTabs: true }),
         );
         expect(pieces).toHaveLength(24);
     });
@@ -41,7 +67,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             3, 3, { width: 90, height: 90 },
             seededRandom(42),
-            { horizontalAmplitude: 0, verticalAmplitude: 0, disableTabs: true },
+            sineConfig({ ha: 0, va: 0, disableTabs: true }),
         );
         for (const piece of pieces) {
             expect(piece.shape).toBeTruthy();
@@ -54,7 +80,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             3, 3, { width: 90, height: 90 },
             seededRandom(42),
-            { horizontalAmplitude: 0, verticalAmplitude: 0 },
+            sineConfig({ ha: 0, va: 0 }),
         );
         const ids = pieces.map(p => p.id);
         expect(new Set(ids).size).toBe(ids.length);
@@ -64,7 +90,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             3, 3, { width: 90, height: 90 },
             seededRandom(42),
-            { horizontalAmplitude: 0, verticalAmplitude: 0 },
+            sineConfig({ ha: 0, va: 0 }),
         );
         const allEdgeIds = pieces.flatMap(p => p.edges.map(e => e.id));
         expect(new Set(allEdgeIds).size).toBe(allEdgeIds.length);
@@ -74,7 +100,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             3, 3, { width: 90, height: 90 },
             seededRandom(42),
-            { horizontalAmplitude: 0, verticalAmplitude: 0 },
+            sineConfig({ ha: 0, va: 0 }),
         );
         const edgeMap = new Map<number, { pieceId: number; mateEdgeId: number; matePieceId: number }>();
         for (const p of pieces) {
@@ -99,8 +125,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             2, 2, { width: 200, height: 200 },
             seededRandom(42),
-            { horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
-              verticalAmplitude: 0.15, verticalFrequency: 1.5 },
+            sineConfig({ ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5 }),
         );
         expect(pieces.length).toBeGreaterThanOrEqual(4);
     });
@@ -109,7 +134,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             2, 2, { width: 200, height: 200 },
             seededRandom(42),
-            { horizontalAmplitude: 0, verticalAmplitude: 0, disableTabs: false },
+            sineConfig({ ha: 0, va: 0, disableTabs: false }),
         );
         // Tabs may create additional pieces where they cross other cuts,
         // but should produce at least the base grid count
@@ -123,8 +148,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             2, 2, { width: 200, height: 200 },
             seededRandom(42),
-            { horizontalAmplitude: 0.1, horizontalFrequency: 1,
-              verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: false },
+            sineConfig({ ha: 0.1, hf: 1, va: 0.1, vf: 1, disableTabs: false }),
         );
         expect(pieces.length).toBeGreaterThanOrEqual(4);
     });
@@ -133,6 +157,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             2, 2, { width: 200, height: 200 },
             seededRandom(42),
+            sineConfig({}),
         );
         expect(pieces.length).toBeGreaterThanOrEqual(4);
     });
@@ -143,8 +168,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             3, 2, { width: 300, height: 200 },
             seededRandom(42),
-            { horizontalAmplitude: 0.1, horizontalFrequency: 1,
-              verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: true },
+            sineConfig({ ha: 0.1, hf: 1, va: 0.1, vf: 1, disableTabs: true }),
         );
         expect(pieces).toHaveLength(6);
     });
@@ -155,8 +179,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             2, 2, { width: 200, height: 200 },
             seededRandom(42),
-            { horizontalAmplitude: 0.15, horizontalFrequency: 10,
-              verticalAmplitude: 0.15, verticalFrequency: 10, disableTabs: true },
+            sineConfig({ ha: 0.15, hf: 10, va: 0.15, vf: 10, disableTabs: true }),
         );
         expect(pieces.length).toBeGreaterThanOrEqual(4);
     });
@@ -165,8 +188,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             3, 2, { width: 300, height: 200 },
             seededRandom(42),
-            { horizontalAmplitude: 0.1, horizontalFrequency: 1,
-              verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: true },
+            sineConfig({ ha: 0.1, hf: 1, va: 0.1, vf: 1, disableTabs: true }),
         );
         const edgeMap = new Map<number, { pieceId: number; mateEdgeId: number; matePieceId: number }>();
         for (const p of pieces) {
@@ -189,8 +211,7 @@ describe('generateTopologyPuzzle', () => {
         const pieces = generateTopologyPuzzle(
             3, 2, { width: 600, height: 400 },
             seededRandom(42),
-            { horizontalAmplitude: 0.1, horizontalFrequency: 1,
-              verticalAmplitude: 0.1, verticalFrequency: 1, disableTabs: false },
+            sineConfig({ ha: 0.1, hf: 1, va: 0.1, vf: 1, disableTabs: false }),
         );
         expect(pieces.length).toBeGreaterThanOrEqual(6);
         for (const piece of pieces) {

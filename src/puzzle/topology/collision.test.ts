@@ -384,11 +384,11 @@ describe('excess intersection resolution - 6x4 high-amplitude reproduction', () 
         for (const seed of seeds) {
             const random = seededRandom(seed);
             const pieces = generateTopologyPuzzle(cols, rows, imageSize, random, {
-                horizontalAmplitude: hAmp,
-                horizontalFrequency: hFreq,
-                verticalAmplitude: vAmp,
-                verticalFrequency: vFreq,
-                disableTabs: true,
+                baseCutGeneratorId: 'sine',
+                baseCutConfig: {
+                    ha: hAmp, hf: hFreq, va: vAmp, vf: vFreq,
+                },
+                tabGeneratorId: 'none',
             });
 
             expect(pieces.length).toBe(24);
