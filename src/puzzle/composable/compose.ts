@@ -90,14 +90,26 @@ export function composePuzzle(
             buildEdge(edgeDef, tabPaths),
         );
 
+        // Forward inner-boundary loops, converting each EdgeDefinition
+        // to an Edge with the same logic as the outer boundary. The
+        // `shape` string still only encodes the outer boundary at this
+        // stage; multi-subpath rendering arrives in a later task.
+        const innerBoundaries: Edge[][] | undefined = pieceDef.innerBoundaries?.map(loop =>
+            loop.map(edgeDef => buildEdge(edgeDef, tabPaths)),
+        );
+
         const shape = buildShape(edges);
 
-        return {
+        const piece: Piece = {
             id: pieceDef.id,
             edges,
             shape,
             imageOffset: pieceDef.imageOffset,
         };
+        if (innerBoundaries !== undefined) {
+            piece.innerBoundaries = innerBoundaries;
+        }
+        return piece;
     });
 }
 

@@ -55,13 +55,30 @@ export function facesToPieceDefinitions(
                 halfEdgeToEdgeId.set(he.twin.id, nextEdgeId++);
             }
         }
+        // Also walk each inner-boundary loop so its half-edges (and
+        // their twins) get edge IDs assigned. Without this, the
+        // halfEdgeToEdgeDef call below would throw when converting
+        // inner-boundary edges.
+        for (const innerStart of face.innerBoundaries) {
+            const innerEdges = walkLoop(innerStart);
+            for (const he of innerEdges) {
+                if (!halfEdgeToEdgeId.has(he.id)) {
+                    halfEdgeToEdgeId.set(he.id, nextEdgeId++);
+                }
+                if (!halfEdgeToEdgeId.has(he.twin.id)) {
+                    halfEdgeToEdgeId.set(he.twin.id, nextEdgeId++);
+                }
+            }
+        }
     }
 
     return innerFaces.map(face => {
         const pieceId = faceIdToPieceId.get(face.id)!;
         const halfEdges = getFaceEdges(face);
 
-        // Compute bounding box for image offset
+        // Compute bounding box for image offset (based on the OUTER
+        // boundary — inner-boundary edges share the same coordinate
+        // frame, so the same bbox is reused for piece-local coords).
         const bbox = computeFaceBBox(halfEdges);
 
         // Convert half-edges to EdgeDefinitions
@@ -71,12 +88,36 @@ export function facesToPieceDefinitions(
             );
         });
 
+        // Convert inner-boundary loops to EdgeDefinition[][]
+        const innerBoundaries: EdgeDefinition[][] = [];
+        for (const innerStart of face.innerBoundaries) {
+            const loopHE = walkLoop(innerStart);
+            innerBoundaries.push(loopHE.map(he =>
+                halfEdgeToEdgeDef(he, bbox, faceIdToPieceId, halfEdgeToEdgeId),
+            ));
+        }
+
         return {
             id: pieceId,
             edges,
+            innerBoundaries: innerBoundaries.length > 0 ? innerBoundaries : undefined,
             imageOffset: { x: -bbox.minX, y: -bbox.minY },
         };
     });
+}
+
+/**
+ * Walk a half-edge loop starting at `start`, returning all half-edges
+ * in cyclic order following `next` pointers.
+ */
+function walkLoop(start: HalfEdge): HalfEdge[] {
+    const loop: HalfEdge[] = [];
+    let current = start;
+    do {
+        loop.push(current);
+        current = current.next;
+    } while (current !== start);
+    return loop;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +257,15 @@ function mergeSmallFaces(dcel: TopologyGraph, expectedPieceCount?: number): void
     //    formed where multiple sine waves converge.
     const NEIGHBOR_RATIO = 0.10;
 
+    // Protect faces that participate in registered inner-boundary
+    // (hole) loops. These are intentional structures from
+    // assignHoles() — merging them would invalidate stored
+    // innerBoundaries half-edge pointers. We protect both the loop
+    // faces themselves and the "inside the hole" faces reached
+    // through their twins, since those are part of the same inner
+    // component.
+    const protectedFaces = collectProtectedFaces(dcel);
+
     let changed = true;
     while (changed) {
         changed = false;
@@ -230,6 +280,7 @@ function mergeSmallFaces(dcel: TopologyGraph, expectedPieceCount?: number): void
         for (let i = dcel.faces.length - 1; i >= 0; i--) {
             const face = dcel.faces[i];
             if (face.isOuter) continue;
+            if (protectedFaces.has(face)) continue;
 
             const edgeCount = countFaceEdges(face);
 
@@ -333,6 +384,31 @@ function mergeSmallFaces(dcel: TopologyGraph, expectedPieceCount?: number): void
             break; // restart scan — indices changed
         }
     }
+}
+
+/**
+ * Collect the set of faces that must not be merged because they
+ * participate in a registered inner-boundary (hole) loop.
+ *
+ * For each loop start half-edge in any face's `innerBoundaries`:
+ * - Walk the loop and protect each half-edge's face.
+ * - Also protect the twin's face on each step (= the face on the
+ *   "inside" of the hole), so the entire inner-component subgraph
+ *   is left untouched.
+ */
+function collectProtectedFaces(dcel: TopologyGraph): Set<Face> {
+    const protectedFaces = new Set<Face>();
+    for (const face of dcel.faces) {
+        for (const start of face.innerBoundaries) {
+            let current = start;
+            do {
+                if (current.face) protectedFaces.add(current.face);
+                if (current.twin.face) protectedFaces.add(current.twin.face);
+                current = current.next;
+            } while (current !== start);
+        }
+    }
+    return protectedFaces;
 }
 
 /**
