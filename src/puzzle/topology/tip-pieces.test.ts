@@ -20,11 +20,11 @@ function seededRandom(seed: number): () => number {
 
 describe('tip piece merging', () => {
     const maxSettings = {
-        horizontalAmplitude: 0.5,
-        horizontalFrequency: 10,
-        verticalAmplitude: 0.5,
-        verticalFrequency: 10,
-        disableTabs: true,
+        baseCutGeneratorId: 'sine',
+        baseCutConfig: {
+            ha: 0.5, hf: 10, va: 0.5, vf: 10,
+        },
+        tabGeneratorId: 'none',
     };
 
     it('6x4 max amplitude/frequency produces exactly 24 pieces', () => {

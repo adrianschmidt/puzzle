@@ -44,11 +44,21 @@ export function generateComposablePuzzle(
 ): Piece[] {
     const random = createSeededRandom(seed);
 
+    // Translate the legacy ComposableConfig fields into the new
+    // opaque base/tab generator config shape. Task 9 will replace
+    // ComposableConfig itself with the same shape; until then this
+    // local translation keeps the call site working and supplies
+    // the sine-grid defaults that previously lived in generator.ts.
+    const baseCutConfig = {
+        ha: config?.horizontalAmplitude ?? 0.15,
+        hf: config?.horizontalFrequency ?? 1.5,
+        va: config?.verticalAmplitude ?? 0.15,
+        vf: config?.verticalFrequency ?? 1.5,
+    };
+
     return generateTopologyPuzzle(cols, rows, imageSize, random, {
-        horizontalAmplitude: config?.horizontalAmplitude,
-        horizontalFrequency: config?.horizontalFrequency,
-        verticalAmplitude: config?.verticalAmplitude,
-        verticalFrequency: config?.verticalFrequency,
-        disableTabs: config?.disableTabs,
+        baseCutGeneratorId: 'sine',
+        baseCutConfig,
+        tabGeneratorId: config?.disableTabs ? 'none' : 'classic',
     });
 }
