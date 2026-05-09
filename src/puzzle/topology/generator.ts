@@ -15,7 +15,6 @@
  */
 
 import type { Piece, Point, Size } from '../../model/types.js';
-import { Curve } from './curve.js';
 import { buildDCEL, getFaceEdges } from './dcel.js';
 import type { HalfEdge, Face } from './dcel.js';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
@@ -26,6 +25,7 @@ import { mergeTabsIntoCuts, DEFAULT_TAB_PLACEMENT } from './tab-merge.js';
 import type { CollisionOptions } from './tab-merge.js';
 import { resolveExcessIntersections } from './collision.js';
 import { diagnostics } from '../../diagnostics.js';
+import { sineCutGenerator } from './sine-cut-generator.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,18 +80,11 @@ export function generateTopologyPuzzle(
     const disableTabs = config?.disableTabs ?? DEFAULT_DISABLE_TABS;
     const template = config?.tabTemplate ?? classicTabTemplate;
 
-    const pieceWidth = imageSize.width / cols;
-    const pieceHeight = imageSize.height / rows;
-
-    // Pixel amplitudes
-    const hPixelAmp = (hAmp * pieceHeight) / 2;
-    const vPixelAmp = (vAmp * pieceWidth) / 2;
-
     // Step 1: Generate border and internal cut lines as Curves
-    const { curves } = generateCutCurves(
-        cols, rows, imageSize, pieceWidth, pieceHeight,
-        hPixelAmp, hFreq, vPixelAmp, vFreq, random,
-    );
+    const curves = sineCutGenerator.generate(imageSize, random, {
+        cols, rows,
+        ha: hAmp, hf: hFreq, va: vAmp, vf: vFreq,
+    });
 
     diagnostics.log('cuts', `Generated ${curves.length} curves (4 border + ${curves.length - 4} internal)`, {
         curveSegments: curves.map((c, i) => ({
@@ -193,151 +186,4 @@ function computeBBox(points: Point[]): { minX: number; minY: number; maxX: numbe
 function bboxStr(b: { minX: number; minY: number; maxX: number; maxY: number }): string {
     return `[${b.minX.toFixed(0)},${b.minY.toFixed(0)}]→[${b.maxX.toFixed(0)},${b.maxY.toFixed(0)}]`;
 }
-
-// ---------------------------------------------------------------------------
-// Cut line generation
-// ---------------------------------------------------------------------------
-
-interface CutCurveResult {
-    curves: Curve[];
-}
-
-/**
- * Generate border and internal cut lines as Curve objects.
- */
-function generateCutCurves(
-    cols: number,
-    rows: number,
-    imageSize: Size,
-    pieceWidth: number,
-    pieceHeight: number,
-    hPixelAmp: number,
-    hFreq: number,
-    vPixelAmp: number,
-    vFreq: number,
-    random: () => number,
-): CutCurveResult {
-    const curves: Curve[] = [];
-
-    // Border curves (always straight, always first)
-    curves.push(
-        Curve.line({ x: 0, y: 0 }, { x: imageSize.width, y: 0 }),
-        Curve.line({ x: imageSize.width, y: 0 }, { x: imageSize.width, y: imageSize.height }),
-        Curve.line({ x: imageSize.width, y: imageSize.height }, { x: 0, y: imageSize.height }),
-        Curve.line({ x: 0, y: imageSize.height }, { x: 0, y: 0 }),
-    );
-
-    // Random phase offsets per cut
-    const rowPhases: number[] = [];
-    for (let r = 0; r <= rows; r++) {
-        rowPhases.push(random() * Math.PI * 2);
-    }
-    const colPhases: number[] = [];
-    for (let c = 0; c <= cols; c++) {
-        colPhases.push(random() * Math.PI * 2);
-    }
-
-    // Internal horizontal cuts (rows 1 to rows-1)
-    for (let r = 1; r < rows; r++) {
-        const y = r * pieceHeight;
-        const useWave = hPixelAmp > 0 && hFreq > 0;
-        if (useWave) {
-            curves.push(generateSineCurve(
-                { x: 0, y },
-                { x: imageSize.width, y },
-                hPixelAmp, hFreq, rowPhases[r],
-            ));
-        } else {
-            curves.push(Curve.line(
-                { x: 0, y },
-                { x: imageSize.width, y },
-            ));
-        }
-    }
-
-    // Internal vertical cuts (cols 1 to cols-1)
-    for (let c = 1; c < cols; c++) {
-        const x = c * pieceWidth;
-        const useWave = vPixelAmp > 0 && vFreq > 0;
-        if (useWave) {
-            curves.push(generateSineCurve(
-                { x, y: 0 },
-                { x, y: imageSize.height },
-                vPixelAmp, vFreq, colPhases[c],
-            ));
-        } else {
-            curves.push(Curve.line(
-                { x, y: 0 },
-                { x, y: imageSize.height },
-            ));
-        }
-    }
-
-    return { curves };
-}
-
-/**
- * Generate a sine-wave curve as a chain of cubic Bézier segments.
- *
- * Uses Hermite-to-Bézier conversion with 4 segments per full wave.
- * This produces smooth, accurate curves that intersect precisely
- * via bezier-js — no polyline sampling artifacts.
- */
-function generateSineCurve(
-    start: { x: number; y: number },
-    end: { x: number; y: number },
-    amplitude: number,
-    frequency: number,
-    phase: number,
-): Curve {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-
-    // Unit vectors: tangent along the cut, perpendicular for displacement
-    const tx = dx / len;
-    const ty = dy / len;
-    const px = -ty;
-    const py = tx;
-
-    // 4 Bézier segments per wave gives excellent accuracy
-    const segmentsPerWave = 4;
-    const totalSegments = Math.max(4, Math.ceil(frequency * segmentsPerWave));
-
-    const bezierPoints: { x: number; y: number }[] = [];
-
-    const evalSine = (t: number) => {
-        const angle = 2 * Math.PI * frequency * t + phase;
-        const s = amplitude * Math.sin(angle);
-        const ds = amplitude * 2 * Math.PI * frequency * Math.cos(angle);
-        return {
-            x: start.x + t * dx + s * px,
-            y: start.y + t * dy + s * py,
-            tx: dx + ds * px,
-            ty: dy + ds * py,
-        };
-    };
-
-    // Hermite-to-Bézier: cp1 = p0 + tangent0 * dt/3, cp2 = p1 - tangent1 * dt/3
-    for (let i = 0; i < totalSegments; i++) {
-        const t0 = i / totalSegments;
-        const t1 = (i + 1) / totalSegments;
-        const dt = t1 - t0;
-
-        const p0 = evalSine(t0);
-        const p1 = evalSine(t1);
-
-        if (i === 0) {
-            bezierPoints.push({ x: p0.x, y: p0.y });
-        }
-        bezierPoints.push(
-            { x: p0.x + p0.tx * dt / 3, y: p0.y + p0.ty * dt / 3 },
-            { x: p1.x - p1.tx * dt / 3, y: p1.y - p1.ty * dt / 3 },
-            { x: p1.x, y: p1.y },
-        );
-    }
-
-    return Curve.fromBezierPath(bezierPoints);
-}
-
 
