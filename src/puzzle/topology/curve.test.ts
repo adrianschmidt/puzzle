@@ -418,3 +418,30 @@ describe('intersect', () => {
         expect(ix).toHaveLength(1);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Curve.circle
+// ---------------------------------------------------------------------------
+
+describe('Curve.circle', () => {
+    it('produces a closed curve through the four cardinal points', () => {
+        const c = Curve.circle({ x: 100, y: 100 }, 50);
+        expect(c.segments).toHaveLength(4);
+        // start should be on the rightmost cardinal point
+        expect(c.start.x).toBeCloseTo(150);
+        expect(c.start.y).toBeCloseTo(100);
+        // end equals start (closed)
+        expect(c.end.x).toBeCloseTo(c.start.x, 6);
+        expect(c.end.y).toBeCloseTo(c.start.y, 6);
+    });
+
+    it('approximates radius accurately at midpoints of each arc', () => {
+        const c = Curve.circle({ x: 0, y: 0 }, 100);
+        // Sample heavily and check distance from center
+        const samples = c.sample(20);
+        for (const p of samples) {
+            const r = Math.hypot(p.x, p.y);
+            expect(r).toBeCloseTo(100, 0); // 4-segment kappa fit is ~0.0005 off
+        }
+    });
+});
