@@ -26,18 +26,22 @@ export function assignHoles(graph: TopologyGraph, components: Component[]): void
         // Find the LOCAL outer face of the inner component (the face
         // with the most-negative signed area within this component —
         // analogous to the global outer face but scoped to the
-        // component). The half-edge bounding that face is the start
-        // of the inner-boundary loop we attach.
-        const localOuterEdge = findLocalOuterEdge(inner, graph);
-        if (localOuterEdge) {
-            containingFace.innerBoundaries.push(localOuterEdge);
-        }
+        // component). Its bounding half-edges become the inner
+        // boundary of the containing face; the face object itself is
+        // redundant after attachment (it represents the same physical
+        // region as `containingFace`) and gets removed from the graph.
+        const localOuterFace = findLocalOuterFace(inner, graph);
+        if (!localOuterFace) continue;
+
+        containingFace.innerBoundaries.push(localOuterFace.outerEdge);
+        const idx = graph.faces.indexOf(localOuterFace);
+        if (idx >= 0) graph.faces.splice(idx, 1);
     }
 }
 
-function findLocalOuterEdge(component: Component, graph: TopologyGraph): HalfEdge | null {
+function findLocalOuterFace(component: Component, graph: TopologyGraph): Face | null {
     // Find the face within this component with the most-negative signed area
-    // (= the local outer face). Return one of its bounding half-edges.
+    // (= the local outer face).
     let bestFace: Face | null = null;
     let mostNegative = Infinity;
     for (const faceId of component.faces) {
@@ -49,7 +53,7 @@ function findLocalOuterEdge(component: Component, graph: TopologyGraph): HalfEdg
             bestFace = face;
         }
     }
-    return bestFace ? bestFace.outerEdge : null;
+    return bestFace;
 }
 
 function findContainingFace(
