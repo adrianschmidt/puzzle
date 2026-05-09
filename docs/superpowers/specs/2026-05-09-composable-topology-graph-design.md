@@ -289,13 +289,20 @@ in parallel with the existing one until step 7 deletes the old paths.
 
 ### Share-link format extension
 
-With multiple `BaseCutGenerator`s and `TabGenerator`s, a share link can no
-longer assume Composable means "sine-grid + classic tabs." It must record
-which plugins to invoke plus their configs.
+The Composable cut style is **explicitly experimental** in the UI today and
+will remain so as long as it directly exposes framework knobs (which
+`BaseCutGenerator`, which `TabGenerator`, sine amplitudes, etc.). Once
+the framework is solid, the eventual plan is to ship one or more
+**production cut styles** (e.g. a "Sine Grid" style, a "Venn" style) that
+each bake in a fixed plugin combination and only expose user-relevant
+parameters. Production-style share links won't need to record plugin ids
+at all — the cut style id implies the plugin choices.
 
-The current `SharePayload.cf` field — `{ ha, hf, va, vf, dt }` — encodes
-sine-grid parameters and a "tabs on/off" boolean. The new shape, for
-`c === 'composable'`:
+So the share-link format question splits in two:
+
+**Experimental Composable share links** (the only case in scope here):
+
+The `cf` field grows to carry plugin ids and per-plugin configs:
 
 ```ts
 cf?: {
@@ -309,28 +316,36 @@ cf?: {
 
 The framework maintains a registry of generator ids → implementations.
 Decoding looks up the ids, validates the configs against generator-specific
-schemas, and runs the pipeline. An unknown id is a decode failure.
+schemas, and runs the pipeline.
+
+**These links are explicitly not stability-guaranteed across releases.**
+The cut style is labelled experimental in the UI; share links generated
+from it are correspondingly experimental. We don't promise that a link
+generated today will produce the same puzzle (or even decode at all) after
+a future framework change.
+
+**Future production cut styles** (out of scope for this spec):
+
+Production styles get their own cut style id in `SharePayload.c` (e.g.
+`'sine-grid'`, `'venn'`) and a much smaller per-style config in `cf`
+limited to user-meaningful parameters. The plugin choices are constants of
+the style. These links will be stability-guaranteed.
+
+This spec doesn't design those styles or their formats; it just leaves the
+door open by not constraining `SharePayload.c` to its current three
+values.
 
 ### Existing share links
 
-Existing share links will not reproduce identical puzzles after this
-refactor — both the PRNG call count and the topology pipeline change for a
-given seed. Given the puzzle currently has effectively no users beyond the
-maintainer, this is acceptable; we don't carry the old generator behind a
-version switch.
+Old `'composable'` share links (with the `{ ha, hf, va, vf, dt }` shape)
+**must still parse and produce a working puzzle** — just not the same
+puzzle they produced before the refactor. The decoder detects the legacy
+shape and translates it: `bg: 'sine'`, `bgc: { ha, hf, va, vf }`, `tg:
+dt ? 'none' : 'classic'`. The translation lives in the share-link
+decoder, not in the generator framework, so the framework itself never
+sees the legacy shape.
 
-Old share links (with the `{ ha, hf, va, vf, dt }` shape) **must still
-parse and produce a working puzzle** — just not the same puzzle they
-produced before the refactor. The decoder detects the legacy shape and
-translates it: `bg: 'sine'`, `bgc: { ha, hf, va, vf }`, `tg: dt ?
-'none' : 'classic'`. The translation lives in the share-link decoder, not
-in the generator framework, so the framework itself never sees the legacy
-shape.
-
-The share-link payload version (`v: 1`) does not need to bump — the field
-shape changes within `cf`, and a strict decoder rejecting unknown fields
-would already reject the old shape. Whether to bump `v` to `2` is a
-defensive call; the spec doesn't require it.
+The share-link payload version (`v: 1`) does not need to bump.
 
 ## Out of scope
 
@@ -338,6 +353,12 @@ defensive call; the spec doesn't require it.
 - New base-cut generators beyond Venn (concentric rings, polar, etc.).
   The framework supports them; this spec only commits to one extra style
   for cross-checking grid-assumptions.
+- **Production cut styles built on the framework.** The eventual plan is
+  to add stable, non-experimental cut styles (e.g. `'sine-grid'`,
+  `'venn'`) that bake in plugin choices and ship with stability
+  guarantees on their share links. This spec only commits to keeping the
+  framework's experimental Composable face working; designing those
+  production styles is a separate effort.
 - Exposing `minPieceArea` as a UI setting. Config-only for V1.
 - Free-rotation work and other in-flight features. Independent.
 
