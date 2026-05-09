@@ -377,6 +377,38 @@ describe('deserializeState', () => {
         });
     });
 
+    it('migrates v9 composableConfig with disableTabs: true to tabGenerator: none', () => {
+        const v9Serialized: SerializedGameState = {
+            version: 9,
+            pieces: [makeRectPiece({ id: 0 })],
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+            imageUrl: 'v9-composable-no-tabs.jpg',
+            imageSize: { width: 800, height: 600 },
+            gridSize: { cols: 8, rows: 6 },
+            cutStyle: 'composable',
+            rotationMode: 'none',
+            completed: false,
+            composableConfig: {
+                horizontalAmplitude: 0.2,
+                horizontalFrequency: 1.5,
+                verticalAmplitude: 0.2,
+                verticalFrequency: 1.5,
+                disableTabs: true,
+            } as unknown as GameState['composableConfig'],
+        };
+
+        const restored = deserializeState(v9Serialized);
+
+        expect(restored.composableConfig).toEqual({
+            baseCutGenerator: 'sine',
+            baseCutConfig: { ha: 0.2, hf: 1.5, va: 0.2, vf: 1.5 },
+            tabGenerator: 'none',
+            tabConfig: {},
+        });
+    });
+
     it('ignores v7 generatorConfig for classic puzzles (no typed shape)', () => {
         const v7Serialized: SerializedGameState = {
             version: 7,

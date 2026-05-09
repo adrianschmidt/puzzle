@@ -34,12 +34,22 @@ export const sineCutGenerator: BaseCutGenerator = {
     id: 'sine',
 
     generate(frame: Size, random: () => number, config: unknown): Curve[] {
-        const cfg = config as SineCutConfig;
-        const { cols, rows } = cfg;
+        // Fall back to sensible defaults when sub-fields are missing so that
+        // `baseCutConfig: {}` (or no config) still produces the canonical
+        // sine grid rather than collapsing to flat cuts via NaN comparisons.
+        // These defaults mirror the previous behaviour from generator.ts.
+        const cfg = (config ?? {}) as Partial<SineCutConfig>;
+        const cols = cfg.cols ?? 1;
+        const rows = cfg.rows ?? 1;
+        const ha = cfg.ha ?? 0.15;
+        const hf = cfg.hf ?? 1.5;
+        const va = cfg.va ?? 0.15;
+        const vf = cfg.vf ?? 1.5;
+
         const pieceWidth = frame.width / cols;
         const pieceHeight = frame.height / rows;
-        const hPixelAmp = (cfg.ha * pieceHeight) / 2;
-        const vPixelAmp = (cfg.va * pieceWidth) / 2;
+        const hPixelAmp = (ha * pieceHeight) / 2;
+        const vPixelAmp = (va * pieceWidth) / 2;
 
         const curves: Curve[] = [
             Curve.line({ x: 0, y: 0 }, { x: frame.width, y: 0 }),
@@ -56,19 +66,19 @@ export const sineCutGenerator: BaseCutGenerator = {
 
         for (let r = 1; r < rows; r++) {
             const y = r * pieceHeight;
-            const useWave = hPixelAmp > 0 && cfg.hf > 0;
+            const useWave = hPixelAmp > 0 && hf > 0;
             curves.push(useWave
                 ? generateSineCurve({ x: 0, y }, { x: frame.width, y },
-                    hPixelAmp, cfg.hf, rowPhases[r])
+                    hPixelAmp, hf, rowPhases[r])
                 : Curve.line({ x: 0, y }, { x: frame.width, y }),
             );
         }
         for (let c = 1; c < cols; c++) {
             const x = c * pieceWidth;
-            const useWave = vPixelAmp > 0 && cfg.vf > 0;
+            const useWave = vPixelAmp > 0 && vf > 0;
             curves.push(useWave
                 ? generateSineCurve({ x, y: 0 }, { x, y: frame.height },
-                    vPixelAmp, cfg.vf, colPhases[c])
+                    vPixelAmp, vf, colPhases[c])
                 : Curve.line({ x, y: 0 }, { x, y: frame.height }),
             );
         }
