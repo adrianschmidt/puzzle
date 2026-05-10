@@ -231,7 +231,7 @@ describe('share-link: legacy → working puzzle smoke test', () => {
         const encoded = encodePayload(legacy as unknown as SharePayload);
         const decoded = decodePayload(encoded)!;
 
-        const pieces = generateComposablePuzzle(
+        const { pieces } = generateComposablePuzzle(
             decoded.g[0], decoded.g[1],
             { width: decoded.is[0], height: decoded.is[1] },
             decoded.s,
@@ -732,8 +732,8 @@ describe('disableTabs default agreement (#285)', () => {
             // The canonical default is `tabs enabled` → tabGeneratorId 'classic'
             { ...args.shared, tabGeneratorId: DEFAULT_DISABLE_TABS ? 'none' : 'classic' },
         );
-        expect(fromUndefined.map((p) => p.shape))
-            .toEqual(fromExplicit.map((p) => p.shape));
+        expect(fromUndefined.pieces.map((p) => p.shape))
+            .toEqual(fromExplicit.pieces.map((p) => p.shape));
     });
 
     it('compose treats undefined disableTabs identically to the canonical default', () => {

@@ -28,7 +28,7 @@ describe('tip piece merging', () => {
     };
 
     it('6x4 max amplitude/frequency produces exactly 24 pieces', () => {
-        const pieces = generateTopologyPuzzle(
+        const { pieces } = generateTopologyPuzzle(
             6, 4, { width: 600, height: 400 },
             seededRandom(42),
             maxSettings,
@@ -38,7 +38,7 @@ describe('tip piece merging', () => {
 
     for (const seed of [42, 123, 7, 999, 2024]) {
         it(`6x4 max settings seed=${seed} produces 24 pieces`, () => {
-            const pieces = generateTopologyPuzzle(
+            const { pieces } = generateTopologyPuzzle(
                 6, 4, { width: 600, height: 400 },
                 seededRandom(seed),
                 maxSettings,
@@ -48,7 +48,7 @@ describe('tip piece merging', () => {
     }
 
     it('mate relationships are valid after tip merging', () => {
-        const pieces = generateTopologyPuzzle(
+        const { pieces } = generateTopologyPuzzle(
             6, 4, { width: 600, height: 400 },
             seededRandom(42),
             maxSettings,

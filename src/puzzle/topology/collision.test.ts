@@ -383,7 +383,7 @@ describe('excess intersection resolution - 6x4 high-amplitude reproduction', () 
         const seeds = [1, 42, 123, 999];
         for (const seed of seeds) {
             const random = seededRandom(seed);
-            const pieces = generateTopologyPuzzle(cols, rows, imageSize, random, {
+            const { pieces } = generateTopologyPuzzle(cols, rows, imageSize, random, {
                 baseCutGeneratorId: 'sine',
                 baseCutConfig: {
                     ha: hAmp, hf: hFreq, va: vAmp, vf: vFreq,
