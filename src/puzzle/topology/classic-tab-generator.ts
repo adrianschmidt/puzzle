@@ -2,9 +2,7 @@
  * Classic tab generator: produces the mushroom-shaped tabs from
  * tab-shapes.ts as a TabGenerator plug-in.
  *
- * Owns the tab placement / preparation / commit primitives that used to
- * live in tab-merge.ts. The legacy tab-merge.ts pipeline still imports
- * a few of these helpers until it is removed in Plan 3 Task 6.
+ * Owns the tab placement / preparation / commit primitives.
  */
 
 import type { Point } from '../../model/types.js';
@@ -32,10 +30,6 @@ export const classicTabGenerator: TabGenerator = {
 
 // ---------------------------------------------------------------------------
 // Tab placement / preparation primitives
-//
-// These were originally defined in tab-merge.ts. They live here now because
-// classic-tab-generator is the canonical caller; tab-merge.ts still imports
-// them for its legacy pipeline until that file is deleted.
 // ---------------------------------------------------------------------------
 
 /**
@@ -231,53 +225,9 @@ export function computeTabPlacement(
 }
 
 /**
- * Find all t-parameters where other curves intersect this curve.
- *
- * Exported for the legacy tab-merge.ts pipeline; will become private
- * (or be deleted) when tab-merge.ts goes away.
- */
-export function findSplitParameters(
-    curve: Curve,
-    allCurves: Curve[],
-    selfIndex: number,
-): number[] {
-    const ts: number[] = [];
-
-    for (let j = 0; j < allCurves.length; j++) {
-        if (j === selfIndex) continue;
-
-        const intersections = curve.intersect(allCurves[j]);
-        for (const ix of intersections) {
-            ts.push(ix.tSelf);
-        }
-
-        // T-junctions: other curve endpoints on this curve
-        for (const endpoint of [allCurves[j].start, allCurves[j].end]) {
-            const t = curve.nearestT(endpoint);
-            const projected = curve.pointAt(t);
-            const d = Math.sqrt(
-                (projected.x - endpoint.x) ** 2 +
-                (projected.y - endpoint.y) ** 2,
-            );
-            if (d < 3 && t > 0.01 && t < 0.99) {
-                ts.push(t);
-            }
-        }
-    }
-
-    // Sort and deduplicate
-    return [...new Set(ts.map(t => Math.round(t * 1e4) / 1e4))]
-        .sort((a, b) => a - b)
-        .filter(t => t > 0.01 && t < 0.99);
-}
-
-/**
  * Join multiple curves into a single curve by concatenating segments.
- *
- * Exported for the legacy tab-merge.ts pipeline; will become private
- * (or be deleted) when tab-merge.ts goes away.
  */
-export function joinCurves(curves: Curve[]): Curve {
+function joinCurves(curves: Curve[]): Curve {
     const allSegments: BezierSegment[] = [];
     for (const c of curves) {
         for (const seg of c.segments) {
