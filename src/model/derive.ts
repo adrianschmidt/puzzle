@@ -39,12 +39,14 @@ export function getImageDimensions(
 }
 
 /**
- * Get the piece-local bounding box from its edge endpoints.
+ * Get the piece-local bounding box from its edges.
  *
- * Approximates the silhouette well enough for layout/labeling without
- * accounting for tab protrusions or curved-edge bulges. Works for any shape
- * the generators produce, including fractal arcs whose start/end points
- * trace the overall outline.
+ * Samples both endpoints and `curvePoints` (when present) so curve-
+ * bounded pieces (e.g. lens / crescent shapes whose endpoints share
+ * an axis) get a meaningful bbox instead of a degenerate line. Tab
+ * protrusions are not separately accounted for, but their geometry
+ * is captured implicitly via `curvePoints` once tabs have been
+ * baked into the edge curves.
  */
 export function getPieceBounds(piece: Piece): {
     minX: number;
@@ -59,12 +61,18 @@ export function getPieceBounds(piece: Piece): {
     let maxX = -Infinity;
     let maxY = -Infinity;
 
+    const include = (p: { x: number; y: number }): void => {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    };
+
     for (const edge of piece.edges) {
-        for (const point of [edge.start, edge.end]) {
-            if (point.x < minX) minX = point.x;
-            if (point.x > maxX) maxX = point.x;
-            if (point.y < minY) minY = point.y;
-            if (point.y > maxY) maxY = point.y;
+        include(edge.start);
+        include(edge.end);
+        if (edge.curvePoints) {
+            for (const p of edge.curvePoints) include(p);
         }
     }
 

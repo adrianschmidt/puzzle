@@ -421,7 +421,27 @@ describe('facesToPieceDefinitions: lens-face merging', () => {
 // ---------------------------------------------------------------------------
 
 describe('facesToPieceDefinitions: piece with hole', () => {
-    it('attaches the free-floating circle as an innerBoundaries loop on the frame piece', () => {
+    /**
+     * A flat edge list represents one or more loops, chained end-to-start
+     * within each loop. Loop boundaries are detected by an edge whose
+     * `start` doesn't match the previous edge's `end`. This counts loops
+     * in a `PieceDefinition.edges` array.
+     */
+    function countLoops(edges: PieceDefinition['edges']): number {
+        if (edges.length === 0) return 0;
+        let loops = 1;
+        for (let i = 1; i < edges.length; i++) {
+            const prev = edges[i - 1];
+            const cur = edges[i];
+            if (Math.abs(prev.end.x - cur.start.x) > 0.5
+                || Math.abs(prev.end.y - cur.start.y) > 0.5) {
+                loops++;
+            }
+        }
+        return loops;
+    }
+
+    it('appends the free-floating circle as a second loop on the frame piece', () => {
         const W = 600, H = 400;
         const pieces = buildPipeline([
             Curve.line({ x: 0, y: 0 }, { x: W, y: 0 }),
@@ -430,8 +450,8 @@ describe('facesToPieceDefinitions: piece with hole', () => {
             Curve.line({ x: 0, y: H }, { x: 0, y: 0 }),
             Curve.circle({ x: 300, y: 200 }, 50),
         ]);
-        const withHoles = pieces.filter(p => p.innerBoundaries && p.innerBoundaries.length > 0);
+        const withHoles = pieces.filter(p => countLoops(p.edges) > 1);
         expect(withHoles).toHaveLength(1);
-        expect(withHoles[0].innerBoundaries!).toHaveLength(1);
+        expect(countLoops(withHoles[0].edges)).toBe(2);
     });
 });
