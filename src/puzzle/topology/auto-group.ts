@@ -17,9 +17,9 @@
  *     lowest root id wins
  *   - within each group, piece ids are sorted ascending
  *
- * Replaces the legacy `mergeSmallFaces` rescue logic, which mutated
- * the DCEL in-place. Auto-grouping leaves the topology untouched and
- * lets the gameplay layer present the small pieces as a glued unit.
+ * Auto-grouping leaves the topology untouched and lets the gameplay
+ * layer present the small pieces as a glued unit, rather than mutating
+ * the DCEL to fold small faces into their neighbours.
  */
 
 /**

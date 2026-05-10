@@ -2,7 +2,8 @@
  * Classic tab generator: produces the mushroom-shaped tabs from
  * tab-shapes.ts as a TabGenerator plug-in.
  *
- * Owns the tab placement / preparation / commit primitives.
+ * Encapsulates the tab placement / preparation / commit primitives
+ * as file-private helpers.
  */
 
 import type { Point } from '../../model/types.js';
@@ -35,14 +36,14 @@ export const classicTabGenerator: TabGenerator = {
 /**
  * Parameters controlling tab placement on edges.
  */
-export interface TabPlacementConfig {
+interface TabPlacementConfig {
     /** Minimum edge arc length (in pixels) to receive a tab. */
     minEdgeLength: number;
     /** Allowed range for tab centre position along the edge (0–1). */
     centreRange: [number, number];
 }
 
-export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
+const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
     minEdgeLength: 20,
     centreRange: [0.3, 0.7],
 };
@@ -51,7 +52,7 @@ export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
  * Result of preparing a tab for merging — contains the tab curve
  * and the split pieces needed to assemble the final curve.
  */
-export interface PreparedTab {
+interface PreparedTab {
     /** The tab curve in world coordinates. */
     tabCurve: Curve;
     /** The curve segment before the tab splice point. */
@@ -61,15 +62,16 @@ export interface PreparedTab {
 }
 
 /**
- * Generate and position a tab on a curve WITHOUT merging it.
+ * Generate and position a tab on a curve WITHOUT assembling it.
  *
  * Returns the tab curve in world coordinates along with the before/after
  * segments needed to assemble the final curve. Returns null if the tab
  * is too wide for the edge.
  *
- * This is used by collision detection to inspect the tab before committing.
+ * Split out from the full tab-creation flow so the tab geometry can be
+ * inspected (or rejected) before `commitTab` joins everything together.
  */
-export function prepareTab(
+function prepareTab(
     curve: Curve,
     tCenter: number,
     isTab: boolean,
@@ -192,7 +194,7 @@ export function prepareTab(
 /**
  * Assemble a prepared tab into a single curve.
  */
-export function commitTab(prepared: PreparedTab): Curve {
+function commitTab(prepared: PreparedTab): Curve {
     return joinCurves([prepared.before, prepared.tabCurve, prepared.after]);
 }
 
@@ -201,7 +203,7 @@ export function commitTab(prepared: PreparedTab): Curve {
  *
  * @returns { tCenter, isTab } or null if the edge is too short
  */
-export function computeTabPlacement(
+function computeTabPlacement(
     curve: Curve,
     config: TabPlacementConfig,
     random: () => number,
