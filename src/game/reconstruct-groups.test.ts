@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
 import { computeMergedOffsets, applyProgress } from './reconstruct-groups.js';
 import { createNewGame } from './init.js';
-import type { GameState } from '../model/types.js';
+import { buildGroupIndexes } from '../model/helpers.js';
+import type { GameState, PieceGroup } from '../model/types.js';
 
 describe('computeMergedOffsets', () => {
     it('computes offsets for a two-piece horizontal merge that match the generator layout', () => {
@@ -170,5 +171,105 @@ describe('applyProgress', () => {
         // Pieces 0 and 2 are not adjacent.
         const ok = applyProgress(state, { m: [[0, 2]] });
         expect(ok).toBe(false);
+    });
+});
+
+/**
+ * Replace `state.groups` with a synthetic partition where pieces `mergedIds`
+ * (which must be a connected subgraph in the live puzzle) form a single
+ * starting group, and every other piece is solo. Mirrors what
+ * `createInitialGroups` produces when `autoGroups` is supplied (composable
+ * cut style with `minPieceArea`), without forcing a full composable puzzle
+ * generation in the test.
+ */
+function replaceWithAutoGroupPartition(state: GameState, mergedIds: number[]): void {
+    const offsets = computeMergedOffsets(state.pieces, mergedIds);
+    if (!offsets) throw new Error('Merged piece set is not connected');
+
+    const newGroups: PieceGroup[] = [];
+    let nextId = 0;
+    const merged: PieceGroup = {
+        id: nextId++,
+        pieces: offsets,
+        position: { x: 0, y: 0 },
+        rotation: 0,
+    };
+    newGroups.push(merged);
+    const absorbed = new Set(mergedIds);
+    for (const piece of state.pieces) {
+        if (absorbed.has(piece.id)) continue;
+        newGroups.push({
+            id: nextId++,
+            pieces: new Map([[piece.id, { x: 0, y: 0 }]]),
+            position: { x: 0, y: 0 },
+            rotation: 0,
+        });
+    }
+    state.groups = newGroups;
+    const indexes = buildGroupIndexes(newGroups);
+    state.groupsById = indexes.groupsById;
+    state.pieceToGroup = indexes.pieceToGroup;
+}
+
+describe('applyProgress: starting auto-groups (Plan 3)', () => {
+    it('does not duplicate a starting auto-group when its pieces appear in pr.m', () => {
+        // Reproduces the bug: extractProgress emits every group with
+        // size >= 2 into pr.m, including starting auto-groups. Without the
+        // dedup filter the receiver ends up with both the starting auto-
+        // group AND a reconstructed merge containing the same pieces.
+        const state = fresh(123);
+        replaceWithAutoGroupPartition(state, [0, 1]);
+        const totalPieces = state.pieces.length;
+
+        // Wire payload contains the auto-group [0, 1] plus a real user
+        // merge [2, 3] (pieces 2 and 3 are horizontally adjacent in the
+        // top row of the 4x3 grid).
+        const ok = applyProgress(state, { m: [[0, 1], [2, 3]] });
+        expect(ok).toBe(true);
+
+        // After progress reload: 2 multi-piece groups (one for [0,1],
+        // one for [2,3]) plus solos for every other piece.
+        const multiGroups = state.groups.filter((g) => g.pieces.size >= 2);
+        expect(multiGroups.length).toBe(2);
+
+        // Total piece count across all groups must match the puzzle
+        // exactly — no piece is missing, no piece appears twice.
+        let countedPieces = 0;
+        const seen = new Set<number>();
+        for (const g of state.groups) {
+            for (const pid of g.pieces.keys()) {
+                expect(seen.has(pid)).toBe(false);
+                seen.add(pid);
+                countedPieces++;
+            }
+        }
+        expect(countedPieces).toBe(totalPieces);
+
+        // pieceToGroup must agree with state.groups (every piece points to
+        // the single group that actually contains it).
+        for (const g of state.groups) {
+            for (const pid of g.pieces.keys()) {
+                expect(state.pieceToGroup.get(pid)).toBe(g);
+            }
+        }
+    });
+
+    it('replaces a starting auto-group with the reconstructed merged group', () => {
+        // The reconstructed group should be the one in state.groups after
+        // applyProgress — confirming the starting auto-group was filtered
+        // out, not retained alongside.
+        const state = fresh(123);
+        replaceWithAutoGroupPartition(state, [0, 1]);
+        const startingAutoGroupId = state.pieceToGroup.get(0)!.id;
+
+        const ok = applyProgress(state, { m: [[0, 1]] });
+        expect(ok).toBe(true);
+
+        const groupContaining0 = state.pieceToGroup.get(0)!;
+        // The reconstructed group has a freshly-allocated id (max+1), so
+        // it must NOT match the original starting auto-group's id.
+        expect(groupContaining0.id).not.toBe(startingAutoGroupId);
+        expect(groupContaining0.pieces.size).toBe(2);
+        expect(groupContaining0.pieces.has(1)).toBe(true);
     });
 });

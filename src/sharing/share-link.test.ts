@@ -6,6 +6,7 @@ import {
     parseLocationHash,
     gameStateToPayload,
     hasShareableProgress,
+    shareCfToComposableConfig,
     type SharePayload,
 } from './share-link.js';
 import type { GameState } from '../model/types.js';
@@ -188,6 +189,60 @@ describe('share-link: composable v2 cf shape', () => {
         const payload = gameStateToPayload(state, { includeProgress: false });
         expect(payload.cf).toBeDefined();
         expect(payload.cf?.mpa).toBeUndefined();
+    });
+});
+
+describe('shareCfToComposableConfig', () => {
+    it('round-trips a non-default minPieceArea end-to-end', () => {
+        // Sender ships mpa=25; receiver must apply it, otherwise auto-grouping
+        // behaviour silently diverges (the default 4 absorbs only sub-pixel
+        // numerical noise, while 25 absorbs visible slivers).
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {
+                baseCutGenerator: 'sine',
+                baseCutConfig: { ha: 0.1, hf: 1, va: 0.1, vf: 1 },
+                tabGenerator: 'classic',
+                tabConfig: {},
+                minPieceArea: 25,
+            },
+        });
+        const encoded = encodePayload(gameStateToPayload(state, { includeProgress: false }));
+        const decoded = decodePayload(encoded);
+        expect(decoded?.cf).toBeDefined();
+        const projected = shareCfToComposableConfig(decoded!.cf!);
+        expect(projected.minPieceArea).toBe(25);
+        expect(projected.baseCutGenerator).toBe('sine');
+        expect(projected.tabGenerator).toBe('classic');
+    });
+
+    it('omits minPieceArea on the projected config when the sender did not set it', () => {
+        // Receivers should fall back to the generator's own default, not a
+        // sentinel value, when `mpa` is absent from the wire payload.
+        const cf: NonNullable<SharePayload['cf']> = {
+            bg: 'sine',
+            bgc: { ha: 0.1, hf: 1, va: 0.1, vf: 1 },
+            tg: 'classic',
+            tgc: {},
+        };
+        const projected = shareCfToComposableConfig(cf);
+        expect(projected.minPieceArea).toBeUndefined();
+    });
+
+    it('passes baseCutConfig and tabConfig through opaquely', () => {
+        const cf: NonNullable<SharePayload['cf']> = {
+            bg: 'venn',
+            bgc: { sets: 3, separation: 0.4 },
+            tg: 'none',
+            tgc: { customKey: 'value' },
+            mpa: 9,
+        };
+        const projected = shareCfToComposableConfig(cf);
+        expect(projected.baseCutGenerator).toBe('venn');
+        expect(projected.baseCutConfig).toEqual({ sets: 3, separation: 0.4 });
+        expect(projected.tabGenerator).toBe('none');
+        expect(projected.tabConfig).toEqual({ customKey: 'value' });
+        expect(projected.minPieceArea).toBe(9);
     });
 });
 

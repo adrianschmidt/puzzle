@@ -83,6 +83,7 @@ import {
 } from './game/image-categories.js';
 import {
     parseLocationHash,
+    shareCfToComposableConfig,
     type SharePayload,
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
@@ -150,23 +151,6 @@ function sliderConfigToGeneratorConfig(slider: {
         },
         tabGenerator: slider.disableTabs ? 'none' : 'classic',
         tabConfig: {},
-    };
-}
-
-/**
- * Project a decoded share-link `cf` block onto the framework's
- * {@link ComposableConfig} shape. This is a 1:1 rename — `decodePayload`
- * already translates legacy share-link payloads (v1 `ha`/`hf`/`va`/`vf`/`dt`
- * fields) to the current `bg`/`bgc`/`tg`/`tgc` shape on the way in.
- */
-function shareCfToComposableConfig(
-    cf: NonNullable<import('./sharing/share-link.js').SharePayload['cf']>,
-): import('./puzzle/composable-generator.js').ComposableConfig {
-    return {
-        baseCutGenerator: cf.bg,
-        baseCutConfig: cf.bgc,
-        tabGenerator: cf.tg,
-        tabConfig: cf.tgc,
     };
 }
 

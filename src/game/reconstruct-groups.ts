@@ -84,11 +84,24 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
 
     let idCursor = Math.max(0, ...state.groups.map((g) => g.id)) + 1;
 
-    // Remove solo groups that are being absorbed into merges.
+    // Remove any starting group whose pieces are about to be replaced by a
+    // reconstructed merged group. Pre-Plan-3 only solo groups could be
+    // absorbed; post-Plan-3, multi-piece auto-groups can be absorbed too —
+    // `extractProgress` emits every group with size>=2 into `pr.m`, so the
+    // receiver sees auto-groups in `m` and would otherwise end up with both
+    // the starting auto-group and the reconstructed merge containing the
+    // same pieces (last-write-wins on `pieceToGroup` then corrupts state).
+    //
+    // Partial absorption is unreachable here: starting groups partition all
+    // pieces, and any user merge that touches an auto-grouped piece on the
+    // sender already contains the entire auto-group, so its `m` entry lists
+    // every piece in the absorbed starting group. `computeMergedOffsets`
+    // also rejects disconnected piece sets, providing a second safety net.
     state.groups = state.groups.filter((g) => {
-        if (g.pieces.size !== 1) return true;
-        const [only] = g.pieces.keys();
-        return !absorbedIds.has(only);
+        for (const pid of g.pieces.keys()) {
+            if (absorbedIds.has(pid)) return false;
+        }
+        return true;
     });
 
     // When rotationMode is 'free', mr/sr carry integer degrees 0..359 directly.
