@@ -137,6 +137,58 @@ describe('share-link: composable v2 cf shape', () => {
         const decoded = decodePayload(encoded);
         expect(decoded).toEqual(payload);
     });
+
+    it('round-trips a venn base-cut generator end-to-end via gameStateToPayload', () => {
+        // Venn diagrams are a non-sine base-cut generator; pin the codec's
+        // ability to carry an arbitrary baseCutGenerator id + opaque config
+        // through the gameState → payload → encode → decode chain.
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {
+                baseCutGenerator: 'venn',
+                baseCutConfig: { sets: 2, separation: 0.3 },
+                tabGenerator: 'none',
+                tabConfig: {},
+            },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.cf?.bg).toBe('venn');
+        expect(decoded?.cf?.bgc).toEqual({ sets: 2, separation: 0.3 });
+        expect(decoded?.cf?.tg).toBe('none');
+    });
+
+    it('round-trips minPieceArea (mpa) when the sender sets it', () => {
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {
+                baseCutGenerator: 'sine',
+                baseCutConfig: { ha: 0.1, hf: 1, va: 0.1, vf: 1 },
+                tabGenerator: 'classic',
+                tabConfig: {},
+                minPieceArea: 9,
+            },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.cf?.mpa).toBe(9);
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.cf?.mpa).toBe(9);
+    });
+
+    it('omits mpa from the payload when the sender did not set minPieceArea', () => {
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {
+                baseCutGenerator: 'sine',
+                baseCutConfig: {},
+                tabGenerator: 'classic',
+                tabConfig: {},
+            },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.cf).toBeDefined();
+        expect(payload.cf?.mpa).toBeUndefined();
+    });
 });
 
 describe('share-link: legacy composable cf shape', () => {

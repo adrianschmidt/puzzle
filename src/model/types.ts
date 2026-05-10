@@ -181,6 +181,7 @@ export interface GameState {
         baseCutConfig?: Record<string, unknown>;
         tabGenerator?: string;
         tabConfig?: Record<string, unknown>;
+        minPieceArea?: number;
     };
     /**
      * Fractal-cut config (only set when cutStyle === 'fractal').
