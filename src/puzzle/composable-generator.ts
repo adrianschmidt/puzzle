@@ -18,9 +18,10 @@
  * and #166 for the topology-driven approach.
  */
 
-import type { Piece, Size } from '../model/types.js';
+import type { Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
 import { generateTopologyPuzzle } from './topology/generator.js';
+import type { TopologyPuzzle } from './topology/generator.js';
 
 /**
  * Configuration for the composable generator.
@@ -63,7 +64,9 @@ export const DEFAULT_MIN_PIECE_AREA = 4;
  *
  * Thin pass-through to {@link generateTopologyPuzzle} — the only work
  * done here is creating the seeded PRNG and renaming the four config
- * fields onto the topology generator's `*Id` field names.
+ * fields onto the topology generator's `*Id` field names. Returns
+ * `{ pieces, autoGroups }` so the gameplay layer can present tiny
+ * residual faces as starting groups.
  */
 export function generateComposablePuzzle(
     cols: number,
@@ -71,7 +74,7 @@ export function generateComposablePuzzle(
     imageSize: Size,
     seed: number,
     config?: ComposableConfig,
-): Piece[] {
+): TopologyPuzzle {
     const random = createSeededRandom(seed);
     return generateTopologyPuzzle(cols, rows, imageSize, random, {
         baseCutGeneratorId: config?.baseCutGenerator ?? 'sine',

@@ -16,7 +16,7 @@ import { generateComposablePuzzle } from '../composable-generator.js';
 
 describe('composable: fused-piece regression', () => {
     it('seed=124741785 (low amp / high freq) produces 192 pieces at 1080x720', () => {
-        const pieces = generateComposablePuzzle(
+        const { pieces } = generateComposablePuzzle(
             16, 12, { width: 1080, height: 720 }, 124741785,
             {
                 baseCutGenerator: 'sine',
@@ -29,7 +29,7 @@ describe('composable: fused-piece regression', () => {
     });
 
     it('seed=3215341677 (high amp) produces 192 pieces at 1080x720', () => {
-        const pieces = generateComposablePuzzle(
+        const { pieces } = generateComposablePuzzle(
             16, 12, { width: 1080, height: 720 }, 3215341677,
             {
                 baseCutGenerator: 'sine',
