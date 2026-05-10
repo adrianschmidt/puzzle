@@ -48,11 +48,17 @@ export interface TopologyGeneratorConfig {
     /** Opaque config forwarded to the tab generator. */
     tabConfig?: Record<string, unknown>;
     /**
-     * Minimum area (px²) for a piece to stand alone; smaller pieces will
-     * be auto-grouped with a neighbour by the post-pass added in Plan 3.
-     * Currently accepted but not yet wired into the algorithm — Task 3
-     * will plumb this into the auto-grouping pass. Default: undefined
-     * (no auto-grouping).
+     * Minimum area (px²) below which a piece is auto-grouped with its
+     * largest neighbour by {@link autoGroupSmallPieces}, run as a
+     * post-pass over the generated DCEL. The resulting groups are
+     * surfaced via {@link TopologyPuzzle.autoGroups} so the gameplay
+     * layer can glue tiny noise faces (sub-pixel slivers from sine/Voronoi
+     * intersections) into their neighbours instead of shipping them as
+     * standalone pieces.
+     *
+     * Omit (default `undefined`) to skip auto-grouping entirely; in that
+     * case `autoGroups` is empty and every piece stands alone. Direct
+     * callers in tests typically leave this unset.
      */
     minPieceArea?: number;
 }
