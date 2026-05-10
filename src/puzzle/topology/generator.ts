@@ -44,6 +44,14 @@ export interface TopologyGeneratorConfig {
     tabGeneratorId?: string;
     /** Opaque config forwarded to the tab generator. */
     tabConfig?: Record<string, unknown>;
+    /**
+     * Minimum area (px²) for a piece to stand alone; smaller pieces will
+     * be auto-grouped with a neighbour by the post-pass added in Plan 3.
+     * Currently accepted but not yet wired into the algorithm — Task 3
+     * will plumb this into the auto-grouping pass. Default: undefined
+     * (no auto-grouping).
+     */
+    minPieceArea?: number;
 }
 
 // ---------------------------------------------------------------------------
