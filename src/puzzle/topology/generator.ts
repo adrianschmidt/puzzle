@@ -131,9 +131,9 @@ export function generateTopologyPuzzle(
         applyTabs(graph, tabGenerator, random, { tabConfig: config?.tabConfig });
     }
 
-    // 4. Faces → piece definitions. The expectedPieceCount drives
-    //    mergeSmallFaces (kept for now; removed in Plan 3 once
-    //    auto-grouping replaces it).
+    // 4. Faces → piece definitions. Tiny faces are not merged here —
+    //    the auto-group pass below handles them by gluing them into
+    //    starting PieceGroups instead of mutating the DCEL.
     const computeArea = (face: { outerEdge: HalfEdge }) => {
         let area = 0;
         let current = face.outerEdge;
@@ -145,18 +145,10 @@ export function generateTopologyPuzzle(
         } while (current !== face.outerEdge);
         return area / 2;
     };
-    logFaceDetails('dcel-pre-merge', graph.faces, computeArea as (face: Face) => number);
+    logFaceDetails('dcel-faces', graph.faces, computeArea as (face: Face) => number);
 
-    // For grid-style cuts (sine), cols*rows is the right target. For
-    // base-cut-driven topologies like Venn, the piece count is decoupled
-    // from cols/rows — but mergeSmallFaces is conservative (won't merge
-    // faces protected by inner-boundary structures or larger than the
-    // ratio threshold), so passing cols*rows here is harmless even when
-    // the actual piece count differs. Plan 3 will remove mergeSmallFaces
-    // entirely in favour of an opt-in auto-grouping pass.
-    const pieceDefs = facesToPieceDefinitions(graph, cols * rows);
+    const pieceDefs = facesToPieceDefinitions(graph);
 
-    logFaceDetails('dcel-post-merge', graph.faces, computeArea as (face: Face) => number);
     diagnostics.log('pieces', `Generated ${pieceDefs.length} piece definitions`);
 
     // 5. Auto-group sub-threshold pieces. We compute area/adjacency from
