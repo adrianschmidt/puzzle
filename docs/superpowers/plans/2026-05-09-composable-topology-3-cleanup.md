@@ -27,7 +27,7 @@
 **Modify:**
 - `src/puzzle/topology/generator.ts` — call `autoGroup` after `facesToPieceDefinitions`
 - `src/puzzle/composable-generator.ts` — accept `minPieceArea` config field; pass through
-- `src/sharing/share-link.ts` — already supports `mpa` field on `cf` (Plan 1); make sure it's propagated
+- `src/sharing/share-link.ts` — switch the `cf` block from the legacy `{ha, hf, va, vf, dt}` shape to the new `{bg, bgc, tg, tgc, mpa?}` shape. (Plan 1 was supposed to ship this and didn't — the encoder/decoder still hard-codes sine fields, so any non-sine composable puzzle silently degrades to default sine on a share-link round-trip. The `translateLegacyComposable` helper already exists for backward-compat decoding; just make the encoder produce the new shape.)
 - `src/game/init.ts` (or wherever `GameState.groups` is initialised) — accept the auto-group output as starting groups
 - `src/model/types.ts` — `ComposableConfig` grows `minPieceArea` field
 
@@ -55,7 +55,7 @@ The Plan 1 wrap of `tab-merge`'s `prepareTab`/`commitTab`/`computeTabPlacement` 
 **Files:**
 - Modify: `src/puzzle/composable-generator.ts`
 - Modify: `src/model/types.ts`
-- Modify: `src/sharing/share-link.ts` (if needed; `mpa` was added in Plan 1)
+- Modify: `src/sharing/share-link.ts` (full `cf` shape rework — see Step 4)
 
 - [ ] **Step 1: Extend `ComposableConfig`**
 
@@ -86,9 +86,45 @@ const DEFAULT_MIN_PIECE_AREA = 4;
 
 In `src/puzzle/composable-generator.ts`'s `generateComposablePuzzle`, pass `minPieceArea` (with the default) to `generateTopologyPuzzle`. In `topology/generator.ts`, accept it and use it in Task 3 below.
 
-- [ ] **Step 4: Round-trip test for `mpa` in share-link**
+- [ ] **Step 4: Switch share-link `cf` shape to the new format**
 
-Verify (and add a test if missing) that `SharePayload.cf.mpa` round-trips. The field was added in Plan 1; confirm it's still validated and serialised correctly.
+Plan 1's plan called for switching the share-link `cf` block from the
+legacy sine-only `{ha, hf, va, vf, dt}` shape to the generator-agnostic
+`{bg, bgc, tg, tgc, mpa?}` shape, but only the decoder side shipped
+(via `translateLegacyComposable`). The encoder still emits the legacy
+shape, so:
+
+- Any non-sine composable puzzle (e.g. Venn) silently round-trips as
+  default sine — recipient sees a different cut style.
+- `mpa` has nowhere to go on the wire.
+
+Concrete work:
+
+1. In `src/sharing/share-link.ts`, change the `SharePayload.cf` type
+   from the legacy shape to:
+   ```ts
+   cf?: {
+       bg: string;             // BaseCutGenerator id
+       bgc: Record<string, unknown>;  // generator-specific config (opaque)
+       tg: string;             // TabGenerator id ('none' to skip tabs)
+       tgc: Record<string, unknown>;  // tab config (opaque)
+       mpa?: number;           // optional minPieceArea override
+   };
+   ```
+2. Update `gameStateToPayload` to read the new `composableConfig` shape
+   (`baseCutGenerator`, `baseCutConfig`, `tabGenerator`, `tabConfig`,
+   `minPieceArea`) and emit `cf.bg / bgc / tg / tgc / mpa`.
+3. Update `isValidPayload` (or the equivalent shape guard) to accept
+   the new shape and reject the legacy shape (the decoder's
+   `translateLegacyComposable` upgrades legacy payloads before
+   validation, so the validator never sees them).
+4. Add a round-trip test that builds a Venn `composableConfig`, encodes
+   it, decodes the result, and verifies the recipient gets the same
+   `baseCutGenerator: 'venn'` + matching `baseCutConfig`.
+5. Add a round-trip test for `mpa`.
+6. Add a backward-compat test that decodes a legacy `{ha, hf, va, vf,
+   dt}` payload and verifies it translates to the new shape (via
+   `translateLegacyComposable`) and produces a sine-style puzzle.
 
 - [ ] **Step 5: Commit**
 
