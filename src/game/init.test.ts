@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
     createNewGame,
+    createInitialGroups,
     randomizePositions,
     DEFAULT_COLS,
     DEFAULT_ROWS,
     VIEWPORT_MARGIN,
 } from './init.js';
-import type { GridSize, Size } from '../model/types.js';
+import type { GridSize, Piece, Size } from '../model/types.js';
+import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 
 /** A deterministic RNG for reproducible tests: cycles through provided values. */
 function seededRandom(values: number[]): () => number {
@@ -170,6 +172,61 @@ describe('createInitialGroups', () => {
             const [pieceId] = group.pieces.keys();
             expect(group.id).toBe(pieceId);
         }
+    });
+
+    describe('AutoGroup offset math', () => {
+        // Build a minimal Piece with the only fields the auto-group offset
+        // computation actually reads (id + imageOffset). The shape/edges
+        // fields are unused by createInitialGroups, so we leave them empty.
+        function makePiece(id: number, imageOffset: { x: number; y: number }): Piece {
+            return { id, edges: [], shape: '', imageOffset };
+        }
+
+        it('computes within-group offsets as anchor.imageOffset - piece.imageOffset', () => {
+            // Two pieces in the same auto-group with distinct image offsets.
+            // anchor (id 0): imageOffset (0, 0)
+            // other  (id 1): imageOffset (-100, -50)
+            // Expected within-group offsets:
+            //   anchor → (0, 0)
+            //   other  → (0,0) - (-100,-50) = (100, 50)
+            const pieces: Piece[] = [
+                makePiece(0, { x: 0, y: 0 }),
+                makePiece(1, { x: -100, y: -50 }),
+            ];
+            const autoGroups: AutoGroup[] = [{ id: 0, pieceIds: [0, 1] }];
+
+            // Fixed RNG (always 0.5) → one deterministic shared position for the group.
+            const groups = createInitialGroups(
+                pieces,
+                IMAGE_SIZE,
+                VIEWPORT,
+                DEFAULT_GRID,
+                { random: seededRandom([0.5]) },
+                autoGroups,
+            );
+
+            // One group containing both pieces, anchored at the lowest piece id.
+            expect(groups).toHaveLength(1);
+            const group = groups[0];
+            expect(group.id).toBe(0);
+            expect(group.pieces.size).toBe(2);
+            expect(group.pieces.get(0)).toEqual({ x: 0, y: 0 });
+            expect(group.pieces.get(1)).toEqual({ x: 100, y: 50 });
+
+            // One shared position and rotation for the whole group, derived
+            // from the (mocked) RNG — not per-piece.
+            const pieceWidth = IMAGE_SIZE.width / DEFAULT_COLS;
+            const pieceHeight = IMAGE_SIZE.height / DEFAULT_ROWS;
+            const expectedX =
+                VIEWPORT_MARGIN +
+                0.5 * (VIEWPORT.width - pieceWidth - 2 * VIEWPORT_MARGIN);
+            const expectedY =
+                VIEWPORT_MARGIN +
+                0.5 * (VIEWPORT.height - pieceHeight - 2 * VIEWPORT_MARGIN);
+            expect(group.position.x).toBeCloseTo(expectedX);
+            expect(group.position.y).toBeCloseTo(expectedY);
+            expect(group.rotation).toBe(0);
+        });
     });
 });
 
