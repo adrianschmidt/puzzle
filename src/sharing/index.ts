@@ -7,4 +7,5 @@ export {
     parseLocationHash,
     gameStateToPayload,
     hasShareableProgress,
+    shareCfToComposableConfig,
 } from './share-link.js';
