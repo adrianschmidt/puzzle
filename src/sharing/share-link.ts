@@ -249,12 +249,18 @@ export function gameStateToPayload(
         // (matching src/puzzle/topology/generator.ts) so recipients reproduce
         // the same cuts when the sender omitted sub-fields.
         const c = state.composableConfig;
-        payload.cf = {
+        const cf: NonNullable<SharePayload['cf']> = {
             bg: c.baseCutGenerator ?? 'sine',
             bgc: (c.baseCutConfig ?? {}) as Record<string, unknown>,
             tg: c.tabGenerator ?? 'classic',
             tgc: (c.tabConfig ?? {}) as Record<string, unknown>,
         };
+        // Only emit `mpa` when the sender explicitly set it; recipients
+        // fall back to the generator's own default when it's absent.
+        if (c.minPieceArea !== undefined) {
+            cf.mpa = c.minPieceArea;
+        }
+        payload.cf = cf;
     }
 
     if (cutStyle === 'fractal' && state.fractalConfig) {

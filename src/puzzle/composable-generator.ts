@@ -42,7 +42,21 @@ export interface ComposableConfig {
     tabGenerator?: string;
     /** Generator-specific tab config. */
     tabConfig?: Record<string, unknown>;
+    /**
+     * Minimum area (px²) for a piece to stand alone; smaller pieces are
+     * auto-grouped with a neighbour. Defaults to {@link DEFAULT_MIN_PIECE_AREA},
+     * an empirical value that absorbs bezier-js sub-pixel-area numerical
+     * noise without consuming legitimate small pieces.
+     */
+    minPieceArea?: number;
 }
+
+/**
+ * Default {@link ComposableConfig.minPieceArea}. A 2×2 px square: small
+ * enough to leave any user-visible piece intact, large enough to clean
+ * up sub-pixel sliver faces produced by curve-intersection rounding.
+ */
+export const DEFAULT_MIN_PIECE_AREA = 4;
 
 /**
  * Generate a puzzle using the topology-driven composable architecture.
@@ -64,5 +78,6 @@ export function generateComposablePuzzle(
         baseCutConfig: config?.baseCutConfig,
         tabGeneratorId: config?.tabGenerator ?? 'classic',
         tabConfig: config?.tabConfig,
+        minPieceArea: config?.minPieceArea ?? DEFAULT_MIN_PIECE_AREA,
     });
 }
