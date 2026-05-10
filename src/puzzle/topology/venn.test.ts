@@ -45,14 +45,14 @@ function countLoops(edges: Edge[]): number {
 
 describe('composable: two-circle Venn', () => {
     it('produces 4 pieces — frame, two crescents, lens', () => {
-        const pieces = generateComposablePuzzle(
+        const { pieces } = generateComposablePuzzle(
             1, 1, { width: 600, height: 400 }, 42, CONFIG,
         );
         expect(pieces).toHaveLength(4);
     });
 
     it('exactly one piece has two loops (the frame, with the circle component as a hole)', () => {
-        const pieces = generateComposablePuzzle(
+        const { pieces } = generateComposablePuzzle(
             1, 1, { width: 600, height: 400 }, 42, CONFIG,
         );
         const multiLoop = pieces.filter(p => countLoops(p.edges) > 1);
@@ -61,7 +61,7 @@ describe('composable: two-circle Venn', () => {
     });
 
     it('the frame piece is interactively merge-able with its inner-boundary mates', () => {
-        const pieces = generateComposablePuzzle(
+        const { pieces } = generateComposablePuzzle(
             1, 1, { width: 600, height: 400 }, 42, CONFIG,
         );
         const frame = pieces.find(p => countLoops(p.edges) > 1)!;

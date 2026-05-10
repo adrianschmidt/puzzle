@@ -17,9 +17,12 @@ import type { Piece, Point, Size } from '../../model/types.js';
 import { buildDCEL, getFaceEdges } from './dcel.js';
 import type { Face, HalfEdge } from './dcel.js';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
+import type { EdgeDefinition } from '../composable/types.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
 import { composePuzzle } from '../composable/compose.js';
 import { applyTabs } from './apply-tabs.js';
+import { autoGroupSmallPieces } from './auto-group.js';
+import type { AutoGroup } from './auto-group.js';
 import { getBaseCutGenerator, getTabGenerator } from './generator-registry.js';
 import { diagnostics } from '../../diagnostics.js';
 
@@ -59,6 +62,22 @@ export interface TopologyGeneratorConfig {
 // ---------------------------------------------------------------------------
 
 /**
+ * Result of {@link generateTopologyPuzzle}.
+ *
+ * `autoGroups` is populated when the caller supplied
+ * {@link TopologyGeneratorConfig.minPieceArea}; the gameplay layer
+ * uses it to glue together tiny noise faces (sub-pixel slivers from
+ * curve-intersection rounding) into starting groups so the player
+ * never sees them as solo pieces. When `minPieceArea` is omitted,
+ * `autoGroups` is empty — every piece becomes its own group via the
+ * caller's normal one-group-per-piece initialisation.
+ */
+export interface TopologyPuzzle {
+    pieces: Piece[];
+    autoGroups: AutoGroup[];
+}
+
+/**
  * Generate a puzzle using the topology-driven pipeline.
  *
  * @param cols - Number of piece columns
@@ -66,7 +85,7 @@ export interface TopologyGeneratorConfig {
  * @param imageSize - Pixel dimensions of the puzzle image
  * @param random - Seeded PRNG function
  * @param config - Optional generator configuration
- * @returns Complete Piece[] ready for the game engine
+ * @returns Pieces plus any auto-grouping the small-piece pass produced.
  */
 export function generateTopologyPuzzle(
     cols: number,
@@ -74,7 +93,7 @@ export function generateTopologyPuzzle(
     imageSize: Size,
     random: () => number,
     config?: TopologyGeneratorConfig,
-): Piece[] {
+): TopologyPuzzle {
     const baseCutId = config?.baseCutGeneratorId ?? 'sine';
     const tabId = config?.tabGeneratorId ?? 'classic';
 
@@ -134,10 +153,76 @@ export function generateTopologyPuzzle(
     logFaceDetails('dcel-post-merge', graph.faces, computeArea as (face: Face) => number);
     diagnostics.log('pieces', `Generated ${pieceDefs.length} piece definitions`);
 
-    // 5. Compose final pieces. Tabs (when enabled) are already in the
+    // 5. Auto-group sub-threshold pieces. We compute area/adjacency from
+    //    the piece definitions (rather than the DCEL faces directly) so
+    //    the auto-group pass operates on the same identifiers callers
+    //    will see. Adjacency follows mate relationships across all loops
+    //    of each piece — inner-boundary edges count as neighbours, which
+    //    is what we want (a tiny piece living inside a hole should be
+    //    glued to the surrounding frame, not orphaned).
+    const minPieceArea = config?.minPieceArea;
+    let autoGroups: AutoGroup[] = [];
+    if (minPieceArea !== undefined) {
+        const areas = new Map<number, number>();
+        const neighbours = new Map<number, Set<number>>();
+        for (const def of pieceDefs) {
+            areas.set(def.id, computeOuterLoopArea(def.edges));
+            const ns = new Set<number>();
+            for (const e of def.edges) {
+                if (e.matePieceId >= 0) ns.add(e.matePieceId);
+            }
+            neighbours.set(def.id, ns);
+        }
+        autoGroups = autoGroupSmallPieces(
+            {
+                pieceIds: pieceDefs.map(d => d.id),
+                areas,
+                neighbours,
+            },
+            minPieceArea,
+        );
+    }
+
+    // 6. Compose final pieces. Tabs (when enabled) are already in the
     //    edge geometry, so disable the composition layer's own tab
     //    logic.
-    return composePuzzle(pieceDefs, classicTabTemplate, random, { disableTabs: true });
+    const pieces = composePuzzle(pieceDefs, classicTabTemplate, random, { disableTabs: true });
+
+    return { pieces, autoGroups };
+}
+
+// ---------------------------------------------------------------------------
+// Outer-loop polygon area (shoelace on edge endpoints)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the polygon area of a piece's outer loop using the shoelace
+ * formula on edge endpoints. The outer loop is the prefix of `edges`
+ * before the first chain break (where the previous edge's `end` no
+ * longer matches the current edge's `start`).
+ *
+ * Endpoints alone are sufficient for distinguishing sub-pixel numerical-
+ * noise faces (a few px²) from legitimate puzzle pieces (hundreds of px²
+ * or more); we don't sample curve points here.
+ */
+function computeOuterLoopArea(edges: EdgeDefinition[]): number {
+    if (edges.length === 0) return 0;
+    let area = 0;
+    for (let i = 0; i < edges.length; i++) {
+        const cur = edges[i];
+        if (i > 0) {
+            const prev = edges[i - 1];
+            // Chain break = end of outer loop. Inner-boundary loops
+            // don't contribute to "is this piece tiny" — they're holes,
+            // and their area would only confuse the threshold.
+            if (Math.abs(prev.end.x - cur.start.x) > 0.5
+                || Math.abs(prev.end.y - cur.start.y) > 0.5) {
+                break;
+            }
+        }
+        area += cur.start.x * cur.end.y - cur.end.x * cur.start.y;
+    }
+    return Math.abs(area) / 2;
 }
 
 // ---------------------------------------------------------------------------

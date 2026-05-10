@@ -30,6 +30,7 @@ import {
 import type { FractalConfig } from '../puzzle/fractal/index.js';
 import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
+import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 import type { CutStyle } from './cut-styles.js';
 
 /**
@@ -39,6 +40,18 @@ import type { CutStyle } from './cut-styles.js';
 export interface StrategyContext {
     fractalConfig?: FractalConfig;
     composableConfig?: ComposableConfig;
+}
+
+/**
+ * What a strategy returns from `generatePieces`.
+ *
+ * `autoGroups` is set by styles whose generator emits starting groups
+ * (currently only composable, when `minPieceArea` is configured). When
+ * absent or empty, `init.ts` falls back to one-piece-per-group.
+ */
+export interface StrategyPuzzle {
+    pieces: Piece[];
+    autoGroups?: AutoGroup[];
 }
 
 export interface CutStyleStrategy {
@@ -56,13 +69,13 @@ export interface CutStyleStrategy {
         generationGrid: GridSize,
         ctx: StrategyContext,
     ): Size;
-    /** Generate the pieces for this style. */
+    /** Generate the pieces (and optional starting groups) for this style. */
     generatePieces(
         grid: GridSize,
         puzzleSize: Size,
         seed: number,
         ctx: StrategyContext,
-    ): Piece[];
+    ): StrategyPuzzle;
     /**
      * Where the generator's config should be stored on `GameState`. Omit
      * for styles that don't take a config (e.g. classic).
@@ -73,8 +86,9 @@ export interface CutStyleStrategy {
 const classicStrategy: CutStyleStrategy = {
     scaleGrid: (grid) => grid,
     inscribePuzzleSize: (imageSize) => imageSize,
-    generatePieces: (grid, puzzleSize, seed) =>
-        generateProceduralPuzzle(grid.cols, grid.rows, puzzleSize, seed),
+    generatePieces: (grid, puzzleSize, seed) => ({
+        pieces: generateProceduralPuzzle(grid.cols, grid.rows, puzzleSize, seed),
+    }),
 };
 
 const composableStrategy: CutStyleStrategy = {
@@ -107,14 +121,15 @@ const fractalStrategy: CutStyleStrategy = {
 
         return inscribeToGridAspect(imageSize, gridAspect);
     },
-    generatePieces: (grid, puzzleSize, seed, ctx) =>
-        generateFractalPuzzle(
+    generatePieces: (grid, puzzleSize, seed, ctx) => ({
+        pieces: generateFractalPuzzle(
             grid.cols,
             grid.rows,
             puzzleSize,
             seed,
             ctx.fractalConfig,
         ),
+    }),
     configKey: 'fractalConfig',
 };
 
