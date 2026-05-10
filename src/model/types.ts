@@ -38,6 +38,14 @@ export interface Edge {
     start: Point;
     /** Where this edge ends on the piece (piece-local coords). */
     end: Point;
+    /**
+     * Sampled points along this edge's underlying cut curve (piece-local
+     * coords). Forwarded from `EdgeDefinition.curvePoints`. Present for
+     * non-straight cut edges; absent for straight edges. Tab protrusions
+     * are NOT included here — they live only in `path`. Used by bbox
+     * helpers to approximate curved-edge silhouette.
+     */
+    curvePoints?: Point[];
 }
 
 /**
@@ -49,15 +57,17 @@ export interface Edge {
 export interface Piece {
     /** Unique piece identifier. */
     id: number;
-    /** All edges of this piece, defining its shape boundary and connectivity. */
-    edges: Edge[];
     /**
-     * Inner-boundary edge loops, one per hole. Empty/undefined for
-     * pieces without holes. Forwarded from PieceDefinition by the
-     * composable pipeline. Currently used only by the Venn-style
-     * topologies; classic grid puzzles always have undefined.
+     * All edges of this piece, defining its shape boundary and
+     * connectivity. Edges are stored as a flat list of one or more
+     * loops chained end-to-start internally; loop boundaries are
+     * detected by the chain breaking (an edge's `start` no longer
+     * matches the previous edge's `end`). Pieces without holes are a
+     * single loop; pieces with holes have additional loops following
+     * the outer boundary. Use `shape` for rendering — it already
+     * encodes loop structure as multi-`M..Z` SVG subpaths.
      */
-    innerBoundaries?: Edge[][];
+    edges: Edge[];
     /** Full SVG clip-path `d` attribute built from all edges. */
     shape: string;
     /** Offset to position the source image behind the clip-path (piece-local coords). */

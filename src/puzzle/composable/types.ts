@@ -15,14 +15,16 @@ import type { Point } from '../../model/types.js';
 export interface PieceDefinition {
     /** Unique piece identifier. */
     id: number;
-    /** Edges ordered clockwise around the piece. */
-    edges: EdgeDefinition[];
     /**
-     * Inner-boundary edge loops, one per hole. Each loop is a
-     * sequence of EdgeDefinitions with the same orientation
-     * convention as `edges`. Empty/undefined for faces without holes.
+     * All edges of the piece, flat. The outer boundary comes first
+     * (each edge's `end` matches the next edge's `start`). For pieces
+     * with holes, each inner-boundary loop follows, also chained
+     * end-to-start internally; loop boundaries are detected by the
+     * chain breaking (an edge's `start` no longer matches the previous
+     * edge's `end`). The renderer uses this to emit one SVG `M..Z`
+     * subpath per loop.
      */
-    innerBoundaries?: EdgeDefinition[][];
+    edges: EdgeDefinition[];
     /** Offset to position the source image behind the piece. */
     imageOffset: Point;
 }

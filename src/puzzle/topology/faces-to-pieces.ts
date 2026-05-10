@@ -74,33 +74,30 @@ export function facesToPieceDefinitions(
 
     return innerFaces.map(face => {
         const pieceId = faceIdToPieceId.get(face.id)!;
-        const halfEdges = getFaceEdges(face);
+        const outerHE = getFaceEdges(face);
 
         // Compute bounding box for image offset (based on the OUTER
-        // boundary — inner-boundary edges share the same coordinate
-        // frame, so the same bbox is reused for piece-local coords).
-        const bbox = computeFaceBBox(halfEdges);
+        // boundary — inner-boundary edges are inside the outer
+        // boundary by definition, so don't extend the bbox).
+        const bbox = computeFaceBBox(outerHE);
 
-        // Convert half-edges to EdgeDefinitions
-        const edges: EdgeDefinition[] = halfEdges.map(he => {
-            return halfEdgeToEdgeDef(
-                he, bbox, faceIdToPieceId, halfEdgeToEdgeId,
-            );
-        });
-
-        // Convert inner-boundary loops to EdgeDefinition[][]
-        const innerBoundaries: EdgeDefinition[][] = [];
+        // Flat edge list: outer boundary first, then each inner-
+        // boundary loop appended. Loop boundaries are implicit —
+        // detected by the renderer when consecutive edges' end/start
+        // points don't match. All loops share the same piece-local
+        // coordinate frame (the same bbox).
+        const allHE: HalfEdge[] = [...outerHE];
         for (const innerStart of face.innerBoundaries) {
-            const loopHE = walkLoop(innerStart);
-            innerBoundaries.push(loopHE.map(he =>
-                halfEdgeToEdgeDef(he, bbox, faceIdToPieceId, halfEdgeToEdgeId),
-            ));
+            allHE.push(...walkLoop(innerStart));
         }
+
+        const edges: EdgeDefinition[] = allHE.map(he =>
+            halfEdgeToEdgeDef(he, bbox, faceIdToPieceId, halfEdgeToEdgeId),
+        );
 
         return {
             id: pieceId,
             edges,
-            innerBoundaries: innerBoundaries.length > 0 ? innerBoundaries : undefined,
             imageOffset: { x: -bbox.minX, y: -bbox.minY },
         };
     });

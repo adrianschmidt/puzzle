@@ -39,6 +39,19 @@ export function assignHoles(graph: TopologyGraph, components: Component[]): void
         if (!localOuterFace) continue;
 
         containingFace.innerBoundaries.push(localOuterFace.outerEdge);
+
+        // Retarget the loop's half-edges to point at the containing face.
+        // Without this, downstream consumers (faces-to-pieces) walk
+        // `he.twin.face` and land on the now-removed local-outer Face
+        // object, which fails the faceId→pieceId lookup and produces
+        // matePieceId = -1 (i.e. the system thinks the inner-boundary
+        // edges are unmated borders, breaking interactive merge).
+        let cur: HalfEdge = localOuterFace.outerEdge;
+        do {
+            cur.face = containingFace;
+            cur = cur.next;
+        } while (cur !== localOuterFace.outerEdge);
+
         const idx = graph.faces.indexOf(localOuterFace);
         if (idx >= 0) graph.faces.splice(idx, 1);
     }

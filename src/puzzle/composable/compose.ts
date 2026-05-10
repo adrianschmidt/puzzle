@@ -89,25 +89,13 @@ export function composePuzzle(
         const edges: Edge[] = pieceDef.edges.map(edgeDef =>
             buildEdge(edgeDef, tabPaths),
         );
-
-        // Forward inner-boundary loops, converting each EdgeDefinition
-        // to an Edge with the same logic as the outer boundary.
-        const innerBoundaries: Edge[][] | undefined = pieceDef.innerBoundaries?.map(loop =>
-            loop.map(edgeDef => buildEdge(edgeDef, tabPaths)),
-        );
-
-        const shape = buildShape(edges, innerBoundaries);
-
-        const piece: Piece = {
+        const shape = buildShape(edges);
+        return {
             id: pieceDef.id,
             edges,
             shape,
             imageOffset: pieceDef.imageOffset,
         };
-        if (innerBoundaries !== undefined) {
-            piece.innerBoundaries = innerBoundaries;
-        }
-        return piece;
     });
 }
 
@@ -137,7 +125,8 @@ function buildEdge(
     edgeDef: EdgeDefinition,
     tabPaths: Map<string, BezierPath>,
 ): Edge {
-    const { id, start, end, mateEdgeId, matePieceId, sharedEdgeKey, isFirstSide } = edgeDef;
+    const { id, start, end, mateEdgeId, matePieceId, sharedEdgeKey, isFirstSide, curvePoints } = edgeDef;
+    const carryCurvePoints = curvePoints ? { curvePoints } : {};
 
     // Border edge: follow curve if available, otherwise straight
     if (mateEdgeId === -1 || !sharedEdgeKey) {
@@ -148,6 +137,7 @@ function buildEdge(
             path: fallbackPath(edgeDef),
             start,
             end,
+            ...carryCurvePoints,
         };
     }
 
@@ -162,6 +152,7 @@ function buildEdge(
             path: fallbackPath(edgeDef),
             start,
             end,
+            ...carryCurvePoints,
         };
     }
 
@@ -173,13 +164,10 @@ function buildEdge(
 
     // For curved edges, use curve-clamped tab placement.
     // For straight edges, use the simple start→end transform.
-    if (edgeDef.curvePoints && edgeDef.curvePoints.length > 2) {
+    if (curvePoints && curvePoints.length > 2) {
         // Curved edge: clamp tab to the actual curve
-        const curvePoints = isFirstSide
-            ? edgeDef.curvePoints
-            : [...edgeDef.curvePoints].reverse();
-
-        const result = clampTabToCurve(curvePoints, pathToTransform);
+        const orientedCurve = isFirstSide ? curvePoints : [...curvePoints].reverse();
+        const result = clampTabToCurve(orientedCurve, pathToTransform);
         return {
             id,
             mateEdgeId,
@@ -187,6 +175,7 @@ function buildEdge(
             path: result.svgPath,
             start,
             end,
+            ...carryCurvePoints,
         };
     }
 
@@ -200,6 +189,7 @@ function buildEdge(
         path: bezierPathToSvg(transformed),
         start,
         end,
+        ...carryCurvePoints,
     };
 }
 
@@ -248,25 +238,31 @@ function transformToEdge(
 // SVG path helpers
 // ---------------------------------------------------------------------------
 
-function buildShape(outerEdges: Edge[], innerLoops?: Edge[][]): string {
-    let d = subPath(outerEdges);
-    if (innerLoops) {
-        for (const loop of innerLoops) {
-            const sub = subPath(loop);
-            if (sub) d += ' ' + sub;
-        }
-    }
-    return d;
-}
-
-function subPath(edges: Edge[]): string {
+/**
+ * Build the SVG `d` string from a flat list of edges. Loop boundaries
+ * are detected implicitly: each edge that does not pick up where the
+ * previous one ended starts a new `M..Z` subpath.
+ */
+function buildShape(edges: Edge[]): string {
     if (edges.length === 0) return '';
-    const first = edges[0];
-    const parts = [`M ${fmt(first.start.x)} ${fmt(first.start.y)}`];
+    const parts: string[] = [];
+    let prevEnd: Point | null = null;
     for (const edge of edges) {
+        const continuesChain =
+            prevEnd !== null
+            && Math.abs(prevEnd.x - edge.start.x) < CHAIN_EPSILON
+            && Math.abs(prevEnd.y - edge.start.y) < CHAIN_EPSILON;
+        if (!continuesChain) {
+            if (parts.length > 0) parts.push('Z');
+            parts.push(`M ${fmt(edge.start.x)} ${fmt(edge.start.y)}`);
+        }
         parts.push(edge.path);
+        prevEnd = edge.end;
     }
     parts.push('Z');
     return parts.join(' ');
 }
+
+/** Tolerance for matching consecutive edges' end→start in piece-local px. */
+const CHAIN_EPSILON = 0.5;
 
