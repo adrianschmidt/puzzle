@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import { buildDCEL } from './dcel.js';
 import { Curve } from './curve.js';
-import { resolveExcessIntersections } from './collision.js';
 import type { PieceDefinition } from '../composable/types.js';
 
 // ---------------------------------------------------------------------------
@@ -336,9 +335,7 @@ describe('facesToPieceDefinitions: lens-face merging', () => {
             generateSineCurve({ x: 0, y: 220 }, { x: 400, y: 220 }, 40, 2, Math.PI),
         ];
 
-        // Run through excess-intersection resolver (may or may not splice)
-        const resolved = resolveExcessIntersections(curves, 4);
-        const dcel = buildDCEL({ curves: resolved });
+        const dcel = buildDCEL({ curves });
         const pieces = facesToPieceDefinitions(dcel);
 
         // Every non-border shared edge must have a valid mate piece
@@ -395,8 +392,7 @@ describe('facesToPieceDefinitions: lens-face merging', () => {
             ));
         }
 
-        const resolved = resolveExcessIntersections(curves, 4);
-        const dcel = buildDCEL({ curves: resolved });
+        const dcel = buildDCEL({ curves });
         const pieces = facesToPieceDefinitions(dcel);
 
         const pieceIds = new Set(pieces.map(p => p.id));
