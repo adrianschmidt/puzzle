@@ -190,6 +190,10 @@ function buildCutStylesSection(): HTMLElement {
         ['strong', 'Free rotation'],
         ' (when rotation is also enabled) — Pieces rotate continuously to any angle instead of snapping to the four 90° orientations. Use the round drag handle below the focused piece.',
     ]);
+    appendInlineLi(composableSub, [
+        ['strong', 'Auto-grouping'],
+        " — Tiny slivers from extreme cut shapes are pre-grouped with a neighbour, so you'll never see an unmovable speck of a piece.",
+    ]);
     composableLi.appendChild(composableSub);
     list.appendChild(composableLi);
 
