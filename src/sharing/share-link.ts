@@ -8,6 +8,7 @@
 
 import type { GameState } from '../model/types.js';
 import { normaliseDegrees } from '../model/helpers.js';
+import type { ComposableConfig } from '../puzzle/composable-generator.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -36,7 +37,7 @@ export interface SharePayload {
         tg: string;
         /** Tab-generator-specific config (opaque). */
         tgc: Record<string, unknown>;
-        /** Optional minPieceArea override (Plan 3 will use this). */
+        /** Optional minPieceArea override; receiver uses this when present. */
         mpa?: number;
     };
     /** Fractal-cut config. */
@@ -200,6 +201,27 @@ function isValidProgress(x: unknown): boolean {
         }
     }
     return true;
+}
+
+/**
+ * Project a decoded share-link `cf` block onto the framework's
+ * {@link ComposableConfig} shape. `decodePayload` already translates legacy
+ * share-link payloads (v1 `ha`/`hf`/`va`/`vf`/`dt` fields) to the current
+ * `bg`/`bgc`/`tg`/`tgc` shape on the way in, so this is a 1:1 rename plus
+ * the optional `mpa` propagation that keeps auto-grouping behaviour
+ * consistent between sender and receiver.
+ */
+export function shareCfToComposableConfig(
+    cf: NonNullable<SharePayload['cf']>,
+): ComposableConfig {
+    const config: ComposableConfig = {
+        baseCutGenerator: cf.bg,
+        baseCutConfig: cf.bgc,
+        tabGenerator: cf.tg,
+        tabConfig: cf.tgc,
+    };
+    if (cf.mpa !== undefined) config.minPieceArea = cf.mpa;
+    return config;
 }
 
 export function buildShareUrl(baseUrl: string, payload: SharePayload): string {

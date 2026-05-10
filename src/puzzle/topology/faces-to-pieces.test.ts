@@ -323,7 +323,7 @@ function generateSineCurve(
     return Curve.fromBezierPath(bezierPoints);
 }
 
-describe('facesToPieceDefinitions: lens-face merging', () => {
+describe('facesToPieceDefinitions: mate consistency under degenerate intersections', () => {
     it('merges 2-edge lens faces instead of creating holes', () => {
         // Two close parallel sine waves with opposite phase — creates lenses
         const curves = [
