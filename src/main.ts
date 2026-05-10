@@ -439,6 +439,44 @@ function zoomToFitCompletedPuzzle(
     });
 };
 
+/**
+ * Dev-console hook for visual smoke-testing the experimental two-circle
+ * Venn cut style. Not exposed in any UI. Removed before Plan 2 merges
+ * if the cut style isn't promoted to a user-facing option.
+ *
+ * Usage (in browser dev console):
+ *   __startVennPuzzle()
+ *   __startVennPuzzle({ leftRadius: 200, rightCenter: { x: 700, y: 360 } })
+ *
+ * Caveat: share-links and reloads don't yet preserve the venn config —
+ * only the in-memory render is meaningful. After the page reloads, the
+ * autosaved state falls back to sine defaults.
+ */
+(window as any).__startVennPuzzle = (overrides?: {
+    leftCenter?: { x: number; y: number };
+    leftRadius?: number;
+    rightCenter?: { x: number; y: number };
+    rightRadius?: number;
+}) => {
+    const baseCutConfig = {
+        leftCenter: overrides?.leftCenter ?? { x: 432, y: 360 },
+        leftRadius: overrides?.leftRadius ?? 240,
+        rightCenter: overrides?.rightCenter ?? { x: 648, y: 360 },
+        rightRadius: overrides?.rightRadius ?? 240,
+    };
+    void startNewGame(
+        { cols: 1, rows: 1 },
+        'composable',
+        {
+            baseCutGenerator: 'venn',
+            baseCutConfig,
+            tabGenerator: 'none',
+            tabConfig: {},
+        },
+        'blank',
+    );
+};
+
 // Viewport transform for zoom & pan
 const viewportTransform = new ViewportTransform();
 
