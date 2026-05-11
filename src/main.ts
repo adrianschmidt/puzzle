@@ -431,6 +431,7 @@ function zoomToFitCompletedPuzzle(
  * Usage (in browser dev console):
  *   __startVennPuzzle()
  *   __startVennPuzzle({ leftRadius: 200, rightCenter: { x: 700, y: 360 } })
+ *   __startVennPuzzle({ tabs: true })   // classic tabs on the shared arcs
  *
  * Caveat: share-links and reloads don't yet preserve the venn config —
  * only the in-memory render is meaningful. After the page reloads, the
@@ -441,6 +442,7 @@ function zoomToFitCompletedPuzzle(
     leftRadius?: number;
     rightCenter?: { x: number; y: number };
     rightRadius?: number;
+    tabs?: boolean;
 }) => {
     const baseCutConfig = {
         leftCenter: overrides?.leftCenter ?? { x: 432, y: 360 },
@@ -454,7 +456,7 @@ function zoomToFitCompletedPuzzle(
         {
             baseCutGenerator: 'venn',
             baseCutConfig,
-            tabGenerator: 'none',
+            tabGenerator: overrides?.tabs ? 'classic' : 'none',
             tabConfig: {},
         },
         'blank',
