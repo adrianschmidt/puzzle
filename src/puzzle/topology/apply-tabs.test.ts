@@ -147,6 +147,106 @@ describe('applyTabs', () => {
 
         expect(internalEdge.curve).not.toBe(curveBefore);
     });
+
+    it('rejects a tab candidate whose bump folds back through its own edge', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+
+        // A "fold-back" generator: build a candidate that has a clean
+        // before/after overlap with the parent edge and a middle bump
+        // shaped as an S that crosses the parent line at its midpoint.
+        // This is the regression case that produced self-intersecting
+        // piece boundaries before the bump-only collision check was
+        // added.
+        const foldbackGenerator: TabGenerator = {
+            id: 'foldback',
+            generate: (edge) => {
+                const start = edge.start;
+                const end = edge.end;
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                // Unit tangent along edge
+                const tx = dx / len;
+                const ty = dy / len;
+                // Unit perpendicular ("up")
+                const nx = -ty;
+                const ny = tx;
+
+                const at = (along: number, perp: number) => ({
+                    x: start.x + tx * along + nx * perp,
+                    y: start.y + ty * along + ny * perp,
+                });
+
+                // 3-segment candidate:
+                //   1. before: linear along the edge from 0 -> 0.2L
+                //   2. bump:  S-curve from 0.2L bouncing through the
+                //             midpoint then coming out at 0.8L —
+                //             control points push above then below.
+                //   3. after: linear along the edge from 0.8L -> 1.0L
+                return Curve.fromBezierPath([
+                    at(0, 0),
+                    at(0.05 * len, 0), at(0.15 * len, 0), at(0.2 * len, 0),
+                    // Bump: from (0.2L, 0) above to (0.8L, 0), but
+                    // control points produce an S that crosses the
+                    // parent at the middle.
+                    at(0.25 * len, -25), at(0.75 * len, 25), at(0.8 * len, 0),
+                    // After: linear along edge.
+                    at(0.85 * len, 0), at(0.95 * len, 0), at(1.0 * len, 0),
+                ]);
+            },
+        };
+
+        const internalEdge = graph.halfEdges.find(he =>
+            !he.face?.isOuter && !he.twin.face?.isOuter,
+        )!;
+        const curveBefore = internalEdge.curve;
+
+        applyTabs(graph, foldbackGenerator, makeSeededRandom(1));
+
+        // Edge should remain flat — the fold-back candidate must be
+        // rejected so the piece boundary does not self-intersect.
+        expect(internalEdge.curve).toBe(curveBefore);
+    });
+
+    it('accepts a normal one-sided tab bump (sanity check)', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+
+        // A normal tab shape: linear before/after overlap with a bump
+        // that stays on one side of the parent. This must NOT be
+        // rejected by the fold-back check.
+        const tabGenerator: TabGenerator = {
+            id: 'normal-tab',
+            generate: (edge) => {
+                const start = edge.start;
+                const end = edge.end;
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const tx = dx / len, ty = dy / len;
+                const nx = -ty, ny = tx;
+                const at = (along: number, perp: number) => ({
+                    x: start.x + tx * along + nx * perp,
+                    y: start.y + ty * along + ny * perp,
+                });
+                return Curve.fromBezierPath([
+                    at(0, 0),
+                    at(0.05 * len, 0), at(0.15 * len, 0), at(0.2 * len, 0),
+                    // Bump: stays above the edge (perp = -10).
+                    at(0.3 * len, -10), at(0.7 * len, -10), at(0.8 * len, 0),
+                    at(0.85 * len, 0), at(0.95 * len, 0), at(1.0 * len, 0),
+                ]);
+            },
+        };
+
+        const internalEdge = graph.halfEdges.find(he =>
+            !he.face?.isOuter && !he.twin.face?.isOuter,
+        )!;
+        const curveBefore = internalEdge.curve;
+
+        applyTabs(graph, tabGenerator, makeSeededRandom(1));
+
+        expect(internalEdge.curve).not.toBe(curveBefore);
+    });
 });
 
 // Helpers
