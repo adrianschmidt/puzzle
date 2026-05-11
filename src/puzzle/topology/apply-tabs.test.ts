@@ -208,6 +208,61 @@ describe('applyTabs', () => {
         expect(internalEdge.curve).toBe(curveBefore);
     });
 
+    it('rejects a tab candidate whose bump folds back only briefly and shallowly', () => {
+        // Sparse-sample signed-perpendicular checks miss this case:
+        // the bump mostly stays above the parent line (perp ≈ -5), but
+        // the right shoulder dips just under 1px below the parent line
+        // for a brief slice of its arc, then returns to the splice.
+        // With 12 uniform samples and a 1px magnitude threshold (the
+        // previous heuristic), every sample on the "below" side is
+        // below threshold, so the sign-change isn't observed and the
+        // fold-back slips through. Bump-only intersect catches it via
+        // bezier-js's exact subdivision.
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+
+        const shallowFoldbackGenerator: TabGenerator = {
+            id: 'shallow-foldback',
+            generate: (edge) => {
+                const start = edge.start;
+                const end = edge.end;
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const tx = dx / len, ty = dy / len;
+                const nx = -ty, ny = tx;
+                const at = (along: number, perp: number) => ({
+                    x: start.x + tx * along + nx * perp,
+                    y: start.y + ty * along + ny * perp,
+                });
+                // Bump's left side strongly above the parent (perp -15),
+                // right control nudges below by 4 (an exaggerated control
+                // value that yields a sub-pixel actual excursion). The
+                // resulting cubic dips by ~0.55px below the parent line
+                // near the right splice — a real crossing of the parent
+                // line, but below the 1px magnitude floor used by the
+                // previous detector.
+                return Curve.fromBezierPath([
+                    at(0, 0),
+                    at(0.05 * len, 0), at(0.15 * len, 0), at(0.2 * len, 0),
+                    at(0.3 * len, -15), at(0.7 * len, 4), at(0.8 * len, 0),
+                    at(0.85 * len, 0), at(0.95 * len, 0), at(1.0 * len, 0),
+                ]);
+            },
+        };
+
+        const internalEdge = graph.halfEdges.find(he =>
+            !he.face?.isOuter && !he.twin.face?.isOuter,
+        )!;
+        const curveBefore = internalEdge.curve;
+
+        applyTabs(graph, shallowFoldbackGenerator, makeSeededRandom(1));
+
+        // The brief shallow dip is still a real crossing of the parent
+        // line — the resulting piece boundary would self-intersect.
+        // Bump-only intersection must catch it.
+        expect(internalEdge.curve).toBe(curveBefore);
+    });
+
     it('accepts a normal one-sided tab bump (sanity check)', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
