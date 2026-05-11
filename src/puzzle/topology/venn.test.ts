@@ -74,4 +74,20 @@ describe('composable: two-circle Venn', () => {
         );
         expect(matedFrameEdges.length).toBeGreaterThan(0);
     });
+
+    it('does not auto-group pieces — all four pieces are independent starting groups', () => {
+        // Regression: with endpoints-only shoelace, curve-bounded faces
+        // (crescents, lens) computed as ~0 area and tripped the default
+        // minPieceArea threshold, incorrectly auto-grouping a crescent
+        // with the frame at puzzle start. Sampling `curvePoints` fixes
+        // this. See generator.ts:computeOuterLoopArea.
+        const { pieces, autoGroups } = generateComposablePuzzle(
+            1, 1, { width: 600, height: 400 }, 42, CONFIG,
+        );
+        expect(pieces).toHaveLength(4);
+        expect(autoGroups).toHaveLength(4);
+        for (const g of autoGroups) {
+            expect(g.pieceIds).toHaveLength(1);
+        }
+    });
 });
