@@ -277,6 +277,9 @@ describe('share-link: legacy composable cf shape', () => {
 });
 
 describe('share-link: legacy → working puzzle smoke test', () => {
+    // Same 16×12 sine + classic-tab pipeline as repro-bug.test.ts —
+    // runs at ~3.5s locally but can exceed vitest's 5s default on slower
+    // CI runners. See repro-bug.test.ts for context.
     it('a legacy-shape link decodes and produces a non-empty piece array', () => {
         const legacy = {
             v: 1, i: 'blank', is: [1080, 720], g: [16, 12],
@@ -301,7 +304,7 @@ describe('share-link: legacy → working puzzle smoke test', () => {
         expect(pieces.length).toBeGreaterThan(0);
         // We don't assert exactly 192 — old links won't necessarily
         // produce the same puzzle. We just assert "produces a puzzle."
-    });
+    }, 15000);
 });
 
 describe('share-link codec — rejection paths', () => {
