@@ -1,23 +1,29 @@
 /**
- * Per-edge tab application with crossing rejection.
+ * Per-edge tab application returning a final cut set.
  *
- * Iterates over each shared internal half-edge pair (skipping border
- * edges where one side is the outer face). For each, asks the
- * TabGenerator for a candidate curve. The candidate's endpoints must
- * match the original edge — the framework checks this and rejects
- * mismatches. Then the candidate is checked against every OTHER
- * edge in the graph for crossings; if any crossing would be
- * introduced, the candidate is rejected and the edge stays flat.
+ * Walks every half-edge in the input graph and produces a list of
+ * curves that the caller feeds into a SECOND `buildDCEL` pass. The
+ * second pass discovers any topology introduced by the tab shapes
+ * themselves (e.g. a tab whose bump folds back through its own parent
+ * edge, which creates an extra "island" face).
  *
- * Topology is never modified — only the `curve` field of each
- * half-edge changes (and its twin's reversed curve). Faces, vertices,
- * and connectivity are untouched.
+ * For each shared internal half-edge pair (skipping border edges where
+ * one side is the outer face), the harness asks the TabGenerator for a
+ * candidate curve. The candidate's endpoints must match the original
+ * edge — the framework checks this and rejects mismatches. The
+ * candidate is then checked against every OTHER edge in the graph for
+ * crossings; if any crossing would be introduced, the candidate is
+ * rejected and the original (flat) sub-curve is emitted instead.
  *
- * Tabs whose bump folds back through their own parent edge are NOT
- * rejected here. The fold-back produces additional closed regions in
- * the topology (extra small faces), which the delivery-side auto-group
- * pass absorbs into their larger neighbours via the adaptive
- * minPieceArea threshold in the topology generator.
+ * Self-crossings (the bump folding back through the parent edge) are
+ * NOT rejected here — they are intended to materialise as additional
+ * topology in the second DCEL pass, where the existing auto-group
+ * pass absorbs the resulting tiny islands into their neighbours via
+ * the adaptive minPieceArea threshold.
+ *
+ * Border half-edges contribute their original sub-curves unchanged.
+ * Twin half-edges contribute nothing extra (each shared edge is
+ * emitted exactly once).
  */
 
 import { Curve } from './curve.js';
@@ -34,46 +40,72 @@ export interface ApplyTabsOptions {
     tabConfig?: unknown;
 }
 
+/**
+ * Walk the initial DCEL and produce the final cut set: one entry per
+ * twin pair (internal shared edges as their tab-decorated curve when
+ * accepted, else their original sub-curve; border edges as their
+ * original sub-curve).
+ *
+ * The returned list is intended to be fed into a fresh `buildDCEL`
+ * call. The second pass picks up any tab self-crossings as real
+ * topology.
+ */
 export function applyTabs(
     graph: TopologyGraph,
     generator: TabGenerator,
     random: () => number,
     options: ApplyTabsOptions = {},
-): void {
+): Curve[] {
     const policy = options.policy ?? defaultTabPolicy;
     const tabConfig = options.tabConfig ?? {};
 
-    // Build the canonical list of shared edges (one entry per twin pair).
-    // Skip pairs where either side is the outer face.
+    const finalCurves: Curve[] = [];
     const visited = new Set<number>();
-    const sharedEdges: HalfEdge[] = [];
+
     for (const he of graph.halfEdges) {
         if (visited.has(he.id) || visited.has(he.twin.id)) continue;
         visited.add(he.id);
         visited.add(he.twin.id);
+
         const aOuter = !he.face || he.face.isOuter;
         const bOuter = !he.twin.face || he.twin.face.isOuter;
-        if (aOuter || bOuter) continue;
-        sharedEdges.push(he);
-    }
 
-    for (const he of sharedEdges) {
+        // Border edge: emit the original sub-curve unchanged.
+        if (aOuter || bOuter) {
+            finalCurves.push(he.curve);
+            continue;
+        }
+
+        // Internal shared edge: try the tab generator.
         const view: TopologyEdge = {
             id: he.id,
             length: he.curve.arcLength(),
         };
-        if (!policy(view)) continue;
+        if (!policy(view)) {
+            finalCurves.push(he.curve);
+            continue;
+        }
 
         const candidate = generator.generate(he.curve, random, tabConfig);
-        if (!candidate) continue;
+        if (!candidate) {
+            finalCurves.push(he.curve);
+            continue;
+        }
 
-        if (!endpointsMatch(candidate, he.curve)) continue;
+        if (!endpointsMatch(candidate, he.curve)) {
+            finalCurves.push(he.curve);
+            continue;
+        }
 
-        if (introducesNewCrossing(candidate, he, graph)) continue;
+        if (introducesNewCrossing(candidate, he, graph)) {
+            finalCurves.push(he.curve);
+            continue;
+        }
 
-        he.curve = candidate;
-        he.twin.curve = candidate.reverse();
+        finalCurves.push(candidate);
     }
+
+    return finalCurves;
 }
 
 const defaultTabPolicy: TabPolicy = () => true;
@@ -91,8 +123,8 @@ function endpointsMatch(candidate: Curve, original: Curve): boolean {
  *
  * Self-crossings (the bump folding back through the parent edge) are
  * NOT checked here. Such fold-backs are allowed to materialise as
- * extra tiny faces in the topology and are absorbed downstream by
- * the auto-group pass.
+ * extra tiny faces in the topology built by the second DCEL pass,
+ * and are absorbed downstream by the auto-group pass.
  */
 function introducesNewCrossing(
     candidate: Curve,

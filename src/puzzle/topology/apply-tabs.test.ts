@@ -2,18 +2,18 @@
  * Tests for the per-edge tab application harness.
  *
  * The harness must:
- * - skip border edges (one side is the outer face)
+ * - skip border edges (one side is the outer face) by emitting their
+ *   original sub-curve into the final cut set unchanged
  * - call the tab generator once per eligible half-edge pair
- *   (each shared edge counted once, both sides updated)
+ *   (each shared edge counted once)
  * - reject candidates that introduce new crossings against
- *   other edge curves
- * - leave edge geometry unchanged if no candidate is acceptable
- * - preserve graph topology (vertices, half-edges, faces are
- *   unchanged in count and connectivity)
+ *   other edge curves, falling back to the original sub-curve
+ * - return one curve per twin pair in the final cut set
  *
  * Tabs whose bump folds back through their own parent edge are NOT
- * rejected — those self-intersections produce additional small faces
- * in the topology and are absorbed downstream by the adaptive
+ * rejected — those self-intersections are intended to materialise as
+ * extra small faces in a second `buildDCEL` pass run on the returned
+ * cut set, and are then absorbed downstream by the adaptive
  * auto-grouping pass in the topology generator.
  */
 
@@ -24,17 +24,28 @@ import { applyTabs } from './apply-tabs.js';
 import type { TabGenerator } from './plugin-types.js';
 
 describe('applyTabs', () => {
-    it('preserves topology — same vertex/edge/face counts after application', () => {
+    it('returns one curve per twin pair (4 internal + 4 border = 8 curves for a 2×2 grid)', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
-        const verticesBefore = graph.vertices.length;
-        const halfEdgesBefore = graph.halfEdges.length;
-        const facesBefore = graph.faces.length;
 
-        applyTabs(graph, makeFlatTabGenerator(), makeSeededRandom(1));
+        const result = applyTabs(graph, makeFlatTabGenerator(), makeSeededRandom(1));
 
-        expect(graph.vertices).toHaveLength(verticesBefore);
-        expect(graph.halfEdges).toHaveLength(halfEdgesBefore);
-        expect(graph.faces).toHaveLength(facesBefore);
+        // A 2×2 grid yields 4 cells with 12 half-edge pairs total
+        // (4 outer borders split into 8 segments by the inner cross,
+        // plus 4 internal edges from the inner cross). Each twin pair
+        // produces exactly one entry in the final cut set.
+        const expectedPairs = graph.halfEdges.length / 2;
+        expect(result).toHaveLength(expectedPairs);
+    });
+
+    it('rebuilds an equivalent topology when fed back into buildDCEL', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+
+        const result = applyTabs(graph, makeFlatTabGenerator(), makeSeededRandom(1));
+        const rebuilt = buildDCEL({ curves: result });
+
+        // Flat-tab generator emits no candidate, so all sub-curves are
+        // originals. Pass 2 should yield the same face count as pass 1.
+        expect(rebuilt.faces.length).toBe(graph.faces.length);
     });
 
     it('skips border edges (no tab applied where one side is the outer face)', () => {
@@ -48,14 +59,15 @@ describe('applyTabs', () => {
 
         // 2x2 grid: 4 cells, internal edges = 4 (2 horiz + 2 vert,
         // each as a single shared edge after dedup). The outer-facing
-        // border edges should not be visited.
+        // border edges should not invoke the generator.
         // Each internal shared edge is visited ONCE (not once per
         // half-edge), so calls = 4.
         expect(calls).toBe(4);
     });
 
     it('rejects a tab candidate that crosses another edge', () => {
-        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+        const baseCurves = simpleGridCurves(2, 2);
+        const graph = buildDCEL({ curves: baseCurves });
 
         // A "bad" generator that always returns a curve protruding
         // far enough to cross adjacent edges.
@@ -77,15 +89,20 @@ describe('applyTabs', () => {
             },
         };
 
-        // Snapshot one half-edge's curve before; expect it unchanged after
+        // Find a representative internal half-edge curve before tab
+        // application; expect the same Curve reference to appear in
+        // the returned cut set (rejected → original emitted).
         const internalEdge = graph.halfEdges.find(he =>
             !he.face?.isOuter && !he.twin.face?.isOuter,
         )!;
-        const curveBefore = internalEdge.curve;
+        const originalCurve = internalEdge.curve;
 
-        applyTabs(graph, badGenerator, makeSeededRandom(1));
+        const result = applyTabs(graph, badGenerator, makeSeededRandom(1));
 
-        expect(internalEdge.curve).toBe(curveBefore);
+        // All bad-candidate curves are rejected, so every internal
+        // sub-curve in the result is one of the originals from the
+        // graph.
+        expect(result).toContain(originalCurve);
     });
 
     it('honors a custom TabPolicy that filters by length', () => {
@@ -146,11 +163,13 @@ describe('applyTabs', () => {
         const internalEdge = graph.halfEdges.find(he =>
             !he.face?.isOuter && !he.twin.face?.isOuter,
         )!;
-        const curveBefore = internalEdge.curve;
+        const originalCurve = internalEdge.curve;
 
-        applyTabs(graph, goodGenerator, makeSeededRandom(1));
+        const result = applyTabs(graph, goodGenerator, makeSeededRandom(1));
 
-        expect(internalEdge.curve).not.toBe(curveBefore);
+        // The accepted candidates replace the original sub-curves, so
+        // the original Curve reference should NOT appear in the result.
+        expect(result).not.toContain(originalCurve);
     });
 
     it('accepts a normal one-sided tab bump (sanity check)', () => {
@@ -186,11 +205,58 @@ describe('applyTabs', () => {
         const internalEdge = graph.halfEdges.find(he =>
             !he.face?.isOuter && !he.twin.face?.isOuter,
         )!;
-        const curveBefore = internalEdge.curve;
+        const originalCurve = internalEdge.curve;
 
-        applyTabs(graph, tabGenerator, makeSeededRandom(1));
+        const result = applyTabs(graph, tabGenerator, makeSeededRandom(1));
 
-        expect(internalEdge.curve).not.toBe(curveBefore);
+        expect(result).not.toContain(originalCurve);
+    });
+
+    it('tab self-crossing produces an additional face after a second buildDCEL pass', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+        const facesBefore = graph.faces.filter(f => !f.isOuter).length;
+
+        // A synthetic candidate whose bump dips back through the
+        // parent line: start → reach out perpendicular, then dive
+        // BACK across the chord so the curve self-intersects, then
+        // return to the endpoint. The intersection point is not at
+        // either endpoint, so the second DCEL pass picks it up as a
+        // new vertex and splits the chord into multiple faces.
+        const foldBackGenerator: TabGenerator = {
+            id: 'fold-back',
+            generate: (edge) => {
+                const start = edge.start;
+                const end = edge.end;
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const tx = dx / len, ty = dy / len;
+                const nx = -ty, ny = tx;
+                const at = (along: number, perp: number) => ({
+                    x: start.x + tx * along + nx * perp,
+                    y: start.y + ty * along + ny * perp,
+                });
+                // Path goes UP, then crosses BACK across the chord
+                // (positive perp), then returns up to the endpoint —
+                // creating a loop that self-intersects.
+                return Curve.fromBezierPath([
+                    at(0, 0),
+                    at(0.2 * len, -30), at(0.3 * len, -30), at(0.4 * len, 0),
+                    at(0.45 * len, 20), at(0.55 * len, 20), at(0.6 * len, 0),
+                    at(0.7 * len, -30), at(0.8 * len, -30), at(1.0 * len, 0),
+                ]);
+            },
+        };
+
+        const finalCurves = applyTabs(graph, foldBackGenerator, makeSeededRandom(1));
+        const rebuilt = buildDCEL({ curves: finalCurves });
+        const facesAfter = rebuilt.faces.filter(f => !f.isOuter).length;
+
+        // The second DCEL pass should see each self-crossing as a new
+        // vertex, splitting each tab-decorated edge into additional
+        // sub-faces. A 2×2 grid has 4 internal edges; even one of
+        // them folding back must add at least one face.
+        expect(facesAfter).toBeGreaterThan(facesBefore);
     });
 });
 

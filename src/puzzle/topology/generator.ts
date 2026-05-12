@@ -1,12 +1,22 @@
 /**
  * Topology-driven puzzle generator.
  *
- * Single-pass pipeline:
+ * Two-pass pipeline:
  *   1. BaseCutGenerator → input cuts (Curves)
- *   2. buildDCEL → topology graph (single intersection pass)
- *   3. applyTabs → per-edge tab application with collision rejection
- *   4. facesToPieceDefinitions → PieceDefinition[]
- *   5. composePuzzle → final Piece[]
+ *   2. buildDCEL (pass 1) → topology graph used to identify shared edges
+ *   3. applyTabs → final cut set (tab-decorated sub-curves for shared
+ *      edges, originals for border edges and rejected tabs)
+ *   4. buildDCEL (pass 2) → final topology, including any extra faces
+ *      introduced by tab self-crossings (fold-back islands)
+ *   5. facesToPieceDefinitions → PieceDefinition[]
+ *   6. composePuzzle → final Piece[]
+ *
+ * Two passes avoid the legacy multi-pass drift bug (which Plan 1 first
+ * fixed): each `buildDCEL` call builds topology and geometry together
+ * from a single self-consistent cut set. No state is shared between
+ * passes — pass 2 starts fresh from a new, richer cut set and inherits
+ * none of pass 1's topology decisions. Tab self-crossings therefore
+ * become real faces, which the auto-group pass downstream can absorb.
  *
  * The base-cut and tab generators are looked up from the registry by
  * id, so the same code path serves the sine grid, Venn diagrams, and
@@ -134,17 +144,29 @@ export function generateTopologyPuzzle(
         })),
     });
 
-    // 2. Build the topology graph in a single intersection pass.
-    const graph = buildDCEL({ curves });
+    // 2. Build the topology graph (pass 1). Used purely to identify
+    //    shared edges as input to applyTabs.
+    const initialGraph = buildDCEL({ curves });
 
-    // 3. Apply tabs per edge with collision rejection. The graph's
-    //    topology is unchanged — only edge curves are swapped.
+    // 3. Apply tabs per edge with collision rejection. Returns the
+    //    final cut set: tab-decorated sub-curves for accepted internal
+    //    edges, original sub-curves for border edges and rejected
+    //    candidates. Self-crossings (tab fold-backs) are intentionally
+    //    NOT rejected — they will materialise as real topology in pass 2.
+    let finalCurves = curves;
     if (tabId !== 'none') {
         const tabGenerator = getTabGenerator(tabId);
-        applyTabs(graph, tabGenerator, random, { tabConfig: config?.tabConfig });
+        finalCurves = applyTabs(initialGraph, tabGenerator, random, {
+            tabConfig: config?.tabConfig,
+        });
     }
 
-    // 4. Faces → piece definitions. Tiny faces are not merged here —
+    // 4. Build the topology graph (pass 2) on the post-tab cut set.
+    //    Any tab self-crossings now become real faces (small fold-back
+    //    islands) that the auto-group pass can absorb.
+    const graph = buildDCEL({ curves: finalCurves });
+
+    // 5. Faces → piece definitions. Tiny faces are not merged here —
     //    the auto-group pass below handles them by gluing them into
     //    starting PieceGroups instead of mutating the DCEL.
     const computeArea = (face: { outerEdge: HalfEdge }) => {
@@ -164,7 +186,7 @@ export function generateTopologyPuzzle(
 
     diagnostics.log('pieces', `Generated ${pieceDefs.length} piece definitions`);
 
-    // 5. Auto-group sub-threshold pieces. We compute area/adjacency from
+    // 6. Auto-group sub-threshold pieces. We compute area/adjacency from
     //    the piece definitions (rather than the DCEL faces directly) so
     //    the auto-group pass operates on the same identifiers callers
     //    will see. Adjacency follows mate relationships across all loops
@@ -209,7 +231,7 @@ export function generateTopologyPuzzle(
         );
     }
 
-    // 6. Compose final pieces. Tabs (when enabled) are already in the
+    // 7. Compose final pieces. Tabs (when enabled) are already in the
     //    edge geometry, so disable the composition layer's own tab
     //    logic.
     const pieces = composePuzzle(pieceDefs, classicTabTemplate, random, { disableTabs: true });
