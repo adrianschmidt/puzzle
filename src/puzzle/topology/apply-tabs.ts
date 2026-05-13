@@ -9,17 +9,22 @@
  *
  * For each shared internal half-edge pair (skipping border edges where
  * one side is the outer face), the harness asks the TabGenerator for a
- * candidate curve. The candidate's endpoints must match the original
- * edge — the framework checks this and rejects mismatches. The
- * candidate is then checked against every OTHER edge in the graph for
- * crossings; if any crossing would be introduced, the candidate is
- * rejected and the original (flat) sub-curve is emitted instead.
+ * candidate DECOMPOSITION — an array of curves whose combined
+ * endpoints match the original edge (first.start, last.end). The
+ * harness checks the combined endpoints and the crossing constraint
+ * against every OTHER edge in the graph; if any crossing would be
+ * introduced, the candidate is rejected and the original (flat)
+ * sub-curve is emitted instead.
  *
- * Self-crossings (the bump folding back through the parent edge) are
- * NOT rejected here — they are intended to materialise as additional
- * topology in the second DCEL pass, where the existing auto-group
- * pass absorbs the resulting tiny islands into their neighbours via
- * the adaptive minPieceArea threshold.
+ * On acceptance, each curve in the decomposition is emitted as a
+ * SEPARATE entry in the final cut set. This is essential for
+ * fold-back detection: `buildDCEL`'s intersection finder only
+ * compares DISTINCT input curves (j > i), so a single joined curve
+ * hides its self-intersections. Emitting `[before, tab, after]` as
+ * three cuts lets the second pass see the tab ↔ before/after
+ * crossings as ordinary cross-curve intersections, which split into
+ * extra island faces that the auto-group pass downstream then
+ * absorbs via the adaptive minPieceArea threshold.
  *
  * Border half-edges contribute their original sub-curves unchanged.
  * Twin half-edges contribute nothing extra (each shared edge is
@@ -87,7 +92,7 @@ export function applyTabs(
         }
 
         const candidate = generator.generate(he.curve, random, tabConfig);
-        if (!candidate) {
+        if (!candidate || candidate.length === 0) {
             finalCurves.push(he.curve);
             continue;
         }
@@ -102,7 +107,11 @@ export function applyTabs(
             continue;
         }
 
-        finalCurves.push(candidate);
+        // Accepted: emit each piece of the decomposition as its own
+        // cut. The second DCEL pass then sees any tab-on-before /
+        // tab-on-after self-intersections as ordinary cross-curve
+        // crossings and splits them into real island faces.
+        for (const piece of candidate) finalCurves.push(piece);
     }
 
     return finalCurves;
@@ -110,29 +119,38 @@ export function applyTabs(
 
 const defaultTabPolicy: TabPolicy = () => true;
 
-function endpointsMatch(candidate: Curve, original: Curve): boolean {
-    const ds = pointDist(candidate.start, original.start);
-    const de = pointDist(candidate.end, original.end);
+/**
+ * The combined endpoints of the decomposition (first piece's start,
+ * last piece's end) must match the original edge endpoints.
+ */
+function endpointsMatch(candidate: Curve[], original: Curve): boolean {
+    const first = candidate[0];
+    const last = candidate[candidate.length - 1];
+    const ds = pointDist(first.start, original.start);
+    const de = pointDist(last.end, original.end);
     return ds < ENDPOINT_TOLERANCE && de < ENDPOINT_TOLERANCE;
 }
 
 /**
- * Returns true if the candidate curve crosses any OTHER edge in the
- * graph at a point that isn't already a shared endpoint of the
- * original edge.
+ * Returns true if any piece of the candidate decomposition crosses
+ * any OTHER edge in the graph at a point that isn't already a
+ * shared endpoint of the original edge.
  *
- * Self-crossings (the bump folding back through the parent edge) are
- * NOT checked here. Such fold-backs are allowed to materialise as
- * extra tiny faces in the topology built by the second DCEL pass,
- * and are absorbed downstream by the auto-group pass.
+ * The check is performed piecewise — semantically equivalent to
+ * checking the combined tab-decorated curve against each neighbour,
+ * but cheaper than reassembling. Intra-decomposition crossings
+ * (e.g. tab ↔ before, the fold-back case) are NOT checked here —
+ * those are the whole point of emitting the decomposition as
+ * separate cuts, so the second DCEL pass can materialise them as
+ * real topology that the auto-group pass downstream absorbs.
  */
 function introducesNewCrossing(
-    candidate: Curve,
+    candidate: Curve[],
     self: HalfEdge,
     graph: TopologyGraph,
 ): boolean {
-    const candStart = candidate.start;
-    const candEnd = candidate.end;
+    const candStart = candidate[0].start;
+    const candEnd = candidate[candidate.length - 1].end;
 
     // Build the set of half-edges to check. Each twin pair is
     // checked once; we skip self and self.twin (the candidate IS
@@ -144,13 +162,15 @@ function introducesNewCrossing(
         seen.add(he.twin.id);
         if (he.id === self.id || he.id === self.twin.id) continue;
 
-        const intersections = candidate.intersect(he.curve);
-        for (const ix of intersections) {
-            const dStart = pointDist(ix.point, candStart);
-            const dEnd = pointDist(ix.point, candEnd);
-            if (dStart < CROSSING_ENDPOINT_TOLERANCE) continue;
-            if (dEnd < CROSSING_ENDPOINT_TOLERANCE) continue;
-            return true;
+        for (const piece of candidate) {
+            const intersections = piece.intersect(he.curve);
+            for (const ix of intersections) {
+                const dStart = pointDist(ix.point, candStart);
+                const dEnd = pointDist(ix.point, candEnd);
+                if (dStart < CROSSING_ENDPOINT_TOLERANCE) continue;
+                if (dEnd < CROSSING_ENDPOINT_TOLERANCE) continue;
+                return true;
+            }
         }
     }
     return false;

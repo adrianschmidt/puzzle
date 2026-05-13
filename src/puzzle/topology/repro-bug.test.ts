@@ -26,10 +26,12 @@ import { generateComposablePuzzle } from '../composable-generator.js';
 import { adaptiveMinAreaThreshold } from './adaptive-threshold.js';
 import type { Edge } from '../../model/types.js';
 
-// 16×12 sine + classic-tab pipeline runs well under vitest's 5s default
-// locally, but slower CI runners occasionally exceed it. Give the heavy
-// composable pipeline tests a generous timeout.
-const HEAVY_PIPELINE_TIMEOUT_MS = 15000;
+// 16×12 sine + classic-tab pipeline runs in ~5–9s locally depending on
+// the config — the tab-decomposition fix in apply-tabs emits 3 curves
+// per accepted tab, roughly tripling the pairwise intersection work in
+// the second DCEL pass. Slower CI runners can take noticeably longer,
+// so the heavy composable pipeline tests need a generous timeout.
+const HEAVY_PIPELINE_TIMEOUT_MS = 30000;
 
 describe('composable: fused-piece regression', () => {
     it('seed=124741785 (low amp / high freq) produces ≥192 pieces at 1080x720', () => {
@@ -121,6 +123,44 @@ describe('composable: tabs-as-cuts produces real fold-back island faces', () => 
             // (4 px²) applies; fold-back islands ride above that and
             // stand alone.
             expect(autoGroups.length).toBe(pieces.length);
+        }, HEAVY_PIPELINE_TIMEOUT_MS);
+    });
+
+    describe('12×8 high-frequency (user-reported repro for tab decomposition fix)', () => {
+        // User-reported repro for the tab-decomposition fix. Before the
+        // fix `applyTabs` emitted each accepted tab as one joined curve
+        // (`joinCurves([before, tab, after])`), so a tab whose bump
+        // folded back through its own before/after slice contained an
+        // intra-curve self-crossing that `buildDCEL`'s pairwise
+        // intersection finder (j > i) never saw — the boundary
+        // appeared as one figure-eight face. Visually those rendered
+        // as islands attached corner-to-corner under SVG
+        // `fill-rule:evenodd`, even though topologically they were a
+        // single face. After the fix, applyTabs emits the
+        // decomposition as three separate cuts, the second DCEL pass
+        // detects tab ↔ before / tab ↔ after crossings as ordinary
+        // cross-curve intersections, and the islands materialise as
+        // real independent faces.
+        const cols = 12, rows = 8, seed = 3935335920;
+        const config = {
+            baseCutGenerator: 'sine',
+            baseCutConfig: { ha: 0.5, hf: 10, va: 0.5, vf: 10 },
+            tabGenerator: 'classic',
+            tabConfig: {},
+        } as const;
+
+        it('produces more pieces than the grid cell count (fold-backs become real faces)', () => {
+            const { pieces } = generateComposablePuzzle(
+                cols, rows, { width: 1080, height: 720 }, seed, config,
+            );
+            // Empirically: 192 pieces with the fix vs 125 without.
+            // Asserting >= 150 catches a regression in which the
+            // tab decomposition is rejoined into a single curve and
+            // fold-back self-crossings stop materialising as faces.
+            expect(pieces.length).toBeGreaterThanOrEqual(150);
+            // Sanity: the grid has 96 cells; we always expect at least
+            // that many real pieces.
+            expect(pieces.length).toBeGreaterThanOrEqual(cols * rows);
         }, HEAVY_PIPELINE_TIMEOUT_MS);
     });
 

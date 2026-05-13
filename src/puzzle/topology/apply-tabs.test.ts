@@ -8,7 +8,10 @@
  *   (each shared edge counted once)
  * - reject candidates that introduce new crossings against
  *   other edge curves, falling back to the original sub-curve
- * - return one curve per twin pair in the final cut set
+ * - on acceptance, emit each piece of the returned decomposition as
+ *   a separate entry in the final cut set (so the second DCEL pass
+ *   can detect intra-decomposition fold-back crossings as ordinary
+ *   cross-curve intersections)
  *
  * Tabs whose bump folds back through their own parent edge are NOT
  * rejected — those self-intersections are intended to materialise as
@@ -24,15 +27,18 @@ import { applyTabs } from './apply-tabs.js';
 import type { TabGenerator } from './plugin-types.js';
 
 describe('applyTabs', () => {
-    it('returns one curve per twin pair (4 internal + 4 border = 8 curves for a 2×2 grid)', () => {
+    it('with a flat generator (null tabs), emits one curve per twin pair', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
         const result = applyTabs(graph, makeFlatTabGenerator(), makeSeededRandom(1));
 
         // A 2×2 grid yields 4 cells with 12 half-edge pairs total
         // (4 outer borders split into 8 segments by the inner cross,
-        // plus 4 internal edges from the inner cross). Each twin pair
-        // produces exactly one entry in the final cut set.
+        // plus 4 internal edges from the inner cross). With the
+        // flat generator every internal pair falls back to its
+        // original sub-curve — one entry per twin pair. (An
+        // accepting generator with a multi-piece decomposition would
+        // emit MORE than one entry per accepted internal pair.)
         const expectedPairs = graph.halfEdges.length / 2;
         expect(result).toHaveLength(expectedPairs);
     });
@@ -77,7 +83,7 @@ describe('applyTabs', () => {
             generate: (edge) => {
                 const mid = edge.pointAt(0.5);
                 // build a wedge that pokes way out to (mid.x, mid.y + 1000)
-                return Curve.fromBezierPath([
+                return [Curve.fromBezierPath([
                     edge.start,
                     edge.start,
                     { x: mid.x, y: mid.y + protrusion },
@@ -85,7 +91,7 @@ describe('applyTabs', () => {
                     { x: mid.x, y: mid.y + protrusion },
                     edge.end,
                     edge.end,
-                ]);
+                ])];
             },
         };
 
@@ -148,7 +154,7 @@ describe('applyTabs', () => {
                 const len = Math.sqrt(dx * dx + dy * dy);
                 const px = -dy / len * 1; // 1 px perpendicular
                 const py = dx / len * 1;
-                return Curve.fromBezierPath([
+                return [Curve.fromBezierPath([
                     start,
                     start,
                     { x: mid.x + px, y: mid.y + py },
@@ -156,7 +162,7 @@ describe('applyTabs', () => {
                     { x: mid.x + px, y: mid.y + py },
                     end,
                     end,
-                ]);
+                ])];
             },
         };
 
@@ -170,6 +176,52 @@ describe('applyTabs', () => {
         // The accepted candidates replace the original sub-curves, so
         // the original Curve reference should NOT appear in the result.
         expect(result).not.toContain(originalCurve);
+    });
+
+    it('emits each piece of an accepted decomposition as a separate cut', () => {
+        // Single internal edge (2×1 grid: only one shared edge).
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 1) });
+
+        // Generator returns a 3-piece decomposition of the edge into
+        // before/middle/after segments along the chord. The middle
+        // piece is a one-pixel bump perpendicular to the edge so the
+        // crossing-check accepts it. The exact shape doesn't matter —
+        // the test is that the final cut set grows by 2 entries
+        // (3 pieces emitted instead of 1).
+        const threePieceGenerator: TabGenerator = {
+            id: 'three-piece',
+            generate: (edge) => {
+                const start = edge.start;
+                const end = edge.end;
+                const dx = end.x - start.x;
+                const dy = end.y - start.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const tx = dx / len, ty = dy / len;
+                const nx = -ty, ny = tx;
+                const at = (along: number, perp: number) => ({
+                    x: start.x + tx * along + nx * perp,
+                    y: start.y + ty * along + ny * perp,
+                });
+                return [
+                    Curve.line(at(0, 0), at(0.3 * len, 0)),
+                    Curve.fromBezierPath([
+                        at(0.3 * len, 0),
+                        at(0.4 * len, -1), at(0.6 * len, -1),
+                        at(0.7 * len, 0),
+                    ]),
+                    Curve.line(at(0.7 * len, 0), at(1 * len, 0)),
+                ];
+            },
+        };
+
+        const flatResult = applyTabs(graph, makeFlatTabGenerator(), makeSeededRandom(1));
+        const result = applyTabs(graph, threePieceGenerator, makeSeededRandom(1));
+
+        // The 2×1 grid has exactly one internal shared edge. The
+        // three-piece generator replaces that single entry with 3
+        // entries, so the final cut set grows by exactly 2 entries
+        // relative to the flat baseline.
+        expect(result.length).toBe(flatResult.length + 2);
     });
 
     it('accepts a normal one-sided tab bump (sanity check)', () => {
@@ -192,13 +244,13 @@ describe('applyTabs', () => {
                     x: start.x + tx * along + nx * perp,
                     y: start.y + ty * along + ny * perp,
                 });
-                return Curve.fromBezierPath([
+                return [Curve.fromBezierPath([
                     at(0, 0),
                     at(0.05 * len, 0), at(0.15 * len, 0), at(0.2 * len, 0),
                     // Bump: stays above the edge (perp = -10).
                     at(0.3 * len, -10), at(0.7 * len, -10), at(0.8 * len, 0),
                     at(0.85 * len, 0), at(0.95 * len, 0), at(1.0 * len, 0),
-                ]);
+                ])];
             },
         };
 
@@ -212,16 +264,17 @@ describe('applyTabs', () => {
         expect(result).not.toContain(originalCurve);
     });
 
-    it('tab self-crossing produces an additional face after a second buildDCEL pass', () => {
+    it('tab decomposition with a fold-back produces an additional face after a second buildDCEL pass', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
         const facesBefore = graph.faces.filter(f => !f.isOuter).length;
 
-        // A synthetic candidate whose bump dips back through the
-        // parent line: start → reach out perpendicular, then dive
-        // BACK across the chord so the curve self-intersects, then
-        // return to the endpoint. The intersection point is not at
-        // either endpoint, so the second DCEL pass picks it up as a
-        // new vertex and splits the chord into multiple faces.
+        // A synthetic decomposition mirroring the classic tab shape's
+        // failure mode: the `before` slice runs along the chord, the
+        // tab itself dives BACK across the chord (so the tab body
+        // intersects `before`), then the `after` slice continues
+        // along the chord. The intersection between `tab` and
+        // `before` is a real cross-curve crossing that the second
+        // DCEL pass sees and splits into a new face.
         const foldBackGenerator: TabGenerator = {
             id: 'fold-back',
             generate: (edge) => {
@@ -236,15 +289,20 @@ describe('applyTabs', () => {
                     x: start.x + tx * along + nx * perp,
                     y: start.y + ty * along + ny * perp,
                 });
-                // Path goes UP, then crosses BACK across the chord
-                // (positive perp), then returns up to the endpoint —
-                // creating a loop that self-intersects.
-                return Curve.fromBezierPath([
-                    at(0, 0),
-                    at(0.2 * len, -30), at(0.3 * len, -30), at(0.4 * len, 0),
-                    at(0.45 * len, 20), at(0.55 * len, 20), at(0.6 * len, 0),
-                    at(0.7 * len, -30), at(0.8 * len, -30), at(1.0 * len, 0),
+                // `before`: chord from 0 to 0.4
+                const before = Curve.line(at(0, 0), at(0.4 * len, 0));
+                // `tab`: dives DOWN to perp=+30 (the opposite side from
+                // the "up" we'd normally expect), so when the tab body
+                // sweeps it crosses the chord-aligned `before` slice.
+                const tab = Curve.fromBezierPath([
+                    at(0.4 * len, 0),
+                    at(0.3 * len, 30), at(0.2 * len, 30), at(0.3 * len, 0),
+                    at(0.4 * len, -10), at(0.5 * len, -10),
+                    at(0.6 * len, 0),
                 ]);
+                // `after`: chord from 0.6 to 1.0
+                const after = Curve.line(at(0.6 * len, 0), at(1.0 * len, 0));
+                return [before, tab, after];
             },
         };
 
@@ -252,10 +310,10 @@ describe('applyTabs', () => {
         const rebuilt = buildDCEL({ curves: finalCurves });
         const facesAfter = rebuilt.faces.filter(f => !f.isOuter).length;
 
-        // The second DCEL pass should see each self-crossing as a new
-        // vertex, splitting each tab-decorated edge into additional
-        // sub-faces. A 2×2 grid has 4 internal edges; even one of
-        // them folding back must add at least one face.
+        // Each accepted tab contributes 3 entries (before, tab, after)
+        // to the cut set. The tab piece doubles back through `before`,
+        // a cross-curve intersection the second DCEL pass picks up as
+        // a new vertex and splits into an extra face.
         expect(facesAfter).toBeGreaterThan(facesBefore);
     });
 });

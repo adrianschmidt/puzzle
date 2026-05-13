@@ -11,7 +11,7 @@ import type { TabGenerator } from './plugin-types.js';
 export const noneTabGenerator: TabGenerator = {
     id: 'none',
 
-    generate(_edge: Curve, _random: () => number, _config: unknown): Curve | null {
+    generate(_edge: Curve, _random: () => number, _config: unknown): Curve[] | null {
         return null;
     },
 };
