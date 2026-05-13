@@ -95,10 +95,20 @@ const FALLBACK_IMAGE_SIZE = { width: 800, height: 600 };
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
-// Suppress the browser context menu on the puzzle container.
+// Suppress the browser context menu on the puzzle table only.
 // On touch devices (especially iPad), long-pressing a piece would
-// otherwise trigger the context menu, interfering with drag.
-app.addEventListener('contextmenu', (e) => e.preventDefault());
+// otherwise trigger the context menu, interfering with drag. We
+// can't target the table directly here because it's created later
+// by renderer.init; delegate from #app and check the event target
+// so context menus inside the info modal / debug panels still
+// reach the browser (otherwise the user can't copy share links
+// or reproduction parameters via long-press).
+app.addEventListener('contextmenu', (e) => {
+    const target = e.target as Element | null;
+    if (target?.closest('[data-puzzle-table]')) {
+        e.preventDefault();
+    }
+});
 
 initAnalytics();
 
