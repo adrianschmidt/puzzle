@@ -21,6 +21,7 @@ import { RotationFocus } from './rotation-focus.js';
 import type { Renderer } from '../renderer/types.js';
 import type { GameState, PieceGroup } from '../model/types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
+import { loadOffsetDragPreference } from '../ui/offset-drag.js';
 
 vi.mock('../ui/offset-drag.js', () => ({
     loadOffsetDragPreference: vi.fn(() => false),
@@ -410,6 +411,72 @@ describe('setupInteraction', () => {
             container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));
 
             expect(rotationFocus.focusedGroupId).toBeNull();
+        });
+    });
+
+    describe('offset drag', () => {
+        it('does NOT apply when dragging a multi-selection', () => {
+            vi.mocked(loadOffsetDragPreference).mockReturnValue(true);
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const selectionManager = new SelectionManager();
+            selectionManager.toolActive = true;
+
+            // Two single-piece groups, both selected. Dragging group 7 also
+            // moves group 8, so this is not a single-piece drag and the
+            // offset must not be applied.
+            const group7 = makeGroup(7, [3], { x: 0, y: 0 });
+            const group8 = makeGroup(8, [4], { x: 0, y: 0 });
+            selectionManager.select(7);
+            selectionManager.select(8);
+            const state = makeState([group7, group8]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                selectionManager,
+            });
+
+            const pieceTarget = { _pieceId: 3 };
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 })); // promote
+
+            expect(group7.position.y).toBe(0);
+        });
+
+        it('still applies when the multi-select tool has only one group selected', () => {
+            vi.mocked(loadOffsetDragPreference).mockReturnValue(true);
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const selectionManager = new SelectionManager();
+            selectionManager.toolActive = true;
+
+            const group7 = makeGroup(7, [3], { x: 0, y: 0 });
+            selectionManager.select(7);
+            const state = makeState([group7]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                selectionManager,
+            });
+
+            const pieceTarget = { _pieceId: 3 };
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 })); // promote
+
+            // OFFSET_DRAG_SCREEN_PX = 50, shifted upward (negative Y).
+            expect(group7.position.y).toBe(-50);
         });
     });
 });

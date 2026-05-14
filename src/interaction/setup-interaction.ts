@@ -96,6 +96,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     function applyOffsetDragIfSinglePiece(groupId: number): void {
         const group = tryGetGroup(getState(), groupId);
         if (!group || group.pieces.size !== 1) return;
+        if (expandToSelection(groupId).length > 1) return;
         if (!loadOffsetDragPreference()) return;
         const offset = deltaToWorld({ x: 0, y: -OFFSET_DRAG_SCREEN_PX });
         moveGroup(group, offset);
