@@ -136,15 +136,54 @@ export function buildDCEL(cutSet: CutSet): TopologyGraph {
     // Step 2b: Split closed curves (start === end) at t=0.5 to create two half-edges
     segments = splitClosedCurves(segments);
 
-    // Step 3: Build vertices with merging
-    const vertexMap = new VertexPool();
-    const halfEdges: HalfEdge[] = [];
-    let nextHalfEdgeId = 0;
+    // Step 3: Build vertices with union-find clustering.
+    //
+    // Each segment contributes two endpoints. We cluster all endpoints by
+    // world-space proximity (transitive: chained merges, not first-match)
+    // so a bezier-js near-tangent crossing that produces a cloud of
+    // detections collapses to a single topological vertex even when the
+    // cloud's diameter slightly exceeds VERTEX_MERGE_TOLERANCE. Without
+    // transitive clustering, the cloud collapses to an *odd* number of
+    // vertices and the two diagonal cells around the nominal crossing
+    // fuse into one face (because each effective crossing flips the
+    // "side" relationship between the two curves).
+    const endpoints: Point[] = [];
+    for (const seg of segments) endpoints.push(seg.start, seg.end);
+
+    const parent = endpoints.map((_, i) => i);
+    const find = (i: number): number => {
+        while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; }
+        return i;
+    };
+    for (let i = 0; i < endpoints.length; i++) {
+        for (let j = i + 1; j < endpoints.length; j++) {
+            if (pointDist(endpoints[i], endpoints[j]) < VERTEX_MERGE_TOLERANCE) {
+                const ri = find(i), rj = find(j);
+                if (ri !== rj) parent[ri] = rj;
+            }
+        }
+    }
+
+    const vertexByRoot = new Map<number, Vertex>();
+    let nextVertexId = 0;
+    for (let i = 0; i < endpoints.length; i++) {
+        const root = find(i);
+        if (!vertexByRoot.has(root)) {
+            vertexByRoot.set(root, {
+                id: nextVertexId++,
+                position: { x: endpoints[i].x, y: endpoints[i].y },
+                outgoing: null,
+            });
+        }
+    }
 
     // Step 4: Create twin half-edges for each segment
-    for (const segment of segments) {
-        const originVertex = vertexMap.getOrCreate(segment.start);
-        const targetVertex = vertexMap.getOrCreate(segment.end);
+    const halfEdges: HalfEdge[] = [];
+    let nextHalfEdgeId = 0;
+    for (let s = 0; s < segments.length; s++) {
+        const segment = segments[s];
+        const originVertex = vertexByRoot.get(find(2 * s))!;
+        const targetVertex = vertexByRoot.get(find(2 * s + 1))!;
 
         // Skip zero-length segments
         if (originVertex === targetVertex) continue;
@@ -162,7 +201,7 @@ export function buildDCEL(cutSet: CutSet): TopologyGraph {
         if (!targetVertex.outgoing) targetVertex.outgoing = he2;
     }
 
-    const vertices = vertexMap.all();
+    const vertices = Array.from(vertexByRoot.values());
 
     // Step 5: At each vertex, sort outgoing half-edges by angle and link next pointers
     linkHalfEdges(vertices, halfEdges);
@@ -215,7 +254,33 @@ function findAllIntersections(
             if (skipPairs.has(`${i},${j}`)) continue;
 
             const intersections = curves[i].intersect(curves[j]);
+            const aStart = curves[i].start, aEnd = curves[i].end;
+            const bStart = curves[j].start, bEnd = curves[j].end;
             for (const ix of intersections) {
+                // Skip shared-endpoint "crossings": when two curves meet at
+                // both their endpoints (a chain connection like a tab
+                // anchor where `before.end == tab.start`, or two curves
+                // that both start at the same pass-1 vertex), bezier-js
+                // reports the meeting point as an intersection. This is
+                // not a crossing — the curves continue as a chain or
+                // diverge from a shared point, no side swap. Counting it
+                // as a crossing flips the parity of effective vertices
+                // between the pair and triggers diagonal-cell fusion in
+                // the surrounding topology.
+                //
+                // Use world-space proximity (VERTEX_MERGE_TOLERANCE) rather
+                // than parametric t-tolerance: at a near-tangent shared
+                // endpoint, bezier-js can report the intersection with
+                // tSelf/tOther slightly past 0 or 1 (e.g. 0.0013) where a
+                // tight parametric filter misses it but the point is still
+                // ~0.1 px from the natural endpoint.
+                const nearSelfEnd =
+                    pointDist(ix.point, aStart) < VERTEX_MERGE_TOLERANCE ||
+                    pointDist(ix.point, aEnd) < VERTEX_MERGE_TOLERANCE;
+                const nearOtherEnd =
+                    pointDist(ix.point, bStart) < VERTEX_MERGE_TOLERANCE ||
+                    pointDist(ix.point, bEnd) < VERTEX_MERGE_TOLERANCE;
+                if (nearSelfEnd && nearOtherEnd) continue;
                 results.push({
                     curveIndexA: i,
                     curveIndexB: j,
@@ -474,36 +539,6 @@ function splitClosedCurves(segments: Curve[]): Curve[] {
     }
 
     return result;
-}
-
-// ---------------------------------------------------------------------------
-// Vertex pool with tolerance-based merging
-// ---------------------------------------------------------------------------
-
-class VertexPool {
-    private vertices: Vertex[] = [];
-    private nextId = 0;
-
-    getOrCreate(point: Point): Vertex {
-        // Find existing vertex within tolerance
-        for (const v of this.vertices) {
-            if (pointDist(v.position, point) < VERTEX_MERGE_TOLERANCE) {
-                return v;
-            }
-        }
-
-        const v: Vertex = {
-            id: this.nextId++,
-            position: { x: point.x, y: point.y },
-            outgoing: null,
-        };
-        this.vertices.push(v);
-        return v;
-    }
-
-    all(): Vertex[] {
-        return this.vertices;
-    }
 }
 
 /**
