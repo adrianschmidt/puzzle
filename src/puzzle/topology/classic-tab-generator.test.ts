@@ -7,25 +7,29 @@ describe('classicTabGenerator', () => {
         expect(classicTabGenerator.id).toBe('classic');
     });
 
-    it('produces a curve with the same start and end as the input edge', () => {
+    it('produces a [before, tab, after] decomposition whose combined endpoints match the input edge', () => {
         const random = makeSeededRandom(42);
         const edge = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const result = classicTabGenerator.generate(edge, random, {});
 
         expect(result).not.toBeNull();
-        expect(result!.start.x).toBeCloseTo(edge.start.x, 6);
-        expect(result!.start.y).toBeCloseTo(edge.start.y, 6);
-        expect(result!.end.x).toBeCloseTo(edge.end.x, 6);
-        expect(result!.end.y).toBeCloseTo(edge.end.y, 6);
+        expect(result!).toHaveLength(3);
+        const first = result![0];
+        const last = result![2];
+        expect(first.start.x).toBeCloseTo(edge.start.x, 6);
+        expect(first.start.y).toBeCloseTo(edge.start.y, 6);
+        expect(last.end.x).toBeCloseTo(edge.end.x, 6);
+        expect(last.end.y).toBeCloseTo(edge.end.y, 6);
     });
 
-    it('returns a curve that deviates from a straight line (the tab protrusion)', () => {
+    it('the middle piece (the tab itself) deviates from the straight chord', () => {
         const random = makeSeededRandom(42);
         const edge = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const result = classicTabGenerator.generate(edge, random, {})!;
 
-        // Sample the result and find the maximum perpendicular displacement
-        const samples = result.sample(20);
+        // Sample the tab piece (middle of the decomposition) and find
+        // the maximum perpendicular displacement.
+        const samples = result[1].sample(20);
         const maxAbsY = Math.max(...samples.map(p => Math.abs(p.y)));
         expect(maxAbsY).toBeGreaterThan(5); // tab protrudes meaningfully
     });

@@ -42,14 +42,29 @@ export interface BaseCutGenerator {
  * Produces a tab shape for a single edge.
  *
  * Receives the edge's current curve (the segment between the
- * edge's two vertices) and a seeded PRNG. Returns a candidate
- * curve with the SAME endpoints as the input — the framework
- * enforces this — or null to leave the edge flat.
+ * edge's two vertices) and a seeded PRNG. Returns the tab
+ * candidate as a DECOMPOSITION — an array of curves whose
+ * combined endpoints (the first curve's start, the last curve's
+ * end) match the input edge's endpoints. The framework enforces
+ * this. Return null to leave the edge flat.
+ *
+ * Why a decomposition rather than a single joined curve? The
+ * framework feeds each entry as a separate cut into the second
+ * DCEL pass, so any self-crossings between adjacent pieces of the
+ * decomposition (e.g. a tab's bump folding back through its own
+ * before/after slices) materialise as cross-curve intersections
+ * the second pass can detect. A single joined curve would hide
+ * those intra-curve self-crossings from the intersection finder.
+ *
+ * A generator that doesn't need a decomposition can return a
+ * single-element array `[curve]`; one that declines to decorate
+ * the edge returns `null`.
  *
  * The candidate may protrude outside the original edge's bounding
- * box. The framework checks the candidate against all other edge
- * curves in the graph; if the candidate would introduce a new
- * crossing, the original edge is kept and the candidate discarded.
+ * box. The framework checks the combined candidate against all
+ * other edge curves in the graph; if any piece would introduce a
+ * new crossing with a neighbouring edge, the whole candidate is
+ * rejected and the original (flat) sub-curve emitted instead.
  *
  * The generator does NOT see neighbouring edges or pieces — by
  * design. Tabs that genuinely need to mesh with neighbours are
@@ -59,11 +74,11 @@ export interface TabGenerator {
     /** Stable id for share-link encoding. */
     readonly id: string;
     /**
-     * Generate a tab candidate for the given edge curve.
-     * @returns a curve with the same start/end as `edge`, or null
-     *   to leave the edge flat
+     * Generate a tab candidate decomposition for the given edge curve.
+     * @returns an array of curves whose combined endpoints match
+     *   `edge.start` and `edge.end`, or null to leave the edge flat
      */
-    generate(edge: Curve, random: () => number, config: unknown): Curve | null;
+    generate(edge: Curve, random: () => number, config: unknown): Curve[] | null;
 }
 
 /**

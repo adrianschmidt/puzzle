@@ -8,7 +8,6 @@
 
 import type { Point } from '../../model/types.js';
 import { Curve } from './curve.js';
-import type { BezierSegment } from './curve.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
 import type { BezierPath } from '../composable/bezier-path.js';
@@ -18,14 +17,23 @@ import type { TabGenerator } from './plugin-types.js';
 export const classicTabGenerator: TabGenerator = {
     id: 'classic',
 
-    generate(edge: Curve, random: () => number, _config: unknown): Curve | null {
+    /**
+     * Returns the tab as `[before, tab, after]` — three separate cuts.
+     * Emitting the decomposition (rather than a single joined curve)
+     * lets the second DCEL pass detect tab self-crossings via the
+     * normal cross-curve intersection finder. A tab bump that folds
+     * back through its own before/after slice becomes a `tab` ↔
+     * `before` / `after` intersection, which the second pass picks up
+     * and splits into real island faces.
+     */
+    generate(edge: Curve, random: () => number, _config: unknown): Curve[] | null {
         const placement = computeTabPlacement(edge, DEFAULT_TAB_PLACEMENT, random);
         if (!placement) return null;
 
         const prepared = prepareTab(edge, placement.tCenter, placement.isTab, classicTabTemplate, random);
         if (!prepared) return null;
 
-        return commitTab(prepared);
+        return [prepared.before, prepared.tabCurve, prepared.after];
     },
 };
 
@@ -192,13 +200,6 @@ function prepareTab(
 }
 
 /**
- * Assemble a prepared tab into a single curve.
- */
-function commitTab(prepared: PreparedTab): Curve {
-    return joinCurves([prepared.before, prepared.tabCurve, prepared.after]);
-}
-
-/**
  * Determine if and where to place a tab on an edge segment.
  *
  * @returns { tCenter, isTab } or null if the edge is too short
@@ -224,28 +225,6 @@ function computeTabPlacement(
     const isTab = random() > 0.5;
 
     return { tCenter, isTab };
-}
-
-/**
- * Join multiple curves into a single curve by concatenating segments.
- */
-function joinCurves(curves: Curve[]): Curve {
-    const allSegments: BezierSegment[] = [];
-    for (const c of curves) {
-        for (const seg of c.segments) {
-            const len = Math.sqrt(
-                (seg.p3.x - seg.p0.x) ** 2 + (seg.p3.y - seg.p0.y) ** 2,
-            );
-            if (len < 1e-6) continue;
-            allSegments.push(seg);
-        }
-    }
-
-    if (allSegments.length === 0) {
-        return curves[0];
-    }
-
-    return new Curve(allSegments);
 }
 
 // ---------------------------------------------------------------------------

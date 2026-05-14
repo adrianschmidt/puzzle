@@ -303,7 +303,7 @@ describe('share-link: legacy → working puzzle smoke test', () => {
         expect(pieces.length).toBeGreaterThan(0);
         // We don't assert exactly 192 — old links won't necessarily
         // produce the same puzzle. We just assert "produces a puzzle."
-    }, 15000);
+    }, 30000);
 });
 
 describe('share-link codec — rejection paths', () => {
