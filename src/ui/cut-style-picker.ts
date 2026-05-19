@@ -1,28 +1,29 @@
 /**
  * Cut style picker — lets the player choose the puzzle cut style.
  *
- * Creates a row of style option buttons that can be embedded
- * in the new-game dialog alongside the size picker.
+ * Renders one button per provided option. The caller decides which
+ * options to show (Task 6 will introduce a `getVisibleCutStyleOptions`
+ * helper that filters Composable out on production builds).
  */
 
 import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
+import type { CutStyleOption } from '../game/cut-styles.js';
 
 export interface CutStylePickerOptions {
-    /** Currently selected cut style index. */
-    selectedIndex: number;
-    /** Called when the player selects a style. Receives the option index. */
-    onSelect: (index: number) => void;
+    /** Currently selected cut style id. */
+    selectedCutStyleId: string;
+    /** Options to render. Defaults to all known options. */
+    options?: readonly CutStyleOption[];
+    /** Called when the player selects a style. Receives the option id. */
+    onSelect: (id: string) => void;
 }
 
 /**
  * Create the cut style picker section (title + option buttons).
- *
- * Returns a container element to append to a dialog.
- * When a style is selected, its button gets the selected class
- * and onSelect is called.
  */
-export function createCutStylePicker(options: CutStylePickerOptions): HTMLElement {
-    const { selectedIndex, onSelect } = options;
+export function createCutStylePicker(opts: CutStylePickerOptions): HTMLElement {
+    const { selectedCutStyleId, onSelect } = opts;
+    const options = opts.options ?? CUT_STYLE_OPTIONS;
 
     const section = document.createElement('div');
     section.className = 'cut-style-section';
@@ -37,13 +38,13 @@ export function createCutStylePicker(options: CutStylePickerOptions): HTMLElemen
 
     const buttons: HTMLButtonElement[] = [];
 
-    for (let i = 0; i < CUT_STYLE_OPTIONS.length; i++) {
-        const opt = CUT_STYLE_OPTIONS[i];
+    for (const opt of options) {
         const btn = document.createElement('button');
         btn.className = 'cut-style-option';
         btn.type = 'button';
+        btn.dataset.cutStyleId = opt.id;
 
-        if (i === selectedIndex) {
+        if (opt.id === selectedCutStyleId) {
             btn.classList.add('cut-style-option--selected');
         }
 
@@ -58,15 +59,12 @@ export function createCutStylePicker(options: CutStylePickerOptions): HTMLElemen
         btn.appendChild(label);
         btn.appendChild(desc);
 
-        const index = i;
         btn.addEventListener('click', () => {
-            // Update visual selection
             for (const b of buttons) {
                 b.classList.remove('cut-style-option--selected');
             }
-
             btn.classList.add('cut-style-option--selected');
-            onSelect(index);
+            onSelect(opt.id);
         });
 
         buttons.push(btn);
@@ -74,6 +72,5 @@ export function createCutStylePicker(options: CutStylePickerOptions): HTMLElemen
     }
 
     section.appendChild(grid);
-
     return section;
 }

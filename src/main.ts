@@ -58,7 +58,6 @@ import {
 import {
     loadCutStylePreference,
     saveCutStylePreference,
-    getCutStyleOption,
 } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
 import {
@@ -781,7 +780,7 @@ createNewGameButton({
     getPieceCount: () => gameState.pieces.length,
     onNewGame: () => {
         const preferredSizeId = loadSizePreference();
-        const preferredCutStyleIndex = loadCutStylePreference();
+        const preferredCutStyleId = loadCutStylePreference();
         const savedComposableConfig = loadComposableConfigPreference();
         const savedFractalConfig = loadFractalConfigPreference();
         const savedRotationEnabled = loadRotationEnabledPreference();
@@ -792,7 +791,7 @@ createNewGameButton({
         createNewGameDialog({
             container: app,
             selectedSizeId: preferredSizeId,
-            selectedCutStyleIndex: preferredCutStyleIndex,
+            selectedCutStyleId: preferredCutStyleId,
             savedComposableConfig: savedComposableConfig,
             savedFractalConfig: savedFractalConfig,
             savedRotationEnabled: savedRotationEnabled,
@@ -800,9 +799,9 @@ createNewGameButton({
             savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
             savedVibrant: savedVibrant,
-            onSelect: ({ sizeId, cutStyleIndex, composableConfig, fractalConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
+            onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
                 saveSizePreference(sizeId);
-                saveCutStylePreference(cutStyleIndex);
+                saveCutStylePreference(cutStyleId);
                 if (composableConfig) {
                     saveComposableConfigPreference(composableConfig);
                 }
@@ -815,7 +814,7 @@ createNewGameButton({
                 saveImageCategoryPreference(imageCategory);
                 saveVibrantPreference(vibrant);
                 const option = getSizeOption(sizeId);
-                const cutStyle = getCutStyleOption(cutStyleIndex).id;
+                const cutStyle = cutStyleId as CutStyle;
                 clearSavedState();
                 void startNewGame(
                     toGridSize(option),
@@ -1096,7 +1095,7 @@ void (async () => {
         // First load with no saved game: use the preferred size and cut style
         const preferredSizeId = loadSizePreference();
         const option = getSizeOption(preferredSizeId);
-        const preferredCutStyle = getCutStyleOption(loadCutStylePreference()).id;
+        const preferredCutStyle = loadCutStylePreference() as CutStyle;
         const preferredFractalConfig = loadFractalConfigPreference();
         const preferredRotationEnabled = loadRotationEnabledPreference();
         const preferredFreeRotationEnabled = loadFreeRotationEnabledPreference();

@@ -68,10 +68,9 @@ export { getPathBounds } from './path-bounds.js';
 
 export {
     CUT_STYLE_OPTIONS,
-    DEFAULT_CUT_STYLE_INDEX,
+    DEFAULT_CUT_STYLE_ID,
     CUT_STYLE_PREFERENCE_KEY,
     getCutStyleOption,
-    findCutStyleIndex,
     saveCutStylePreference,
     loadCutStylePreference,
 } from './cut-styles.js';
