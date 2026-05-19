@@ -157,6 +157,83 @@ export function createStringPreference(opts: {
 }
 
 /**
+ * A store for an id-keyed preset preference: a list of presets carrying
+ * stable string ids, plus a persisted id pointing into the list.
+ *
+ * Reads accept either the new id form or a legacy integer index
+ * (translated via `legacyOrder`), so existing saved preferences keep
+ * working across the migration. Writes always use the id form, so the
+ * legacy form gets overwritten the next time the user changes their
+ * preference.
+ */
+export interface IdPreferenceStore<T extends { id: string }> {
+    /** Get the preset whose id matches, or the default preset. */
+    getPreset: (id: string) => T;
+    /** Persist the preferred id. */
+    save: (id: string) => void;
+    /** Load the persisted id (always a valid preset id). */
+    load: () => string;
+}
+
+/**
+ * Build an id-keyed preference store backed by `localStorage`.
+ *
+ * `legacyOrder` captures the pre-migration storage order so a raw
+ * value of `'N'` (numeric string) resolves to `legacyOrder[N]`. Drop
+ * it in a follow-up release once enough users have loaded the
+ * migrated build.
+ */
+export function createIdPreferenceStore<T extends { id: string }>(opts: {
+    key: string;
+    presets: readonly T[];
+    defaultId: string;
+    legacyOrder: readonly string[];
+}): IdPreferenceStore<T> {
+    const { key, presets, defaultId, legacyOrder } = opts;
+    const ids = new Set(presets.map((p) => p.id));
+
+    function defaultPreset(): T {
+        return presets.find((p) => p.id === defaultId) ?? presets[0];
+    }
+
+    return {
+        getPreset(id) {
+            return presets.find((p) => p.id === id) ?? defaultPreset();
+        },
+        save(id) {
+            localStorage.setItem(key, id);
+        },
+        load() {
+            try {
+                const raw = localStorage.getItem(key);
+                if (raw === null) {
+                    return defaultId;
+                }
+
+                if (ids.has(raw)) {
+                    return raw;
+                }
+
+                // Legacy integer-index migration.
+                if (/^-?\d+$/.test(raw)) {
+                    const idx = parseInt(raw, 10);
+                    if (idx >= 0 && idx < legacyOrder.length) {
+                        const id = legacyOrder[idx];
+                        if (ids.has(id)) {
+                            return id;
+                        }
+                    }
+                }
+
+                return defaultId;
+            } catch {
+                return defaultId;
+            }
+        },
+    };
+}
+
+/**
  * A store for a boolean preference. Missing or unreadable values fall
  * back to `defaultValue`; otherwise the saved string is parsed
  * strictly as `'true'` → `true`, anything else → `false`.

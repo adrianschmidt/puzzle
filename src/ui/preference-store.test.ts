@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     createIndexedPreferenceStore,
+    createIdPreferenceStore,
     createBooleanPreference,
     createJsonPreference,
     createStringPreference,
@@ -224,5 +225,88 @@ describe('createStringPreference', () => {
             localStorage.setItem(KEY, 'other');
             expect(store.load()).toBe('other');
         });
+    });
+});
+
+describe('createIdPreferenceStore', () => {
+    const PRESETS = [
+        { id: 'alpha' },
+        { id: 'beta' },
+        { id: 'gamma' },
+    ] as const;
+    const KEY = 'test-id-pref';
+    const LEGACY_ORDER = ['alpha', 'beta', 'gamma'] as const;
+
+    function makeStore() {
+        return createIdPreferenceStore({
+            key: KEY,
+            presets: PRESETS,
+            defaultId: 'beta',
+            legacyOrder: LEGACY_ORDER,
+        });
+    }
+
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('returns the preset matching an id', () => {
+        expect(makeStore().getPreset('alpha')).toEqual({ id: 'alpha' });
+        expect(makeStore().getPreset('gamma')).toEqual({ id: 'gamma' });
+    });
+
+    it('returns the default preset for an unknown id', () => {
+        expect(makeStore().getPreset('nope')).toEqual({ id: 'beta' });
+    });
+
+    it('saves and loads an id', () => {
+        const store = makeStore();
+        store.save('gamma');
+        expect(store.load()).toBe('gamma');
+    });
+
+    it('returns the default id when nothing is saved', () => {
+        expect(makeStore().load()).toBe('beta');
+    });
+
+    it('migrates a legacy integer index to the matching id', () => {
+        localStorage.setItem(KEY, '0');
+        expect(makeStore().load()).toBe('alpha');
+        localStorage.setItem(KEY, '2');
+        expect(makeStore().load()).toBe('gamma');
+    });
+
+    it('returns the default for an out-of-range legacy integer', () => {
+        localStorage.setItem(KEY, '99');
+        expect(makeStore().load()).toBe('beta');
+        localStorage.setItem(KEY, '-1');
+        expect(makeStore().load()).toBe('beta');
+    });
+
+    it('returns the default for an unknown saved string', () => {
+        localStorage.setItem(KEY, 'not-a-known-id');
+        expect(makeStore().load()).toBe('beta');
+    });
+
+    it('does NOT rewrite localStorage on load (migration is read-only)', () => {
+        localStorage.setItem(KEY, '0');
+        makeStore().load();
+        expect(localStorage.getItem(KEY)).toBe('0');
+    });
+
+    it('overwrites the legacy integer the next time save() is called', () => {
+        localStorage.setItem(KEY, '0');
+        const store = makeStore();
+        expect(store.load()).toBe('alpha');
+        store.save('gamma');
+        expect(localStorage.getItem(KEY)).toBe('gamma');
+    });
+
+    it('survives localStorage errors by returning the default', () => {
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+            throw new Error('storage broken');
+        });
+        expect(makeStore().load()).toBe('beta');
+        vi.restoreAllMocks();
     });
 });
