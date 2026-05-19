@@ -191,3 +191,42 @@ describe('createInfoModal — Cut Styles section', () => {
         expect(freeRotIdx).toBeGreaterThan(wavyIdx);
     });
 });
+
+describe('createInfoModal — How to Play section', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+    });
+
+    function howToPlaySection(): HTMLElement {
+        const headings = container.querySelectorAll<HTMLHeadingElement>(
+            '.info-section > h3',
+        );
+        const match = [...headings].find((h) => h.textContent === 'How to Play');
+        return match!.parentElement!;
+    }
+
+    it('does not mention "composable" in How to Play', () => {
+        createInfoModal({ container });
+        expect(howToPlaySection().textContent?.toLowerCase()).not.toContain('composable');
+    });
+
+    it('mentions Wavy alongside Free rotation', () => {
+        createInfoModal({ container });
+        const text = howToPlaySection().textContent ?? '';
+        const freeRotIdx = text.indexOf('Free rotation');
+        const wavyIdx = text.indexOf('Wavy');
+        expect(freeRotIdx).toBeGreaterThan(-1);
+        expect(wavyIdx).toBeGreaterThan(-1);
+        // Wavy should be near (within ~60 chars of) the Free rotation phrase.
+        expect(Math.abs(wavyIdx - freeRotIdx)).toBeLessThan(60);
+    });
+});
