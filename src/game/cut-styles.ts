@@ -10,7 +10,7 @@ import { createIdPreferenceStore } from '../ui/preference-store.js';
 /**
  * Identifier for a cut style generator.
  */
-export type CutStyle = 'classic' | 'fractal' | 'composable';
+export type CutStyle = 'classic' | 'fractal' | 'wavy' | 'composable';
 
 /**
  * A selectable cut style option.
@@ -38,6 +38,11 @@ export const CUT_STYLE_OPTIONS: readonly CutStyleOption[] = [
         id: 'fractal',
         label: 'Fractal',
         description: 'Organic circle-packing',
+    },
+    {
+        id: 'wavy',
+        label: 'Wavy',
+        description: 'Like Classic, but each cut curves boldly',
     },
     {
         id: 'composable',

@@ -133,10 +133,19 @@ const fractalStrategy: CutStyleStrategy = {
     configKey: 'fractalConfig',
 };
 
+const wavyStrategy: CutStyleStrategy = {
+    scaleGrid: (grid) => grid,
+    inscribePuzzleSize: (imageSize) => imageSize,
+    generatePieces: () => {
+        throw new Error('wavy strategy not implemented yet — Task 8');
+    },
+};
+
 const STRATEGIES: Record<CutStyle, CutStyleStrategy> = {
     classic: classicStrategy,
     composable: composableStrategy,
     fractal: fractalStrategy,
+    wavy: wavyStrategy,
 };
 
 /** Look up the strategy for a cut style. */

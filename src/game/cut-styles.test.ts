@@ -10,6 +10,8 @@ import {
     getCutStyleOption,
     saveCutStylePreference,
     loadCutStylePreference,
+    getVisibleCutStyleOptions,
+    isComposableVisible,
 } from './cut-styles.js';
 
 describe('CUT_STYLE_OPTIONS', () => {
@@ -26,6 +28,23 @@ describe('CUT_STYLE_OPTIONS', () => {
 
     it('default id is "classic"', () => {
         expect(DEFAULT_CUT_STYLE_ID).toBe('classic');
+    });
+
+    it('includes wavy between fractal and composable', () => {
+        const ids = CUT_STYLE_OPTIONS.map((o) => o.id);
+        const fractalIdx = ids.indexOf('fractal');
+        const wavyIdx = ids.indexOf('wavy');
+        const composableIdx = ids.indexOf('composable');
+        expect(wavyIdx).toBeGreaterThan(fractalIdx);
+        expect(composableIdx).toBeGreaterThan(wavyIdx);
+    });
+
+    it('renders wavy in the visible list on production', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/');
+        const ids = getVisibleCutStyleOptions().map((o) => o.id);
+        expect(ids).toContain('wavy');
+        vi.unstubAllEnvs();
     });
 });
 
@@ -69,8 +88,6 @@ describe('saveCutStylePreference / loadCutStylePreference', () => {
         expect(loadCutStylePreference()).toBe(DEFAULT_CUT_STYLE_ID);
     });
 });
-
-import { getVisibleCutStyleOptions, isComposableVisible } from './cut-styles.js';
 
 describe('getVisibleCutStyleOptions', () => {
     afterEach(() => {
