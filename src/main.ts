@@ -462,6 +462,65 @@ function zoomToFitCompletedPuzzle(
     );
 };
 
+/**
+ * Dev-console hook for launching a Composable puzzle with arbitrary
+ * generator parameters. Exposed because Composable is hidden from the
+ * production new-game dialog; power users can still reach the full
+ * surface via this helper.
+ *
+ * Usage (browser console):
+ *   __newComposableGame()
+ *   __newComposableGame({ cols: 12, rows: 8 })
+ *   __newComposableGame({
+ *       baseCutConfig: { cols: 8, rows: 6, ha: 0.3, hf: 2, va: 0.3, vf: 1.5 },
+ *       tabGenerator: 'none',
+ *   })
+ *   __newComposableGame({ rotation: 'free' })
+ *
+ * Defaults: 8×6 grid, sine base-cut generator with composable's stock
+ * defaults, classic tabs, no rotation, current saved image-source
+ * preference.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).__newComposableGame = (overrides?: {
+    cols?: number;
+    rows?: number;
+    baseCutGenerator?: string;
+    baseCutConfig?: Record<string, unknown>;
+    tabGenerator?: string;
+    tabConfig?: Record<string, unknown>;
+    minPieceArea?: number;
+    rotation?: 'none' | 'quarter-turn' | 'free';
+    imageSource?: 'random' | 'blank';
+}) => {
+    const cols = overrides?.cols ?? 8;
+    const rows = overrides?.rows ?? 6;
+    const baseCutConfig = overrides?.baseCutConfig ?? {
+        cols, rows, ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5,
+    };
+    const config: import('./puzzle/composable-generator.js').ComposableConfig = {
+        baseCutGenerator: overrides?.baseCutGenerator ?? 'sine',
+        baseCutConfig,
+        tabGenerator: overrides?.tabGenerator ?? 'classic',
+        tabConfig: overrides?.tabConfig ?? {},
+    };
+    if (overrides?.minPieceArea !== undefined) {
+        config.minPieceArea = overrides.minPieceArea;
+    }
+    const rotation = overrides?.rotation ?? 'none';
+    void startNewGame(
+        { cols, rows },
+        'composable',
+        config,
+        overrides?.imageSource ?? loadImageSourcePreference(),
+        loadImageCategoryPreference(),
+        undefined,
+        loadVibrantPreference(),
+        rotation !== 'none',
+        rotation === 'free',
+    );
+};
+
 // Viewport transform for zoom & pan
 const viewportTransform = new ViewportTransform();
 
