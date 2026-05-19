@@ -22,7 +22,7 @@ export interface SharePayload {
     /** Grid size [cols, rows]. */
     g: [number, number];
     /** Cut style. */
-    c: 'classic' | 'fractal' | 'composable';
+    c: 'classic' | 'fractal' | 'composable' | 'wavy';
     /** PRNG seed. */
     s: number;
     /** Rotation mode. */
@@ -139,7 +139,8 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (typeof p.i !== 'string') return false;
     if (!isTuple2Number(p.is)) return false;
     if (!isTuple2Number(p.g)) return false;
-    if (p.c !== 'classic' && p.c !== 'fractal' && p.c !== 'composable') return false;
+    if (p.c !== 'classic' && p.c !== 'fractal'
+        && p.c !== 'composable' && p.c !== 'wavy') return false;
     if (typeof p.s !== 'number') return false;
     if (p.r !== 'none' && p.r !== 'quarter-turn' && p.r !== 'free') return false;
     if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
