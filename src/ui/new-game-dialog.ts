@@ -433,7 +433,8 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     );
 
     // Free rotation sub-checkbox — visible only when rotation is enabled AND
-    // the cut style is composable. State persists across visibility toggles.
+    // the cut style supports free rotation (wavy or composable). State
+    // persists across visibility toggles.
     const freeRotationRow = document.createElement('div');
     freeRotationRow.className = 'free-rotation-row';
     const freeRotationCheckbox = appendCheckboxRow(
@@ -445,7 +446,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     function updateFreeRotationVisibility(): void {
         const visible =
             rotationCheckbox.checked &&
-            currentCutStyleId === 'composable';
+            (currentCutStyleId === 'wavy' || currentCutStyleId === 'composable');
         freeRotationRow.style.display = visible ? 'block' : 'none';
     }
 
@@ -469,7 +470,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
                 rotationEnabled: rotationCheckbox.checked,
                 freeRotation:
                     rotationCheckbox.checked &&
-                    currentCutStyleId === 'composable' &&
+                    (currentCutStyleId === 'wavy' || currentCutStyleId === 'composable') &&
                     freeRotationCheckbox.checked,
                 ...imageSourceSection.getValues(),
             });

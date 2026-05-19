@@ -723,7 +723,7 @@ async function startNewGame(
         let rotationMode: 'none' | 'quarter-turn' | 'free';
         if (!rotationEnabled) {
             rotationMode = 'none';
-        } else if (freeRotation && cutStyle === 'composable') {
+        } else if (freeRotation && (cutStyle === 'wavy' || cutStyle === 'composable')) {
             rotationMode = 'free';
         } else {
             rotationMode = 'quarter-turn';

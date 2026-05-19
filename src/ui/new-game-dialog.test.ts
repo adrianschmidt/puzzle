@@ -580,3 +580,79 @@ describe('createNewGameDialog — composable visibility', () => {
         expect(classicBtn?.classList.contains('cut-style-option--selected')).toBe(true);
     });
 });
+
+describe('createNewGameDialog — free rotation sub-checkbox', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+        // Make composable visible so the picker renders it.
+        vi.stubEnv('DEV', true);
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+    });
+
+    function getFreeRotationRow(): HTMLElement {
+        return container.querySelector('.free-rotation-row') as HTMLElement;
+    }
+
+    it('is hidden by default (rotation off)', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'wavy',
+            onSelect: vi.fn(),
+        });
+        expect(getFreeRotationRow().style.display).toBe('none');
+    });
+
+    it('is visible when rotation is on and cut style is wavy', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'wavy',
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+        expect(getFreeRotationRow().style.display).toBe('block');
+    });
+
+    it('is visible when rotation is on and cut style is composable', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'composable',
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+        expect(getFreeRotationRow().style.display).toBe('block');
+    });
+
+    it('is hidden when rotation is on but cut style is classic', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'classic',
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+        expect(getFreeRotationRow().style.display).toBe('none');
+    });
+
+    it('is hidden when rotation is on but cut style is fractal', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'fractal',
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+        expect(getFreeRotationRow().style.display).toBe('none');
+    });
+});
