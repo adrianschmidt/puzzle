@@ -75,6 +75,7 @@ export type {
 
 export {
     BACKGROUND_COLOUR_PRESETS,
+    DEFAULT_COLOUR_ID,
     getColourPreset,
     saveColourPreference,
     loadColourPreference,
