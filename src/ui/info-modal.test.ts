@@ -148,3 +148,46 @@ describe('createInfoModal', () => {
         expect(cutStyles?.textContent).toContain('Free rotation');
     });
 });
+
+describe('createInfoModal — Cut Styles section', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+    });
+
+    function cutStylesSection(): HTMLElement {
+        // Locate the Cut Styles section by its heading text.
+        const headings = container.querySelectorAll<HTMLHeadingElement>(
+            '.info-section > h3',
+        );
+        const match = [...headings].find((h) => h.textContent === 'Cut Styles');
+        return match!.parentElement!;
+    }
+
+    it('mentions Wavy as a cut style', () => {
+        createInfoModal({ container });
+        expect(cutStylesSection().textContent).toContain('Wavy');
+    });
+
+    it('does not mention Composable in the help text', () => {
+        createInfoModal({ container });
+        expect(cutStylesSection().textContent).not.toContain('Composable');
+    });
+
+    it('mentions Free rotation in the Wavy bullet', () => {
+        createInfoModal({ container });
+        const html = cutStylesSection().innerHTML;
+        const wavyIdx = html.indexOf('Wavy');
+        const freeRotIdx = html.indexOf('Free rotation');
+        expect(wavyIdx).toBeGreaterThan(-1);
+        expect(freeRotIdx).toBeGreaterThan(wavyIdx);
+    });
+});

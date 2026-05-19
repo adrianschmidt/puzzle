@@ -180,22 +180,18 @@ function buildCutStylesSection(): HTMLElement {
     fractalLi.appendChild(fractalSub);
     list.appendChild(fractalLi);
 
-    const composableLi = document.createElement('li');
-    appendInline(composableLi, [
-        ['strong', 'Composable'],
-        ' (experimental) — Customizable cuts with sliders in the new-game dialog. Options:',
+    const wavyLi = document.createElement('li');
+    appendInline(wavyLi, [
+        ['strong', 'Wavy'],
+        ' — Smooth sinewave edges with classic jigsaw tabs — a more dramatic take on Classic. Options:',
     ]);
-    const composableSub = document.createElement('ul');
-    appendInlineLi(composableSub, [
+    const wavySub = document.createElement('ul');
+    appendInlineLi(wavySub, [
         ['strong', 'Free rotation'],
         ' (when rotation is also enabled) — Pieces rotate continuously to any angle instead of snapping to the four 90° orientations. Use the round drag handle below the focused piece.',
     ]);
-    appendInlineLi(composableSub, [
-        ['strong', 'Auto-grouping'],
-        " — Tiny slivers from extreme cut shapes are pre-grouped with a neighbour, so you'll never see an unmovable speck of a piece.",
-    ]);
-    composableLi.appendChild(composableSub);
-    list.appendChild(composableLi);
+    wavyLi.appendChild(wavySub);
+    list.appendChild(wavyLi);
 
     section.appendChild(list);
     return section;
