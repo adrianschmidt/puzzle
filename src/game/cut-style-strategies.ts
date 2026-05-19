@@ -136,9 +136,26 @@ const fractalStrategy: CutStyleStrategy = {
 const wavyStrategy: CutStyleStrategy = {
     scaleGrid: (grid) => grid,
     inscribePuzzleSize: (imageSize) => imageSize,
-    generatePieces: () => {
-        throw new Error('wavy strategy not implemented yet — Task 8');
+    generatePieces: (grid, puzzleSize, seed) => {
+        const avgPieceArea =
+            (puzzleSize.width * puzzleSize.height) /
+            (grid.cols * grid.rows);
+        return generateComposablePuzzle(grid.cols, grid.rows, puzzleSize, seed, {
+            baseCutGenerator: 'sine',
+            baseCutConfig: {
+                cols: grid.cols,
+                rows: grid.rows,
+                ha: 0.5,
+                hf: grid.cols / 2,
+                va: 0.5,
+                vf: grid.rows / 2,
+            },
+            tabGenerator: 'classic',
+            tabConfig: {},
+            minPieceArea: avgPieceArea / 4,
+        });
     },
+    // configKey omitted — Wavy is fully reproducible from seed + gridSize.
 };
 
 const STRATEGIES: Record<CutStyle, CutStyleStrategy> = {
