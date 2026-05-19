@@ -10,11 +10,11 @@ export type { InitOptions } from './init.js';
 
 export {
     PUZZLE_SIZE_OPTIONS,
-    DEFAULT_SIZE_INDEX,
+    DEFAULT_SIZE_ID,
     SIZE_PREFERENCE_KEY,
     getSizeOption,
     toGridSize,
-    findSizeIndex,
+    findSizeId,
     saveSizePreference,
     loadSizePreference,
 } from './puzzle-sizes.js';
