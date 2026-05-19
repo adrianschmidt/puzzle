@@ -949,15 +949,15 @@ function updateRotationUiVisibility(): void {
 }
 
 // Set up the Background Colour picker
-const initialColourIndex = loadColourPreference();
-applyBackgroundColour(initialColourIndex);
+const initialColourId = loadColourPreference();
+applyBackgroundColour(initialColourId);
 
 createBackgroundColourPicker({
     container: app,
-    selectedIndex: initialColourIndex,
-    onSelect: (index) => {
-        saveColourPreference(index);
-        applyBackgroundColour(index);
+    selectedId: initialColourId,
+    onSelect: (id) => {
+        saveColourPreference(id);
+        applyBackgroundColour(id);
     },
 });
 

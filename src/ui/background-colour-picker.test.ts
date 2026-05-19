@@ -16,36 +16,37 @@ import {
 
 describe('createSwatch', () => {
     it('creates a button element', () => {
-        const swatch = createSwatch(BACKGROUND_COLOUR_PRESETS[0], 0, false);
+        const swatch = createSwatch(BACKGROUND_COLOUR_PRESETS[0], false);
         expect(swatch.tagName).toBe('BUTTON');
     });
 
     it('sets the background colour to the preset colour', () => {
         const preset = BACKGROUND_COLOUR_PRESETS[0];
-        const swatch = createSwatch(preset, 0, false);
+        const swatch = createSwatch(preset, false);
         expect(swatch.style.backgroundColor).toBeTruthy();
     });
 
     it('sets the aria-label to the preset label', () => {
         const preset = BACKGROUND_COLOUR_PRESETS[1];
-        const swatch = createSwatch(preset, 1, false);
+        const swatch = createSwatch(preset, false);
         expect(swatch.getAttribute('aria-label')).toBe(preset.label);
     });
 
-    it('stores the index in a data attribute', () => {
-        const swatch = createSwatch(BACKGROUND_COLOUR_PRESETS[2], 2, false);
-        expect(swatch.dataset.colourIndex).toBe('2');
+    it('stores the id in a data attribute', () => {
+        const preset = BACKGROUND_COLOUR_PRESETS[2];
+        const swatch = createSwatch(preset, false);
+        expect(swatch.dataset.colourId).toBe(preset.id);
     });
 
     it('adds selected class when isSelected is true', () => {
-        const swatch = createSwatch(BACKGROUND_COLOUR_PRESETS[0], 0, true);
+        const swatch = createSwatch(BACKGROUND_COLOUR_PRESETS[0], true);
         expect(swatch.classList.contains('bg-colour-swatch--selected')).toBe(
             true,
         );
     });
 
     it('does not add selected class when isSelected is false', () => {
-        const swatch = createSwatch(BACKGROUND_COLOUR_PRESETS[0], 0, false);
+        const swatch = createSwatch(BACKGROUND_COLOUR_PRESETS[0], false);
         expect(swatch.classList.contains('bg-colour-swatch--selected')).toBe(
             false,
         );
@@ -54,36 +55,41 @@ describe('createSwatch', () => {
 
 describe('createPickerPanel', () => {
     it('creates a panel with a swatch for each preset', () => {
-        const panel = createPickerPanel(0, vi.fn(), vi.fn());
+        const panel = createPickerPanel('midnight', vi.fn(), vi.fn());
         const swatches = panel.querySelectorAll('.bg-colour-swatch');
         expect(swatches.length).toBe(BACKGROUND_COLOUR_PRESETS.length);
     });
 
     it('marks the selected swatch', () => {
-        const panel = createPickerPanel(2, vi.fn(), vi.fn());
+        const panel = createPickerPanel('slate', vi.fn(), vi.fn());
         const swatches = panel.querySelectorAll('.bg-colour-swatch');
+        const selectedIndex = BACKGROUND_COLOUR_PRESETS.findIndex(
+            (p) => p.id === 'slate',
+        );
         expect(
-            swatches[2].classList.contains('bg-colour-swatch--selected'),
+            swatches[selectedIndex].classList.contains(
+                'bg-colour-swatch--selected',
+            ),
         ).toBe(true);
     });
 
-    it('calls onSelect with the correct index when a swatch is clicked', () => {
+    it('calls onSelect with the correct id when a swatch is clicked', () => {
         const onSelect = vi.fn();
         const onDismiss = vi.fn();
-        const panel = createPickerPanel(0, onSelect, onDismiss);
+        const panel = createPickerPanel('midnight', onSelect, onDismiss);
         const swatches = panel.querySelectorAll<HTMLButtonElement>(
             '.bg-colour-swatch',
         );
 
         swatches[3].click();
 
-        expect(onSelect).toHaveBeenCalledWith(3);
+        expect(onSelect).toHaveBeenCalledWith(BACKGROUND_COLOUR_PRESETS[3].id);
     });
 
     it('calls onDismiss when a swatch is clicked', () => {
         const onSelect = vi.fn();
         const onDismiss = vi.fn();
-        const panel = createPickerPanel(0, onSelect, onDismiss);
+        const panel = createPickerPanel('midnight', onSelect, onDismiss);
         const swatches = panel.querySelectorAll<HTMLButtonElement>(
             '.bg-colour-swatch',
         );
@@ -94,12 +100,12 @@ describe('createPickerPanel', () => {
     });
 
     it('has role=listbox', () => {
-        const panel = createPickerPanel(0, vi.fn(), vi.fn());
+        const panel = createPickerPanel('midnight', vi.fn(), vi.fn());
         expect(panel.getAttribute('role')).toBe('listbox');
     });
 
     it('each swatch has role=option', () => {
-        const panel = createPickerPanel(0, vi.fn(), vi.fn());
+        const panel = createPickerPanel('midnight', vi.fn(), vi.fn());
         const swatches = panel.querySelectorAll('.bg-colour-swatch');
         for (const swatch of swatches) {
             expect(swatch.getAttribute('role')).toBe('option');
@@ -109,12 +115,12 @@ describe('createPickerPanel', () => {
 
 describe('createBackgroundColourPicker', () => {
     let container: HTMLElement;
-    let onSelect: ReturnType<typeof vi.fn<(index: number) => void>>;
+    let onSelect: ReturnType<typeof vi.fn<(id: string) => void>>;
 
     beforeEach(() => {
         container = document.createElement('div');
         document.body.appendChild(container);
-        onSelect = vi.fn<(index: number) => void>();
+        onSelect = vi.fn<(id: string) => void>();
     });
 
     afterEach(() => {
@@ -124,7 +130,7 @@ describe('createBackgroundColourPicker', () => {
     it('adds a button to the container', () => {
         createBackgroundColourPicker({
             container,
-            selectedIndex: 0,
+            selectedId: 'midnight',
             onSelect,
         });
 
@@ -135,7 +141,7 @@ describe('createBackgroundColourPicker', () => {
     it('opens a panel when the button is clicked', () => {
         createBackgroundColourPicker({
             container,
-            selectedIndex: 0,
+            selectedId: 'midnight',
             onSelect,
         });
 
@@ -150,7 +156,7 @@ describe('createBackgroundColourPicker', () => {
     it('closes the panel when the button is clicked again', () => {
         createBackgroundColourPicker({
             container,
-            selectedIndex: 0,
+            selectedId: 'midnight',
             onSelect,
         });
 
@@ -166,7 +172,7 @@ describe('createBackgroundColourPicker', () => {
     it('calls onSelect when a swatch is clicked', () => {
         createBackgroundColourPicker({
             container,
-            selectedIndex: 0,
+            selectedId: 'midnight',
             onSelect,
         });
 
@@ -179,13 +185,13 @@ describe('createBackgroundColourPicker', () => {
         );
         swatches[2].click();
 
-        expect(onSelect).toHaveBeenCalledWith(2);
+        expect(onSelect).toHaveBeenCalledWith(BACKGROUND_COLOUR_PRESETS[2].id);
     });
 
     it('closes the panel after selecting a colour', () => {
         createBackgroundColourPicker({
             container,
-            selectedIndex: 0,
+            selectedId: 'midnight',
             onSelect,
         });
 
@@ -204,7 +210,7 @@ describe('createBackgroundColourPicker', () => {
     it('removes everything on cleanup', () => {
         const cleanup = createBackgroundColourPicker({
             container,
-            selectedIndex: 0,
+            selectedId: 'midnight',
             onSelect,
         });
 

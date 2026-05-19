@@ -16,10 +16,10 @@ import { attachDismissablePopover } from './dismissable-overlay.js';
 export interface BackgroundColourPickerOptions {
     /** The container to append the button to. */
     container: HTMLElement;
-    /** Currently selected colour index. */
-    selectedIndex: number;
-    /** Called when the player selects a colour. Receives the preset index. */
-    onSelect: (index: number) => void;
+    /** Currently selected colour id. */
+    selectedId: string;
+    /** Called when the player selects a colour. Receives the preset id. */
+    onSelect: (id: string) => void;
 }
 
 /**
@@ -27,7 +27,6 @@ export interface BackgroundColourPickerOptions {
  */
 export function createSwatch(
     preset: BackgroundColourPreset,
-    index: number,
     isSelected: boolean,
 ): HTMLButtonElement {
     const swatch = document.createElement('button');
@@ -36,7 +35,7 @@ export function createSwatch(
     swatch.style.backgroundColor = preset.colour;
     swatch.setAttribute('aria-label', preset.label);
     swatch.title = preset.label;
-    swatch.dataset.colourIndex = String(index);
+    swatch.dataset.colourId = preset.id;
 
     if (isSelected) {
         swatch.classList.add('bg-colour-swatch--selected');
@@ -49,8 +48,8 @@ export function createSwatch(
  * Create the popover panel containing all colour swatches.
  */
 export function createPickerPanel(
-    selectedIndex: number,
-    onSelect: (index: number) => void,
+    selectedId: string,
+    onSelect: (id: string) => void,
     onDismiss: () => void,
 ): HTMLDivElement {
     const panel = document.createElement('div');
@@ -58,16 +57,15 @@ export function createPickerPanel(
     panel.setAttribute('role', 'listbox');
     panel.setAttribute('aria-label', 'Background colour');
 
-    for (let i = 0; i < BACKGROUND_COLOUR_PRESETS.length; i++) {
-        const preset = BACKGROUND_COLOUR_PRESETS[i];
-        const isSelected = i === selectedIndex;
-        const swatch = createSwatch(preset, i, isSelected);
+    for (const preset of BACKGROUND_COLOUR_PRESETS) {
+        const isSelected = preset.id === selectedId;
+        const swatch = createSwatch(preset, isSelected);
         swatch.setAttribute('role', 'option');
         swatch.setAttribute('aria-selected', String(isSelected));
 
         swatch.addEventListener('click', (e) => {
             e.stopPropagation();
-            onSelect(i);
+            onSelect(preset.id);
             onDismiss();
         });
 
@@ -86,7 +84,7 @@ export function createBackgroundColourPicker(
     options: BackgroundColourPickerOptions,
 ): () => void {
     const { container, onSelect } = options;
-    let currentIndex = options.selectedIndex;
+    let currentId = options.selectedId;
 
     const button = document.createElement('button');
     button.className = 'bg-colour-button';
@@ -114,10 +112,10 @@ export function createBackgroundColourPicker(
         }
 
         panel = createPickerPanel(
-            currentIndex,
-            (index) => {
-                currentIndex = index;
-                onSelect(index);
+            currentId,
+            (id) => {
+                currentId = id;
+                onSelect(id);
             },
             dismissPanel,
         );
