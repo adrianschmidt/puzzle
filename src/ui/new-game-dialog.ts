@@ -11,7 +11,7 @@
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
-import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
+import { DEFAULT_CUT_STYLE_ID } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
@@ -33,7 +33,7 @@ export interface FractalDialogConfig {
 /** Everything the player chose in the new-game dialog. */
 export interface NewGameSelection {
     sizeId: string;
-    cutStyleIndex: number;
+    cutStyleId: string;
     /** Present only when the chosen cut style is composable. */
     composableConfig?: ComposableSliderConfig;
     /** Present only when the chosen cut style is fractal. */
@@ -56,8 +56,8 @@ export interface NewGameDialogOptions {
     container: HTMLElement;
     /** Currently selected size id (highlighted in the dialog). */
     selectedSizeId: string;
-    /** Currently selected cut style index. */
-    selectedCutStyleIndex?: number;
+    /** Currently selected cut style id. */
+    selectedCutStyleId?: string;
     /** Previously saved composable slider config (used to pre-populate sliders). */
     savedComposableConfig?: ComposableSliderConfig;
     /** Previously saved fractal config (used to pre-populate controls). */
@@ -115,7 +115,7 @@ interface ImageSourceSection {
 
 function buildSizeSection(args: {
     selectedSizeId: string;
-    getCutStyleIndex: () => number;
+    getCutStyleId: () => string;
     onPick: (sizeId: string) => void;
 }): SizeSection {
     const grid = document.createElement('div');
@@ -140,7 +140,7 @@ function buildSizeSection(args: {
     }
 
     function updateLabels(): void {
-        const isFractal = CUT_STYLE_OPTIONS[args.getCutStyleIndex()].id === 'fractal';
+        const isFractal = args.getCutStyleId() === 'fractal';
 
         for (let i = 0; i < buttons.length; i++) {
             const btn = buttons[i];
@@ -384,9 +384,7 @@ function appendCheckboxRow(
 export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     const { container, selectedSizeId, onSelect, onCancel } = options;
 
-    let currentCutStyleIndex = options.selectedCutStyleIndex ?? 0;
-    const composableCutIndex = CUT_STYLE_OPTIONS.findIndex(o => o.id === 'composable');
-    const fractalCutIndex = CUT_STYLE_OPTIONS.findIndex(o => o.id === 'fractal');
+    let currentCutStyleId: string = options.selectedCutStyleId ?? DEFAULT_CUT_STYLE_ID;
 
     // The helper owns Escape/backdrop dismissal and fires onCancel only on
     // those paths — not when the caller invokes dismiss() after picking a
@@ -442,7 +440,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     function updateFreeRotationVisibility(): void {
         const visible =
             rotationCheckbox.checked &&
-            currentCutStyleIndex === composableCutIndex;
+            currentCutStyleId === 'composable';
         freeRotationRow.style.display = visible ? 'block' : 'none';
     }
 
@@ -451,22 +449,22 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
 
     const sizeSection = buildSizeSection({
         selectedSizeId,
-        getCutStyleIndex: () => currentCutStyleIndex,
+        getCutStyleId: () => currentCutStyleId,
         onPick: (sizeId) => {
             dismiss();
             onSelect({
                 sizeId,
-                cutStyleIndex: currentCutStyleIndex,
-                composableConfig: currentCutStyleIndex === composableCutIndex
+                cutStyleId: currentCutStyleId,
+                composableConfig: currentCutStyleId === 'composable'
                     ? composableSection.getValues()
                     : undefined,
-                fractalConfig: currentCutStyleIndex === fractalCutIndex
+                fractalConfig: currentCutStyleId === 'fractal'
                     ? fractalSection.getValues()
                     : undefined,
                 rotationEnabled: rotationCheckbox.checked,
                 freeRotation:
                     rotationCheckbox.checked &&
-                    currentCutStyleIndex === composableCutIndex &&
+                    currentCutStyleId === 'composable' &&
                     freeRotationCheckbox.checked,
                 ...imageSourceSection.getValues(),
             });
@@ -474,18 +472,18 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     });
 
     const cutStyleSection = createCutStylePicker({
-        selectedIndex: currentCutStyleIndex,
-        onSelect: (index) => {
-            currentCutStyleIndex = index;
+        selectedCutStyleId: currentCutStyleId,
+        onSelect: (id) => {
+            currentCutStyleId = id;
             sizeSection.updateLabels();
-            fractalSection.setVisible(index === fractalCutIndex);
-            composableSection.setVisible(index === composableCutIndex);
+            fractalSection.setVisible(id === 'fractal');
+            composableSection.setVisible(id === 'composable');
             updateFreeRotationVisibility();
         },
     });
 
-    fractalSection.setVisible(currentCutStyleIndex === fractalCutIndex);
-    composableSection.setVisible(currentCutStyleIndex === composableCutIndex);
+    fractalSection.setVisible(currentCutStyleId === 'fractal');
+    composableSection.setVisible(currentCutStyleId === 'composable');
 
     dialog.appendChild(cutStyleSection);
     dialog.appendChild(rotationRow);

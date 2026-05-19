@@ -82,7 +82,7 @@ describe('createNewGameDialog', () => {
 
         expect(onSelect).toHaveBeenCalledWith({
             sizeId: '192',
-            cutStyleIndex: 0,
+            cutStyleId: 'classic',
             composableConfig: undefined,
             fractalConfig: undefined,
             rotationEnabled: false,
@@ -187,12 +187,12 @@ describe('createNewGameDialog', () => {
         expect(container.querySelector('.cut-style-section')).not.toBeNull();
     });
 
-    it('passes the selected cut style index to onSelect', () => {
+    it('passes the selected cut style id to onSelect', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: 1,
+            selectedCutStyleId: 'fractal',
             onSelect,
         });
 
@@ -203,7 +203,7 @@ describe('createNewGameDialog', () => {
 
         expect(onSelect).toHaveBeenCalledWith({
             sizeId: '24',
-            cutStyleIndex: 1,
+            cutStyleId: 'fractal',
             composableConfig: undefined,
             fractalConfig: { borderless: false },
             rotationEnabled: false,
@@ -219,14 +219,15 @@ describe('createNewGameDialog', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: 0,
+            selectedCutStyleId: 'classic',
             onSelect,
         });
 
         // Switch to Fractal
-        const cutStyleButtons =
-            container.querySelectorAll<HTMLButtonElement>('.cut-style-option');
-        cutStyleButtons[1].click();
+        const fractalBtn = container.querySelector<HTMLButtonElement>(
+            '[data-cut-style-id="fractal"]',
+        )!;
+        fractalBtn.click();
 
         // Then pick a size
         const sizeButtons =
@@ -235,7 +236,7 @@ describe('createNewGameDialog', () => {
 
         expect(onSelect).toHaveBeenCalledWith({
             sizeId: '24',
-            cutStyleIndex: 1,
+            cutStyleId: 'fractal',
             composableConfig: undefined,
             fractalConfig: { borderless: false },
             rotationEnabled: false,
@@ -265,7 +266,7 @@ describe('createNewGameDialog', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: 0, // Classic
+            selectedCutStyleId: 'classic',
             onSelect,
         });
 
@@ -281,7 +282,7 @@ describe('createNewGameDialog', () => {
 
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({
-                cutStyleIndex: 0,
+                cutStyleId: 'classic',
                 rotationEnabled: true,
             }),
         );
@@ -302,11 +303,6 @@ describe('createNewGameDialog', () => {
     });
 });
 
-// CUT_STYLE_OPTIONS order: 0=classic, 1=fractal, 2=composable
-const COMPOSABLE_INDEX = 2;
-const FRACTAL_INDEX = 1;
-const CLASSIC_INDEX = 0;
-
 describe('free rotation sub-checkbox', () => {
     let container: HTMLElement;
 
@@ -319,7 +315,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: false,
             onSelect: vi.fn(),
         });
@@ -333,7 +329,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: FRACTAL_INDEX,
+            selectedCutStyleId: 'fractal',
             savedRotationEnabled: true,
             onSelect: vi.fn(),
         });
@@ -347,7 +343,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: CLASSIC_INDEX,
+            selectedCutStyleId: 'classic',
             savedRotationEnabled: true,
             onSelect: vi.fn(),
         });
@@ -361,7 +357,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: true,
             onSelect: vi.fn(),
         });
@@ -375,7 +371,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: false,
             onSelect: vi.fn(),
         });
@@ -396,7 +392,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: true,
             onSelect: vi.fn(),
         });
@@ -405,9 +401,10 @@ describe('free rotation sub-checkbox', () => {
         expect(row.style.display).not.toBe('none');
 
         // Switch to Fractal
-        const cutStyleButtons =
-            container.querySelectorAll<HTMLButtonElement>('.cut-style-option');
-        cutStyleButtons[FRACTAL_INDEX].click();
+        const fractalBtn = container.querySelector<HTMLButtonElement>(
+            '[data-cut-style-id="fractal"]',
+        )!;
+        fractalBtn.click();
 
         expect(row.style.display).toBe('none');
     });
@@ -417,7 +414,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: true,
             savedFreeRotationEnabled: true,
             onSelect,
@@ -437,7 +434,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: true,
             savedFreeRotationEnabled: false,
             onSelect,
@@ -457,7 +454,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: false,
             savedFreeRotationEnabled: true,
             onSelect,
@@ -477,7 +474,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: CLASSIC_INDEX,
+            selectedCutStyleId: 'classic',
             savedRotationEnabled: true,
             savedFreeRotationEnabled: true,
             onSelect,
@@ -496,7 +493,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: true,
             savedFreeRotationEnabled: true,
             onSelect: vi.fn(),
@@ -512,7 +509,7 @@ describe('free rotation sub-checkbox', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleIndex: COMPOSABLE_INDEX,
+            selectedCutStyleId: 'composable',
             savedRotationEnabled: true,
             onSelect: vi.fn(),
         });
