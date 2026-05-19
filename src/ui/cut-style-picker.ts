@@ -2,8 +2,8 @@
  * Cut style picker — lets the player choose the puzzle cut style.
  *
  * Renders one button per provided option. The caller decides which
- * options to show (Task 6 will introduce a `getVisibleCutStyleOptions`
- * helper that filters Composable out on production builds).
+ * options to show — on production builds, `getVisibleCutStyleOptions()`
+ * in `game/cut-styles.ts` filters Composable out.
  */
 
 import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';

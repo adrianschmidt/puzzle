@@ -120,6 +120,7 @@ const STYLE_SNAP_MULTIPLIERS: Record<string, number> = {
     classic: 1.0,
     fractal: 1.0,
     composable: 1.0,
+    wavy: 1.0,
 };
 
 /**
