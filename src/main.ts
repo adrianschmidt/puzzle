@@ -780,7 +780,7 @@ createNewGameButton({
     getGroupCount: () => gameState.groups.length,
     getPieceCount: () => gameState.pieces.length,
     onNewGame: () => {
-        const preferredIndex = loadSizePreference();
+        const preferredSizeId = loadSizePreference();
         const preferredCutStyleIndex = loadCutStylePreference();
         const savedComposableConfig = loadComposableConfigPreference();
         const savedFractalConfig = loadFractalConfigPreference();
@@ -791,7 +791,7 @@ createNewGameButton({
         const savedVibrant = loadVibrantPreference();
         createNewGameDialog({
             container: app,
-            selectedIndex: preferredIndex,
+            selectedSizeId: preferredSizeId,
             selectedCutStyleIndex: preferredCutStyleIndex,
             savedComposableConfig: savedComposableConfig,
             savedFractalConfig: savedFractalConfig,
@@ -800,8 +800,8 @@ createNewGameButton({
             savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
             savedVibrant: savedVibrant,
-            onSelect: ({ sizeIndex, cutStyleIndex, composableConfig, fractalConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
-                saveSizePreference(sizeIndex);
+            onSelect: ({ sizeId, cutStyleIndex, composableConfig, fractalConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
+                saveSizePreference(sizeId);
                 saveCutStylePreference(cutStyleIndex);
                 if (composableConfig) {
                     saveComposableConfigPreference(composableConfig);
@@ -814,7 +814,7 @@ createNewGameButton({
                 saveImageSourcePreference(imageSource);
                 saveImageCategoryPreference(imageCategory);
                 saveVibrantPreference(vibrant);
-                const option = getSizeOption(sizeIndex);
+                const option = getSizeOption(sizeId);
                 const cutStyle = getCutStyleOption(cutStyleIndex).id;
                 clearSavedState();
                 void startNewGame(
@@ -1094,8 +1094,8 @@ void (async () => {
         }
 
         // First load with no saved game: use the preferred size and cut style
-        const preferredIndex = loadSizePreference();
-        const option = getSizeOption(preferredIndex);
+        const preferredSizeId = loadSizePreference();
+        const option = getSizeOption(preferredSizeId);
         const preferredCutStyle = getCutStyleOption(loadCutStylePreference()).id;
         const preferredFractalConfig = loadFractalConfigPreference();
         const preferredRotationEnabled = loadRotationEnabledPreference();

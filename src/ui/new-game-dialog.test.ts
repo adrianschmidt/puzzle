@@ -39,7 +39,7 @@ describe('createNewGameDialog', () => {
     it('adds an overlay to the container', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
         });
 
@@ -49,7 +49,7 @@ describe('createNewGameDialog', () => {
     it('shows the correct number of size options', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
         });
 
@@ -60,7 +60,7 @@ describe('createNewGameDialog', () => {
     it('marks the selected option', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 2,
+            selectedSizeId: '96',
             onSelect: vi.fn(),
         });
 
@@ -69,11 +69,11 @@ describe('createNewGameDialog', () => {
         expect(buttons[0].classList.contains('size-picker-option--selected')).toBe(false);
     });
 
-    it('calls onSelect with the correct index when a size is clicked', () => {
+    it('calls onSelect with the correct id when a size is clicked', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect,
         });
 
@@ -81,7 +81,7 @@ describe('createNewGameDialog', () => {
         buttons[3].click();
 
         expect(onSelect).toHaveBeenCalledWith({
-            sizeIndex: 3,
+            sizeId: '192',
             cutStyleIndex: 0,
             composableConfig: undefined,
             fractalConfig: undefined,
@@ -96,7 +96,7 @@ describe('createNewGameDialog', () => {
     it('removes the overlay after selection', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
         });
 
@@ -110,7 +110,7 @@ describe('createNewGameDialog', () => {
         const onCancel = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
             onCancel,
         });
@@ -126,7 +126,7 @@ describe('createNewGameDialog', () => {
         const onCancel = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
             onCancel,
         });
@@ -140,7 +140,7 @@ describe('createNewGameDialog', () => {
     it('returns a cleanup function that removes the overlay', () => {
         const dismiss = createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
         });
 
@@ -152,7 +152,7 @@ describe('createNewGameDialog', () => {
     it('displays piece count in each button', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
         });
 
@@ -166,7 +166,7 @@ describe('createNewGameDialog', () => {
     it('displays grid dimensions in each button', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
         });
 
@@ -180,7 +180,7 @@ describe('createNewGameDialog', () => {
     it('includes the cut style picker section', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
         });
 
@@ -191,7 +191,7 @@ describe('createNewGameDialog', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: 1,
             onSelect,
         });
@@ -202,7 +202,7 @@ describe('createNewGameDialog', () => {
         sizeButtons[0].click();
 
         expect(onSelect).toHaveBeenCalledWith({
-            sizeIndex: 0,
+            sizeId: '24',
             cutStyleIndex: 1,
             composableConfig: undefined,
             fractalConfig: { borderless: false },
@@ -218,7 +218,7 @@ describe('createNewGameDialog', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: 0,
             onSelect,
         });
@@ -234,7 +234,7 @@ describe('createNewGameDialog', () => {
         sizeButtons[0].click();
 
         expect(onSelect).toHaveBeenCalledWith({
-            sizeIndex: 0,
+            sizeId: '24',
             cutStyleIndex: 1,
             composableConfig: undefined,
             fractalConfig: { borderless: false },
@@ -249,7 +249,7 @@ describe('createNewGameDialog', () => {
     it('exposes the top-level "Enable rotation" checkbox by default', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             onSelect: vi.fn(),
         });
 
@@ -264,7 +264,7 @@ describe('createNewGameDialog', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: 0, // Classic
             onSelect,
         });
@@ -290,7 +290,7 @@ describe('createNewGameDialog', () => {
     it('initialises the top-level checkbox from savedRotationEnabled', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             savedRotationEnabled: true,
             onSelect: vi.fn(),
         });
@@ -318,7 +318,7 @@ describe('free rotation sub-checkbox', () => {
     it('is hidden when "Enable rotation" is unchecked', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: false,
             onSelect: vi.fn(),
@@ -332,7 +332,7 @@ describe('free rotation sub-checkbox', () => {
     it('is hidden when cut style is not composable', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: FRACTAL_INDEX,
             savedRotationEnabled: true,
             onSelect: vi.fn(),
@@ -346,7 +346,7 @@ describe('free rotation sub-checkbox', () => {
     it('is hidden when rotation is enabled but classic cut style is active', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: CLASSIC_INDEX,
             savedRotationEnabled: true,
             onSelect: vi.fn(),
@@ -360,7 +360,7 @@ describe('free rotation sub-checkbox', () => {
     it('appears when rotation is enabled AND cut style is composable', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: true,
             onSelect: vi.fn(),
@@ -374,7 +374,7 @@ describe('free rotation sub-checkbox', () => {
     it('becomes visible when user enables rotation while composable is active', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: false,
             onSelect: vi.fn(),
@@ -395,7 +395,7 @@ describe('free rotation sub-checkbox', () => {
     it('becomes hidden when user switches away from composable while rotation is on', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: true,
             onSelect: vi.fn(),
@@ -416,7 +416,7 @@ describe('free rotation sub-checkbox', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: true,
             savedFreeRotationEnabled: true,
@@ -436,7 +436,7 @@ describe('free rotation sub-checkbox', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: true,
             savedFreeRotationEnabled: false,
@@ -456,7 +456,7 @@ describe('free rotation sub-checkbox', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: false,
             savedFreeRotationEnabled: true,
@@ -476,7 +476,7 @@ describe('free rotation sub-checkbox', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: CLASSIC_INDEX,
             savedRotationEnabled: true,
             savedFreeRotationEnabled: true,
@@ -495,7 +495,7 @@ describe('free rotation sub-checkbox', () => {
     it('initialises the sub-checkbox from savedFreeRotationEnabled', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: true,
             savedFreeRotationEnabled: true,
@@ -511,7 +511,7 @@ describe('free rotation sub-checkbox', () => {
     it('defaults the sub-checkbox to unchecked when savedFreeRotationEnabled is not provided', () => {
         createNewGameDialog({
             container,
-            selectedIndex: 1,
+            selectedSizeId: '48',
             selectedCutStyleIndex: COMPOSABLE_INDEX,
             savedRotationEnabled: true,
             onSelect: vi.fn(),

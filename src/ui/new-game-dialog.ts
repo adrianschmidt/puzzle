@@ -32,7 +32,7 @@ export interface FractalDialogConfig {
 
 /** Everything the player chose in the new-game dialog. */
 export interface NewGameSelection {
-    sizeIndex: number;
+    sizeId: string;
     cutStyleIndex: number;
     /** Present only when the chosen cut style is composable. */
     composableConfig?: ComposableSliderConfig;
@@ -54,8 +54,8 @@ export interface NewGameSelection {
 export interface NewGameDialogOptions {
     /** Container to append the dialog to. */
     container: HTMLElement;
-    /** Currently selected size index (highlighted in the dialog). */
-    selectedIndex: number;
+    /** Currently selected size id (highlighted in the dialog). */
+    selectedSizeId: string;
     /** Currently selected cut style index. */
     selectedCutStyleIndex?: number;
     /** Previously saved composable slider config (used to pre-populate sliders). */
@@ -114,26 +114,26 @@ interface ImageSourceSection {
 }
 
 function buildSizeSection(args: {
-    selectedIndex: number;
+    selectedSizeId: string;
     getCutStyleIndex: () => number;
-    onPick: (sizeIndex: number) => void;
+    onPick: (sizeId: string) => void;
 }): SizeSection {
     const grid = document.createElement('div');
     grid.className = 'size-picker-grid';
 
     const buttons: HTMLButtonElement[] = [];
 
-    for (let i = 0; i < PUZZLE_SIZE_OPTIONS.length; i++) {
-        const opt = PUZZLE_SIZE_OPTIONS[i];
+    for (const opt of PUZZLE_SIZE_OPTIONS) {
         const btn = document.createElement('button');
         btn.className = `size-picker-option size-picker-option--${getSizeClass(opt.pieceCount)}`;
         btn.type = 'button';
+        btn.dataset.sizeId = opt.id;
 
-        if (i === args.selectedIndex) {
+        if (opt.id === args.selectedSizeId) {
             btn.classList.add('size-picker-option--selected');
         }
 
-        btn.addEventListener('click', () => args.onPick(i));
+        btn.addEventListener('click', () => args.onPick(opt.id));
 
         buttons.push(btn);
         grid.appendChild(btn);
@@ -382,7 +382,7 @@ function appendCheckboxRow(
  * Returns a cleanup function that removes the dialog from the DOM.
  */
 export function createNewGameDialog(options: NewGameDialogOptions): () => void {
-    const { container, selectedIndex, onSelect, onCancel } = options;
+    const { container, selectedSizeId, onSelect, onCancel } = options;
 
     let currentCutStyleIndex = options.selectedCutStyleIndex ?? 0;
     const composableCutIndex = CUT_STYLE_OPTIONS.findIndex(o => o.id === 'composable');
@@ -450,12 +450,12 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     updateFreeRotationVisibility();
 
     const sizeSection = buildSizeSection({
-        selectedIndex,
+        selectedSizeId,
         getCutStyleIndex: () => currentCutStyleIndex,
-        onPick: (sizeIndex) => {
+        onPick: (sizeId) => {
             dismiss();
             onSelect({
-                sizeIndex,
+                sizeId,
                 cutStyleIndex: currentCutStyleIndex,
                 composableConfig: currentCutStyleIndex === composableCutIndex
                     ? composableSection.getValues()
