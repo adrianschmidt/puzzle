@@ -23,6 +23,7 @@ import { composePuzzle } from '../composable/compose.js';
 import { applyTabs } from './apply-tabs.js';
 import { autoGroupSmallPieces } from './auto-group.js';
 import type { AutoGroup } from './auto-group.js';
+import { adaptiveMinAreaThreshold, DEFAULT_MIN_PIECE_AREA_GAP_RATIO } from './adaptive-threshold.js';
 import { getBaseCutGenerator, getTabGenerator } from './generator-registry.js';
 import { diagnostics } from '../../diagnostics.js';
 
@@ -48,19 +49,31 @@ export interface TopologyGeneratorConfig {
     /** Opaque config forwarded to the tab generator. */
     tabConfig?: Record<string, unknown>;
     /**
-     * Minimum area (px²) below which a piece is auto-grouped with its
+     * Absolute floor (px²) below which a piece is auto-grouped with its
      * largest neighbour by {@link autoGroupSmallPieces}, run as a
-     * post-pass over the generated DCEL. The resulting groups are
-     * surfaced via {@link TopologyPuzzle.autoGroups} so the gameplay
-     * layer can glue tiny noise faces (sub-pixel slivers from sine/Voronoi
-     * intersections) into their neighbours instead of shipping them as
-     * standalone pieces.
+     * post-pass over the generated DCEL. Compared against the piece's
+     * bounding-box area. The resulting groups are surfaced via
+     * {@link TopologyPuzzle.autoGroups} so the gameplay layer can glue
+     * tiny noise faces (sub-pixel slivers from curve-intersection
+     * rounding, or tab-fold-back islands) into their neighbours instead
+     * of shipping them as standalone pieces.
      *
      * Omit (default `undefined`) to skip auto-grouping entirely; in that
      * case `autoGroups` is empty and every piece stands alone. Direct
      * callers in tests typically leave this unset.
      */
     minPieceArea?: number;
+    /**
+     * Ratio between consecutive bbox-area pieces that defines a "size
+     * gap" — used by the adaptive auto-group threshold. When the
+     * sorted bbox areas have a consecutive ratio ≥ this value, every
+     * piece below the gap (up to the geometric-mean cutoff) is also
+     * eligible for auto-grouping, on top of the absolute
+     * {@link minPieceArea} floor. Defaults to
+     * {@link DEFAULT_MIN_PIECE_AREA_GAP_RATIO}. Set to `Infinity` to
+     * disable the adaptive threshold (only the absolute floor applies).
+     */
+    minPieceAreaGapRatio?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,26 +171,41 @@ export function generateTopologyPuzzle(
     //    of each piece — inner-boundary edges count as neighbours, which
     //    is what we want (a tiny piece living inside a hole should be
     //    glued to the surrounding frame, not orphaned).
+    //
+    //    Area metric: each piece's bounding-box area. Bbox is robust
+    //    against curved boundaries and is good enough for size-class
+    //    detection (junk-vs-real). The adaptive threshold then looks
+    //    for a large multiplicative gap in the sorted bbox distribution
+    //    and bumps the floor accordingly so tab-fold-back islands and
+    //    other tiny sliver faces get absorbed even when they're well
+    //    above the absolute `minPieceArea` noise floor.
     const minPieceArea = config?.minPieceArea;
     let autoGroups: AutoGroup[] = [];
     if (minPieceArea !== undefined) {
         const areas = new Map<number, number>();
         const neighbours = new Map<number, Set<number>>();
         for (const def of pieceDefs) {
-            areas.set(def.id, computeOuterLoopArea(def.edges));
+            areas.set(def.id, computeBboxArea(def.edges));
             const ns = new Set<number>();
             for (const e of def.edges) {
                 if (e.matePieceId >= 0) ns.add(e.matePieceId);
             }
             neighbours.set(def.id, ns);
         }
+        const gapRatio = config?.minPieceAreaGapRatio
+            ?? DEFAULT_MIN_PIECE_AREA_GAP_RATIO;
+        const adaptive = adaptiveMinAreaThreshold(
+            [...areas.values()],
+            gapRatio,
+        );
+        const effectiveMinArea = Math.max(minPieceArea, adaptive ?? 0);
         autoGroups = autoGroupSmallPieces(
             {
                 pieceIds: pieceDefs.map(d => d.id),
                 areas,
                 neighbours,
             },
-            minPieceArea,
+            effectiveMinArea,
         );
     }
 
@@ -190,61 +218,37 @@ export function generateTopologyPuzzle(
 }
 
 // ---------------------------------------------------------------------------
-// Outer-loop polygon area (shoelace on edge endpoints)
+// Piece bounding-box area
 // ---------------------------------------------------------------------------
 
 /**
- * Compute the polygon area of a piece's outer loop using the shoelace
- * formula. The outer loop is the prefix of `edges` before the first
- * chain break (where the previous edge's `end` no longer matches the
- * current edge's `start`).
+ * Compute the bounding-box area of a piece. Walks every edge (including
+ * inner-boundary loops, since their points are still part of the piece)
+ * and uses `curvePoints` when present so curved boundaries contribute
+ * accurate extents rather than just their endpoint chord.
  *
- * Curve-bounded faces (Venn crescents, the lens) have outer loops made
- * of a handful of arcs whose endpoints are the circle intersection
- * points. Running shoelace on endpoints alone collapses such faces to
- * ~0 area, which then trips the auto-group threshold and incorrectly
- * glues legitimate pieces (e.g. a crescent) onto their largest
- * neighbour (the frame). To avoid that, we sample each edge's
- * `curvePoints` polyline when present so the shoelace input
- * approximates the true curved boundary; straight edges (no
- * `curvePoints`) continue to contribute just their endpoint.
+ * Bbox area is the size-class metric used by the adaptive auto-group
+ * threshold: it's stable for curved faces, cheap to compute, and good
+ * enough to separate "real piece" from "sliver/fold-back island".
  */
-function computeOuterLoopArea(edges: EdgeDefinition[]): number {
-    if (edges.length === 0) return 0;
-    // Build a polyline approximating the outer loop, then shoelace it.
-    const polyline: Point[] = [];
-    for (let i = 0; i < edges.length; i++) {
-        const cur = edges[i];
-        if (i > 0) {
-            const prev = edges[i - 1];
-            // Chain break = end of outer loop. Inner-boundary loops
-            // don't contribute to "is this piece tiny" — they're holes,
-            // and their area would only confuse the threshold.
-            if (Math.abs(prev.end.x - cur.start.x) > 0.5
-                || Math.abs(prev.end.y - cur.start.y) > 0.5) {
-                break;
-            }
-        }
-        if (cur.curvePoints && cur.curvePoints.length >= 2) {
-            // curvePoints[0] === cur.start; skip the first to avoid
-            // duplicating the previous edge's endpoint.
-            const startIdx = polyline.length === 0 ? 0 : 1;
-            for (let j = startIdx; j < cur.curvePoints.length; j++) {
-                polyline.push(cur.curvePoints[j]);
-            }
+function computeBboxArea(edges: EdgeDefinition[]): number {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const visit = (p: Point): void => {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    };
+    for (const e of edges) {
+        if (e.curvePoints && e.curvePoints.length >= 2) {
+            for (const p of e.curvePoints) visit(p);
         } else {
-            if (polyline.length === 0) polyline.push(cur.start);
-            polyline.push(cur.end);
+            visit(e.start);
+            visit(e.end);
         }
     }
-    if (polyline.length < 3) return 0;
-    let area = 0;
-    for (let i = 0; i < polyline.length; i++) {
-        const a = polyline[i];
-        const b = polyline[(i + 1) % polyline.length];
-        area += a.x * b.y - b.x * a.y;
-    }
-    return Math.abs(area) / 2;
+    if (minX === Infinity) return 0;
+    return (maxX - minX) * (maxY - minY);
 }
 
 // ---------------------------------------------------------------------------

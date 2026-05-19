@@ -76,11 +76,15 @@ describe('composable: two-circle Venn', () => {
     });
 
     it('does not auto-group pieces — all four pieces are independent starting groups', () => {
-        // Regression: with endpoints-only shoelace, curve-bounded faces
-        // (crescents, lens) computed as ~0 area and tripped the default
-        // minPieceArea threshold, incorrectly auto-grouping a crescent
-        // with the frame at puzzle start. Sampling `curvePoints` fixes
-        // this. See generator.ts:computeOuterLoopArea.
+        // Regression: when the area heuristic used endpoint-only shoelace,
+        // curve-bounded faces (crescents, lens) computed as ~0 area and
+        // tripped the default minPieceArea threshold, incorrectly
+        // auto-grouping a crescent with the frame at puzzle start. The
+        // current generator uses each piece's bounding-box area (which
+        // is robust against curved boundaries) and an adaptive threshold
+        // that only kicks in when the size distribution is bimodal — the
+        // four Venn pieces have similarly-sized bboxes, so they pass.
+        // See generator.ts:computeBboxArea and adaptive-threshold.ts.
         const { pieces, autoGroups } = generateComposablePuzzle(
             1, 1, { width: 600, height: 400 }, 42, CONFIG,
         );

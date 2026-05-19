@@ -44,12 +44,29 @@ export interface ComposableConfig {
     /** Generator-specific tab config. */
     tabConfig?: Record<string, unknown>;
     /**
-     * Minimum area (px²) for a piece to stand alone; smaller pieces are
-     * auto-grouped with a neighbour. Defaults to {@link DEFAULT_MIN_PIECE_AREA},
-     * an empirical value that absorbs bezier-js sub-pixel-area numerical
-     * noise without consuming legitimate small pieces.
+     * Absolute floor (px², bbox area) for a piece to stand alone;
+     * smaller pieces are auto-grouped with a neighbour. Defaults to
+     * {@link DEFAULT_MIN_PIECE_AREA}, an empirical value that absorbs
+     * bezier-js sub-pixel-area numerical noise without consuming
+     * legitimate small pieces.
+     *
+     * On top of this floor an adaptive threshold (see
+     * {@link minPieceAreaGapRatio}) bumps the effective cutoff when
+     * the bbox-area distribution is bimodal — that's what catches
+     * tab-fold-back islands at extreme amplitude/frequency settings.
      */
     minPieceArea?: number;
+    /**
+     * Multiplicative gap that defines "junk-vs-real" in the bbox-area
+     * distribution for adaptive auto-grouping. When the sorted piece
+     * bbox areas have a consecutive ratio at or above this value, the
+     * geometric mean of the two straddling areas becomes the effective
+     * threshold (on top of {@link minPieceArea}). Defaults to
+     * {@link DEFAULT_MIN_PIECE_AREA_GAP_RATIO}. Use `Infinity` to
+     * disable the adaptive threshold (only the absolute floor
+     * applies).
+     */
+    minPieceAreaGapRatio?: number;
 }
 
 /**
@@ -58,6 +75,12 @@ export interface ComposableConfig {
  * up sub-pixel sliver faces produced by curve-intersection rounding.
  */
 export const DEFAULT_MIN_PIECE_AREA = 4;
+
+/**
+ * Default {@link ComposableConfig.minPieceAreaGapRatio}. Re-exported
+ * from the topology layer where the heuristic lives.
+ */
+export { DEFAULT_MIN_PIECE_AREA_GAP_RATIO } from './topology/adaptive-threshold.js';
 
 /**
  * Generate a puzzle using the topology-driven composable architecture.
@@ -82,5 +105,6 @@ export function generateComposablePuzzle(
         tabGeneratorId: config?.tabGenerator ?? 'classic',
         tabConfig: config?.tabConfig,
         minPieceArea: config?.minPieceArea ?? DEFAULT_MIN_PIECE_AREA,
+        minPieceAreaGapRatio: config?.minPieceAreaGapRatio,
     });
 }
