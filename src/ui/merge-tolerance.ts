@@ -6,22 +6,21 @@
  * (imageWidth / cols), so it feels consistent regardless of puzzle
  * size or image resolution.
  *
- * Storage format: preset index in localStorage. Indices are append-only
- * to avoid breaking existing saved preferences.
- *
- * Storage layout (append-only — do NOT reorder):
- *   0 = Strict  (was "Normal" before relative snap)
- *   1 = Forgiving
- *   2 = Normal  (new default, added with relative snap)
+ * Storage format: each preset has a stable string `id` written to
+ * localStorage. Legacy integer indices (pre-migration:
+ * 0=strict, 1=forgiving, 2=normal) still load via the
+ * `createIdPreferenceStore` factory's legacy-order translation.
  */
 
 import type { CutStyle } from '../game/cut-styles.js';
-import { createIndexedPreferenceStore } from './preference-store.js';
+import { createIdPreferenceStore } from './preference-store.js';
 
 /**
  * A merge tolerance preset.
  */
 export interface MergeTolerancePreset {
+    /** Stable string identifier used in localStorage. */
+    id: string;
     /** Display label */
     label: string;
     /** Description shown to the player */
@@ -41,11 +40,13 @@ export interface MergeTolerancePreset {
 /**
  * Available merge tolerance presets.
  *
- * IMPORTANT: indices are persisted in localStorage.
- * Always APPEND new presets — never reorder or remove existing ones.
+ * Array order matches the pre-migration storage indices so the
+ * legacy-index loader translates correctly. New presets can be
+ * appended freely now that storage is id-keyed.
  */
 export const MERGE_TOLERANCE_PRESETS: readonly MergeTolerancePreset[] = [
     {
+        id: 'strict',
         label: 'Strict',
         description: 'Pieces must be very close to snap',
         fraction: 0.133,
@@ -53,6 +54,7 @@ export const MERGE_TOLERANCE_PRESETS: readonly MergeTolerancePreset[] = [
         displayOrder: 0,
     },
     {
+        id: 'forgiving',
         label: 'Forgiving',
         description: 'Pieces snap from further away',
         fraction: 0.533,
@@ -60,6 +62,7 @@ export const MERGE_TOLERANCE_PRESETS: readonly MergeTolerancePreset[] = [
         displayOrder: 2,
     },
     {
+        id: 'normal',
         label: 'Normal',
         description: 'Standard snapping distance',
         fraction: 0.333,
@@ -68,46 +71,42 @@ export const MERGE_TOLERANCE_PRESETS: readonly MergeTolerancePreset[] = [
     },
 ] as const;
 
-/** Default preset index (Normal — index 2). */
-export const DEFAULT_TOLERANCE_INDEX = 2;
+/** Default preset id. */
+export const DEFAULT_TOLERANCE_ID = 'normal';
 
 /**
- * Get the presets sorted by displayOrder for rendering in the UI.
- * Each entry includes the original storage index.
+ * Pre-migration storage order — DO NOT reorder. Used by the loader to
+ * translate legacy integer indices to ids. Drop in a follow-up release
+ * once enough users have loaded the migrated build.
  */
-export function getSortedPresets(): Array<{
-    preset: MergeTolerancePreset;
-    storageIndex: number;
-}> {
-    return MERGE_TOLERANCE_PRESETS
-        .map((preset, storageIndex) => ({ preset, storageIndex }))
-        .sort((a, b) => a.preset.displayOrder - b.preset.displayOrder);
+const LEGACY_ORDER = ['strict', 'forgiving', 'normal'] as const;
+
+/**
+ * Return the presets sorted by `displayOrder`, ready for rendering.
+ */
+export function getSortedPresets(): readonly MergeTolerancePreset[] {
+    return [...MERGE_TOLERANCE_PRESETS].sort(
+        (a, b) => a.displayOrder - b.displayOrder,
+    );
 }
 
 /** localStorage key for the saved merge tolerance preference. */
 export const TOLERANCE_PREFERENCE_KEY = 'puzzle-merge-tolerance';
 
-const store = createIndexedPreferenceStore({
+const store = createIdPreferenceStore({
     key: TOLERANCE_PREFERENCE_KEY,
     presets: MERGE_TOLERANCE_PRESETS,
-    defaultIndex: DEFAULT_TOLERANCE_INDEX,
+    defaultId: DEFAULT_TOLERANCE_ID,
+    legacyOrder: LEGACY_ORDER,
 });
 
-/**
- * Get the preset at the given index,
- * or the default if the index is out of range.
- */
+/** Get the preset for an id, or the default preset for an unknown id. */
 export const getTolerancePreset = store.getPreset;
 
-/**
- * Save the preferred merge tolerance index to localStorage.
- */
+/** Save the preferred merge tolerance id to localStorage. */
 export const saveTolerancePreference = store.save;
 
-/**
- * Load the preferred merge tolerance index from localStorage.
- * Returns the default index if nothing is saved or the value is invalid.
- */
+/** Load the preferred merge tolerance id from localStorage. */
 export const loadTolerancePreference = store.load;
 
 /**
@@ -132,10 +131,6 @@ export function getStyleSnapMultiplier(style: CutStyle | string): number {
 
 /**
  * Compute the reference piece width for snap distance calculation.
- *
- * Uses imageWidth / cols — the nominal piece width for a grid-based
- * puzzle. This is consistent across all styles, including fractal
- * (which still has a nominal grid size).
  */
 export function getReferencePieceWidth(
     imageWidth: number,
@@ -146,32 +141,21 @@ export function getReferencePieceWidth(
 
 /**
  * Get the current merge tolerance in pixels.
- *
- * @param imageWidth - Width of the puzzle image in pixels
- * @param cols - Number of grid columns
- * @param cutStyle - The active cut style (for per-style multiplier)
  */
 export function getActiveTolerance(
     imageWidth: number,
     cols: number,
     cutStyle: CutStyle | string = 'classic',
 ): number {
-    const index = loadTolerancePreference();
-    const preset = getTolerancePreset(index);
+    const preset = getTolerancePreset(loadTolerancePreference());
     const pieceWidth = getReferencePieceWidth(imageWidth, cols);
     const styleMultiplier = getStyleSnapMultiplier(cutStyle);
-
     return preset.fraction * pieceWidth * styleMultiplier;
 }
 
 /**
  * Get the current merge rotation tolerance in degrees.
- *
- * Read from the same Strict/Normal/Forgiving preset as the position
- * tolerance, so a single user-facing setting controls both.
  */
 export function getActiveRotationTolerance(): number {
-    const index = loadTolerancePreference();
-    const preset = getTolerancePreset(index);
-    return preset.rotationDegrees;
+    return getTolerancePreset(loadTolerancePreference()).rotationDegrees;
 }

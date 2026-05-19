@@ -99,6 +99,7 @@ export type { CutStylePickerOptions } from './cut-style-picker.js';
 
 export {
     MERGE_TOLERANCE_PRESETS,
+    DEFAULT_TOLERANCE_ID,
     getTolerancePreset,
     saveTolerancePreference,
     loadTolerancePreference,

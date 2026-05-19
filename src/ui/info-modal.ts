@@ -29,7 +29,7 @@ export interface InfoModalOptions {
     /** Called when the modal is dismissed. */
     onDismiss?: () => void;
     /** Called when the merge tolerance preference changes. */
-    onToleranceChanged?: (index: number) => void;
+    onToleranceChanged?: (id: string) => void;
     /** Called when the solve button is pressed (debug). */
     onSolve?: () => void;
     /**
@@ -202,7 +202,7 @@ function buildCutStylesSection(): HTMLElement {
 }
 
 function buildSettingsSection(args: {
-    onToleranceChanged?: (index: number) => void;
+    onToleranceChanged?: (id: string) => void;
 }): HTMLElement {
     const section = document.createElement('section');
     section.className = 'info-section';
@@ -218,7 +218,7 @@ function buildSettingsSection(args: {
 }
 
 function buildToleranceSetting(
-    onToleranceChanged?: (index: number) => void,
+    onToleranceChanged?: (id: string) => void,
 ): HTMLElement {
     const setting = document.createElement('div');
     setting.className = 'info-setting';
@@ -237,13 +237,13 @@ function buildToleranceSetting(
     tolContainer.className = 'tolerance-options';
     tolContainer.dataset.testid = 'tolerance-options';
 
-    const currentToleranceIndex = loadTolerancePreference();
-    getSortedPresets().forEach(({ preset, storageIndex }) => {
+    const currentToleranceId = loadTolerancePreference();
+    getSortedPresets().forEach((preset) => {
         const button = document.createElement('button');
         button.className = 'tolerance-option';
         button.type = 'button';
         button.dataset.testid = `tolerance-${preset.label.toLowerCase()}`;
-        if (storageIndex === currentToleranceIndex) {
+        if (preset.id === currentToleranceId) {
             button.classList.add('selected');
         }
 
@@ -258,12 +258,12 @@ function buildToleranceSetting(
         button.appendChild(descSpan);
 
         button.addEventListener('click', () => {
-            saveTolerancePreference(storageIndex);
+            saveTolerancePreference(preset.id);
             tolContainer
                 .querySelectorAll('.tolerance-option')
                 .forEach((btn) => btn.classList.remove('selected'));
             button.classList.add('selected');
-            onToleranceChanged?.(storageIndex);
+            onToleranceChanged?.(preset.id);
         });
 
         tolContainer.appendChild(button);
