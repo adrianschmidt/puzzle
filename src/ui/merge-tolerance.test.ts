@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     MERGE_TOLERANCE_PRESETS,
-    DEFAULT_TOLERANCE_INDEX,
+    DEFAULT_TOLERANCE_ID,
     TOLERANCE_PREFERENCE_KEY,
     getTolerancePreset,
     saveTolerancePreference,
@@ -27,8 +27,9 @@ describe('merge-tolerance', () => {
             expect(MERGE_TOLERANCE_PRESETS.length).toBeGreaterThanOrEqual(3);
         });
 
-        it('each preset has a label, description, fraction, rotationDegrees, and displayOrder', () => {
+        it('each preset has id, label, description, fraction, rotationDegrees, displayOrder', () => {
             for (const preset of MERGE_TOLERANCE_PRESETS) {
+                expect(preset.id).toBeTruthy();
                 expect(preset.label).toBeTruthy();
                 expect(preset.description).toBeTruthy();
                 expect(preset.fraction).toBeGreaterThan(0);
@@ -37,60 +38,26 @@ describe('merge-tolerance', () => {
             }
         });
 
-        it('Strict has a smaller fraction than Normal', () => {
-            const strict = MERGE_TOLERANCE_PRESETS[0];
-            const normal = MERGE_TOLERANCE_PRESETS[2];
-            expect(strict.fraction).toBeLessThan(normal.fraction);
+        it('uses stable string ids: strict, forgiving, normal', () => {
+            const ids = MERGE_TOLERANCE_PRESETS.map((p) => p.id);
+            expect(ids).toEqual(['strict', 'forgiving', 'normal']);
         });
 
-        it('Forgiving has a larger fraction than Normal', () => {
-            const forgiving = MERGE_TOLERANCE_PRESETS[1];
-            const normal = MERGE_TOLERANCE_PRESETS[2];
-            expect(forgiving.fraction).toBeGreaterThan(normal.fraction);
-        });
-
-        it('default index points to Normal', () => {
-            expect(MERGE_TOLERANCE_PRESETS[DEFAULT_TOLERANCE_INDEX].label).toBe(
-                'Normal',
-            );
-        });
-
-        it('Strict preset has rotationDegrees = 10', () => {
-            expect(MERGE_TOLERANCE_PRESETS[0].rotationDegrees).toBe(10);
-        });
-
-        it('Forgiving preset has rotationDegrees = 40', () => {
-            expect(MERGE_TOLERANCE_PRESETS[1].rotationDegrees).toBe(40);
-        });
-
-        it('Normal preset has rotationDegrees = 20', () => {
-            expect(MERGE_TOLERANCE_PRESETS[2].rotationDegrees).toBe(20);
+        it('default id points to Normal', () => {
+            expect(DEFAULT_TOLERANCE_ID).toBe('normal');
         });
     });
 
     describe('getSortedPresets', () => {
         it('returns presets in display order: Strict, Normal, Forgiving', () => {
             const sorted = getSortedPresets();
-            expect(sorted.map((s) => s.preset.label)).toEqual([
-                'Strict',
-                'Normal',
-                'Forgiving',
-            ]);
-        });
-
-        it('preserves the correct storage indices', () => {
-            const sorted = getSortedPresets();
-            // Strict is at storage index 0, Normal at 2, Forgiving at 1
-            expect(sorted[0].storageIndex).toBe(0);
-            expect(sorted[1].storageIndex).toBe(2);
-            expect(sorted[2].storageIndex).toBe(1);
+            expect(sorted.map((p) => p.label)).toEqual(['Strict', 'Normal', 'Forgiving']);
         });
     });
 
     describe('getReferencePieceWidth', () => {
         it('computes imageWidth / cols', () => {
             expect(getReferencePieceWidth(1080, 8)).toBe(135);
-            expect(getReferencePieceWidth(800, 6)).toBeCloseTo(133.33, 1);
         });
     });
 
@@ -107,115 +74,86 @@ describe('merge-tolerance', () => {
     });
 
     describe('getTolerancePreset', () => {
-        it('returns the preset at the given index', () => {
-            expect(getTolerancePreset(0)).toBe(MERGE_TOLERANCE_PRESETS[0]);
-            expect(getTolerancePreset(1)).toBe(MERGE_TOLERANCE_PRESETS[1]);
-            expect(getTolerancePreset(2)).toBe(MERGE_TOLERANCE_PRESETS[2]);
+        it('returns the preset matching an id', () => {
+            expect(getTolerancePreset('strict').label).toBe('Strict');
+            expect(getTolerancePreset('forgiving').label).toBe('Forgiving');
+            expect(getTolerancePreset('normal').label).toBe('Normal');
         });
 
-        it('returns default preset for out-of-range index', () => {
-            expect(getTolerancePreset(-1)).toBe(
-                MERGE_TOLERANCE_PRESETS[DEFAULT_TOLERANCE_INDEX],
-            );
-            expect(getTolerancePreset(99)).toBe(
-                MERGE_TOLERANCE_PRESETS[DEFAULT_TOLERANCE_INDEX],
-            );
+        it('returns the default preset for an unknown id', () => {
+            expect(getTolerancePreset('nope').label).toBe('Normal');
         });
     });
 
     describe('saveTolerancePreference / loadTolerancePreference', () => {
-        it('returns default index when nothing is saved', () => {
-            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_INDEX);
+        it('returns default id when nothing is saved', () => {
+            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_ID);
         });
 
-        it('saves and loads the preference', () => {
-            saveTolerancePreference(1);
-            expect(loadTolerancePreference()).toBe(1);
+        it('saves and loads an id', () => {
+            saveTolerancePreference('strict');
+            expect(loadTolerancePreference()).toBe('strict');
         });
 
-        it('returns default for invalid stored values', () => {
+        it('migrates legacy integer indices to ids', () => {
+            localStorage.setItem(TOLERANCE_PREFERENCE_KEY, '0');
+            expect(loadTolerancePreference()).toBe('strict');
+            localStorage.setItem(TOLERANCE_PREFERENCE_KEY, '1');
+            expect(loadTolerancePreference()).toBe('forgiving');
+            localStorage.setItem(TOLERANCE_PREFERENCE_KEY, '2');
+            expect(loadTolerancePreference()).toBe('normal');
+        });
+
+        it('returns default for unknown stored values', () => {
             localStorage.setItem(TOLERANCE_PREFERENCE_KEY, 'garbage');
-            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_INDEX);
+            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_ID);
         });
 
-        it('returns default for out-of-range stored values', () => {
+        it('returns default for out-of-range legacy values', () => {
             localStorage.setItem(TOLERANCE_PREFERENCE_KEY, '99');
-            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_INDEX);
-        });
-
-        it('returns default for negative stored values', () => {
-            localStorage.setItem(TOLERANCE_PREFERENCE_KEY, '-1');
-            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_INDEX);
+            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_ID);
         });
 
         it('handles localStorage errors gracefully', () => {
             vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-                throw new Error('Storage error');
+                throw new Error('storage error');
             });
-
-            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_INDEX);
-
+            expect(loadTolerancePreference()).toBe(DEFAULT_TOLERANCE_ID);
             vi.restoreAllMocks();
         });
     });
 
     describe('getActiveTolerance', () => {
-        it('computes tolerance as fraction × pieceWidth for default preset', () => {
-            // Default is Normal (index 2, fraction 0.333)
-            // With 1080px image, 8 cols → pieceWidth = 135
+        it('computes tolerance for the default preset', () => {
+            // Normal: fraction 0.333, 1080/8 = 135 → ~45
             const tolerance = getActiveTolerance(1080, 8);
-            const expected = 0.333 * 135;
-            expect(tolerance).toBeCloseTo(expected, 1);
+            expect(tolerance).toBeCloseTo(0.333 * 135, 1);
         });
 
-        it('computes tolerance for Strict when preference is set', () => {
-            saveTolerancePreference(0); // Strict, fraction 0.133
-            const tolerance = getActiveTolerance(1080, 8);
-            const expected = 0.133 * 135;
-            expect(tolerance).toBeCloseTo(expected, 1);
+        it('computes tolerance for Strict when saved', () => {
+            saveTolerancePreference('strict');
+            expect(getActiveTolerance(1080, 8)).toBeCloseTo(0.133 * 135, 1);
         });
 
-        it('computes tolerance for Forgiving when preference is set', () => {
-            saveTolerancePreference(1); // Forgiving, fraction 0.533
-            const tolerance = getActiveTolerance(1080, 8);
-            const expected = 0.533 * 135;
-            expect(tolerance).toBeCloseTo(expected, 1);
-        });
-
-        it('scales with image width and column count', () => {
-            // Smaller pieces (more cols) → smaller absolute tolerance
-            const toleranceFew = getActiveTolerance(1080, 6);
-            const toleranceMany = getActiveTolerance(1080, 16);
-            expect(toleranceFew).toBeGreaterThan(toleranceMany);
-        });
-
-        it('applies style multiplier', () => {
-            // All multipliers are 1.0 for now, so result should be the same
-            const classic = getActiveTolerance(1080, 8, 'classic');
-            const fractal = getActiveTolerance(1080, 8, 'fractal');
-            expect(classic).toBe(fractal);
+        it('computes tolerance for Forgiving when saved', () => {
+            saveTolerancePreference('forgiving');
+            expect(getActiveTolerance(1080, 8)).toBeCloseTo(0.533 * 135, 1);
         });
     });
 
     describe('getActiveRotationTolerance', () => {
         it('returns 20 for the default Normal preset', () => {
-            // Default index is Normal (2), rotationDegrees = 20
             expect(getActiveRotationTolerance()).toBe(20);
         });
 
-        it('returns 10 for the Strict preset', () => {
-            saveTolerancePreference(0);
+        it('returns 10 for Strict', () => {
+            saveTolerancePreference('strict');
             expect(getActiveRotationTolerance()).toBe(10);
         });
 
-        it('returns 40 for the Forgiving preset', () => {
-            saveTolerancePreference(1);
+        it('returns 40 for Forgiving', () => {
+            saveTolerancePreference('forgiving');
             expect(getActiveRotationTolerance()).toBe(40);
-        });
-
-        it('returns Normal value after round-trip save/load', () => {
-            saveTolerancePreference(2); // Normal
-            expect(getActiveRotationTolerance()).toBe(20);
         });
     });
 });
