@@ -1,10 +1,11 @@
 /**
- * Free-rotation-enabled preference — sub-checkbox under the composable
- * options in the new-game dialog. Only meaningful when the top-level
- * "Enable rotation" toggle is also on AND the cut style is composable.
+ * Free-rotation-enabled preference — sub-checkbox under the wavy or
+ * composable options in the new-game dialog. Only meaningful when the
+ * top-level "Enable rotation" toggle is also on AND the cut style is
+ * wavy or composable.
  *
  * Stored separately from the parent rotation toggle so it persists across
- * new-game flows even while the composable section is hidden.
+ * new-game flows even while the sub-checkbox is hidden.
  */
 
 import { createBooleanPreference } from './preference-store.js';

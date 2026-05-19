@@ -41,9 +41,9 @@ export interface NewGameSelection {
     /** Whether the player ticked the top-level "Enable rotation" checkbox. */
     rotationEnabled: boolean;
     /**
-     * True iff cut style is composable AND rotation is enabled AND the user
-     * ticked the free-rotation sub-checkbox. Used by the host to pick
-     * `rotationMode: 'free'` instead of `'quarter-turn'`.
+     * True iff cut style is wavy or composable AND rotation is enabled AND
+     * the user ticked the free-rotation sub-checkbox. Used by the host to
+     * pick `rotationMode: 'free'` instead of `'quarter-turn'`.
      */
     freeRotation: boolean;
     imageSource: string;
