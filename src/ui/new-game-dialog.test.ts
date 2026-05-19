@@ -6,7 +6,7 @@
  * Tests for the new-game dialog.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createNewGameDialog, getSizeClass } from './new-game-dialog.js';
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 
@@ -518,5 +518,65 @@ describe('free rotation sub-checkbox', () => {
             '.free-rotation-row input[type="checkbox"]',
         );
         expect(checkbox?.checked).toBe(false);
+    });
+});
+
+describe('createNewGameDialog — composable visibility', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+    });
+
+    it('hides the composable button on production', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/');
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'classic',
+            onSelect: vi.fn(),
+        });
+        expect(
+            container.querySelector('[data-cut-style-id="composable"]'),
+        ).toBeNull();
+    });
+
+    it('shows the composable button on dev-deploys', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/dev/');
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'classic',
+            onSelect: vi.fn(),
+        });
+        expect(
+            container.querySelector('[data-cut-style-id="composable"]'),
+        ).not.toBeNull();
+    });
+
+    it('coerces a saved composable preference to the default on prod', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/');
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'composable',  // saved value not visible on prod
+            onSelect: vi.fn(),
+        });
+        // The "Classic" button should be the selected one.
+        const classicBtn = container.querySelector(
+            '[data-cut-style-id="classic"]',
+        ) as HTMLElement | null;
+        expect(classicBtn?.classList.contains('cut-style-option--selected')).toBe(true);
     });
 });

@@ -11,7 +11,7 @@
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
-import { DEFAULT_CUT_STYLE_ID } from '../game/cut-styles.js';
+import { DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOptions } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
@@ -386,6 +386,11 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
 
     let currentCutStyleId: string = options.selectedCutStyleId ?? DEFAULT_CUT_STYLE_ID;
 
+    const visibleOptions = getVisibleCutStyleOptions();
+    if (!visibleOptions.some((o) => o.id === currentCutStyleId)) {
+        currentCutStyleId = DEFAULT_CUT_STYLE_ID;
+    }
+
     // The helper owns Escape/backdrop dismissal and fires onCancel only on
     // those paths — not when the caller invokes dismiss() after picking a
     // size.
@@ -473,6 +478,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
 
     const cutStyleSection = createCutStylePicker({
         selectedCutStyleId: currentCutStyleId,
+        options: visibleOptions,
         onSelect: (id) => {
             currentCutStyleId = id;
             sizeSection.updateLabels();

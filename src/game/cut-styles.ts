@@ -68,3 +68,26 @@ const store = createIdPreferenceStore({
 export const getCutStyleOption = store.getPreset;
 export const saveCutStylePreference = store.save;
 export const loadCutStylePreference = store.load;
+
+/**
+ * Whether the Composable cut style is selectable in the new-game dialog.
+ * True on `npm run dev` (`import.meta.env.DEV`) and on the PR-preview
+ * deploy (which sets `VITE_BASE_PATH: /puzzle/dev/`). False on the
+ * production build.
+ *
+ * Computed per call rather than cached so tests can stub the env.
+ */
+export function isComposableVisible(): boolean {
+    if (import.meta.env.DEV) return true;
+    const base = import.meta.env.BASE_URL ?? '';
+    return base.includes('/dev/');
+}
+
+/**
+ * Return the cut style options the new-game dialog should render —
+ * the full list on dev, the list without Composable on production.
+ */
+export function getVisibleCutStyleOptions(): readonly CutStyleOption[] {
+    if (isComposableVisible()) return CUT_STYLE_OPTIONS;
+    return CUT_STYLE_OPTIONS.filter((o) => o.id !== 'composable');
+}
