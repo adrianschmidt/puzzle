@@ -836,3 +836,39 @@ describe('disableTabs default agreement (#285)', () => {
             .toEqual(fromExplicit.map((p) => p.shape));
     });
 });
+
+describe('share-link codec — wavy', () => {
+    it('round-trips a wavy payload with no cf', () => {
+        const payload: SharePayload = {
+            v: 1,
+            i: 'x',
+            is: [1080, 720],
+            g: [6, 4],
+            c: 'wavy',
+            s: 42,
+            r: 'none',
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('round-trips a wavy payload with free rotation', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [1080, 720], g: [8, 6],
+            c: 'wavy', s: 7, r: 'free',
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('gameStateToPayload emits no cf for a wavy state', () => {
+        // Wavy's config is derived from gridSize; cf is composable-only.
+        const state = makeGameState({
+            seed: 7,
+            cutStyle: 'wavy',
+            rotationMode: 'none',
+            gridSize: { cols: 6, rows: 4 },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.cf).toBeUndefined();
+        expect(payload.c).toBe('wavy');
+    });
+});
