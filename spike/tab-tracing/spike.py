@@ -559,6 +559,58 @@ def shorter_arc_between_anchors(segs, a_start, a_end):
     return fwd if arc_len(fwd) <= arc_len(bwd) else bwd
 
 
+def tab_arc_between_anchors(segs, a_start, a_end):
+    """
+    Pick the arc from a_start to a_end whose midpoint sits on the
+    "protrusion" side of the neck chord — i.e. the arc going OVER the
+    tab, not around the rest of the silhouette.
+
+    The protrusion direction is whichever side of the chord has the
+    larger perpendicular offset to the arc midpoint (the tab head sticks
+    out further than the opposite arc does). Works for both cropped
+    photos (where the "opposite arc" is the image-edge wrap-around) and
+    internal-baseline screenshots (where it's the rest of the piece).
+    """
+    n = len(segs)
+
+    def walk(direction):
+        arc = []
+        cur = a_start
+        guard = 0
+        while cur != a_end:
+            arc.append(segs[cur] if direction > 0 else _reverse_segment(segs[(cur - 1) % n]))
+            cur = (cur + direction) % n
+            guard += 1
+            if guard > n:
+                raise RuntimeError("runaway arc walk")
+        return arc
+
+    fwd = walk(+1)
+    bwd = walk(-1)
+
+    p_start = segs[a_start][0]
+    p_end = segs[a_end][0]
+    chord_mid = ((p_start[0] + p_end[0]) / 2, (p_start[1] + p_end[1]) / 2)
+    chord_dx = p_end[0] - p_start[0]
+    chord_dy = p_end[1] - p_start[1]
+    chord_len = math.hypot(chord_dx, chord_dy) or 1.0
+
+    def perpendicular_offset(arc):
+        """Signed perpendicular distance from chord midpoint to arc midpoint."""
+        mid = arc[len(arc) // 2]
+        t = 0.5
+        mt = 1 - t
+        midpt = (
+            mt**3 * mid[0][0] + 3*mt**2*t * mid[1][0] + 3*mt*t**2 * mid[2][0] + t**3 * mid[3][0],
+            mt**3 * mid[0][1] + 3*mt**2*t * mid[1][1] + 3*mt*t**2 * mid[2][1] + t**3 * mid[3][1],
+        )
+        # Perpendicular distance: chord-cross-(midpt - chord_mid) / chord_len
+        return (chord_dx * (midpt[1] - chord_mid[1])
+                - chord_dy * (midpt[0] - chord_mid[0])) / chord_len
+
+    return fwd if abs(perpendicular_offset(fwd)) > abs(perpendicular_offset(bwd)) else bwd
+
+
 def _reverse_segment(seg):
     p0, c1, c2, p3 = seg
     return (p3, c2, c1, p0)
@@ -593,15 +645,50 @@ def render_neck_debug(image_path, segs, anchor1, anchor2, tab_arc, out_path):
     cv2.imwrite(str(out_path), img)
 
 
-def process_real_image(png_path, label):
-    """Run the full pipeline on a real photo/screenshot with unknown baseline."""
+def find_edge_anchors(segs, img_width, img_height, edge_tol=4):
+    """
+    For cropped tab photos (tab roughly centred, piece body extending to
+    image edges), the contour leaves the image on the left and right
+    edges. The two "neck" endpoints are the topmost contour anchors that
+    lie on those edges.
+    """
+    n_anchors = len(segs)  # one anchor per segment (the start anchor)
+    candidates_left = []
+    candidates_right = []
+    for i in range(n_anchors):
+        x, y = segs[i][0]
+        if x <= edge_tol:
+            candidates_left.append((i, x, y))
+        if x >= img_width - edge_tol:
+            candidates_right.append((i, x, y))
+    if not candidates_left or not candidates_right:
+        raise RuntimeError(
+            f"could not find anchors on both image edges (left={len(candidates_left)}, right={len(candidates_right)})")
+    left = min(candidates_left, key=lambda c: c[2])[0]   # topmost = smallest y
+    right = min(candidates_right, key=lambda c: c[2])[0]
+    return left, right
+
+
+def process_real_image(png_path, label, mode="auto"):
+    """
+    Run the full pipeline on a real photo/screenshot.
+
+    mode:
+      "concavity"     — internal-baseline case: find necks by curvature peaks.
+      "edge-clipped"  — cropped-photo case: necks are where the silhouette
+                        meets the left and right image edges.
+      "auto"          — try edge-clipped first, fall back to concavity.
+    """
     svg_out = OUT / f"real-{label}-traced.svg"
     debug_out = OUT / f"real-{label}-debug.png"
     overlay_out = OUT / f"real-{label}-overlay.png"
     norm_out = OUT / f"real-{label}-normalized.json"
     metrics_out = OUT / f"real-{label}-metrics.txt"
 
-    print(f"  potrace (alphamax=0.5 keeps necks but smooths the head) ...")
+    img = cv2.imread(str(png_path), cv2.IMREAD_GRAYSCALE)
+    img_h, img_w = img.shape
+
+    print(f"  potrace (alphamax=0.5) ...")
     run_potrace(png_path, svg_out, alphamax=0.5)
     print(f"  parsing SVG ...")
     subpaths = parse_potrace_svg(svg_out)
@@ -617,15 +704,29 @@ def process_real_image(png_path, label):
     print(f"  largest subpath: {(len(chosen) - 1) // 3} segments")
 
     segs = subpath_to_segments(chosen)
-    anchor1, anchor2, signed_angles = detect_necks(segs)
-    print(f"  detected necks at anchors {anchor1}, {anchor2} "
-          f"(turning angles {signed_angles[anchor1 - 1]:.3f}, {signed_angles[anchor2 - 1]:.3f} rad)")
 
-    # Prefer the arc that, after normalization, has POSITIVE y for the
-    # middle of the path — i.e. the tab pokes "outward" rather than "inward".
-    arc_a = shorter_arc_between_anchors(segs, anchor1, anchor2)
-    arc_b = shorter_arc_between_anchors(segs, anchor2, anchor1)
-    tab_arc = arc_a if len(arc_a) <= len(arc_b) else arc_b
+    method_used = None
+    if mode in ("auto", "edge-clipped"):
+        try:
+            anchor1, anchor2 = find_edge_anchors(segs, img_w, img_h)
+            method_used = "edge-clipped"
+            print(f"  edge-clipped necks at anchors {anchor1}, {anchor2}: "
+                  f"L={segs[anchor1][0]}, R={segs[anchor2][0]}")
+        except RuntimeError as e:
+            if mode == "edge-clipped":
+                raise
+            print(f"  edge-clipped detection failed ({e}); falling back to concavity")
+    if method_used is None:
+        anchor1, anchor2, signed_angles = detect_necks(segs)
+        method_used = "concavity"
+        print(f"  detected necks at anchors {anchor1}, {anchor2} "
+              f"(turning angles {signed_angles[anchor1 - 1]:.3f}, {signed_angles[anchor2 - 1]:.3f} rad)")
+
+    # Pick whichever arc bulges further from the neck chord — that's
+    # the tab. Works whether the "other" arc is the rest of the piece
+    # silhouette (screenshot case) or the image-edge wrap-around (cropped
+    # photo case).
+    tab_arc = tab_arc_between_anchors(segs, anchor1, anchor2)
 
     print(f"  tab arc: {len(tab_arc)} segments")
 
@@ -633,6 +734,16 @@ def process_real_image(png_path, label):
 
     normalized_segs = normalize_to_template(tab_arc)
     normalized_path = flatten_segments_to_path(normalized_segs)
+
+    # ----- Shape analysis: neck pinch and head widest point.
+    shape = analyze_tab_shape(normalized_path)
+    if shape:
+        print(f"  shape: head at y={shape['head_y']:.3f} (width {shape['head_width']:.3f}), "
+              f"neck at y={shape['neck_y']:.3f} (width {shape['neck_width']:.3f}), "
+              f"apex y={shape['apex_y']:.3f}")
+        if shape['neck_width'] > 0:
+            print(f"  head/neck width ratio: {shape['head_width'] / shape['neck_width']:.2f} "
+                  f"(classic default ≈ 1.9)")
 
     # ----- Schneider refit: sweep tolerances to show segment-count vs fidelity.
     # Tolerance is in neck-chord fractions (since we're in the normalized frame).
@@ -677,6 +788,21 @@ def process_real_image(png_path, label):
     for i in range(0, len(normalized_path), 3):
         ax0.plot(normalized_path[i][0], normalized_path[i][1], "ks", markersize=5, fillstyle="none")
     ax0.axhline(0, color="gray", lw=0.5)
+    if shape:
+        # Mark head widest (blue) and neck pinch (green) landmarks.
+        ax0.axhline(shape["head_y"], color="tab:blue", lw=0.8, linestyle=":")
+        if shape["head_left_x"] is not None:
+            ax0.plot([shape["head_left_x"], shape["head_right_x"]],
+                     [shape["head_y"], shape["head_y"]],
+                     "b-", lw=2,
+                     label=f"head y={shape['head_y']:.2f}, w={shape['head_width']:.2f}")
+        ax0.axhline(shape["neck_y"], color="tab:green", lw=0.8, linestyle=":")
+        if shape["neck_left_x"] is not None:
+            ax0.plot([shape["neck_left_x"], shape["neck_right_x"]],
+                     [shape["neck_y"], shape["neck_y"]],
+                     "g-", lw=2,
+                     label=f"neck y={shape['neck_y']:.2f}, w={shape['neck_width']:.2f}")
+        ax0.legend(loc="lower center", fontsize=8)
     ax0.set_aspect("equal")
     ax0.set_title(f"Potrace original — {len(normalized_segs)} segments", fontsize=12)
 
@@ -706,16 +832,136 @@ def process_real_image(png_path, label):
         f"  tolerance={r['tolerance']:.3f} (neck-fraction) → {len(r['segments'])} segments"
         for r in refits
     )
+    shape_lines = ""
+    if shape:
+        ratio = shape['head_width'] / shape['neck_width'] if shape['neck_width'] > 0 else float("inf")
+        head_cx = shape.get('head_center_x')
+        neck_cx = shape.get('neck_center_x')
+        cx_lines = ""
+        if head_cx is not None and neck_cx is not None:
+            cx_lines = (
+                f"  head center x: {head_cx:.3f} (off-center by {head_cx - 0.5:+.3f})\n"
+                f"  neck center x: {neck_cx:.3f} (off-center by {neck_cx - 0.5:+.3f})\n"
+            )
+        shape_lines = (
+            f"\nShape landmarks (neck-chord normalized):\n"
+            f"  apex y: {shape['apex_y']:.3f}\n"
+            f"  head widest: y={shape['head_y']:.3f}, width={shape['head_width']:.3f}\n"
+            f"  neck pinch:  y={shape['neck_y']:.3f}, width={shape['neck_width']:.3f}\n"
+            f"{cx_lines}"
+            f"  head/neck width ratio: {ratio:.2f} (classic default ≈ 1.9)\n"
+        )
     metrics_out.write_text(
         f"label: {label}\n"
         f"source: {png_path}\n"
         f"largest subpath segments: {(len(chosen) - 1) // 3}\n"
+        f"neck detection method: {method_used}\n"
         f"detected neck anchors: {anchor1}, {anchor2}\n"
         f"tab arc segments (Potrace): {len(tab_arc)}\n"
+        f"{shape_lines}"
         f"\nSchneider refit:\n{refit_lines}\n"
         f"\nclassic hand-crafted tab (reference): 4 segments\n"
     )
     print(f"  → {overlay_out.name}, {debug_out.name}, {norm_out.name}")
+
+
+# ---------------------------------------------------------------------------
+# Tab shape analysis: locate the neck pinch and head widest point on a
+# normalized tab path. Needed if the eventual TabTemplate is to support
+# neckRatio-style parameterization (uniform scale alone doesn't reproduce
+# the classic's ability to narrow the neck while keeping the head wide).
+# ---------------------------------------------------------------------------
+
+def analyze_tab_shape(normalized_path, n_samples_per_seg=40):
+    """
+    Sample the normalized tab path and locate:
+      - head_y, head_width: y level of maximum horizontal extent
+      - neck_y, neck_width: y level of minimum width BELOW head_y
+      - apex_y: maximum y reached by the path
+
+    The "width" at a given y is the distance between the LEFTMOST and
+    RIGHTMOST points where the polyline crosses a horizontal line at y.
+    Using outermost crossings (rather than max - min of all samples in a
+    slab) makes the measurement robust against small "kinks" caused by
+    e.g. glare highlights along the real-photo silhouette.
+    """
+    pts = sample_bezier_path(normalized_path, samples_per_seg=n_samples_per_seg)
+    ys = pts[:, 1]
+    apex_y = float(ys.max())
+
+    def extent_at(y_target):
+        crossings = []
+        for i in range(len(pts) - 1):
+            y0 = pts[i, 1]
+            y1 = pts[i + 1, 1]
+            if y0 == y1:
+                continue
+            if (y0 - y_target) * (y1 - y_target) <= 0:
+                t = (y_target - y0) / (y1 - y0)
+                x = pts[i, 0] + t * (pts[i + 1, 0] - pts[i, 0])
+                crossings.append(x)
+        if len(crossings) < 2:
+            return None
+        return min(crossings), max(crossings)
+
+    n_bins = 200
+    y_levels = np.linspace(0, apex_y, n_bins + 1)[1:]
+    widths = []
+    extents = {}
+    for y in y_levels:
+        result = extent_at(float(y))
+        if result is None:
+            continue
+        left, right = result
+        widths.append((float(y), right - left))
+        extents[float(y)] = (left, right)
+
+    if not widths:
+        return None
+
+    # The chord (y=0) is by definition width 1.0. For cropped photos that
+    # chord is wider than the tab head, so a naive global max-width returns
+    # the chord. Instead, look at the y range ABOVE a small initial skip,
+    # find the neck pinch first, then the head widest point above it.
+    skip_y = 0.05 * apex_y
+    above_chord = [(y, w) for y, w in widths if y > skip_y]
+    if not above_chord:
+        return None
+
+    # Neck pinch: minimum width in the lower portion of the tab (between
+    # the chord and the head). Cap the search at 60% of apex height so we
+    # don't accidentally pick a low value near the apex where the curve
+    # comes back in.
+    lower = [(y, w) for y, w in above_chord if y < 0.6 * apex_y]
+    if lower:
+        neck_y, neck_width = min(lower, key=lambda w: w[1])
+    else:
+        neck_y, neck_width = skip_y, above_chord[0][1]
+
+    # Head widest: max width above the neck pinch.
+    above_neck = [(y, w) for y, w in above_chord if y > neck_y]
+    if above_neck:
+        head_y, head_width = max(above_neck, key=lambda w: w[1])
+    else:
+        head_y, head_width = neck_y, neck_width
+
+    head_left, head_right = extents.get(head_y, (None, None))
+    neck_left, neck_right = extents.get(neck_y, (None, None))
+
+    return {
+        "head_y": head_y,
+        "head_width": head_width,
+        "head_left_x": head_left,
+        "head_right_x": head_right,
+        "head_center_x": (head_left + head_right) / 2 if head_left is not None else None,
+        "neck_y": neck_y,
+        "neck_width": neck_width,
+        "neck_left_x": neck_left,
+        "neck_right_x": neck_right,
+        "neck_center_x": (neck_left + neck_right) / 2 if neck_left is not None else None,
+        "apex_y": apex_y,
+        "widths": widths,
+    }
 
 
 # ---------------------------------------------------------------------------

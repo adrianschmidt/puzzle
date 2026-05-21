@@ -1,0 +1,23 @@
+label: 03-tab-b
+source: photos/03-tab-b.jpg
+largest subpath segments: 68
+neck detection method: edge-clipped
+detected neck anchors: 36, 42
+tab arc segments (Potrace): 62
+
+Shape landmarks (neck-chord normalized):
+  apex y: 0.872
+  head widest: y=0.632, width=0.764
+  neck pinch:  y=0.236, width=0.442
+  head center x: 0.528 (off-center by +0.028)
+  neck center x: 0.539 (off-center by +0.039)
+  head/neck width ratio: 1.73 (classic default ≈ 1.9)
+
+Schneider refit:
+  tolerance=0.001 (neck-fraction) → 69 segments
+  tolerance=0.002 (neck-fraction) → 42 segments
+  tolerance=0.005 (neck-fraction) → 22 segments
+  tolerance=0.010 (neck-fraction) → 16 segments
+  tolerance=0.020 (neck-fraction) → 7 segments
+
+classic hand-crafted tab (reference): 4 segments

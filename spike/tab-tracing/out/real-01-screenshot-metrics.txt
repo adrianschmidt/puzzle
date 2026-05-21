@@ -1,14 +1,14 @@
 label: 01-screenshot
 source: photos/01-screenshot.png
 largest subpath segments: 59
-detected neck anchors: 23, 43
-tab arc segments (Potrace): 39
+detected neck anchors: 28, 34
+tab arc segments (Potrace): 53
 
 Schneider refit:
-  tolerance=0.001 (neck-fraction) → 52 segments
-  tolerance=0.002 (neck-fraction) → 32 segments
+  tolerance=0.001 (neck-fraction) → 41 segments
+  tolerance=0.002 (neck-fraction) → 27 segments
   tolerance=0.005 (neck-fraction) → 19 segments
-  tolerance=0.010 (neck-fraction) → 8 segments
-  tolerance=0.020 (neck-fraction) → 6 segments
+  tolerance=0.010 (neck-fraction) → 15 segments
+  tolerance=0.020 (neck-fraction) → 11 segments
 
 classic hand-crafted tab (reference): 4 segments

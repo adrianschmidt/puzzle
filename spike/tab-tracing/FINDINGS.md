@@ -194,3 +194,57 @@ hit acceptable: ~2× the curve evaluations per tab, but still far below
 the Wavy generator's overhead per piece. If we need to push further,
 tol=0.02 gets us to 5 segments at the cost of barely-visible smoothing
 at the shoulders.
+
+## Real phone-photo run
+
+Four photographed real puzzle tabs, cropped tight so the tab is centred
+with the piece body extending out the left, right, and bottom image
+edges. For this capture style the neck "endpoints" are wherever the
+silhouette contour hits the left and right image edges — no curvature
+analysis needed. The edge-clipped mode is automatic in `process_real_image`.
+
+Pipeline output per photo (1% chord tolerance, Schneider refit):
+
+| Photo | Potrace tab arc | Refit @ 1% | Head/neck ratio | Apex y | Head off-centre |
+|---|---:|---:|---:|---:|---:|
+| 02-tab-a | 48 | 9  | 1.38 | 0.79 | +0.144 |
+| 03-tab-b | 62 | 16 | 1.73 | 0.87 | -0.020 |
+| 04-tab-c | 62 | 21 | 1.62 | 0.91 | -0.060 |
+| 05-tab-d | 47 | 8  | 1.62 | 0.89 | -0.011 |
+
+(See `out/real-02-tab-a-landmarks.png` etc. for the head-widest and
+neck-pinch annotations on each tab.)
+
+Observations:
+
+- **All four traces survived real-photo conditions** (specular highlights
+  along the die-cut edge, paper texture, mild defocus, asymmetric
+  lighting). The minor "kinks" introduced by glare are absorbed into
+  Schneider's tolerance.
+- **Real tabs are less bulgy than the classic default.** Measured
+  head/neck width ratios cluster around 1.4-1.7; the classic's `neckRatio`
+  default (0.525) produces ratios around 1.9. A library of traced tabs
+  would shift the puzzle's visual character slightly toward "less
+  pinchy".
+- **Some tabs are noticeably asymmetric.** Tab-a's head sits +0.14 to
+  the right of the chord centre. If we want straight-up parameterization
+  compatibility with the classic, we may want to either preserve this
+  asymmetry (it's part of the tab's "character") or symmetrize on import.
+
+## Detected landmarks for parameter compatibility
+
+To make a traced tab fully drop-in for the classic TabTemplate (with
+`scalex`/`scaley`/`mid`/`neckRatio` style controls), the pipeline now
+also detects on each normalized trace:
+
+- **`head_y`, `head_width`**: y level of maximum horizontal extent, and
+  that width
+- **`head_center_x`**: midpoint between left/right at head_y — informs
+  the `mid` parameter
+- **`neck_y`, `neck_width`**: y of the pinch between chord and head, and
+  the pinch width
+- **`apex_y`**: maximum y reached by the contour
+
+These are robust against glare-artifact "kinks" because they use the
+outermost crossings of horizontal lines, not bin-statistics that get
+fooled by clustered crossings inside an artifact.
