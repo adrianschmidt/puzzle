@@ -166,7 +166,10 @@ def run_potrace(png_path, svg_out, alphamax=1.0, opttolerance=0.2):
     # Despeckle: median blur kills salt-and-pepper, morphological open/close
     # closes tiny holes/specks. Real photos need this too.
     img = cv2.medianBlur(img, 5)
-    _, img_bin = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+    # Otsu's threshold picks the cutoff automatically from the histogram.
+    # Better than a fixed 127 for real photos where glare/shadow at the
+    # die-cut edges shifts the foreground/background brightness.
+    _, img_bin = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     # Auto-detect polarity: potrace expects the silhouette to be dark. If
     # the background turned out darker than the foreground (i.e. we have
     # white-on-black input), invert before tracing so the rest of the

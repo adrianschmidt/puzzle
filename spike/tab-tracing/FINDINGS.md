@@ -231,6 +231,42 @@ Observations:
   compatibility with the classic, we may want to either preserve this
   asymmetry (it's part of the tab's "character") or symmetrize on import.
 
+## Preprocessing sweep: handling die-cut glare
+
+Tab C's first trace had a visible wobble on the right neck — the bright
+specular highlight along the die-cut edge has a thin **dark shadow line
+just inside it**, and at a fixed threshold of 127 that shadow crosses
+into "background" and gets traced as a thin bay cut into the tab. The
+morph-close (5px ellipse) couldn't bridge it because the shadow line is
+wider than the kernel.
+
+Tested five preprocessing variants on tab C:
+
+| Variant | Refit segs @ 1% | Glare wobble |
+|---|---:|---|
+| baseline (thresh=127, close=5) | 15 | yes |
+| thresh=80 | 8 | gone |
+| linear stretch [60,200]→[0,255] + thresh=127 | 12 | gone |
+| **Otsu's auto-threshold** | **6** | **gone** |
+| thresh=127, close=15 | 12 | gone |
+| linear stretch + Otsu | 12 | gone |
+
+Otsu wins by picking the threshold from the image's histogram peaks
+automatically — it lands somewhere around 100–110 for these photos, well
+below the shadow brightness, so the shadow stays foreground.
+
+Re-running all four photos with Otsu as the default: A, B, D produce
+visually identical traces with comparable segment counts (7–9 segs at
+1% chord tolerance); C drops from 15 to 6 segs. **Otsu is the new
+default preprocessing in `run_potrace`.**
+
+Important caveat: Otsu assumes a bimodal histogram. The cropped tab
+photos satisfy that easily (tab vs background, two clear peaks). For
+photos with significant mid-grey content (e.g. shot on a textured table)
+Otsu could pick an unhelpful threshold and we'd want to fall back to
+fixed or adaptive thresholding. For the current capture style it's
+robust.
+
 ## Detected landmarks for parameter compatibility
 
 To make a traced tab fully drop-in for the classic TabTemplate (with

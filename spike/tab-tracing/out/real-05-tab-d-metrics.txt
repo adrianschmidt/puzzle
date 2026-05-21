@@ -1,23 +1,23 @@
 label: 05-tab-d
 source: photos/05-tab-d.jpg
-largest subpath segments: 54
+largest subpath segments: 64
 neck detection method: edge-clipped
-detected neck anchors: 26, 33
-tab arc segments (Potrace): 47
+detected neck anchors: 31, 38
+tab arc segments (Potrace): 57
 
 Shape landmarks (neck-chord normalized):
   apex y: 0.887
-  head widest: y=0.559, width=0.774
-  neck pinch:  y=0.222, width=0.478
-  head center x: 0.452 (off-center by -0.048)
-  neck center x: 0.485 (off-center by -0.015)
+  head widest: y=0.612, width=0.772
+  neck pinch:  y=0.186, width=0.477
+  head center x: 0.445 (off-center by -0.055)
+  neck center x: 0.489 (off-center by -0.011)
   head/neck width ratio: 1.62 (classic default ≈ 1.9)
 
 Schneider refit:
-  tolerance=0.001 (neck-fraction) → 57 segments
-  tolerance=0.002 (neck-fraction) → 36 segments
-  tolerance=0.005 (neck-fraction) → 17 segments
-  tolerance=0.010 (neck-fraction) → 8 segments
-  tolerance=0.020 (neck-fraction) → 7 segments
+  tolerance=0.001 (neck-fraction) → 64 segments
+  tolerance=0.002 (neck-fraction) → 41 segments
+  tolerance=0.005 (neck-fraction) → 15 segments
+  tolerance=0.010 (neck-fraction) → 7 segments
+  tolerance=0.020 (neck-fraction) → 6 segments
 
 classic hand-crafted tab (reference): 4 segments
