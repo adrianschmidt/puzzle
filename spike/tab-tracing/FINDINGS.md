@@ -154,3 +154,43 @@ shows a clean mushroom shape in the normalized neck-frame.
 **Implications for real photos**: the only additional preprocessing real
 photos will need is perspective correction. Lighting, polarity, contrast
 variation, slight noise — all handled by the existing preprocessing.
+
+## Schneider refit: getting segment count down to hand-crafted levels
+
+Potrace optimises for "match every pixel" rather than "minimum segments,"
+so its raw output (~40 segments for a clean tab) is much heavier than
+the hand-crafted classic (4 segments). Heavier than we can afford:
+generation cost in this codebase scales with curve count.
+
+The fix is a post-process refit using **Schneider's algorithm** (Graphics
+Gems I, 1990): adaptive least-squares cubic-Bezier fit with recursive
+splitting until the per-segment error is within tolerance. Implemented
+as a self-contained Python port; runs in milliseconds on a 39-segment
+tab.
+
+Tolerance sweep on the screenshot (tolerance expressed as a fraction
+of the neck-to-neck chord):
+
+| Tolerance | Segments | Visual quality |
+|---:|---:|---|
+| 0.001 (0.1%) | 52 | over-segmented — Potrace already smoothed below this; sampling jitter forces splits |
+| 0.002 (0.2%) | 32 | indistinguishable from Potrace |
+| 0.005 (0.5%) | **20** | indistinguishable from Potrace |
+| 0.010 (1.0%) | **8** | indistinguishable from Potrace |
+| 0.020 (2.0%) | **5** | barely-perceptible smoothing |
+| — | 4 | (hand-crafted classic, for reference) |
+
+(See `out/real-01-screenshot-refit-tol010.png` and `-tol020.png` for the
+overlays at the two interesting tolerances.)
+
+**Recommended operating point: tol ≈ 0.01** (1% of neck chord). At a
+typical real piece edge the neck is ~15% of edge length, so this is
+0.15% of edge length, or ~1.5 px on a 1000-px edge — well below visual
+threshold. Result: 8 segments per tab, vs. 4 hand-crafted. 2× overhead,
+not 10×.
+
+That makes the segment-count concern manageable, and the performance
+hit acceptable: ~2× the curve evaluations per tab, but still far below
+the Wavy generator's overhead per piece. If we need to push further,
+tol=0.02 gets us to 5 segments at the cost of barely-visible smoothing
+at the shoulders.

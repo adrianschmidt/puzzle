@@ -634,36 +634,285 @@ def process_real_image(png_path, label):
     normalized_segs = normalize_to_template(tab_arc)
     normalized_path = flatten_segments_to_path(normalized_segs)
 
+    # ----- Schneider refit: sweep tolerances to show segment-count vs fidelity.
+    # Tolerance is in neck-chord fractions (since we're in the normalized frame).
+    print(f"  refitting (Schneider, tolerance sweep) ...")
+    tolerances = [0.001, 0.002, 0.005, 0.01, 0.02]
+    refits = []
+    for tol in tolerances:
+        fitted = schneider_fit(
+            sample_bezier_path(normalized_path, samples_per_seg=20).tolist(),
+            tol,
+        )
+        refits.append({"tolerance": tol, "segments": fitted})
+        print(f"    tol={tol:.3f} → {len(fitted)} cubic segments")
+
+    # Pick the largest tolerance that still produces visually good output;
+    # roughly: max_error ≤ 0.5% of neck chord is indistinguishable to the eye.
+    best = next((r for r in refits if r["tolerance"] <= 0.005), refits[0])
+    best_path = []
+    for i, seg in enumerate(best["segments"]):
+        if i == 0:
+            best_path.append(seg[0])
+        best_path.extend([seg[1], seg[2], seg[3]])
+
     norm_out.write_text(json.dumps(
-        [{"x": p[0], "y": p[1]} for p in normalized_path],
+        {
+            "potrace_path": [{"x": p[0], "y": p[1]} for p in normalized_path],
+            "potrace_segments": len(normalized_segs),
+            "refit_tolerance": best["tolerance"],
+            "refit_segments": len(best["segments"]),
+            "refit_path": [{"x": p[0], "y": p[1]} for p in best_path],
+        },
         indent=2,
     ))
 
-    # Render the normalized tab shape (no original to compare against here).
-    fig, ax = plt.subplots(figsize=(10, 5))
-    pts = sample_bezier_path(normalized_path, samples_per_seg=200)
-    ax.plot(pts[:, 0], pts[:, 1], "r-", lw=2)
+    # ----- Render: original Potrace trace + each refit on a grid.
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes_flat = list(axes.flat)
+    pts_orig = sample_bezier_path(normalized_path, samples_per_seg=200)
+
+    ax0 = axes_flat[0]
+    ax0.plot(pts_orig[:, 0], pts_orig[:, 1], "k-", lw=2)
     for i in range(0, len(normalized_path), 3):
-        ax.plot(normalized_path[i][0], normalized_path[i][1], "rs", markersize=5, fillstyle="none")
-    ax.axhline(0, color="gray", lw=0.5)
-    ax.set_aspect("equal")
-    ax.set_title(f"{label} — traced tab in normalized (neck→neck=1) frame "
-                 f"({len(normalized_segs)} cubic segments)")
-    ax.set_xlabel("x (neck-chord fraction)")
-    ax.set_ylabel("y (neck-chord fraction)")
+        ax0.plot(normalized_path[i][0], normalized_path[i][1], "ks", markersize=5, fillstyle="none")
+    ax0.axhline(0, color="gray", lw=0.5)
+    ax0.set_aspect("equal")
+    ax0.set_title(f"Potrace original — {len(normalized_segs)} segments", fontsize=12)
+
+    for r, ax in zip(refits, axes_flat[1:]):
+        path = [r["segments"][0][0]]
+        for seg in r["segments"]:
+            path.extend([seg[1], seg[2], seg[3]])
+        pts_refit = sample_bezier_path(path, samples_per_seg=200)
+        ax.plot(pts_orig[:, 0], pts_orig[:, 1], color="lightgray", lw=5, label="Potrace")
+        ax.plot(pts_refit[:, 0], pts_refit[:, 1], "r-", lw=2, label="refit")
+        for i in range(0, len(path), 3):
+            ax.plot(path[i][0], path[i][1], "rs", markersize=6, fillstyle="none")
+        ax.axhline(0, color="gray", lw=0.5)
+        ax.set_aspect("equal")
+        ax.set_title(f"refit at tol={r['tolerance']:.3f} → {len(r['segments'])} segments",
+                     fontsize=12)
+        ax.legend(loc="lower center", fontsize=9)
+
+    fig.suptitle(f"{label} — Schneider refit tolerance sweep "
+                 f"(hand-crafted classic uses 4 segments for reference)",
+                 fontsize=14, y=0.995)
     fig.tight_layout()
-    fig.savefig(overlay_out, dpi=120)
+    fig.savefig(overlay_out, dpi=100)
     plt.close(fig)
 
+    refit_lines = "\n".join(
+        f"  tolerance={r['tolerance']:.3f} (neck-fraction) → {len(r['segments'])} segments"
+        for r in refits
+    )
     metrics_out.write_text(
         f"label: {label}\n"
         f"source: {png_path}\n"
         f"largest subpath segments: {(len(chosen) - 1) // 3}\n"
         f"detected neck anchors: {anchor1}, {anchor2}\n"
-        f"tab arc segments: {len(tab_arc)}\n"
-        f"normalized output segments: {len(normalized_segs)}\n"
+        f"tab arc segments (Potrace): {len(tab_arc)}\n"
+        f"\nSchneider refit:\n{refit_lines}\n"
+        f"\nclassic hand-crafted tab (reference): 4 segments\n"
     )
     print(f"  → {overlay_out.name}, {debug_out.name}, {norm_out.name}")
+
+
+# ---------------------------------------------------------------------------
+# Schneider's algorithm — fit a polyline with the minimum number of cubic
+# Beziers that stays within a given error tolerance. Direct port of the
+# Graphics Gems I "FitCurves" routine by Philip J. Schneider.
+# ---------------------------------------------------------------------------
+
+def _vsub(a, b):
+    return (a[0] - b[0], a[1] - b[1])
+
+
+def _vadd(a, b):
+    return (a[0] + b[0], a[1] + b[1])
+
+
+def _vscale(v, s):
+    return (v[0] * s, v[1] * s)
+
+
+def _vdot(a, b):
+    return a[0] * b[0] + a[1] * b[1]
+
+
+def _vnorm(v):
+    n = math.hypot(v[0], v[1])
+    return (v[0] / n, v[1] / n) if n > 1e-12 else (0.0, 0.0)
+
+
+def _bez_at(b, t):
+    mt = 1 - t
+    return (
+        mt ** 3 * b[0][0] + 3 * mt ** 2 * t * b[1][0]
+        + 3 * mt * t ** 2 * b[2][0] + t ** 3 * b[3][0],
+        mt ** 3 * b[0][1] + 3 * mt ** 2 * t * b[1][1]
+        + 3 * mt * t ** 2 * b[2][1] + t ** 3 * b[3][1],
+    )
+
+
+def _chord_length_parameterize(d, first, last):
+    u = [0.0]
+    for i in range(first + 1, last + 1):
+        u.append(u[-1] + math.hypot(d[i][0] - d[i - 1][0], d[i][1] - d[i - 1][1]))
+    total = u[-1]
+    if total > 0:
+        u = [x / total for x in u]
+    return u
+
+
+def _generate_bezier(d, first, last, u, tHat1, tHat2):
+    """Least-squares fit of a cubic Bezier given fixed endpoints and tangent directions."""
+    nPts = last - first + 1
+    A = [(_vscale(tHat1, 3 * (1 - u[i]) ** 2 * u[i]),
+          _vscale(tHat2, 3 * (1 - u[i]) * u[i] ** 2)) for i in range(nPts)]
+
+    C = [[0.0, 0.0], [0.0, 0.0]]
+    X = [0.0, 0.0]
+    for i in range(nPts):
+        C[0][0] += _vdot(A[i][0], A[i][0])
+        C[0][1] += _vdot(A[i][0], A[i][1])
+        C[1][1] += _vdot(A[i][1], A[i][1])
+
+        t = u[i]
+        mt = 1 - t
+        # Bezier with b1=b0 and b2=b3 (i.e. control points at endpoints):
+        # used to compute the residual that the (alpha1, alpha2) factors must close.
+        BezAtT = (
+            (mt ** 3 + 3 * mt ** 2 * t) * d[first][0] + (3 * mt * t ** 2 + t ** 3) * d[last][0],
+            (mt ** 3 + 3 * mt ** 2 * t) * d[first][1] + (3 * mt * t ** 2 + t ** 3) * d[last][1],
+        )
+        tmp = _vsub(d[first + i], BezAtT)
+        X[0] += _vdot(A[i][0], tmp)
+        X[1] += _vdot(A[i][1], tmp)
+    C[1][0] = C[0][1]
+
+    det_C0_C1 = C[0][0] * C[1][1] - C[1][0] * C[0][1]
+    if abs(det_C0_C1) < 1e-12:
+        # Fall back to the Wu/Barsky heuristic.
+        dist = math.hypot(d[last][0] - d[first][0], d[last][1] - d[first][1]) / 3
+        return [
+            d[first],
+            _vadd(d[first], _vscale(tHat1, dist)),
+            _vadd(d[last], _vscale(tHat2, dist)),
+            d[last],
+        ]
+    det_C0_X = C[0][0] * X[1] - C[1][0] * X[0]
+    det_X_C1 = X[0] * C[1][1] - X[1] * C[0][1]
+    alpha_l = det_X_C1 / det_C0_C1
+    alpha_r = det_C0_X / det_C0_C1
+
+    segLength = math.hypot(d[last][0] - d[first][0], d[last][1] - d[first][1])
+    epsilon = 1e-6 * segLength
+    if alpha_l < epsilon or alpha_r < epsilon:
+        dist = segLength / 3
+        return [
+            d[first],
+            _vadd(d[first], _vscale(tHat1, dist)),
+            _vadd(d[last], _vscale(tHat2, dist)),
+            d[last],
+        ]
+    return [
+        d[first],
+        _vadd(d[first], _vscale(tHat1, alpha_l)),
+        _vadd(d[last], _vscale(tHat2, alpha_r)),
+        d[last],
+    ]
+
+
+def _newton_raphson_root_find(Q, P, u):
+    Q1 = [_vscale(_vsub(Q[1], Q[0]), 3),
+          _vscale(_vsub(Q[2], Q[1]), 3),
+          _vscale(_vsub(Q[3], Q[2]), 3)]
+    Q2 = [_vscale(_vsub(Q1[1], Q1[0]), 2),
+          _vscale(_vsub(Q1[2], Q1[1]), 2)]
+    mt = 1 - u
+    Q_u = _bez_at(Q, u)
+    Q1_u = (mt ** 2 * Q1[0][0] + 2 * mt * u * Q1[1][0] + u ** 2 * Q1[2][0],
+            mt ** 2 * Q1[0][1] + 2 * mt * u * Q1[1][1] + u ** 2 * Q1[2][1])
+    Q2_u = (mt * Q2[0][0] + u * Q2[1][0],
+            mt * Q2[0][1] + u * Q2[1][1])
+    diff = _vsub(Q_u, P)
+    num = _vdot(diff, Q1_u)
+    den = _vdot(Q1_u, Q1_u) + _vdot(diff, Q2_u)
+    if abs(den) < 1e-12:
+        return u
+    return u - num / den
+
+
+def _compute_max_error(d, first, last, bez, u):
+    maxDist = 0.0
+    splitPoint = (last + first) // 2
+    for i in range(1, last - first):
+        P = _bez_at(bez, u[i])
+        dist = math.hypot(P[0] - d[first + i][0], P[1] - d[first + i][1])
+        if dist > maxDist:
+            maxDist = dist
+            splitPoint = first + i
+    return maxDist, splitPoint
+
+
+def _fit_cubic(d, first, last, tHat1, tHat2, error, max_iters=4):
+    iterationError = error * error
+    nPts = last - first + 1
+    if nPts == 2:
+        dist = math.hypot(d[last][0] - d[first][0], d[last][1] - d[first][1]) / 3
+        return [[
+            d[first],
+            _vadd(d[first], _vscale(tHat1, dist)),
+            _vadd(d[last], _vscale(tHat2, dist)),
+            d[last],
+        ]]
+    u = _chord_length_parameterize(d, first, last)
+    bez = _generate_bezier(d, first, last, u, tHat1, tHat2)
+    maxError, splitPoint = _compute_max_error(d, first, last, bez, u)
+    if maxError < error:
+        return [bez]
+    if maxError < iterationError:
+        for _ in range(max_iters):
+            uPrime = [_newton_raphson_root_find(bez, d[first + i], u[i])
+                      for i in range(nPts)]
+            bez = _generate_bezier(d, first, last, uPrime, tHat1, tHat2)
+            maxError, splitPoint = _compute_max_error(d, first, last, bez, uPrime)
+            if maxError < error:
+                return [bez]
+            u = uPrime
+    # Split at worst point and recurse.
+    v1 = _vsub(d[splitPoint - 1], d[splitPoint])
+    v2 = _vsub(d[splitPoint], d[splitPoint + 1])
+    tHatCenter = _vnorm(((v1[0] + v2[0]) / 2, (v1[1] + v2[1]) / 2))
+    left = _fit_cubic(d, first, splitPoint, tHat1, tHatCenter, error, max_iters)
+    right = _fit_cubic(d, splitPoint, last, (-tHatCenter[0], -tHatCenter[1]),
+                       tHat2, error, max_iters)
+    return left + right
+
+
+def schneider_fit(points, error):
+    """Fit a polyline with a piecewise cubic Bezier. Returns list of 4-tuple segments."""
+    if len(points) < 2:
+        return []
+    tHat1 = _vnorm(_vsub(points[1], points[0]))
+    tHat2 = _vnorm(_vsub(points[-2], points[-1]))
+    return _fit_cubic(points, 0, len(points) - 1, tHat1, tHat2, error)
+
+
+def refit_arc(tab_arc, max_error, samples_per_seg=20):
+    """Densely sample an existing piecewise-Bezier arc, then refit with Schneider."""
+    pts = []
+    for i, seg in enumerate(tab_arc):
+        endpoint = (i == len(tab_arc) - 1)
+        n_samples = samples_per_seg + (1 if endpoint else 0)
+        ts = np.linspace(0, 1, samples_per_seg, endpoint=False)
+        if endpoint:
+            ts = np.append(ts, 1.0)
+        for t in ts:
+            pts.append(_bez_at(seg, float(t)))
+    fitted_tuples = schneider_fit(pts, max_error)
+    return [tuple(seg) for seg in fitted_tuples]
 
 
 def plot_overlay(original_path, traced_path, png_out):
