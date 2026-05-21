@@ -20,9 +20,12 @@ Outputs (next to this script):
   out/05-normalized.json      traced path in normalized (0,0)->(1,0) space
 """
 
+import argparse
 import json
+import math
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import cv2
@@ -422,6 +425,247 @@ def deviation(original_path, traced_path):
     return float(np.mean(d)), float(np.max(d))
 
 
+# ---------------------------------------------------------------------------
+# Real-image support: detect tab necks on a closed contour without knowing
+# a baseline y. The two tab necks are the two most CONCAVE anchors on the
+# closed Potrace contour. "Concave" here means the contour turns inward
+# (relative to the foreground silhouette) at the neck — sharp inward bends.
+# ---------------------------------------------------------------------------
+
+def _tangent_at_start(seg):
+    p0, c1, _, _ = seg
+    return (c1[0] - p0[0], c1[1] - p0[1])
+
+
+def _tangent_at_end(seg):
+    _, _, c2, p3 = seg
+    return (p3[0] - c2[0], p3[1] - c2[1])
+
+
+def _signed_angle(v1, v2):
+    a1 = math.atan2(v1[1], v1[0])
+    a2 = math.atan2(v2[1], v2[0])
+    d = a2 - a1
+    while d > math.pi:
+        d -= 2 * math.pi
+    while d < -math.pi:
+        d += 2 * math.pi
+    return d
+
+
+def subpath_to_segments(subpath):
+    """
+    Convert a Potrace subpath (anchor + (c1,c2,anchor) triples ...) to a
+    list of (p0, c1, c2, p3) cubic tuples forming a closed contour. If the
+    last anchor coincides with the first (Potrace closes its own paths),
+    skip adding an explicit closing segment to avoid a degenerate cubic
+    that would produce undefined tangents at the junction.
+    """
+    n_anchors = (len(subpath) - 1) // 3 + 1
+    anchors = [subpath[i * 3] for i in range(n_anchors)]
+    segs = []
+    for i in range(n_anchors - 1):
+        p0 = anchors[i]
+        c1 = subpath[i * 3 + 1]
+        c2 = subpath[i * 3 + 2]
+        p3 = anchors[i + 1]
+        segs.append((p0, c1, c2, p3))
+    dx = anchors[0][0] - anchors[-1][0]
+    dy = anchors[0][1] - anchors[-1][1]
+    if math.hypot(dx, dy) > 1e-6:
+        p0 = anchors[-1]
+        p3 = anchors[0]
+        c1 = (p0[0] + dx / 3, p0[1] + dy / 3)
+        c2 = (p0[0] + 2 * dx / 3, p0[1] + 2 * dy / 3)
+        segs.append((p0, c1, c2, p3))
+    return segs
+
+
+def detect_necks(segs, window=5, min_separation=None):
+    """
+    Find the two most-concave regions on a closed contour.
+
+    Real necks usually span 2-4 adjacent anchors after Potrace tracing (the
+    contour bends inward sharply but over a few segments rather than a
+    single point). Summing signed turning angles over a sliding window
+    aggregates each neck into one peak so peak-picking finds the two
+    distinct necks rather than two nearby anchors of the same neck.
+
+    Returns (anchor1, anchor2, windowed_signed_sums).
+    """
+    n = len(segs)
+    raw = []
+    for i in range(n):
+        out_t = _tangent_at_end(segs[i])
+        in_t = _tangent_at_start(segs[(i + 1) % n])
+        raw.append(_signed_angle(out_t, in_t))
+
+    total = sum(raw)
+    if total < 0:
+        raw = [-a for a in raw]
+
+    half = window // 2
+    windowed = [
+        sum(raw[(i + k) % n] for k in range(-half, half + 1))
+        for i in range(n)
+    ]
+
+    if min_separation is None:
+        min_separation = max(window, n // 6)
+
+    order = sorted(range(n), key=lambda i: windowed[i])
+    neck1 = order[0]
+    neck2 = None
+    for idx in order[1:]:
+        d = min(abs(idx - neck1), n - abs(idx - neck1))
+        if d >= min_separation:
+            neck2 = idx
+            break
+    if neck2 is None:
+        raise RuntimeError("could not find a second neck candidate")
+    anchor1 = (neck1 + 1) % n
+    anchor2 = (neck2 + 1) % n
+    return anchor1, anchor2, windowed
+
+
+def shorter_arc_between_anchors(segs, a_start, a_end):
+    """
+    Walk segments from anchor a_start to anchor a_end along the contour,
+    picking whichever direction yields the shorter arc length.
+
+    Segments returned have p0 = anchor[a_start] (first seg) and
+    p3 = anchor[a_end] (last seg).
+    """
+    n = len(segs)
+
+    def walk(direction):
+        arc = []
+        cur = a_start
+        guard = 0
+        while cur != a_end:
+            arc.append(segs[cur] if direction > 0 else _reverse_segment(segs[(cur - 1) % n]))
+            cur = (cur + direction) % n
+            guard += 1
+            if guard > n:
+                raise RuntimeError("runaway arc walk")
+        return arc
+
+    fwd = walk(+1)
+    bwd = walk(-1)
+
+    def arc_len(a):
+        return sum(math.hypot(s[3][0] - s[0][0], s[3][1] - s[0][1]) for s in a)
+
+    return fwd if arc_len(fwd) <= arc_len(bwd) else bwd
+
+
+def _reverse_segment(seg):
+    p0, c1, c2, p3 = seg
+    return (p3, c2, c1, p0)
+
+
+def render_neck_debug(image_path, segs, anchor1, anchor2, tab_arc, out_path):
+    """Overlay the traced contour and detected necks on the original image."""
+    img = cv2.imread(str(image_path))
+    if img is None:
+        raise RuntimeError(f"could not read {image_path}")
+    if img.ndim == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    # Draw full contour in thin gray
+    for seg in segs:
+        pts = sample_bezier_path([seg[0], seg[1], seg[2], seg[3]], samples_per_seg=20).astype(np.int32)
+        cv2.polylines(img, [pts], False, (180, 180, 180), 1, cv2.LINE_AA)
+
+    # Draw tab arc in red
+    for seg in tab_arc:
+        pts = sample_bezier_path([seg[0], seg[1], seg[2], seg[3]], samples_per_seg=30).astype(np.int32)
+        cv2.polylines(img, [pts], False, (0, 0, 255), 3, cv2.LINE_AA)
+
+    # Mark neck anchors
+    n = len(segs)
+    for label, a in [("L", anchor1), ("R", anchor2)]:
+        ax, ay = segs[a][0]
+        cv2.circle(img, (int(ax), int(ay)), 12, (0, 255, 0), 3)
+        cv2.putText(img, label, (int(ax) + 14, int(ay) + 6),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+    cv2.imwrite(str(out_path), img)
+
+
+def process_real_image(png_path, label):
+    """Run the full pipeline on a real photo/screenshot with unknown baseline."""
+    svg_out = OUT / f"real-{label}-traced.svg"
+    debug_out = OUT / f"real-{label}-debug.png"
+    overlay_out = OUT / f"real-{label}-overlay.png"
+    norm_out = OUT / f"real-{label}-normalized.json"
+    metrics_out = OUT / f"real-{label}-metrics.txt"
+
+    print(f"  potrace (alphamax=0.5 keeps necks but smooths the head) ...")
+    run_potrace(png_path, svg_out, alphamax=0.5)
+    print(f"  parsing SVG ...")
+    subpaths = parse_potrace_svg(svg_out)
+
+    def bbox_area(sp):
+        xs = [p[0] for p in sp]
+        ys = [p[1] for p in sp]
+        return (max(xs) - min(xs)) * (max(ys) - min(ys))
+
+    if not subpaths:
+        raise RuntimeError("no contours from potrace")
+    chosen = max(subpaths, key=bbox_area)
+    print(f"  largest subpath: {(len(chosen) - 1) // 3} segments")
+
+    segs = subpath_to_segments(chosen)
+    anchor1, anchor2, signed_angles = detect_necks(segs)
+    print(f"  detected necks at anchors {anchor1}, {anchor2} "
+          f"(turning angles {signed_angles[anchor1 - 1]:.3f}, {signed_angles[anchor2 - 1]:.3f} rad)")
+
+    # Prefer the arc that, after normalization, has POSITIVE y for the
+    # middle of the path — i.e. the tab pokes "outward" rather than "inward".
+    arc_a = shorter_arc_between_anchors(segs, anchor1, anchor2)
+    arc_b = shorter_arc_between_anchors(segs, anchor2, anchor1)
+    tab_arc = arc_a if len(arc_a) <= len(arc_b) else arc_b
+
+    print(f"  tab arc: {len(tab_arc)} segments")
+
+    render_neck_debug(png_path, segs, anchor1, anchor2, tab_arc, debug_out)
+
+    normalized_segs = normalize_to_template(tab_arc)
+    normalized_path = flatten_segments_to_path(normalized_segs)
+
+    norm_out.write_text(json.dumps(
+        [{"x": p[0], "y": p[1]} for p in normalized_path],
+        indent=2,
+    ))
+
+    # Render the normalized tab shape (no original to compare against here).
+    fig, ax = plt.subplots(figsize=(10, 5))
+    pts = sample_bezier_path(normalized_path, samples_per_seg=200)
+    ax.plot(pts[:, 0], pts[:, 1], "r-", lw=2)
+    for i in range(0, len(normalized_path), 3):
+        ax.plot(normalized_path[i][0], normalized_path[i][1], "rs", markersize=5, fillstyle="none")
+    ax.axhline(0, color="gray", lw=0.5)
+    ax.set_aspect("equal")
+    ax.set_title(f"{label} — traced tab in normalized (neck→neck=1) frame "
+                 f"({len(normalized_segs)} cubic segments)")
+    ax.set_xlabel("x (neck-chord fraction)")
+    ax.set_ylabel("y (neck-chord fraction)")
+    fig.tight_layout()
+    fig.savefig(overlay_out, dpi=120)
+    plt.close(fig)
+
+    metrics_out.write_text(
+        f"label: {label}\n"
+        f"source: {png_path}\n"
+        f"largest subpath segments: {(len(chosen) - 1) // 3}\n"
+        f"detected neck anchors: {anchor1}, {anchor2}\n"
+        f"tab arc segments: {len(tab_arc)}\n"
+        f"normalized output segments: {len(normalized_segs)}\n"
+    )
+    print(f"  → {overlay_out.name}, {debug_out.name}, {norm_out.name}")
+
+
 def plot_overlay(original_path, traced_path, png_out):
     fig, ax = plt.subplots(figsize=(12, 4))
     a = sample_bezier_path(original_path, samples_per_seg=400)
@@ -499,6 +743,16 @@ def run_pipeline(png_path, svg_out, original_neck_frame, label, alphamax=1.0, op
         "max_dev": max_d,
         "path": traced_path,
     }
+
+
+def main_real(image_paths):
+    OUT.mkdir(exist_ok=True)
+    for p in image_paths:
+        p = Path(p)
+        label = p.stem
+        print(f"Processing real image: {p}")
+        process_real_image(p, label)
+    print(f"done. outputs in {OUT}")
 
 
 def main():
@@ -588,4 +842,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="cmd")
+    sub.add_parser("synthetic", help="run the synthetic round-trip tests (default)")
+    real = sub.add_parser("real", help="trace one or more real photos/screenshots")
+    real.add_argument("images", nargs="+", help="paths to input PNGs")
+    args = parser.parse_args()
+    if args.cmd == "real":
+        main_real(args.images)
+    else:
+        main()

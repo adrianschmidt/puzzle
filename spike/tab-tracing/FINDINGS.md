@@ -118,3 +118,39 @@ smoothing on noisy input" — default Potrace tuning is robust.
 
 Try the pipeline on 2–3 actual photographs of puzzle tabs. Same scripts;
 just feed real PNGs in instead of `synthesize()`.
+
+## Real-image pipeline addition (after first round)
+
+The synthetic phase cheated in two ways: it knew the baseline y, and it
+knew exactly two anchors were the necks. For real images we don't know
+either, so the pipeline was extended:
+
+1. **Auto-detect tab necks from contour curvature.** The two tab necks
+   are the two sharpest inward (concave) bends on the closed Potrace
+   contour. We sum signed turning angles over a 5-anchor window so that
+   necks broken across 2-4 adjacent anchors (which is what Potrace
+   produces at sharper corners) aggregate into a single peak, then pick
+   the two most-negative peaks separated by at least `n/6` anchors.
+
+2. **Use Potrace `alphamax=0.5` for real images.** The default (1.0)
+   smooths shallower necks into curves, making them invisible to the
+   curvature detector. `alpha=0` works but keeps too many corners (110+
+   segments). `alpha=0.5` is a sweet spot: corners at the necks are
+   preserved as sharp anchors, but the head and shoulders stay reasonably
+   smooth.
+
+3. **Fixed a closing-segment artifact.** Potrace closes its own paths
+   (last anchor coincides with the first), so my added "closing line"
+   was degenerate and produced an undefined ±π turning angle at the
+   start point that dominated the neck detection. Now skipped when the
+   path is already closed.
+
+**Validation on a clean screenshot** of a puzzle tab from the app (curved
+baseline, white-on-dark, no known baseline y): 59 traced segments, both
+necks detected correctly (windowed concavity -1.88 and -1.40 rad), tab
+arc 39 segments. Visual overlay (\`out/real-01-screenshot-overlay.png\`)
+shows a clean mushroom shape in the normalized neck-frame.
+
+**Implications for real photos**: the only additional preprocessing real
+photos will need is perspective correction. Lighting, polarity, contrast
+variation, slight noise — all handled by the existing preprocessing.

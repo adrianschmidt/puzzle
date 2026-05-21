@@ -1,0 +1,6 @@
+label: 01-screenshot
+source: photos/01-screenshot.png
+largest subpath segments: 59
+detected neck anchors: 23, 43
+tab arc segments: 39
+normalized output segments: 39

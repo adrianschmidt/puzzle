@@ -1,5 +1,7 @@
 out/*.bmp
 out/01*.png
 out/02-traced-*.svg
+out/real-*-traced.svg
+photos/*.bmp
 __pycache__/
 *.pyc
