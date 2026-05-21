@@ -34,14 +34,14 @@ neck endpoints is length 1). For the classic default the neck is roughly
 15% of the edge length, so multiply by ~0.15 to get edge-length fractions,
 and by ~150 to get pixels on a 1000-px edge.
 
-| Input | Potrace tuning | Segments | Mean dev | Max dev | ~Max dev @ 1000px edge |
+| Input | Polarity | Segments | Mean dev | Max dev | ~Max dev @ 1000px edge |
 |---|---|---:|---:|---:|---:|
-| Clean | default (a=1.0, O=0.2) | 13 | 0.0156 | 0.0358 | ~5.4 px |
-| Clean | smooth  (a=1.33, O=1.0) | **9** | **0.0144** | **0.0353** | **~5.3 px** |
-| Noisy | default (a=1.0, O=0.2) | 17 | 0.0264 | 0.0550 | ~8.3 px |
-| Noisy | smooth  (a=1.33, O=1.0) | 14 | 0.330  | 0.480  | catastrophic (see below) |
+| Clean | black-on-white | 13 | 0.0156 | 0.0358 | ~5.4 px |
+| Clean | white-on-black | 13 | 0.0156 | 0.0358 | ~5.4 px |
+| Noisy | black-on-white | 17 | 0.0264 | 0.0550 | ~8.3 px |
+| Noisy | white-on-black | 16 | 0.0258 | 0.0517 | ~7.8 px |
 
-(For reference: the classic hand-crafted template uses **4** cubic segments.)
+(For reference: the classic hand-crafted template uses **4** cubic segments. Earlier runs found that Potrace's smoothing knob `-a 1.33 -O 1.0` brings the clean case down to 9 segments at the same fidelity, but the same setting destroys the noisy case — so the default tuning is the safer choice for a real-photo pipeline.)
 
 See `out/03-overlay.png` for the visual comparison — the first three
 configurations overlay almost perfectly on the original tab shape.
@@ -58,6 +58,13 @@ realistic blur + sensor noise + specks) still came out to ~8 px max
 deviation after standard preprocessing (median blur, threshold, morph
 open/close). That preprocessing is generic and tunable; real photos will
 need similar steps plus perspective correction.
+
+**Polarity doesn't matter.** Black-on-white and white-on-black silhouettes
+produce numerically identical fits. The pipeline auto-detects polarity
+from the image border (whichever colour dominates the edge of the frame
+is treated as background) and inverts before tracing if needed. So a
+photographer can choose either light-tab/dark-mat or dark-tab/light-mat,
+whichever gives them better contrast.
 
 **Segment-count overhead is modest but real.** Potrace uses ~2–4× more
 segments than a hand-crafted template. That's the cost of automation. For

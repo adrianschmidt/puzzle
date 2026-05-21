@@ -101,10 +101,23 @@ PADDING = 100
 BASELINE_Y = 500  # image-y where the straight piece edge sits
 
 
-def synthesize(bez_path, png_out):
+def synthesize(bez_path, png_out, polarity="black_on_white"):
+    """
+    Render the tab silhouette to a PNG.
+
+    polarity:
+      "black_on_white" — background 255, piece+tab filled with 0.
+      "white_on_black" — background 0,   piece+tab filled with 255.
+    """
     width = PADDING * 2 + EDGE_LEN_PX
     height = BASELINE_Y + PADDING
-    img = np.full((height, width), 255, dtype=np.uint8)
+    if polarity == "black_on_white":
+        bg, fg = 255, 0
+    elif polarity == "white_on_black":
+        bg, fg = 0, 255
+    else:
+        raise ValueError(f"unknown polarity {polarity!r}")
+    img = np.full((height, width), bg, dtype=np.uint8)
 
     samples = sample_bezier_path(bez_path, samples_per_seg=200)
     px = (samples[:, 0] * EDGE_LEN_PX + PADDING).astype(np.int32)
@@ -119,9 +132,24 @@ def synthesize(bez_path, png_out):
         [0, BASELINE_Y],
         poly[0],
     ])
-    cv2.fillPoly(img, [poly], 0)
+    cv2.fillPoly(img, [poly], fg)
     cv2.imwrite(str(png_out), img)
     return img
+
+
+def detect_polarity(img):
+    """
+    Auto-detect: is the foreground (piece silhouette) dark or light?
+
+    Heuristic: the background touches the image border, so the dominant
+    border colour is the background. Whichever is foreground is the other.
+    Returns "black_on_white" or "white_on_black".
+    """
+    border = np.concatenate([
+        img[0, :], img[-1, :], img[:, 0], img[:, -1],
+    ])
+    border_mean = float(border.mean())
+    return "black_on_white" if border_mean > 127 else "white_on_black"
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +164,13 @@ def run_potrace(png_path, svg_out, alphamax=1.0, opttolerance=0.2):
     # closes tiny holes/specks. Real photos need this too.
     img = cv2.medianBlur(img, 5)
     _, img_bin = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+    # Auto-detect polarity: potrace expects the silhouette to be dark. If
+    # the background turned out darker than the foreground (i.e. we have
+    # white-on-black input), invert before tracing so the rest of the
+    # pipeline can stay polarity-agnostic.
+    polarity = detect_polarity(img_bin)
+    if polarity == "white_on_black":
+        img_bin = cv2.bitwise_not(img_bin)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     img_bin = cv2.morphologyEx(img_bin, cv2.MORPH_OPEN, kernel)
     img_bin = cv2.morphologyEx(img_bin, cv2.MORPH_CLOSE, kernel)
@@ -470,9 +505,9 @@ def main():
     original = classic_tab()
     OUT.mkdir(exist_ok=True)
 
-    print("step 1: synthesizing reference PNG ...")
+    print("step 1: synthesizing reference PNG (black on white) ...")
     png_clean = OUT / "01-reference.png"
-    synthesize(original, png_clean)
+    synthesize(original, png_clean, polarity="black_on_white")
 
     print("step 1b: synthesizing noisy variant (photo simulation) ...")
     clean_img = cv2.imread(str(png_clean), cv2.IMREAD_GRAYSCALE)
@@ -480,14 +515,24 @@ def main():
     png_noisy = OUT / "01b-reference-noisy.png"
     cv2.imwrite(str(png_noisy), noisy_img)
 
+    print("step 1c: synthesizing inverted variant (white on black) ...")
+    png_inverted = OUT / "01c-reference-inverted.png"
+    synthesize(original, png_inverted, polarity="white_on_black")
+
+    print("step 1d: synthesizing noisy inverted variant ...")
+    inverted_img = cv2.imread(str(png_inverted), cv2.IMREAD_GRAYSCALE)
+    noisy_inverted = add_photo_noise(inverted_img)
+    png_inverted_noisy = OUT / "01d-reference-inverted-noisy.png"
+    cv2.imwrite(str(png_inverted_noisy), noisy_inverted)
+
     original_neck_frame = renormalize_original_to_neck_frame(original)
 
     print("step 2-4: running pipeline under several configurations ...")
     configs = [
-        ("clean,  default potrace (a=1.0,  O=0.2)", png_clean, OUT / "02-traced-clean-default.svg", 1.0, 0.2),
-        ("clean,  high smoothing  (a=1.33, O=1.0)", png_clean, OUT / "02-traced-clean-smooth.svg", 1.33, 1.0),
-        ("noisy,  default potrace (a=1.0,  O=0.2)", png_noisy, OUT / "02-traced-noisy-default.svg", 1.0, 0.2),
-        ("noisy,  high smoothing  (a=1.33, O=1.0)", png_noisy, OUT / "02-traced-noisy-smooth.svg", 1.33, 1.0),
+        ("clean black-on-white", png_clean,           OUT / "02-traced-clean-bow.svg",         1.0,  0.2),
+        ("clean white-on-black", png_inverted,        OUT / "02-traced-clean-wob.svg",         1.0,  0.2),
+        ("noisy black-on-white", png_noisy,           OUT / "02-traced-noisy-bow.svg",         1.0,  0.2),
+        ("noisy white-on-black", png_inverted_noisy, OUT / "02-traced-noisy-wob.svg",         1.0,  0.2),
     ]
 
     results = []
@@ -515,9 +560,9 @@ def main():
     fig.savefig(overlay, dpi=110)
     plt.close(fig)
 
-    # Save the best-quality clean result as the "winning" normalized path.
+    # Save the best-quality result as the "winning" normalized path.
     norm_json = OUT / "05-normalized.json"
-    best = min(results[:2], key=lambda r: r["max_dev"])
+    best = min(results, key=lambda r: r["max_dev"])
     norm_json.write_text(json.dumps(
         [{"x": p[0], "y": p[1]} for p in best["path"]],
         indent=2,
