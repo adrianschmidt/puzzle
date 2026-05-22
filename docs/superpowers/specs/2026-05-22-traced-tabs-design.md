@@ -331,6 +331,26 @@ export const tracedTabGenerator: TabGenerator = {
 A factory wrapper (`makeTabGenerator(id, template)`) is tempting but
 not required — two five-line generators are perfectly readable.
 
+### Implementation note: traced bypasses `prepareTab`
+
+During implementation the traced generator diverged from the
+"identical structure" shape above. The traced template's path spans
+the full edge — `(0, 0)` to `(1, 0)` are the chord endpoints
+themselves, not the mid-edge necks the classic template uses.
+`prepareTab` assumes a small mushroom-style shape it can splice into
+the middle of an edge, with the rest of the edge preserved as
+before/after segments. With a full-edge template that splice gate
+always rejects.
+
+The traced generator therefore calls `transformTabToEdge` directly
+with `edge.start` / `edge.end` as the anchor frame, replacing the
+edge wholesale rather than splicing into it. It still consumes the
+two outer placement calls from `computeTabPlacement` (the `tCenter`
+value is unused but the call must stay — see the function's
+PRNG-contract docstring). See the docstring on
+`src/puzzle/topology/traced-tab-generator.ts` for the authoritative
+description of the design difference.
+
 ## Python CLI
 
 `tools/trace-tab/main.py` — one command per trace:
