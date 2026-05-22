@@ -7,7 +7,10 @@
  */
 
 import type { Point } from '../../../model/types.js';
-import tab01 from './tab-01-spike-screenshot.json';
+import tab02 from './02-tab-a.json';
+import tab03 from './03-tab-b.json';
+import tab04 from './04-tab-c.json';
+import tab05 from './05-tab-d.json';
 
 export interface TracedLandmarks {
     /** Y of the highest point of the tab, normalized to chord length. */
@@ -35,5 +38,8 @@ export interface TracedTemplate {
 }
 
 export const TRACED_TEMPLATES: readonly TracedTemplate[] = [
-    tab01 as TracedTemplate,
+    tab02 as TracedTemplate,
+    tab03 as TracedTemplate,
+    tab04 as TracedTemplate,
+    tab05 as TracedTemplate,
 ] as const;
