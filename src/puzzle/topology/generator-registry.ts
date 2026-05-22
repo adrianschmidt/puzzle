@@ -10,6 +10,7 @@ import { sineCutGenerator } from './sine-cut-generator.js';
 import { classicTabGenerator } from './classic-tab-generator.js';
 import { vennCutGenerator } from './venn-cut-generator.js';
 import { noneTabGenerator } from './none-tab-generator.js';
+import { tracedTabGenerator } from './traced-tab-generator.js';
 
 const baseCutGenerators = new Map<string, BaseCutGenerator>();
 const tabGenerators = new Map<string, TabGenerator>();
@@ -49,3 +50,4 @@ registerTabGenerator(classicTabGenerator);
 // Register additional generators
 registerBaseCutGenerator(vennCutGenerator);
 registerTabGenerator(noneTabGenerator);
+registerTabGenerator(tracedTabGenerator);

@@ -243,7 +243,7 @@ function joinCurves(curves: Curve[]): Curve {
  * x is positioned along the edge direction, y perpendicular to it.
  * Both are scaled by edgeLength, keeping width and height independent.
  */
-function transformTabToEdge(
+export function transformTabToEdge(
     path: BezierPath,
     pLeft: Point,
     pRight: Point,
