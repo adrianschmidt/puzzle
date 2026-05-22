@@ -8,24 +8,32 @@ real-photographed puzzle-tab Bezier paths, exposed dev-only via a new
 dialog. Reference spec: `docs/superpowers/specs/2026-05-22-traced-tabs-design.md`.
 
 **Architecture:** A new `tracedTabTemplate` reads from a curated library of
-JSON traces under `src/puzzle/composable/traces/` and applies six PRNG-driven
-transforms (template pick, x-flip, scale-x, scale-y, lateral shift,
-neck pinch). Placement/preparation helpers move out of `classic-tab-generator.ts`
-into a shared `tab-generator-helpers.ts`. A new `tracedTabGenerator` uses
-them. The existing "Disable tabs" checkbox is replaced by a three-way
-segmented control (Classic / Traced / None) backed by a new
-`tabGenerator: 'classic' | 'traced' | 'none'` field on
-`ComposableSliderConfig` and `ComposableSliderPreference`. Read-side
-migration maps legacy `disableTabs: true` → `tabGenerator: 'none'`.
+JSON traces under `src/puzzle/composable/traces/` and applies six
+transforms (template pick, x-flip, scale-x, scale-y, lateral shift, neck
+pinch) driven by a **local sub-PRNG seeded by a single outer PRNG call**.
+This isolates traced-tab internals from the outer puzzle stream so
+future per-edge jitter parameters can be added without disturbing the
+rest of the puzzle's seeded generation. Placement/preparation helpers
+move out of `classic-tab-generator.ts` into a shared
+`tab-generator-helpers.ts`. A new `tracedTabGenerator` uses them. The
+existing "Disable tabs" checkbox is replaced by a three-way segmented
+control (Classic / Traced / None) backed by a new `tabGenerator:
+'classic' | 'traced' | 'none'` field on `ComposableSliderConfig` and
+`ComposableSliderPreference`. Read-side migration maps legacy
+`disableTabs: true` → `tabGenerator: 'none'`.
 
 **Tech Stack:** TypeScript + Vite + Vitest; Python 3 + OpenCV + Potrace
 (offline CLI). The Python CLI is promoted from the existing `spike/tab-tracing`
 branch (`spike/tab-tracing/spike.py`, 1352 lines).
 
-**PRNG contract:** Per [[project_share_link_prng_contract]], the exact PRNG
-call order matters. The classic helper extraction (Phase B) is a refactor —
-it MUST NOT alter classic's PRNG consumption or output. The traced generator
-(Phase C) defines a new PRNG order; once shipped, that order is locked.
+**PRNG contract:** Per [[project_share_link_prng_contract]], outer-stream
+PRNG consumption order is locked once shipped. The classic helper
+extraction (Phase B) is a refactor — it MUST NOT alter classic's PRNG
+consumption or output. The traced generator (Phase C) consumes
+**exactly one outer PRNG call per edge** (for placement: 2 outer calls;
+for the template: 1 outer call → seeds a sub-PRNG). The sub-PRNG's
+internal call order is a within-traced-tab reproducibility contract,
+but local-block changes do NOT propagate to the outer puzzle structure.
 
 ---
 
@@ -860,12 +868,15 @@ This implements the PRNG-locked transform pipeline from the spec.
  * Traced tab shape template — pulls cubic-Bezier paths from a
  * photographed library and applies six PRNG-driven transforms.
  *
- * PRNG call order LOCKED. See project_share_link_prng_contract.
+ * Outer-PRNG contract LOCKED: exactly ONE outer call per generation.
+ * That call seeds a local sub-PRNG used for all per-edge transforms.
+ * See project_share_link_prng_contract.
  */
 
 import type { Point } from '../../model/types.js';
 import type { BezierPath } from './bezier-path.js';
 import type { TabTemplate } from './tab-shapes.js';
+import { createSeededRandom } from '../seeded-random.js';
 import {
     TRACED_TEMPLATES,
     type TracedLandmarks,
@@ -874,6 +885,16 @@ import {
 
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
+}
+
+/**
+ * Derive a deterministic integer seed for the local sub-PRNG from one
+ * outer-PRNG draw. createSeededRandom normalizes via `seed | 0`, so any
+ * integer in the int32 range is fine; we use the canonical mulberry32
+ * pattern of scaling [0,1) → uint32.
+ */
+function seedFromFloat(v: number): number {
+    return Math.floor(v * 4294967296);
 }
 
 function mirrorLandmarksX(lm: TracedLandmarks): TracedLandmarks {
@@ -926,13 +947,18 @@ export const tracedTabTemplate: TabTemplate = {
     name: 'Traced',
 
     generate(random: () => number): BezierPath {
-        // PRNG call order — LOCKED. See project_share_link_prng_contract.
-        const idx       = Math.floor(random() * TRACED_TEMPLATES.length);  // 1
-        const flip      = random() < 0.5;                                  // 2
-        const scalex    = lerp(0.85, 1.05, random());                      // 3
-        const scaley    = lerp(0.85, 1.05, random());                      // 4
-        const mid       = lerp(0.45, 0.55, random());                      // 5
-        const neckScale = lerp(0.75, 1.10, random());                      // 6
+        // Outer PRNG advances by exactly ONE call. The local sub-PRNG
+        // then drives every per-edge parameter — future additions slot
+        // in below without touching the outer stream.
+        const subSeed = random();
+        const local = createSeededRandom(seedFromFloat(subSeed));
+
+        const idx       = Math.floor(local() * TRACED_TEMPLATES.length); // local 1
+        const flip      = local() < 0.5;                                 // local 2
+        const scalex    = lerp(0.85, 1.05, local());                     // local 3
+        const scaley    = lerp(0.85, 1.05, local());                     // local 4
+        const mid       = lerp(0.45, 0.55, local());                     // local 5
+        const neckScale = lerp(0.75, 1.10, local());                     // local 6
 
         const template: TracedTemplate = TRACED_TEMPLATES[idx];
         let path: Point[] = template.path.map(p => ({ x: p.x, y: p.y }));
@@ -971,13 +997,16 @@ fallback note.
 ```bash
 git add src/puzzle/composable/tab-shapes-traced.ts
 git commit -m "$(cat <<'EOF'
-feat(composable): add tracedTabTemplate with PRNG-locked transforms
+feat(composable): add tracedTabTemplate with sub-PRNG isolation
 
 Pulls a tab from the TRACED_TEMPLATES library and applies six
-PRNG-driven adjustments (template pick, x-flip, scalex, scaley, mid
-shift, neck pinch). The call order is the share-link reproducibility
-contract for traced tabs; reordering or inserting calls breaks every
-previously-shared traced-tab puzzle.
+sub-PRNG-driven adjustments (template pick, x-flip, scalex, scaley,
+mid shift, neck pinch).
+
+Outer-PRNG contract: exactly one outer call per edge, which seeds the
+local sub-PRNG. Future per-edge parameters can be added to the local
+block without disturbing the outer puzzle's seeded generation —
+puzzle structure stays seed-stable even as the local block evolves.
 EOF
 )"
 ```
@@ -990,6 +1019,10 @@ EOF
 - Create: `src/puzzle/composable/tab-shapes-traced.test.ts`
 
 - [ ] **Step 1: Write the unit tests**
+
+The outer-PRNG mocking tricks used in earlier drafts no longer work
+because every per-edge parameter comes from the *local* sub-PRNG. Tests
+focus on structural properties + outer-stream consumption count.
 
 ```typescript
 import { describe, it, expect } from 'vitest';
@@ -1005,14 +1038,14 @@ describe('tracedTabTemplate', () => {
         expect(path[path.length - 1].y).toBeCloseTo(0, 3);
     });
 
-    it('consumes exactly 6 PRNG calls', () => {
+    it('consumes exactly 1 outer PRNG call', () => {
         let calls = 0;
         const random = (): number => {
             calls++;
             return 0.5;
         };
         tracedTabTemplate.generate(random);
-        expect(calls).toBe(6);
+        expect(calls).toBe(1);
     });
 
     it('is deterministic for a fixed seed', () => {
@@ -1023,46 +1056,34 @@ describe('tracedTabTemplate', () => {
         expect(a).toEqual(b);
     });
 
-    it('produces a path with the same point count as the picked library entry', () => {
-        // With random() === 0 always, idx=0 → first template. flip=true (0<0.5).
-        const path = tracedTabTemplate.generate(() => 0);
-        expect(path.length).toBe(TRACED_TEMPLATES[0].path.length);
+    it('produces different paths for different outer seeds', () => {
+        const a = tracedTabTemplate.generate(createSeededRandom(1));
+        const b = tracedTabTemplate.generate(createSeededRandom(2));
+        // At least one point should differ — if the outer call has no
+        // effect on output, the sub-PRNG isn't being seeded from it.
+        const allEqual = a.length === b.length && a.every((p, i) =>
+            Math.abs(p.x - b[i].x) < 1e-9 && Math.abs(p.y - b[i].y) < 1e-9,
+        );
+        expect(allEqual).toBe(false);
     });
 
-    it('mirrors the path horizontally when flip is chosen', () => {
-        // Call counter so we can return 0 for indices 1 (flip) and 0.5 for the rest.
-        // PRNG order: idx, flip, scalex, scaley, mid, neckScale.
-        let i = 0;
-        const random = (): number => {
-            i++;
-            if (i === 1) return 0;     // idx 0
-            if (i === 2) return 0.0;   // flip = true (random() < 0.5)
-            if (i === 3) return 0.5;   // scalex = lerp midpoint
-            if (i === 4) return 0.5;   // scaley = lerp midpoint
-            if (i === 5) return 0.5;   // mid = lerp midpoint = 0.5
-            if (i === 6) return 0.5;   // neckScale = lerp midpoint
-            return 0.5;
-        };
-        const flipped = tracedTabTemplate.generate(random);
+    it('produces a path with length matching the picked template (3n+1 cubic Bezier shape)', () => {
+        // For any seed we pick a template from TRACED_TEMPLATES and the
+        // output preserves the (3n+1) length invariant.
+        const path = tracedTabTemplate.generate(createSeededRandom(99));
+        expect(path.length).toBeGreaterThanOrEqual(4);
+        expect((path.length - 1) % 3).toBe(0);
+        // Length must match one of the library entries.
+        const libraryLengths = TRACED_TEMPLATES.map(t => t.path.length);
+        expect(libraryLengths).toContain(path.length);
+    });
 
-        // Same parameters but flip=false.
-        i = 0;
-        const random2 = (): number => {
-            i++;
-            if (i === 1) return 0;
-            if (i === 2) return 0.999; // flip = false (random() >= 0.5)
-            if (i === 3) return 0.5;
-            if (i === 4) return 0.5;
-            if (i === 5) return 0.5;
-            if (i === 6) return 0.5;
-            return 0.5;
-        };
-        const upright = tracedTabTemplate.generate(random2);
-
-        // First x of flipped ≈ last x of upright (mirror about x=mid=0.5,
-        // then both scaled identically with scalex=1, mid=0.5).
-        expect(flipped[0].x).toBeCloseTo(1 - upright[0].x, 3);
-        expect(flipped[flipped.length - 1].x).toBeCloseTo(1 - upright[upright.length - 1].x, 3);
+    it('preserves chord endpoints x≈mid±half-width after transforms', () => {
+        // After the lateral shift + scale, the chord endpoints should
+        // still sit on y=0 (already tested above) and span a positive
+        // x range — i.e. start.x < end.x with non-zero width.
+        const path = tracedTabTemplate.generate(createSeededRandom(7));
+        expect(path[path.length - 1].x).toBeGreaterThan(path[0].x);
     });
 });
 ```
@@ -1081,10 +1102,11 @@ contract guard.
 ```bash
 git add src/puzzle/composable/tab-shapes-traced.test.ts
 git commit -m "$(cat <<'EOF'
-test(composable): cover tracedTabTemplate PRNG and transform pipeline
+test(composable): cover tracedTabTemplate outer-PRNG contract
 
-Pins the 6-PRNG-call contract, determinism for a fixed seed, the
-x-flip transform, and chord-endpoint preservation.
+Pins the one-outer-call contract, determinism for a fixed seed,
+sub-PRNG seeding (different outer seeds → different paths), and the
+3n+1 Bezier-path length invariant.
 EOF
 )"
 ```
@@ -1202,7 +1224,7 @@ describe('tracedTabGenerator', () => {
         expect(tracedTabGenerator.generate(shortEdge, random, {})).toBeNull();
     });
 
-    it('consumes 8 PRNG calls per successful tab (2 placement + 6 template)', () => {
+    it('consumes 3 outer PRNG calls per successful tab (2 placement + 1 template subSeed)', () => {
         let calls = 0;
         const counting = (): number => {
             calls++;
@@ -1211,7 +1233,7 @@ describe('tracedTabGenerator', () => {
         const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
         const result = tracedTabGenerator.generate(edge, counting, {});
         expect(result).not.toBeNull();
-        expect(calls).toBe(8);
+        expect(calls).toBe(3);
     });
 });
 ```
@@ -1232,9 +1254,10 @@ git commit -m "$(cat <<'EOF'
 feat(topology): add traced tab generator and register it
 
 The generator reuses the shared placement helpers and delegates shape
-choice to tracedTabTemplate. Total PRNG consumption per edge is 8
-calls (2 placement + 6 template), recorded in the test as the
-share-link reproducibility contract for traced puzzles.
+choice to tracedTabTemplate. Outer-stream PRNG consumption per edge is
+3 calls (2 placement + 1 template subSeed); the rest of the
+randomness is sandboxed in a sub-PRNG so future per-edge parameters
+can be added without disturbing the outer puzzle structure.
 EOF
 )"
 ```

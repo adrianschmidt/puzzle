@@ -13,11 +13,15 @@ Composable's tab-style picker, alongside the existing `classic` and
 `none` options. Production cut styles (Classic, Wavy, Fractal) are not
 touched; their tab-generator choices stay hardcoded in their strategies.
 
-Each `traced` tab generation consumes 6 PRNG calls (template-pick, random
-flip, scalex, scaley, mid, neckRatio-analog) on top of the 2 placement
-calls already made by `computeTabPlacement` — 8 total per edge, vs. 6 for
-classic. Library size at launch: aiming for 25+ traces, collected across
-multiple physical puzzles.
+Each `traced` tab generation consumes **one outer PRNG call**, which seeds
+a local sub-PRNG that drives all per-edge transforms (template-pick,
+random flip, scalex, scaley, mid, neckRatio-analog). Combined with the 2
+placement calls already made by `computeTabPlacement`, this is 3 outer
+calls per edge (vs. 6 outer for classic). The sub-PRNG isolation lets
+future per-edge jitter parameters be added inside the local block
+without disturbing the outer puzzle's PRNG sequence. Library size at
+launch: aiming for 25+ traces, collected across multiple physical
+puzzles.
 
 A separate cleanup in the same PR replaces Composable's "Disable tabs"
 checkbox with a three-way segmented control (`● Classic ○ Traced ○ None`)
@@ -208,15 +212,22 @@ Pseudo-code; exact lerp ranges are tunable during implementation:
 
 ```ts
 generate(random): BezierPath {
-    // PRNG call order — LOCKED. Defines the share-link reproducibility
-    // contract for traced tabs. Reordering or inserting calls breaks
-    // every previously-shared traced-tab puzzle.
-    const idx       = Math.floor(random() * TRACED_TEMPLATES.length);   // 1: pick
-    const flip      = random() < 0.5;                                   // 2: mirror x
-    const scalex    = lerp(0.85, 1.05, random());                       // 3
-    const scaley    = lerp(0.85, 1.05, random());                       // 4
-    const mid       = lerp(0.45, 0.55, random());                       // 5: lateral shift
-    const neckScale = lerp(0.75, 1.10, random());                       // 6: neckRatio analog
+    // OUTER PRNG contract — LOCKED at ONE call per traced tab. That
+    // call seeds a local sub-PRNG used for every per-edge parameter.
+    // Adding/reordering LOCAL calls below changes which shape a given
+    // seed produces for THIS edge, but does not disturb the outer
+    // stream — so puzzle structure (cuts, piece placement, neighbouring
+    // tabs) stays seed-stable as the local block evolves.
+    const subSeed = random();
+    const local = createSeededRandom(seedFromFloat(subSeed));
+
+    const idx       = Math.floor(local() * TRACED_TEMPLATES.length);    // 1: pick
+    const flip      = local() < 0.5;                                    // 2: mirror x
+    const scalex    = lerp(0.85, 1.05, local());                        // 3
+    const scaley    = lerp(0.85, 1.05, local());                        // 4
+    const mid       = lerp(0.45, 0.55, local());                        // 5: lateral shift
+    const neckScale = lerp(0.75, 1.10, local());                        // 6: neckRatio analog
+    // future per-edge parameters slot in here without affecting outer.
 
     const template = TRACED_TEMPLATES[idx];
     let path = template.path;
@@ -271,11 +282,16 @@ neck inward when `neckScale < 1`, and leaves the head proportions intact.
 
 ### Total PRNG cost per edge
 
-- Existing `computeTabPlacement`: 2 calls (tCenter, isTab).
-- New `tracedTabTemplate.generate`: 6 calls (as above).
-- **Total per edge: 8 PRNG calls.** Classic uses 6 (2 placement + 4
-  template). Both stay independent — switching tab generator changes
-  the PRNG consumption but doesn't invalidate other puzzles' seeds.
+- Existing `computeTabPlacement`: 2 outer calls (tCenter, isTab).
+- New `tracedTabTemplate.generate`: 1 outer call (subSeed) + 6 local
+  sub-PRNG calls.
+- **Total per edge: 3 outer + 6 local.** Classic uses 6 outer (2
+  placement + 4 template). Switching tab generator changes outer-stream
+  consumption from 6 to 3, but the sub-PRNG isolation means future
+  additions to the local block (e.g. per-edge rotation jitter,
+  per-edge texture variation) won't disturb the outer stream — so
+  puzzle structure stays seed-stable across version bumps that only
+  change local-block ordering.
 
 ## Generator helpers refactor
 
