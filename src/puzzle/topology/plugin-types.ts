@@ -11,6 +11,7 @@
 
 import type { Curve } from './curve.js';
 import type { Size } from '../../model/types.js';
+import type { TabTemplate } from '../composable/tab-shapes.js';
 
 /**
  * Produces the input cuts for a puzzle.
@@ -88,4 +89,39 @@ export interface TopologyEdge {
     readonly id: number;
     /** Arc length of the edge's current curve, in pixels. */
     readonly length: number;
+}
+
+/**
+ * Splices a tab template onto a parent edge at a chosen placement.
+ *
+ * A `TabSplicer` is the "how to attach" half of tab generation: given
+ * a position along the edge, a template, and a PRNG, it produces the
+ * final curve that replaces the spliced section. Different splicers
+ * can use the same `TabTemplate` but attach it differently — e.g. a
+ * standard splicer that joins the tab to the parent edge with C0
+ * continuity (matching positions only) vs. a smoothed splicer that
+ * also tangent-aligns the tab's end controls so the join is C1
+ * (smooth direction across the splice).
+ *
+ * Splicers compose with the shared placement primitives
+ * (`prepareTab`, `commitTab`) from `tab-generator-helpers.ts`. The
+ * choice of splicer is currently a per-`TabGenerator` decision — each
+ * generator imports the splicer it wants. If a future need calls for
+ * cut-style-level overrides, the lookup can move to the cut-style
+ * strategy without changing this interface.
+ */
+export interface TabSplicer {
+    /** Stable id for debug/logs; not part of any share-link contract. */
+    readonly id: string;
+    /**
+     * Build the spliced curve. Returns null if the placement is
+     * invalid (e.g. the tab would consume more of the edge than the
+     * placement margins allow).
+     */
+    splice(
+        edge: Curve,
+        placement: { tCenter: number; isTab: boolean },
+        template: TabTemplate,
+        random: () => number,
+    ): Curve | null;
 }
