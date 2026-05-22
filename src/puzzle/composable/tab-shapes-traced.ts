@@ -90,15 +90,15 @@ export const tracedTabTemplate: TabTemplate = {
 
         const idx       = Math.floor(local() * TRACED_TEMPLATES.length); // local 1
         const flip      = local() < 0.5;                                 // local 2
-        // scalex / scaley shrink the unit-length neck-to-neck path so
-        // the traced tab occupies a small fraction of the host edge —
-        // mirroring classic, whose chord (neck-to-neck) sits at
-        // ~0.05–0.27 of template space and whose apex sits ~0.25 above
-        // the chord. scaley is sized so a typical traced apex_y (~0.35)
-        // produces an apex height comparable to classic's. Output has
-        // neck endpoints at (mid ± scalex/2, 0), ready for prepareTab.
+        // scalex is the desired neck-to-neck width on the host edge
+        // (the same dimension classic's halfWidth × 2 controls). scaley
+        // is a multiplicative aspect adjustment around the photo's
+        // natural apex-to-neck ratio — 1.0 keeps the photographed
+        // proportions, > 1 stretches taller, < 1 squashes flatter. mid
+        // shifts the neck centre laterally inside [mid - scalex/2,
+        // mid + scalex/2].
         const scalex    = lerp(0.14, 0.20, local());                     // local 3
-        const scaley    = lerp(0.55, 0.80, local());                     // local 4
+        const scaley    = lerp(0.85, 1.15, local());                     // local 4
         const mid       = lerp(0.45, 0.55, local());                     // local 5
         const neckScale = lerp(0.75, 1.10, local());                     // local 6
 
@@ -118,13 +118,21 @@ export const tracedTabTemplate: TabTemplate = {
         // Pinch neck (uses pre-shift landmarks in [0,1] template space).
         path = path.map(p => pinchNeck(p, landmarks, neckScale));
 
-        // Lateral shift + scale around (mid, 0). After this the path
-        // spans [mid - scalex/2, mid + scalex/2] in x and is scaled by
-        // scaley in y — the neck endpoints sit at mid ± scalex/2 in
-        // template space, ready for prepareTab to position on an edge.
+        // Re-anchor the scale to the actual neck. The JSON's chord
+        // (path[0] → path[-1]) often sits at the image-crop edges,
+        // wider than the real neck. We use the neck landmarks instead
+        // so scalex maps to the tab's neck-to-neck width on the edge,
+        // not the photo crop. The flat-shoulder padding outside the
+        // neck still extends in x but stays at y ≈ 0, so it overlaps
+        // the parent edge invisibly after splicing. xFactor is clamped
+        // against degenerate neck.width values that would amplify the
+        // path beyond reason.
+        const xFactor = scalex / Math.max(0.05, landmarks.neck.width);
+        const yFactor = xFactor * scaley;
+
         path = path.map(p => ({
-            x: mid + (p.x - 0.5) * scalex,
-            y: p.y * scaley,
+            x: mid + (p.x - landmarks.neck.center_x) * xFactor,
+            y: p.y * yFactor,
         }));
 
         return path;
