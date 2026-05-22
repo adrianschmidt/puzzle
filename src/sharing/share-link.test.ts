@@ -837,6 +837,42 @@ describe('disableTabs default agreement (#285)', () => {
     });
 });
 
+describe('share-link tg = "traced"', () => {
+    it('round-trips an encoded payload with tg: "traced"', () => {
+        const payload: SharePayload = {
+            v: 1,
+            i: 'blank',
+            is: [800, 600],
+            g: [4, 3],
+            c: 'composable',
+            s: 12345,
+            r: 'none',
+            cf: {
+                bg: 'sine',
+                bgc: { ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5 },
+                tg: 'traced',
+                tgc: {},
+            },
+        };
+        const encoded = encodePayload(payload);
+        const decoded = decodePayload(encoded);
+        expect(decoded).toEqual(payload);
+    });
+
+    it('decodes legacy "dt: true" (no tg) as tg: "none"', () => {
+        // Hand-craft a legacy payload. translateLegacyComposable in
+        // share-link.ts should map dt → tg.
+        const legacyJson = JSON.stringify({
+            v: 1, i: 'blank', is: [800, 600], g: [4, 3], c: 'composable',
+            s: 1, r: 'none',
+            cf: { ha: 0.1, hf: 1, va: 0.1, vf: 1, dt: true },
+        });
+        const encoded = encodeRaw(JSON.parse(legacyJson));
+        const decoded = decodePayload(encoded);
+        expect(decoded?.cf?.tg).toBe('none');
+    });
+});
+
 describe('share-link codec — wavy', () => {
     it('round-trips a wavy payload with no cf', () => {
         const payload: SharePayload = {
