@@ -40,6 +40,123 @@ describe('classicTabGenerator', () => {
     });
 });
 
+describe('classicTabGenerator (PRNG snapshot)', () => {
+    it('produces a deterministic curve for a fixed seed and edge', () => {
+        const random = makeSeededRandom(0xC1A551C); // arbitrary, but stable
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+
+        const result = classicTabGenerator.generate(edge, random, {});
+        expect(result).not.toBeNull();
+
+        // Flatten to numeric arrays so toMatchInlineSnapshot stays readable.
+        const points = result!.segments.flatMap(seg =>
+            [seg.p0, seg.cp1, seg.cp2, seg.p3]
+                .map(p => [Math.round(p.x * 1000) / 1000, Math.round(p.y * 1000) / 1000])
+        );
+
+        expect(points).toMatchInlineSnapshot(`
+          [
+            [
+              0,
+              0,
+            ],
+            [
+              21.803,
+              0,
+            ],
+            [
+              43.607,
+              0,
+            ],
+            [
+              65.41,
+              0,
+            ],
+            [
+              65.41,
+              0,
+            ],
+            [
+              72.256,
+              -8.075,
+            ],
+            [
+              54.623,
+              -24.226,
+            ],
+            [
+              60.734,
+              -34.321,
+            ],
+            [
+              60.734,
+              -34.321,
+            ],
+            [
+              69.899,
+              -48.453,
+            ],
+            [
+              79.064,
+              -50.472,
+            ],
+            [
+              88.23,
+              -50.472,
+            ],
+            [
+              88.23,
+              -50.472,
+            ],
+            [
+              97.395,
+              -50.472,
+            ],
+            [
+              106.56,
+              -48.453,
+            ],
+            [
+              115.726,
+              -34.321,
+            ],
+            [
+              115.726,
+              -34.321,
+            ],
+            [
+              121.836,
+              -24.226,
+            ],
+            [
+              104.203,
+              -8.075,
+            ],
+            [
+              111.049,
+              0,
+            ],
+            [
+              111.049,
+              0,
+            ],
+            [
+              154.033,
+              0,
+            ],
+            [
+              197.016,
+              0,
+            ],
+            [
+              240,
+              0,
+            ],
+          ]
+        `);
+    });
+});
+
 function makeSeededRandom(seed: number): () => number {
     let s = seed | 0;
     return () => {
