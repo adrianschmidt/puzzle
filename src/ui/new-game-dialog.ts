@@ -370,15 +370,20 @@ function appendSegmentedRow<T extends string>(
     const row = document.createElement('div');
     row.className = 'dialog-row';
 
+    const groupSlug = `${labelText.replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`;
+    const labelId = `seg-label-${groupSlug}`;
+
     const label = document.createElement('label');
     label.className = 'dialog-row-label';
+    label.id = labelId;
     label.textContent = labelText;
 
     const group = document.createElement('div');
     group.className = 'segmented-control';
     group.setAttribute('role', 'radiogroup');
+    group.setAttribute('aria-labelledby', labelId);
 
-    const groupName = `seg-${labelText.replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`;
+    const groupName = `seg-${groupSlug}`;
     const inputs: HTMLInputElement[] = [];
 
     for (const opt of options) {

@@ -182,6 +182,14 @@ export function commitTab(prepared: PreparedTab): Curve {
 /**
  * Determine if and where to place a tab on an edge segment.
  *
+ * **PRNG contract:** when this function returns non-null it consumes
+ * exactly two `random()` calls in fixed order (tCenter, then isTab).
+ * This count is part of the share-link reproducibility contract for
+ * every consumer — classic uses both values, traced only uses isTab
+ * but the two-call advancement is still required to keep its
+ * outer-stream consumption stable. Don't refactor away an "unused"
+ * call.
+ *
  * @returns { tCenter, isTab } or null if the edge is too short
  */
 export function computeTabPlacement(
