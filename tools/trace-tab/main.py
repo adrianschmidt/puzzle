@@ -1,0 +1,1352 @@
+"""
+Tab-tracing spike.
+
+Question: can we automatically convert a (synthesized for now, photographed
+later) puzzle-tab silhouette into a normalized cubic-Bezier path that
+matches the puzzle app's TabTemplate convention?
+
+Pipeline:
+  1. Synthesize a reference tab silhouette PNG from the classic template.
+  2. Run Potrace on the PNG to get vectorized cubic Beziers.
+  3. Parse the SVG, isolate the tab portion of the contour, normalize
+     to the (0,0)->(1,0) convention with the tab protruding in +Y.
+  4. Render original vs. traced overlay and compute a deviation metric.
+
+Outputs (next to this script):
+  out/01-reference.png        synthesized input
+  out/02-traced.svg           raw potrace output
+  out/03-overlay.png          original (blue) vs traced (red)
+  out/04-metrics.txt          deviation numbers
+  out/05-normalized.json      traced path in normalized (0,0)->(1,0) space
+"""
+
+import argparse
+import json
+import math
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+OUT = Path(__file__).parent / "out"
+OUT.mkdir(exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Classic tab template — direct port of classicTabTemplate in
+# src/puzzle/composable/tab-shapes.ts. Returns 13 points: start anchor
+# followed by (cp1, cp2, anchor) triples for 4 cubic segments.
+# ---------------------------------------------------------------------------
+
+def classic_tab(scalex=0.825, scaley=0.9, mid=0.5, neck_ratio=0.525):
+    halfWidth = 0.17 * scalex
+    neckHalfWidth = halfWidth * neck_ratio
+    yShift = 0.08 * scaley
+
+    def pt(h, v):
+        return (h, v - yShift)
+
+    pb = pt(mid - halfWidth * 0.9, 0.25 * scaley)
+    pc = pt(mid, 0.33 * scaley)
+    pd = pt(mid + halfWidth * 0.9, 0.25 * scaley)
+
+    cp2_1 = pt(mid - neckHalfWidth * 0.7, 0.12 * scaley)
+    cp2_2 = pt(mid - halfWidth * 1.1, 0.20 * scaley)
+    cp3_1 = pt(mid - halfWidth * 0.6, 0.32 * scaley)
+    cp3_2 = pt(mid - halfWidth * 0.3, 0.33 * scaley)
+    cp4_1 = pt(mid + halfWidth * 0.3, 0.33 * scaley)
+    cp4_2 = pt(mid + halfWidth * 0.6, 0.32 * scaley)
+    cp5_1 = pt(mid + halfWidth * 1.1, 0.20 * scaley)
+    cp5_2 = pt(mid + neckHalfWidth * 0.7, 0.12 * scaley)
+
+    return [
+        pt(mid - neckHalfWidth, 0.08 * scaley),
+        cp2_1, cp2_2, pb,
+        cp3_1, cp3_2, pc,
+        cp4_1, cp4_2, pd,
+        cp5_1, cp5_2,
+        pt(mid + neckHalfWidth, 0.08 * scaley),
+    ]
+
+
+def sample_bezier_path(path, samples_per_seg=200):
+    pts = []
+    n_segs = (len(path) - 1) // 3
+    for i in range(n_segs):
+        p0 = np.array(path[i * 3])
+        p1 = np.array(path[i * 3 + 1])
+        p2 = np.array(path[i * 3 + 2])
+        p3 = np.array(path[i * 3 + 3])
+        last = (i == n_segs - 1)
+        ts = np.linspace(0, 1, samples_per_seg, endpoint=last)
+        for t in ts:
+            p = (1 - t) ** 3 * p0 + 3 * (1 - t) ** 2 * t * p1 + \
+                3 * (1 - t) * t ** 2 * p2 + t ** 3 * p3
+            pts.append(p)
+    return np.array(pts)
+
+
+# ---------------------------------------------------------------------------
+# Synthesize the input PNG.
+# Template space: x in [0,1] runs along the edge, y >= 0 is the protrusion.
+# Image space: x maps to pixels along width, y in template maps to upward
+# protrusion (smaller image-y). The piece body fills the area below the
+# baseline so the contour is a closed silhouette.
+# ---------------------------------------------------------------------------
+
+EDGE_LEN_PX = 1000
+PADDING = 100
+BASELINE_Y = 500  # image-y where the straight piece edge sits
+
+
+def synthesize(bez_path, png_out, polarity="black_on_white"):
+    """
+    Render the tab silhouette to a PNG.
+
+    polarity:
+      "black_on_white" — background 255, piece+tab filled with 0.
+      "white_on_black" — background 0,   piece+tab filled with 255.
+    """
+    width = PADDING * 2 + EDGE_LEN_PX
+    height = BASELINE_Y + PADDING
+    if polarity == "black_on_white":
+        bg, fg = 255, 0
+    elif polarity == "white_on_black":
+        bg, fg = 0, 255
+    else:
+        raise ValueError(f"unknown polarity {polarity!r}")
+    img = np.full((height, width), bg, dtype=np.uint8)
+
+    samples = sample_bezier_path(bez_path, samples_per_seg=200)
+    px = (samples[:, 0] * EDGE_LEN_PX + PADDING).astype(np.int32)
+    py = (BASELINE_Y - samples[:, 1] * EDGE_LEN_PX).astype(np.int32)
+
+    poly = np.column_stack([px, py])
+    poly = np.vstack([
+        poly,
+        [width - 1, BASELINE_Y],
+        [width - 1, height - 1],
+        [0, height - 1],
+        [0, BASELINE_Y],
+        poly[0],
+    ])
+    cv2.fillPoly(img, [poly], fg)
+    cv2.imwrite(str(png_out), img)
+    return img
+
+
+def detect_polarity(img):
+    """
+    Auto-detect: is the foreground (piece silhouette) dark or light?
+
+    Heuristic: the background touches the image border, so the dominant
+    border colour is the background. Whichever is foreground is the other.
+    Returns "black_on_white" or "white_on_black".
+    """
+    border = np.concatenate([
+        img[0, :], img[-1, :], img[:, 0], img[:, -1],
+    ])
+    border_mean = float(border.mean())
+    return "black_on_white" if border_mean > 127 else "white_on_black"
+
+
+# ---------------------------------------------------------------------------
+# Run potrace on the PNG. Potrace reads BMP, so convert first.
+# Output: SVG with cubic Beziers.
+# ---------------------------------------------------------------------------
+
+def run_potrace(png_path, svg_out, alphamax=1.0, opttolerance=0.2):
+    bmp_path = png_path.with_suffix(".bmp")
+    img = cv2.imread(str(png_path), cv2.IMREAD_GRAYSCALE)
+    # Despeckle: median blur kills salt-and-pepper, morphological open/close
+    # closes tiny holes/specks. Real photos need this too.
+    img = cv2.medianBlur(img, 5)
+    # Otsu's threshold picks the cutoff automatically from the histogram.
+    # Better than a fixed 127 for real photos where glare/shadow at the
+    # die-cut edges shifts the foreground/background brightness.
+    _, img_bin = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Auto-detect polarity: potrace expects the silhouette to be dark. If
+    # the background turned out darker than the foreground (i.e. we have
+    # white-on-black input), invert before tracing so the rest of the
+    # pipeline can stay polarity-agnostic.
+    polarity = detect_polarity(img_bin)
+    if polarity == "white_on_black":
+        img_bin = cv2.bitwise_not(img_bin)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    img_bin = cv2.morphologyEx(img_bin, cv2.MORPH_OPEN, kernel)
+    img_bin = cv2.morphologyEx(img_bin, cv2.MORPH_CLOSE, kernel)
+    cv2.imwrite(str(bmp_path), img_bin)
+    # potrace also has --turdsize for despeckling at the vector level
+    subprocess.run(
+        [
+            "potrace", str(bmp_path),
+            "-b", "svg",
+            "-o", str(svg_out),
+            "-a", str(alphamax),
+            "-O", str(opttolerance),
+            "-t", "100",  # ignore traced regions smaller than 100 px²
+        ],
+        check=True,
+    )
+
+
+def add_photo_noise(img, blur_sigma=2.0, gauss_noise_std=8.0, sp_amount=0.005, seed=42):
+    """
+    Simulate what a tab photographed under decent conditions might look like
+    before threshold: Gaussian blur (defocus / paper-pulp fuzz at the edge),
+    Gaussian intensity noise (sensor), and a few salt-and-pepper specks
+    (dust / paper fibres).
+    """
+    rng = np.random.default_rng(seed)
+    out = cv2.GaussianBlur(img, ksize=(0, 0), sigmaX=blur_sigma)
+    noise = rng.normal(0, gauss_noise_std, size=out.shape)
+    out = np.clip(out.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+    mask = rng.random(out.shape)
+    out[mask < sp_amount] = 0
+    out[mask > 1 - sp_amount] = 255
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Parse potrace SVG and extract cubic-Bezier control points.
+# Potrace emits a path like:
+#   M x y C cx1 cy1 cx2 cy2 x y C ... z
+# We split it into anchor+control-point lists.
+# Note: potrace flips Y (SVG coords are top-down) and may apply a scaling
+# transform on the parent <g>. We resolve that by reading the <g transform>.
+# ---------------------------------------------------------------------------
+
+def parse_potrace_svg(svg_path):
+    text = svg_path.read_text()
+
+    # potrace wraps its path in <g transform="translate(...) scale(...)">.
+    tm = re.search(r'<g\s+transform="translate\(([-\d.]+),([-\d.]+)\)\s+scale\(([-\d.]+),([-\d.]+)\)"', text)
+    if not tm:
+        raise RuntimeError("could not parse potrace <g> transform")
+    tx, ty, sx, sy = map(float, tm.groups())
+
+    pm = re.search(r'<path[^>]*\bd="([^"]+)"', text)
+    if not pm:
+        raise RuntimeError("could not find <path d=...>")
+    d = pm.group(1)
+
+    # Tokenise: split on whitespace and commas after inserting spaces around commands.
+    d_norm = re.sub(r"([MmLlCcZz])", r" \1 ", d).replace(",", " ")
+    tokens = d_norm.split()
+
+    paths = []
+    current = None
+    cursor = (0.0, 0.0)
+
+    def is_number(s):
+        return bool(re.match(r"^-?[\d.]", s))
+
+    i = 0
+    cmd = None
+    while i < len(tokens):
+        t = tokens[i]
+        if t in ("M", "m", "L", "l", "C", "c", "Z", "z"):
+            cmd = t
+            i += 1
+            if cmd in ("Z", "z"):
+                continue
+        elif not is_number(t):
+            i += 1
+            continue
+        # else: t is a number → implicit repeat of the previous command
+        # (note: after M/m, repeated numbers are implicit L/l per SVG spec).
+
+        if cmd in ("M", "m"):
+            x = float(tokens[i]); y = float(tokens[i + 1]); i += 2
+            if cmd == "m" and current is not None:
+                x += cursor[0]; y += cursor[1]
+            cursor = (x, y)
+            current = [cursor]
+            paths.append(current)
+            # Subsequent implicit numbers become L/l per SVG spec.
+            cmd = "L" if cmd == "M" else "l"
+        elif cmd in ("L", "l"):
+            x = float(tokens[i]); y = float(tokens[i + 1]); i += 2
+            if cmd == "l":
+                x += cursor[0]; y += cursor[1]
+            p0 = cursor
+            p3 = (x, y)
+            c1 = (p0[0] + (p3[0] - p0[0]) / 3, p0[1] + (p3[1] - p0[1]) / 3)
+            c2 = (p0[0] + 2 * (p3[0] - p0[0]) / 3, p0[1] + 2 * (p3[1] - p0[1]) / 3)
+            current.extend([c1, c2, p3])
+            cursor = p3
+        elif cmd in ("C", "c"):
+            c1x = float(tokens[i]); c1y = float(tokens[i + 1]); i += 2
+            c2x = float(tokens[i]); c2y = float(tokens[i + 1]); i += 2
+            x = float(tokens[i]); y = float(tokens[i + 1]); i += 2
+            if cmd == "c":
+                c1x += cursor[0]; c1y += cursor[1]
+                c2x += cursor[0]; c2y += cursor[1]
+                x += cursor[0]; y += cursor[1]
+            current.extend([(c1x, c1y), (c2x, c2y), (x, y)])
+            cursor = (x, y)
+        else:
+            i += 1
+
+    # Apply transform: world = (tx + sx*x, ty + sy*y)
+    transformed = []
+    for sub in paths:
+        transformed.append([(tx + sx * x, ty + sy * y) for (x, y) in sub])
+
+    return transformed  # in image coordinates (y down)
+
+
+# ---------------------------------------------------------------------------
+# Identify the tab portion of the traced outer contour.
+# Strategy: the silhouette is "piece body + tab protrusion". On the contour
+# in image coords, the piece body sits at y >= BASELINE_Y, and the tab is
+# the only portion that pokes above BASELINE_Y (y < BASELINE_Y, since image
+# y points down). So we find the longest contiguous run of anchors with
+# y < BASELINE_Y - eps, and extend by one anchor on each side so we include
+# the on-baseline neck endpoints.
+# ---------------------------------------------------------------------------
+
+def isolate_tab_segments(subpath, baseline_y, eps=2.0):
+    """
+    Build the segment list for a closed subpath and pick the contiguous
+    run of segments belonging to the tab.
+
+    A segment "belongs to the tab" if any of its 4 points (p0, c1, c2, p3)
+    sits above the baseline (image-y < baseline - eps, since image y is
+    down). This includes the boundary segments where one endpoint is on
+    the baseline (the neck endpoints).
+    """
+    n_anchors = (len(subpath) - 1) // 3 + 1
+    anchors = [subpath[i * 3] for i in range(n_anchors)]
+
+    # Build all closing-loop segments. For a closed subpath the last
+    # segment goes from anchors[n-1] back to anchors[0]; potrace's Z
+    # makes it a straight line, but we treat all segments uniformly.
+    segs = []
+    for i in range(n_anchors - 1):
+        p0 = anchors[i]
+        c1 = subpath[i * 3 + 1]
+        c2 = subpath[i * 3 + 2]
+        p3 = anchors[i + 1]
+        segs.append((p0, c1, c2, p3))
+    # Closing segment (straight line back to start)
+    p0 = anchors[-1]
+    p3 = anchors[0]
+    c1 = (p0[0] + (p3[0] - p0[0]) / 3, p0[1] + (p3[1] - p0[1]) / 3)
+    c2 = (p0[0] + 2 * (p3[0] - p0[0]) / 3, p0[1] + 2 * (p3[1] - p0[1]) / 3)
+    segs.append((p0, c1, c2, p3))
+
+    n = len(segs)
+    above = [
+        any(pt[1] < baseline_y - eps for pt in seg)
+        for seg in segs
+    ]
+
+    # Longest contiguous run with wrap-around.
+    doubled = above + above
+    best_start = 0
+    best_len = 0
+    run_start = None
+    for i, v in enumerate(doubled):
+        if v:
+            if run_start is None:
+                run_start = i
+            cur_len = i - run_start + 1
+            if cur_len > best_len and cur_len <= n:
+                best_len = cur_len
+                best_start = run_start
+        else:
+            run_start = None
+
+    if best_len == 0:
+        raise RuntimeError("no tab segments above baseline")
+
+    out = []
+    for k in range(best_len):
+        out.append(segs[(best_start + k) % n])
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Normalize traced tab to (0,0)->(1,0), Y up.
+# We take the first segment's start as the left neck and the last segment's
+# end as the right neck. Then apply an affine transform that maps left->
+# (0,0), right->(1,0), and flips Y so positive Y is the protrusion direction.
+# ---------------------------------------------------------------------------
+
+def normalize_to_template(segs):
+    left = np.array(segs[0][0])
+    right = np.array(segs[-1][-1])
+    chord = right - left
+    chord_len = np.linalg.norm(chord)
+    ux = chord / chord_len             # along-chord unit
+    # In image coords, +y is down. Protrusion is in -y. We want template +y = protrusion.
+    # The perpendicular pointing toward the protrusion is (-uy_x, uy_y) rotated... easier:
+    # We pick the perpendicular such that the midpoint of the tab is at positive template y.
+    perp = np.array([-ux[1], ux[0]])   # 90° CCW; could be wrong sign
+    # Sample-check: a known anchor (e.g. middle anchor) should have positive y after transform.
+    mid_anchor = np.array(segs[len(segs) // 2][-1])
+    test = mid_anchor - left
+    if np.dot(test, perp) < 0:
+        perp = -perp
+
+    def to_template(p):
+        v = np.array(p) - left
+        return (np.dot(v, ux) / chord_len, np.dot(v, perp) / chord_len)
+
+    normalized = []
+    for seg in segs:
+        normalized.append([to_template(p) for p in seg])
+    return normalized
+
+
+def flatten_segments_to_path(segs):
+    out = [segs[0][0]]
+    for s in segs:
+        out.extend([s[1], s[2], s[3]])
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Compare original vs traced: render overlay and compute deviation.
+# Deviation is the mean and max nearest-point distance from densely sampled
+# traced points to densely sampled original points, both in template space.
+# ---------------------------------------------------------------------------
+
+def deviation(original_path, traced_path):
+    a = sample_bezier_path(original_path, samples_per_seg=500)
+    b = sample_bezier_path(traced_path, samples_per_seg=500)
+    # For each b, nearest distance to a
+    from scipy.spatial import cKDTree
+    tree = cKDTree(a)
+    d, _ = tree.query(b)
+    return float(np.mean(d)), float(np.max(d))
+
+
+# ---------------------------------------------------------------------------
+# Real-image support: detect tab necks on a closed contour without knowing
+# a baseline y. The two tab necks are the two most CONCAVE anchors on the
+# closed Potrace contour. "Concave" here means the contour turns inward
+# (relative to the foreground silhouette) at the neck — sharp inward bends.
+# ---------------------------------------------------------------------------
+
+def _tangent_at_start(seg):
+    p0, c1, _, _ = seg
+    return (c1[0] - p0[0], c1[1] - p0[1])
+
+
+def _tangent_at_end(seg):
+    _, _, c2, p3 = seg
+    return (p3[0] - c2[0], p3[1] - c2[1])
+
+
+def _signed_angle(v1, v2):
+    a1 = math.atan2(v1[1], v1[0])
+    a2 = math.atan2(v2[1], v2[0])
+    d = a2 - a1
+    while d > math.pi:
+        d -= 2 * math.pi
+    while d < -math.pi:
+        d += 2 * math.pi
+    return d
+
+
+def subpath_to_segments(subpath):
+    """
+    Convert a Potrace subpath (anchor + (c1,c2,anchor) triples ...) to a
+    list of (p0, c1, c2, p3) cubic tuples forming a closed contour. If the
+    last anchor coincides with the first (Potrace closes its own paths),
+    skip adding an explicit closing segment to avoid a degenerate cubic
+    that would produce undefined tangents at the junction.
+    """
+    n_anchors = (len(subpath) - 1) // 3 + 1
+    anchors = [subpath[i * 3] for i in range(n_anchors)]
+    segs = []
+    for i in range(n_anchors - 1):
+        p0 = anchors[i]
+        c1 = subpath[i * 3 + 1]
+        c2 = subpath[i * 3 + 2]
+        p3 = anchors[i + 1]
+        segs.append((p0, c1, c2, p3))
+    dx = anchors[0][0] - anchors[-1][0]
+    dy = anchors[0][1] - anchors[-1][1]
+    if math.hypot(dx, dy) > 1e-6:
+        p0 = anchors[-1]
+        p3 = anchors[0]
+        c1 = (p0[0] + dx / 3, p0[1] + dy / 3)
+        c2 = (p0[0] + 2 * dx / 3, p0[1] + 2 * dy / 3)
+        segs.append((p0, c1, c2, p3))
+    return segs
+
+
+def detect_necks(segs, window=5, min_separation=None):
+    """
+    Find the two most-concave regions on a closed contour.
+
+    Real necks usually span 2-4 adjacent anchors after Potrace tracing (the
+    contour bends inward sharply but over a few segments rather than a
+    single point). Summing signed turning angles over a sliding window
+    aggregates each neck into one peak so peak-picking finds the two
+    distinct necks rather than two nearby anchors of the same neck.
+
+    Returns (anchor1, anchor2, windowed_signed_sums).
+    """
+    n = len(segs)
+    raw = []
+    for i in range(n):
+        out_t = _tangent_at_end(segs[i])
+        in_t = _tangent_at_start(segs[(i + 1) % n])
+        raw.append(_signed_angle(out_t, in_t))
+
+    total = sum(raw)
+    if total < 0:
+        raw = [-a for a in raw]
+
+    half = window // 2
+    windowed = [
+        sum(raw[(i + k) % n] for k in range(-half, half + 1))
+        for i in range(n)
+    ]
+
+    if min_separation is None:
+        min_separation = max(window, n // 6)
+
+    order = sorted(range(n), key=lambda i: windowed[i])
+    neck1 = order[0]
+    neck2 = None
+    for idx in order[1:]:
+        d = min(abs(idx - neck1), n - abs(idx - neck1))
+        if d >= min_separation:
+            neck2 = idx
+            break
+    if neck2 is None:
+        raise RuntimeError("could not find a second neck candidate")
+    anchor1 = (neck1 + 1) % n
+    anchor2 = (neck2 + 1) % n
+    return anchor1, anchor2, windowed
+
+
+def shorter_arc_between_anchors(segs, a_start, a_end):
+    """
+    Walk segments from anchor a_start to anchor a_end along the contour,
+    picking whichever direction yields the shorter arc length.
+
+    Segments returned have p0 = anchor[a_start] (first seg) and
+    p3 = anchor[a_end] (last seg).
+    """
+    n = len(segs)
+
+    def walk(direction):
+        arc = []
+        cur = a_start
+        guard = 0
+        while cur != a_end:
+            arc.append(segs[cur] if direction > 0 else _reverse_segment(segs[(cur - 1) % n]))
+            cur = (cur + direction) % n
+            guard += 1
+            if guard > n:
+                raise RuntimeError("runaway arc walk")
+        return arc
+
+    fwd = walk(+1)
+    bwd = walk(-1)
+
+    def arc_len(a):
+        return sum(math.hypot(s[3][0] - s[0][0], s[3][1] - s[0][1]) for s in a)
+
+    return fwd if arc_len(fwd) <= arc_len(bwd) else bwd
+
+
+def tab_arc_between_anchors(segs, a_start, a_end):
+    """
+    Pick the arc from a_start to a_end whose midpoint sits on the
+    "protrusion" side of the neck chord — i.e. the arc going OVER the
+    tab, not around the rest of the silhouette.
+
+    The protrusion direction is whichever side of the chord has the
+    larger perpendicular offset to the arc midpoint (the tab head sticks
+    out further than the opposite arc does). Works for both cropped
+    photos (where the "opposite arc" is the image-edge wrap-around) and
+    internal-baseline screenshots (where it's the rest of the piece).
+    """
+    n = len(segs)
+
+    def walk(direction):
+        arc = []
+        cur = a_start
+        guard = 0
+        while cur != a_end:
+            arc.append(segs[cur] if direction > 0 else _reverse_segment(segs[(cur - 1) % n]))
+            cur = (cur + direction) % n
+            guard += 1
+            if guard > n:
+                raise RuntimeError("runaway arc walk")
+        return arc
+
+    fwd = walk(+1)
+    bwd = walk(-1)
+
+    p_start = segs[a_start][0]
+    p_end = segs[a_end][0]
+    chord_mid = ((p_start[0] + p_end[0]) / 2, (p_start[1] + p_end[1]) / 2)
+    chord_dx = p_end[0] - p_start[0]
+    chord_dy = p_end[1] - p_start[1]
+    chord_len = math.hypot(chord_dx, chord_dy) or 1.0
+
+    def perpendicular_offset(arc):
+        """Signed perpendicular distance from chord midpoint to arc midpoint."""
+        mid = arc[len(arc) // 2]
+        t = 0.5
+        mt = 1 - t
+        midpt = (
+            mt**3 * mid[0][0] + 3*mt**2*t * mid[1][0] + 3*mt*t**2 * mid[2][0] + t**3 * mid[3][0],
+            mt**3 * mid[0][1] + 3*mt**2*t * mid[1][1] + 3*mt*t**2 * mid[2][1] + t**3 * mid[3][1],
+        )
+        # Perpendicular distance: chord-cross-(midpt - chord_mid) / chord_len
+        return (chord_dx * (midpt[1] - chord_mid[1])
+                - chord_dy * (midpt[0] - chord_mid[0])) / chord_len
+
+    return fwd if abs(perpendicular_offset(fwd)) > abs(perpendicular_offset(bwd)) else bwd
+
+
+def _reverse_segment(seg):
+    p0, c1, c2, p3 = seg
+    return (p3, c2, c1, p0)
+
+
+def render_neck_debug(image_path, segs, anchor1, anchor2, tab_arc, out_path):
+    """Overlay the traced contour and detected necks on the original image."""
+    img = cv2.imread(str(image_path))
+    if img is None:
+        raise RuntimeError(f"could not read {image_path}")
+    if img.ndim == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    # Draw full contour in thin gray
+    for seg in segs:
+        pts = sample_bezier_path([seg[0], seg[1], seg[2], seg[3]], samples_per_seg=20).astype(np.int32)
+        cv2.polylines(img, [pts], False, (180, 180, 180), 1, cv2.LINE_AA)
+
+    # Draw tab arc in red
+    for seg in tab_arc:
+        pts = sample_bezier_path([seg[0], seg[1], seg[2], seg[3]], samples_per_seg=30).astype(np.int32)
+        cv2.polylines(img, [pts], False, (0, 0, 255), 3, cv2.LINE_AA)
+
+    # Mark neck anchors
+    n = len(segs)
+    for label, a in [("L", anchor1), ("R", anchor2)]:
+        ax, ay = segs[a][0]
+        cv2.circle(img, (int(ax), int(ay)), 12, (0, 255, 0), 3)
+        cv2.putText(img, label, (int(ax) + 14, int(ay) + 6),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+    cv2.imwrite(str(out_path), img)
+
+
+def find_edge_anchors(segs, img_width, img_height, edge_tol=4):
+    """
+    For cropped tab photos (tab roughly centred, piece body extending to
+    image edges), the contour leaves the image on the left and right
+    edges. The two "neck" endpoints are the topmost contour anchors that
+    lie on those edges.
+    """
+    n_anchors = len(segs)  # one anchor per segment (the start anchor)
+    candidates_left = []
+    candidates_right = []
+    for i in range(n_anchors):
+        x, y = segs[i][0]
+        if x <= edge_tol:
+            candidates_left.append((i, x, y))
+        if x >= img_width - edge_tol:
+            candidates_right.append((i, x, y))
+    if not candidates_left or not candidates_right:
+        raise RuntimeError(
+            f"could not find anchors on both image edges (left={len(candidates_left)}, right={len(candidates_right)})")
+    left = min(candidates_left, key=lambda c: c[2])[0]   # topmost = smallest y
+    right = min(candidates_right, key=lambda c: c[2])[0]
+    return left, right
+
+
+def process_real_image(png_path, label, mode="auto"):
+    """
+    Run the full pipeline on a real photo/screenshot.
+
+    mode:
+      "concavity"     — internal-baseline case: find necks by curvature peaks.
+      "edge-clipped"  — cropped-photo case: necks are where the silhouette
+                        meets the left and right image edges.
+      "auto"          — try edge-clipped first, fall back to concavity.
+    """
+    svg_out = OUT / f"real-{label}-traced.svg"
+    debug_out = OUT / f"real-{label}-debug.png"
+    overlay_out = OUT / f"real-{label}-overlay.png"
+    norm_out = OUT / f"real-{label}-normalized.json"
+    metrics_out = OUT / f"real-{label}-metrics.txt"
+
+    img = cv2.imread(str(png_path), cv2.IMREAD_GRAYSCALE)
+    img_h, img_w = img.shape
+
+    print(f"  potrace (alphamax=0.5) ...")
+    run_potrace(png_path, svg_out, alphamax=0.5)
+    print(f"  parsing SVG ...")
+    subpaths = parse_potrace_svg(svg_out)
+
+    def bbox_area(sp):
+        xs = [p[0] for p in sp]
+        ys = [p[1] for p in sp]
+        return (max(xs) - min(xs)) * (max(ys) - min(ys))
+
+    if not subpaths:
+        raise RuntimeError("no contours from potrace")
+    chosen = max(subpaths, key=bbox_area)
+    print(f"  largest subpath: {(len(chosen) - 1) // 3} segments")
+
+    segs = subpath_to_segments(chosen)
+
+    method_used = None
+    if mode in ("auto", "edge-clipped"):
+        try:
+            anchor1, anchor2 = find_edge_anchors(segs, img_w, img_h)
+            method_used = "edge-clipped"
+            print(f"  edge-clipped necks at anchors {anchor1}, {anchor2}: "
+                  f"L={segs[anchor1][0]}, R={segs[anchor2][0]}")
+        except RuntimeError as e:
+            if mode == "edge-clipped":
+                raise
+            print(f"  edge-clipped detection failed ({e}); falling back to concavity")
+    if method_used is None:
+        anchor1, anchor2, signed_angles = detect_necks(segs)
+        method_used = "concavity"
+        print(f"  detected necks at anchors {anchor1}, {anchor2} "
+              f"(turning angles {signed_angles[anchor1 - 1]:.3f}, {signed_angles[anchor2 - 1]:.3f} rad)")
+
+    # Pick whichever arc bulges further from the neck chord — that's
+    # the tab. Works whether the "other" arc is the rest of the piece
+    # silhouette (screenshot case) or the image-edge wrap-around (cropped
+    # photo case).
+    tab_arc = tab_arc_between_anchors(segs, anchor1, anchor2)
+
+    print(f"  tab arc: {len(tab_arc)} segments")
+
+    render_neck_debug(png_path, segs, anchor1, anchor2, tab_arc, debug_out)
+
+    normalized_segs = normalize_to_template(tab_arc)
+    normalized_path = flatten_segments_to_path(normalized_segs)
+
+    # ----- Shape analysis: neck pinch and head widest point.
+    shape = analyze_tab_shape(normalized_path)
+    if shape:
+        print(f"  shape: head at y={shape['head_y']:.3f} (width {shape['head_width']:.3f}), "
+              f"neck at y={shape['neck_y']:.3f} (width {shape['neck_width']:.3f}), "
+              f"apex y={shape['apex_y']:.3f}")
+        if shape['neck_width'] > 0:
+            print(f"  head/neck width ratio: {shape['head_width'] / shape['neck_width']:.2f} "
+                  f"(classic default ≈ 1.9)")
+
+    # ----- Schneider refit: sweep tolerances to show segment-count vs fidelity.
+    # Tolerance is in neck-chord fractions (since we're in the normalized frame).
+    print(f"  refitting (Schneider, tolerance sweep) ...")
+    tolerances = [0.001, 0.002, 0.005, 0.01, 0.02]
+    refits = []
+    for tol in tolerances:
+        fitted = schneider_fit(
+            sample_bezier_path(normalized_path, samples_per_seg=20).tolist(),
+            tol,
+        )
+        refits.append({"tolerance": tol, "segments": fitted})
+        print(f"    tol={tol:.3f} → {len(fitted)} cubic segments")
+
+    # Pick the largest tolerance that still produces visually good output;
+    # roughly: max_error ≤ 0.5% of neck chord is indistinguishable to the eye.
+    best = next((r for r in refits if r["tolerance"] <= 0.005), refits[0])
+    best_path = []
+    for i, seg in enumerate(best["segments"]):
+        if i == 0:
+            best_path.append(seg[0])
+        best_path.extend([seg[1], seg[2], seg[3]])
+
+    norm_out.write_text(json.dumps(
+        {
+            "potrace_path": [{"x": p[0], "y": p[1]} for p in normalized_path],
+            "potrace_segments": len(normalized_segs),
+            "refit_tolerance": best["tolerance"],
+            "refit_segments": len(best["segments"]),
+            "refit_path": [{"x": p[0], "y": p[1]} for p in best_path],
+        },
+        indent=2,
+    ))
+
+    # ----- Render: original Potrace trace + each refit on a grid.
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    axes_flat = list(axes.flat)
+    pts_orig = sample_bezier_path(normalized_path, samples_per_seg=200)
+
+    ax0 = axes_flat[0]
+    ax0.plot(pts_orig[:, 0], pts_orig[:, 1], "k-", lw=2)
+    for i in range(0, len(normalized_path), 3):
+        ax0.plot(normalized_path[i][0], normalized_path[i][1], "ks", markersize=5, fillstyle="none")
+    ax0.axhline(0, color="gray", lw=0.5)
+    if shape:
+        # Mark head widest (blue) and neck pinch (green) landmarks.
+        ax0.axhline(shape["head_y"], color="tab:blue", lw=0.8, linestyle=":")
+        if shape["head_left_x"] is not None:
+            ax0.plot([shape["head_left_x"], shape["head_right_x"]],
+                     [shape["head_y"], shape["head_y"]],
+                     "b-", lw=2,
+                     label=f"head y={shape['head_y']:.2f}, w={shape['head_width']:.2f}")
+        ax0.axhline(shape["neck_y"], color="tab:green", lw=0.8, linestyle=":")
+        if shape["neck_left_x"] is not None:
+            ax0.plot([shape["neck_left_x"], shape["neck_right_x"]],
+                     [shape["neck_y"], shape["neck_y"]],
+                     "g-", lw=2,
+                     label=f"neck y={shape['neck_y']:.2f}, w={shape['neck_width']:.2f}")
+        ax0.legend(loc="lower center", fontsize=8)
+    ax0.set_aspect("equal")
+    ax0.set_title(f"Potrace original — {len(normalized_segs)} segments", fontsize=12)
+
+    for r, ax in zip(refits, axes_flat[1:]):
+        path = [r["segments"][0][0]]
+        for seg in r["segments"]:
+            path.extend([seg[1], seg[2], seg[3]])
+        pts_refit = sample_bezier_path(path, samples_per_seg=200)
+        ax.plot(pts_orig[:, 0], pts_orig[:, 1], color="lightgray", lw=5, label="Potrace")
+        ax.plot(pts_refit[:, 0], pts_refit[:, 1], "r-", lw=2, label="refit")
+        for i in range(0, len(path), 3):
+            ax.plot(path[i][0], path[i][1], "rs", markersize=6, fillstyle="none")
+        ax.axhline(0, color="gray", lw=0.5)
+        ax.set_aspect("equal")
+        ax.set_title(f"refit at tol={r['tolerance']:.3f} → {len(r['segments'])} segments",
+                     fontsize=12)
+        ax.legend(loc="lower center", fontsize=9)
+
+    fig.suptitle(f"{label} — Schneider refit tolerance sweep "
+                 f"(hand-crafted classic uses 4 segments for reference)",
+                 fontsize=14, y=0.995)
+    fig.tight_layout()
+    fig.savefig(overlay_out, dpi=100)
+    plt.close(fig)
+
+    refit_lines = "\n".join(
+        f"  tolerance={r['tolerance']:.3f} (neck-fraction) → {len(r['segments'])} segments"
+        for r in refits
+    )
+    shape_lines = ""
+    if shape:
+        ratio = shape['head_width'] / shape['neck_width'] if shape['neck_width'] > 0 else float("inf")
+        head_cx = shape.get('head_center_x')
+        neck_cx = shape.get('neck_center_x')
+        cx_lines = ""
+        if head_cx is not None and neck_cx is not None:
+            cx_lines = (
+                f"  head center x: {head_cx:.3f} (off-center by {head_cx - 0.5:+.3f})\n"
+                f"  neck center x: {neck_cx:.3f} (off-center by {neck_cx - 0.5:+.3f})\n"
+            )
+        shape_lines = (
+            f"\nShape landmarks (neck-chord normalized):\n"
+            f"  apex y: {shape['apex_y']:.3f}\n"
+            f"  head widest: y={shape['head_y']:.3f}, width={shape['head_width']:.3f}\n"
+            f"  neck pinch:  y={shape['neck_y']:.3f}, width={shape['neck_width']:.3f}\n"
+            f"{cx_lines}"
+            f"  head/neck width ratio: {ratio:.2f} (classic default ≈ 1.9)\n"
+        )
+    metrics_out.write_text(
+        f"label: {label}\n"
+        f"source: {png_path}\n"
+        f"largest subpath segments: {(len(chosen) - 1) // 3}\n"
+        f"neck detection method: {method_used}\n"
+        f"detected neck anchors: {anchor1}, {anchor2}\n"
+        f"tab arc segments (Potrace): {len(tab_arc)}\n"
+        f"{shape_lines}"
+        f"\nSchneider refit:\n{refit_lines}\n"
+        f"\nclassic hand-crafted tab (reference): 4 segments\n"
+    )
+    print(f"  → {overlay_out.name}, {debug_out.name}, {norm_out.name}")
+
+
+# ---------------------------------------------------------------------------
+# Tab shape analysis: locate the neck pinch and head widest point on a
+# normalized tab path. Needed if the eventual TabTemplate is to support
+# neckRatio-style parameterization (uniform scale alone doesn't reproduce
+# the classic's ability to narrow the neck while keeping the head wide).
+# ---------------------------------------------------------------------------
+
+def analyze_tab_shape(normalized_path, n_samples_per_seg=40):
+    """
+    Sample the normalized tab path and locate:
+      - head_y, head_width: y level of maximum horizontal extent
+      - neck_y, neck_width: y level of minimum width BELOW head_y
+      - apex_y: maximum y reached by the path
+
+    The "width" at a given y is the distance between the LEFTMOST and
+    RIGHTMOST points where the polyline crosses a horizontal line at y.
+    Using outermost crossings (rather than max - min of all samples in a
+    slab) makes the measurement robust against small "kinks" caused by
+    e.g. glare highlights along the real-photo silhouette.
+    """
+    pts = sample_bezier_path(normalized_path, samples_per_seg=n_samples_per_seg)
+    ys = pts[:, 1]
+    apex_y = float(ys.max())
+
+    def extent_at(y_target):
+        crossings = []
+        for i in range(len(pts) - 1):
+            y0 = pts[i, 1]
+            y1 = pts[i + 1, 1]
+            if y0 == y1:
+                continue
+            if (y0 - y_target) * (y1 - y_target) <= 0:
+                t = (y_target - y0) / (y1 - y0)
+                x = pts[i, 0] + t * (pts[i + 1, 0] - pts[i, 0])
+                crossings.append(x)
+        if len(crossings) < 2:
+            return None
+        return min(crossings), max(crossings)
+
+    n_bins = 200
+    y_levels = np.linspace(0, apex_y, n_bins + 1)[1:]
+    widths = []
+    extents = {}
+    for y in y_levels:
+        result = extent_at(float(y))
+        if result is None:
+            continue
+        left, right = result
+        widths.append((float(y), right - left))
+        extents[float(y)] = (left, right)
+
+    if not widths:
+        return None
+
+    # The chord (y=0) is by definition width 1.0. For cropped photos that
+    # chord is wider than the tab head, so a naive global max-width returns
+    # the chord. Instead, look at the y range ABOVE a small initial skip,
+    # find the neck pinch first, then the head widest point above it.
+    skip_y = 0.05 * apex_y
+    above_chord = [(y, w) for y, w in widths if y > skip_y]
+    if not above_chord:
+        return None
+
+    # Neck pinch: minimum width in the lower portion of the tab (between
+    # the chord and the head). Cap the search at 60% of apex height so we
+    # don't accidentally pick a low value near the apex where the curve
+    # comes back in.
+    lower = [(y, w) for y, w in above_chord if y < 0.6 * apex_y]
+    if lower:
+        neck_y, neck_width = min(lower, key=lambda w: w[1])
+    else:
+        neck_y, neck_width = skip_y, above_chord[0][1]
+
+    # Head widest: max width above the neck pinch.
+    above_neck = [(y, w) for y, w in above_chord if y > neck_y]
+    if above_neck:
+        head_y, head_width = max(above_neck, key=lambda w: w[1])
+    else:
+        head_y, head_width = neck_y, neck_width
+
+    head_left, head_right = extents.get(head_y, (None, None))
+    neck_left, neck_right = extents.get(neck_y, (None, None))
+
+    return {
+        "head_y": head_y,
+        "head_width": head_width,
+        "head_left_x": head_left,
+        "head_right_x": head_right,
+        "head_center_x": (head_left + head_right) / 2 if head_left is not None else None,
+        "neck_y": neck_y,
+        "neck_width": neck_width,
+        "neck_left_x": neck_left,
+        "neck_right_x": neck_right,
+        "neck_center_x": (neck_left + neck_right) / 2 if neck_left is not None else None,
+        "apex_y": apex_y,
+        "widths": widths,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Schneider's algorithm — fit a polyline with the minimum number of cubic
+# Beziers that stays within a given error tolerance. Direct port of the
+# Graphics Gems I "FitCurves" routine by Philip J. Schneider.
+# ---------------------------------------------------------------------------
+
+def _vsub(a, b):
+    return (a[0] - b[0], a[1] - b[1])
+
+
+def _vadd(a, b):
+    return (a[0] + b[0], a[1] + b[1])
+
+
+def _vscale(v, s):
+    return (v[0] * s, v[1] * s)
+
+
+def _vdot(a, b):
+    return a[0] * b[0] + a[1] * b[1]
+
+
+def _vnorm(v):
+    n = math.hypot(v[0], v[1])
+    return (v[0] / n, v[1] / n) if n > 1e-12 else (0.0, 0.0)
+
+
+def _bez_at(b, t):
+    mt = 1 - t
+    return (
+        mt ** 3 * b[0][0] + 3 * mt ** 2 * t * b[1][0]
+        + 3 * mt * t ** 2 * b[2][0] + t ** 3 * b[3][0],
+        mt ** 3 * b[0][1] + 3 * mt ** 2 * t * b[1][1]
+        + 3 * mt * t ** 2 * b[2][1] + t ** 3 * b[3][1],
+    )
+
+
+def _chord_length_parameterize(d, first, last):
+    u = [0.0]
+    for i in range(first + 1, last + 1):
+        u.append(u[-1] + math.hypot(d[i][0] - d[i - 1][0], d[i][1] - d[i - 1][1]))
+    total = u[-1]
+    if total > 0:
+        u = [x / total for x in u]
+    return u
+
+
+def _generate_bezier(d, first, last, u, tHat1, tHat2):
+    """Least-squares fit of a cubic Bezier given fixed endpoints and tangent directions."""
+    nPts = last - first + 1
+    A = [(_vscale(tHat1, 3 * (1 - u[i]) ** 2 * u[i]),
+          _vscale(tHat2, 3 * (1 - u[i]) * u[i] ** 2)) for i in range(nPts)]
+
+    C = [[0.0, 0.0], [0.0, 0.0]]
+    X = [0.0, 0.0]
+    for i in range(nPts):
+        C[0][0] += _vdot(A[i][0], A[i][0])
+        C[0][1] += _vdot(A[i][0], A[i][1])
+        C[1][1] += _vdot(A[i][1], A[i][1])
+
+        t = u[i]
+        mt = 1 - t
+        # Bezier with b1=b0 and b2=b3 (i.e. control points at endpoints):
+        # used to compute the residual that the (alpha1, alpha2) factors must close.
+        BezAtT = (
+            (mt ** 3 + 3 * mt ** 2 * t) * d[first][0] + (3 * mt * t ** 2 + t ** 3) * d[last][0],
+            (mt ** 3 + 3 * mt ** 2 * t) * d[first][1] + (3 * mt * t ** 2 + t ** 3) * d[last][1],
+        )
+        tmp = _vsub(d[first + i], BezAtT)
+        X[0] += _vdot(A[i][0], tmp)
+        X[1] += _vdot(A[i][1], tmp)
+    C[1][0] = C[0][1]
+
+    det_C0_C1 = C[0][0] * C[1][1] - C[1][0] * C[0][1]
+    if abs(det_C0_C1) < 1e-12:
+        # Fall back to the Wu/Barsky heuristic.
+        dist = math.hypot(d[last][0] - d[first][0], d[last][1] - d[first][1]) / 3
+        return [
+            d[first],
+            _vadd(d[first], _vscale(tHat1, dist)),
+            _vadd(d[last], _vscale(tHat2, dist)),
+            d[last],
+        ]
+    det_C0_X = C[0][0] * X[1] - C[1][0] * X[0]
+    det_X_C1 = X[0] * C[1][1] - X[1] * C[0][1]
+    alpha_l = det_X_C1 / det_C0_C1
+    alpha_r = det_C0_X / det_C0_C1
+
+    segLength = math.hypot(d[last][0] - d[first][0], d[last][1] - d[first][1])
+    epsilon = 1e-6 * segLength
+    if alpha_l < epsilon or alpha_r < epsilon:
+        dist = segLength / 3
+        return [
+            d[first],
+            _vadd(d[first], _vscale(tHat1, dist)),
+            _vadd(d[last], _vscale(tHat2, dist)),
+            d[last],
+        ]
+    return [
+        d[first],
+        _vadd(d[first], _vscale(tHat1, alpha_l)),
+        _vadd(d[last], _vscale(tHat2, alpha_r)),
+        d[last],
+    ]
+
+
+def _newton_raphson_root_find(Q, P, u):
+    Q1 = [_vscale(_vsub(Q[1], Q[0]), 3),
+          _vscale(_vsub(Q[2], Q[1]), 3),
+          _vscale(_vsub(Q[3], Q[2]), 3)]
+    Q2 = [_vscale(_vsub(Q1[1], Q1[0]), 2),
+          _vscale(_vsub(Q1[2], Q1[1]), 2)]
+    mt = 1 - u
+    Q_u = _bez_at(Q, u)
+    Q1_u = (mt ** 2 * Q1[0][0] + 2 * mt * u * Q1[1][0] + u ** 2 * Q1[2][0],
+            mt ** 2 * Q1[0][1] + 2 * mt * u * Q1[1][1] + u ** 2 * Q1[2][1])
+    Q2_u = (mt * Q2[0][0] + u * Q2[1][0],
+            mt * Q2[0][1] + u * Q2[1][1])
+    diff = _vsub(Q_u, P)
+    num = _vdot(diff, Q1_u)
+    den = _vdot(Q1_u, Q1_u) + _vdot(diff, Q2_u)
+    if abs(den) < 1e-12:
+        return u
+    return u - num / den
+
+
+def _compute_max_error(d, first, last, bez, u):
+    maxDist = 0.0
+    splitPoint = (last + first) // 2
+    for i in range(1, last - first):
+        P = _bez_at(bez, u[i])
+        dist = math.hypot(P[0] - d[first + i][0], P[1] - d[first + i][1])
+        if dist > maxDist:
+            maxDist = dist
+            splitPoint = first + i
+    return maxDist, splitPoint
+
+
+def _fit_cubic(d, first, last, tHat1, tHat2, error, max_iters=4):
+    iterationError = error * error
+    nPts = last - first + 1
+    if nPts == 2:
+        dist = math.hypot(d[last][0] - d[first][0], d[last][1] - d[first][1]) / 3
+        return [[
+            d[first],
+            _vadd(d[first], _vscale(tHat1, dist)),
+            _vadd(d[last], _vscale(tHat2, dist)),
+            d[last],
+        ]]
+    u = _chord_length_parameterize(d, first, last)
+    bez = _generate_bezier(d, first, last, u, tHat1, tHat2)
+    maxError, splitPoint = _compute_max_error(d, first, last, bez, u)
+    if maxError < error:
+        return [bez]
+    if maxError < iterationError:
+        for _ in range(max_iters):
+            uPrime = [_newton_raphson_root_find(bez, d[first + i], u[i])
+                      for i in range(nPts)]
+            bez = _generate_bezier(d, first, last, uPrime, tHat1, tHat2)
+            maxError, splitPoint = _compute_max_error(d, first, last, bez, uPrime)
+            if maxError < error:
+                return [bez]
+            u = uPrime
+    # Split at worst point and recurse.
+    v1 = _vsub(d[splitPoint - 1], d[splitPoint])
+    v2 = _vsub(d[splitPoint], d[splitPoint + 1])
+    tHatCenter = _vnorm(((v1[0] + v2[0]) / 2, (v1[1] + v2[1]) / 2))
+    left = _fit_cubic(d, first, splitPoint, tHat1, tHatCenter, error, max_iters)
+    right = _fit_cubic(d, splitPoint, last, (-tHatCenter[0], -tHatCenter[1]),
+                       tHat2, error, max_iters)
+    return left + right
+
+
+def schneider_fit(points, error):
+    """Fit a polyline with a piecewise cubic Bezier. Returns list of 4-tuple segments."""
+    if len(points) < 2:
+        return []
+    tHat1 = _vnorm(_vsub(points[1], points[0]))
+    tHat2 = _vnorm(_vsub(points[-2], points[-1]))
+    return _fit_cubic(points, 0, len(points) - 1, tHat1, tHat2, error)
+
+
+def refit_arc(tab_arc, max_error, samples_per_seg=20):
+    """Densely sample an existing piecewise-Bezier arc, then refit with Schneider."""
+    pts = []
+    for i, seg in enumerate(tab_arc):
+        endpoint = (i == len(tab_arc) - 1)
+        n_samples = samples_per_seg + (1 if endpoint else 0)
+        ts = np.linspace(0, 1, samples_per_seg, endpoint=False)
+        if endpoint:
+            ts = np.append(ts, 1.0)
+        for t in ts:
+            pts.append(_bez_at(seg, float(t)))
+    fitted_tuples = schneider_fit(pts, max_error)
+    return [tuple(seg) for seg in fitted_tuples]
+
+
+def plot_overlay(original_path, traced_path, png_out):
+    fig, ax = plt.subplots(figsize=(12, 4))
+    a = sample_bezier_path(original_path, samples_per_seg=400)
+    b = sample_bezier_path(traced_path, samples_per_seg=400)
+    ax.plot(a[:, 0], a[:, 1], "b-", lw=2.5, label="original (classic template)")
+    ax.plot(b[:, 0], b[:, 1], "r--", lw=1.5, label="traced (potrace, normalized)")
+
+    # Anchors
+    for i in range(0, len(original_path), 3):
+        ax.plot(original_path[i][0], original_path[i][1], "bo", markersize=5)
+    for i in range(0, len(traced_path), 3):
+        ax.plot(traced_path[i][0], traced_path[i][1], "rs", markersize=4, fillstyle="none")
+
+    ax.axhline(0, color="gray", lw=0.5)
+    ax.set_aspect("equal")
+    ax.legend()
+    ax.set_title("Tab tracing spike: original vs Potrace-traced (normalized template space)")
+    ax.set_xlabel("x (edge-length fraction)")
+    ax.set_ylabel("y (edge-length fraction, +Y = protrusion)")
+    fig.tight_layout()
+    fig.savefig(png_out, dpi=120)
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+
+def renormalize_original_to_neck_frame(original):
+    """
+    The classic template returns a path from left-neck to right-neck where
+    the necks live somewhere inside [0,1]. To compare against the traced
+    result (which we renormalize to put the necks at (0,0) and (1,0)), we
+    apply the same neck-frame transform to the original.
+    """
+    left = np.array(original[0])
+    right = np.array(original[-1])
+    chord = right - left
+    chord_len = np.linalg.norm(chord)
+    ux = chord / chord_len
+    perp = np.array([-ux[1], ux[0]])
+    # In template space, the protrusion is in +y, so perp should point in +y.
+    # Sample: a mid-path anchor should have positive y after transform.
+    mid_anchor = np.array(original[len(original) // 2])
+    if np.dot(mid_anchor - left, perp) < 0:
+        perp = -perp
+
+    def to_neck(p):
+        v = np.array(p) - left
+        return (np.dot(v, ux) / chord_len, np.dot(v, perp) / chord_len)
+
+    return [to_neck(p) for p in original]
+
+
+def run_pipeline(png_path, svg_out, original_neck_frame, label, alphamax=1.0, opt=0.2):
+    run_potrace(png_path, svg_out, alphamax=alphamax, opttolerance=opt)
+    subpaths = parse_potrace_svg(svg_out)
+    # Pick the largest subpath by bounding-box area; that's the piece body.
+    def bbox_area(sp):
+        xs = [p[0] for p in sp]
+        ys = [p[1] for p in sp]
+        return (max(xs) - min(xs)) * (max(ys) - min(ys))
+    candidates = [sp for sp in subpaths if any(p[1] < BASELINE_Y - 2 for p in sp[::3])]
+    if not candidates:
+        raise RuntimeError(f"{label}: no traced subpath contains the tab")
+    chosen = max(candidates, key=bbox_area)
+    segs = isolate_tab_segments(chosen, BASELINE_Y)
+    normalized_segs = normalize_to_template(segs)
+    traced_path = flatten_segments_to_path(normalized_segs)
+    mean_d, max_d = deviation(original_neck_frame, traced_path)
+    return {
+        "label": label,
+        "segments": len(normalized_segs),
+        "mean_dev": mean_d,
+        "max_dev": max_d,
+        "path": traced_path,
+    }
+
+
+def main_real(image_paths):
+    OUT.mkdir(exist_ok=True)
+    for p in image_paths:
+        p = Path(p)
+        label = p.stem
+        print(f"Processing real image: {p}")
+        process_real_image(p, label)
+    print(f"done. outputs in {OUT}")
+
+
+def main():
+    original = classic_tab()
+    OUT.mkdir(exist_ok=True)
+
+    print("step 1: synthesizing reference PNG (black on white) ...")
+    png_clean = OUT / "01-reference.png"
+    synthesize(original, png_clean, polarity="black_on_white")
+
+    print("step 1b: synthesizing noisy variant (photo simulation) ...")
+    clean_img = cv2.imread(str(png_clean), cv2.IMREAD_GRAYSCALE)
+    noisy_img = add_photo_noise(clean_img)
+    png_noisy = OUT / "01b-reference-noisy.png"
+    cv2.imwrite(str(png_noisy), noisy_img)
+
+    print("step 1c: synthesizing inverted variant (white on black) ...")
+    png_inverted = OUT / "01c-reference-inverted.png"
+    synthesize(original, png_inverted, polarity="white_on_black")
+
+    print("step 1d: synthesizing noisy inverted variant ...")
+    inverted_img = cv2.imread(str(png_inverted), cv2.IMREAD_GRAYSCALE)
+    noisy_inverted = add_photo_noise(inverted_img)
+    png_inverted_noisy = OUT / "01d-reference-inverted-noisy.png"
+    cv2.imwrite(str(png_inverted_noisy), noisy_inverted)
+
+    original_neck_frame = renormalize_original_to_neck_frame(original)
+
+    print("step 2-4: running pipeline under several configurations ...")
+    configs = [
+        ("clean black-on-white", png_clean,           OUT / "02-traced-clean-bow.svg",         1.0,  0.2),
+        ("clean white-on-black", png_inverted,        OUT / "02-traced-clean-wob.svg",         1.0,  0.2),
+        ("noisy black-on-white", png_noisy,           OUT / "02-traced-noisy-bow.svg",         1.0,  0.2),
+        ("noisy white-on-black", png_inverted_noisy, OUT / "02-traced-noisy-wob.svg",         1.0,  0.2),
+    ]
+
+    results = []
+    for label, png_in, svg_out, alpha, opt in configs:
+        r = run_pipeline(png_in, svg_out, original_neck_frame, label, alpha, opt)
+        results.append(r)
+        print(f"  {label}: {r['segments']:3d} segs, mean={r['mean_dev']:.5f}, max={r['max_dev']:.5f}")
+
+    print("step 5: rendering comparison plot ...")
+    fig, axes = plt.subplots(2, 2, figsize=(14, 7))
+    a_orig = sample_bezier_path(original_neck_frame, samples_per_seg=400)
+    for ax, r in zip(axes.flat, results):
+        b = sample_bezier_path(r["path"], samples_per_seg=400)
+        ax.plot(a_orig[:, 0], a_orig[:, 1], "b-", lw=2.5, label="original")
+        ax.plot(b[:, 0], b[:, 1], "r--", lw=1.5, label="traced")
+        for i in range(0, len(r["path"]), 3):
+            ax.plot(r["path"][i][0], r["path"][i][1], "rs", markersize=4, fillstyle="none")
+        ax.axhline(0, color="gray", lw=0.5)
+        ax.set_aspect("equal")
+        ax.set_title(f"{r['label']}\n{r['segments']} segs, mean={r['mean_dev']:.4f}, max={r['max_dev']:.4f}")
+        ax.legend(loc="lower center", fontsize=8)
+    fig.suptitle("Tab tracing spike — original (blue) vs Potrace-traced (red)", y=0.995)
+    fig.tight_layout()
+    overlay = OUT / "03-overlay.png"
+    fig.savefig(overlay, dpi=110)
+    plt.close(fig)
+
+    # Save the best-quality result as the "winning" normalized path.
+    norm_json = OUT / "05-normalized.json"
+    best = min(results, key=lambda r: r["max_dev"])
+    norm_json.write_text(json.dumps(
+        [{"x": p[0], "y": p[1]} for p in best["path"]],
+        indent=2,
+    ))
+
+    metrics = OUT / "04-metrics.txt"
+    lines = [
+        f"original segments: {(len(original) - 1) // 3}",
+        "frame: neck-to-neck chord = 1.0",
+        "",
+    ]
+    for r in results:
+        lines.append(
+            f"{r['label']}: segments={r['segments']:3d}  mean_dev={r['mean_dev']:.6f}  max_dev={r['max_dev']:.6f}"
+        )
+    lines.append("")
+    lines.append("Translation to a real puzzle edge:")
+    lines.append("  At neck-width ≈ 15% of edge length (classic-default), 1 neck-fraction = ~150 px on a 1000-px edge.")
+    lines.append("  Deviations above scale to roughly 0.15 × the listed neck-fraction values in edge-px.")
+    metrics.write_text("\n".join(lines) + "\n")
+
+    print(f"done. outputs in {OUT}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(dest="cmd")
+    sub.add_parser("synthetic", help="run the synthetic round-trip tests (default)")
+    real = sub.add_parser("real", help="trace one or more real photos/screenshots")
+    real.add_argument("images", nargs="+", help="paths to input PNGs")
+    args = parser.parse_args()
+    if args.cmd == "real":
+        main_real(args.images)
+    else:
+        main()
