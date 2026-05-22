@@ -13,6 +13,7 @@ import type { BezierSegment } from './curve.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
 import type { BezierPath } from '../composable/bezier-path.js';
 import { mirrorBezierPathY } from '../composable/bezier-path.js';
+import type { TabSplicer } from './plugin-types.js';
 
 /**
  * Parameters controlling tab placement on edges.
@@ -293,4 +294,116 @@ function transformTabToEdge(
 
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
+}
+
+// ---------------------------------------------------------------------------
+// Splicers
+// ---------------------------------------------------------------------------
+
+/**
+ * Default splicer: standard `prepareTab` + `commitTab` with no
+ * post-processing. The tab's first/last control points stay where
+ * `transformTabToEdge` put them, so the join is C0 (positions match
+ * but directions can disagree — visible as a corner on flowy templates).
+ */
+export const standardTabSplicer: TabSplicer = {
+    id: 'standard',
+    splice(edge, placement, template, random) {
+        const prepared = prepareTab(edge, placement.tCenter, placement.isTab, template, random);
+        return prepared ? commitTab(prepared) : null;
+    },
+};
+
+/**
+ * Tangent-aligned splicer: same as `standardTabSplicer` but rotates
+ * the tab's first segment's cp1 and last segment's cp2 to lie along
+ * the parent edge's tangent at the splice points. Result is a C1
+ * join (smooth direction across the splice) instead of C0. Suited to
+ * templates with continuous-looking curves (e.g. photographed tabs).
+ *
+ * The cp distances (|p0→cp1| and |p3→cp2|) are preserved, so the
+ * tab's overall "strength" of curvature isn't changed — only the
+ * direction of its first/last handles.
+ */
+export const smoothedTabSplicer: TabSplicer = {
+    id: 'tangent-smoothed',
+    splice(edge, placement, template, random) {
+        const prepared = prepareTab(edge, placement.tCenter, placement.isTab, template, random);
+        if (!prepared) return null;
+        return commitTab(alignTangentsAtSplice(prepared));
+    },
+};
+
+/**
+ * Adjust the tabCurve's outermost control points so the tangents at
+ * the splice points match the parent's tangents there.
+ */
+function alignTangentsAtSplice(prepared: PreparedTab): PreparedTab {
+    const { before, tabCurve, after } = prepared;
+
+    const beforeTangent = tangentAtEnd(before);  // direction of parent travel leaving before.end
+    const afterTangent = tangentAtStart(after);  // direction of parent travel entering after.start
+
+    const segs = tabCurve.segments.slice();
+    if (segs.length === 0) return prepared;
+
+    // Tab's first segment: rotate cp1 around p0 so (cp1 - p0) is
+    // parallel to beforeTangent, preserving |p0 → cp1|.
+    const first = segs[0];
+    const cp1Distance = Math.hypot(first.cp1.x - first.p0.x, first.cp1.y - first.p0.y);
+    if (cp1Distance > 1e-9) {
+        segs[0] = {
+            ...first,
+            cp1: {
+                x: first.p0.x + beforeTangent.x * cp1Distance,
+                y: first.p0.y + beforeTangent.y * cp1Distance,
+            },
+        };
+    }
+
+    // Tab's last segment: rotate cp2 around p3 so (p3 - cp2) is
+    // parallel to afterTangent (parent's direction entering p3),
+    // preserving |p3 → cp2|.
+    const lastIdx = segs.length - 1;
+    const last = segs[lastIdx];
+    const cp2Distance = Math.hypot(last.p3.x - last.cp2.x, last.p3.y - last.cp2.y);
+    if (cp2Distance > 1e-9) {
+        segs[lastIdx] = {
+            ...last,
+            cp2: {
+                x: last.p3.x - afterTangent.x * cp2Distance,
+                y: last.p3.y - afterTangent.y * cp2Distance,
+            },
+        };
+    }
+
+    return { before, tabCurve: new Curve(segs), after };
+}
+
+function tangentAtEnd(curve: Curve): Point {
+    const lastSeg = curve.segments[curve.segments.length - 1];
+    // Prefer cp2 → p3 for the tangent direction at the curve's end.
+    // Fall back to p0 → p3 if cp2 ≈ p3 (degenerate / linear segment).
+    let dx = lastSeg.p3.x - lastSeg.cp2.x;
+    let dy = lastSeg.p3.y - lastSeg.cp2.y;
+    let len = Math.hypot(dx, dy);
+    if (len < 1e-9) {
+        dx = lastSeg.p3.x - lastSeg.p0.x;
+        dy = lastSeg.p3.y - lastSeg.p0.y;
+        len = Math.hypot(dx, dy);
+    }
+    return len < 1e-9 ? { x: 1, y: 0 } : { x: dx / len, y: dy / len };
+}
+
+function tangentAtStart(curve: Curve): Point {
+    const firstSeg = curve.segments[0];
+    let dx = firstSeg.cp1.x - firstSeg.p0.x;
+    let dy = firstSeg.cp1.y - firstSeg.p0.y;
+    let len = Math.hypot(dx, dy);
+    if (len < 1e-9) {
+        dx = firstSeg.p3.x - firstSeg.p0.x;
+        dy = firstSeg.p3.y - firstSeg.p0.y;
+        len = Math.hypot(dx, dy);
+    }
+    return len < 1e-9 ? { x: 1, y: 0 } : { x: dx / len, y: dy / len };
 }
