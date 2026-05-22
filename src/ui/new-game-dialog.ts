@@ -13,7 +13,6 @@ import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
 import { DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOptions } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
-import { DEFAULT_DISABLE_TABS } from '../puzzle/composable/compose.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
 
 /** Composable generator config passed through from sliders. */
@@ -22,7 +21,7 @@ export interface ComposableSliderConfig {
     horizontalFrequency: number;
     verticalAmplitude: number;
     verticalFrequency: number;
-    disableTabs: boolean;
+    tabGenerator: 'classic' | 'traced' | 'none';
 }
 
 /** Fractal generator config passed through from the dialog. */
@@ -282,7 +281,7 @@ function buildComposableSlidersSection(args: {
     section.className = 'composable-sliders';
 
     interface SliderDef {
-        id: keyof Omit<ComposableSliderConfig, 'disableTabs'>;
+        id: keyof Omit<ComposableSliderConfig, 'tabGenerator'>;
         label: string;
         min: number;
         max: number;
@@ -331,10 +330,15 @@ function buildComposableSlidersSection(args: {
         section.appendChild(row);
     }
 
-    const disableTabsCheckbox = appendCheckboxRow(
+    const tabGeneratorRow = appendSegmentedRow<'classic' | 'traced' | 'none'>(
         section,
-        'Disable Tabs',
-        args.saved?.disableTabs ?? DEFAULT_DISABLE_TABS,
+        'Tab style',
+        [
+            { value: 'classic', label: 'Classic' },
+            { value: 'traced',  label: 'Traced'  },
+            { value: 'none',    label: 'None'    },
+        ],
+        args.saved?.tabGenerator ?? 'classic',
     );
 
     return {
@@ -344,10 +348,66 @@ function buildComposableSlidersSection(args: {
             horizontalFrequency: parseFloat(sliderInputs.get('horizontalFrequency')!.value),
             verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
             verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
-            disableTabs: disableTabsCheckbox.checked,
+            tabGenerator: tabGeneratorRow.getValue(),
         }),
         setVisible: (visible) => {
             section.style.display = visible ? 'block' : 'none';
+        },
+    };
+}
+
+interface SegmentedRow<T extends string> {
+    getValue(): T;
+}
+
+/** Append a label + radio-group "segmented" row and return the value getter. */
+function appendSegmentedRow<T extends string>(
+    parent: HTMLElement,
+    labelText: string,
+    options: ReadonlyArray<{ value: T; label: string }>,
+    initialValue: T,
+): SegmentedRow<T> {
+    const row = document.createElement('div');
+    row.className = 'dialog-row';
+
+    const label = document.createElement('label');
+    label.className = 'dialog-row-label';
+    label.textContent = labelText;
+
+    const group = document.createElement('div');
+    group.className = 'segmented-control';
+    group.setAttribute('role', 'radiogroup');
+
+    const groupName = `seg-${labelText.replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`;
+    const inputs: HTMLInputElement[] = [];
+
+    for (const opt of options) {
+        const optLabel = document.createElement('label');
+        optLabel.className = 'segmented-option';
+
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = groupName;
+        input.value = opt.value;
+        if (opt.value === initialValue) input.checked = true;
+        inputs.push(input);
+
+        const text = document.createElement('span');
+        text.textContent = opt.label;
+
+        optLabel.appendChild(input);
+        optLabel.appendChild(text);
+        group.appendChild(optLabel);
+    }
+
+    row.appendChild(label);
+    row.appendChild(group);
+    parent.appendChild(row);
+
+    return {
+        getValue: (): T => {
+            const checked = inputs.find(i => i.checked);
+            return (checked ? (checked.value as T) : initialValue);
         },
     };
 }

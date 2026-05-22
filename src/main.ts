@@ -128,17 +128,18 @@ let currentCompletionHide: (() => void) | null = null;
  * Convert the new-game dialog's slider values (legacy `horizontalAmplitude`
  * etc. field names) into the generator's opaque `ComposableConfig` shape.
  *
- * The dialog continues to expose four named sliders + a "disable tabs"
- * checkbox; the generator side now identifies plug-ins by id and treats
- * each plug-in's config as opaque. This adapter sits at the boundary so
- * the rest of the call chain handles only the canonical generator shape.
+ * The dialog exposes four named sliders + a tab-generator picker
+ * (classic / traced / none); the generator side identifies plug-ins by id
+ * and treats each plug-in's config as opaque. This adapter sits at the
+ * boundary so the rest of the call chain handles only the canonical
+ * generator shape.
  */
 function sliderConfigToGeneratorConfig(slider: {
     horizontalAmplitude: number;
     horizontalFrequency: number;
     verticalAmplitude: number;
     verticalFrequency: number;
-    disableTabs: boolean;
+    tabGenerator: 'classic' | 'traced' | 'none';
 }): import('./puzzle/composable-generator.js').ComposableConfig {
     return {
         baseCutGenerator: 'sine',
@@ -148,7 +149,7 @@ function sliderConfigToGeneratorConfig(slider: {
             va: slider.verticalAmplitude,
             vf: slider.verticalFrequency,
         },
-        tabGenerator: slider.disableTabs ? 'none' : 'classic',
+        tabGenerator: slider.tabGenerator,
         tabConfig: {},
     };
 }

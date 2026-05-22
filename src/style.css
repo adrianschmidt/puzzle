@@ -762,6 +762,38 @@ html, body {
   text-align: right;
 }
 
+/* Three-way segmented control used for tab-style picker in composable section */
+.segmented-control {
+  display: inline-flex;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.segmented-control .segmented-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+  border-right: 1px solid var(--ui-border);
+  font-size: 0.75rem;
+}
+
+.segmented-control .segmented-option:last-child {
+  border-right: none;
+}
+
+.segmented-control .segmented-option:hover {
+  background: var(--ui-overlay-hover);
+}
+
+.segmented-control .segmented-option input[type="radio"] {
+  margin: 0;
+  accent-color: var(--lime-primary-color, #7c6faa);
+}
+
 /* Info modal solve button (debug) */
 .info-modal-solve-btn {
   display: block;
