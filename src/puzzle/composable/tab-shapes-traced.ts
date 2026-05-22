@@ -103,16 +103,7 @@ export const tracedTabTemplate: TabTemplate = {
         const neckScale = lerp(0.75, 1.10, local());                     // local 6
 
         const template: TracedTemplate = TRACED_TEMPLATES[idx];
-        // Clip negative y to 0. The trace algorithm sometimes places the
-        // chord (neck endpoints) slightly above the lowest part of the
-        // photographed outline — typically the small dip where the
-        // shoulders meet the neck. Letting that dip through into the
-        // generated path makes the candidate tab cross the parent edge
-        // (the chord), which apply-tabs's foldsBackThroughSelf check
-        // correctly rejects — so without clipping no traced tabs ever
-        // land. The cosmetic loss is a flatter neck shoulder, ~5% of
-        // chord length on the current seed.
-        let path: Point[] = template.path.map(p => ({ x: p.x, y: Math.max(0, p.y) }));
+        let path: Point[] = template.path.map(p => ({ x: p.x, y: p.y }));
         let landmarks = template.landmarks;
 
         if (flip) {

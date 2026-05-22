@@ -129,9 +129,11 @@ function introducesNewCrossing(
 }
 
 /**
- * Returns true if the candidate's bump portion crosses the parent
- * edge (other than at the splice points where the bump meets the
- * `before`/`after` overlap regions).
+ * Returns true if the candidate's bump portion crosses the parts of
+ * the parent edge that the candidate KEEPS — i.e., the `before` and
+ * `after` overlap regions on either side of the splice. Crossings
+ * through the middle section the candidate replaces are ignored,
+ * since that section doesn't exist in the final boundary.
  *
  * The legacy `createTabCollisionDetector` rejected such tabs to keep
  * piece boundaries free of self-intersections. The pluggable topology
@@ -139,11 +141,12 @@ function introducesNewCrossing(
  *
  * Approach: first identify where the candidate stops overlapping the
  * parent (the splice points between `before`/`bump`/`after`) by
- * sampling unsigned distance to the parent. Then extract the bump
- * sub-curve via `splitAt` and intersect ONLY the bump with the parent
- * using bezier-js. Any intersection that isn't right at the bump's
- * own start/end (the splice points where bump touches parent) is a
- * real transverse fold-back.
+ * sampling unsigned distance to the parent, and record the parent's
+ * t-range that the bump replaces. Then extract the bump sub-curve via
+ * `splitAt` and intersect ONLY the bump with the parent using
+ * bezier-js. Intersections that fall within the replaced range, or
+ * within `BUMP_SPLICE_TOLERANCE` of the bump's own start/end, are
+ * by-construction touches rather than transverse fold-backs.
  *
  * Why we don't just `candidate.intersect(parent)`: the candidate
  * returned by classicTabGenerator is `join([before, tab, after])`
@@ -163,12 +166,16 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
 
     // 1. Find the contiguous range of samples whose distance to the
     //    parent exceeds the overlap threshold — this is the bump.
+    //    Also record each sample's projection onto the parent so we
+    //    can later identify the splice range that the bump replaces.
     let firstFar = -1;
     let lastFar = -1;
+    const tOnParentBySample: number[] = new Array(n + 1);
     for (let i = 0; i <= n; i++) {
         const t = i / n;
         const p = candidate.pointAt(t);
         const tOnParent = parent.nearestT(p);
+        tOnParentBySample[i] = tOnParent;
         const q = parent.pointAt(tOnParent);
         const d = Math.hypot(p.x - q.x, p.y - q.y);
         if (d > BUMP_OVERLAP_THRESHOLD) {
@@ -179,7 +186,21 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
     // No deviation from parent → no bump → no fold-back possible.
     if (firstFar < 0) return false;
 
-    // 2. Map sample indices back to t with a half-step inset on each
+    // 2. Identify the parent's t-range that the bump REPLACES. The
+    //    samples just before firstFar and just after lastFar are the
+    //    last/first ones still on the overlap; their nearest-t on the
+    //    parent give us the splice points. Intersections that land in
+    //    this range are crossings through a section of the parent that
+    //    won't exist in the final geometry — so they're not fold-backs.
+    const leftAnchorIdx = Math.max(0, firstFar - 1);
+    const rightAnchorIdx = Math.min(n, lastFar + 1);
+    let tReplacedStart = tOnParentBySample[leftAnchorIdx];
+    let tReplacedEnd = tOnParentBySample[rightAnchorIdx];
+    if (tReplacedStart > tReplacedEnd) {
+        [tReplacedStart, tReplacedEnd] = [tReplacedEnd, tReplacedStart];
+    }
+
+    // 3. Map sample indices back to t with a half-step inset on each
     //    side. The half-step pulls the cut just into the overlap
     //    region, so the extracted bump's endpoints land on the parent
     //    rather than inside the bump.
@@ -187,7 +208,7 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
     const tRight = Math.min(1, (lastFar + 0.5) / n);
     if (tRight <= tLeft) return false;
 
-    // 3. Extract the bump sub-curve via two splits. Account for the
+    // 4. Extract the bump sub-curve via two splits. Account for the
     //    parameter rescaling that happens after the first split:
     //    `rest` covers t ∈ [tLeft, 1] on the original curve, so the
     //    local t for tRight on `rest` is (tRight - tLeft) / (1 - tLeft).
@@ -197,10 +218,15 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
         ? rest.splitAt(restLocalTRight)[0]
         : rest;
 
-    // 4. Intersect the bump with the parent. By construction the bump
-    //    starts/ends near the parent (the splice points), so we ignore
-    //    intersections that fall within `BUMP_SPLICE_TOLERANCE` of
-    //    those endpoints. Any other intersection is a fold-back.
+    // 5. Intersect the bump with the parent. Skip intersections that:
+    //    - sit within `BUMP_SPLICE_TOLERANCE` of the bump's own
+    //      endpoints (where the bump rejoins the parent at the splice
+    //      points — those are by-construction touches, not crossings);
+    //    - land on the parent inside the replaced middle section
+    //      (parent t in [tReplacedStart, tReplacedEnd]) — that section
+    //      isn't part of the final boundary, so crossing through it is
+    //      fine. Anything else is a real fold-back through the
+    //      `before`/`after` portion that the candidate keeps.
     const intersections = bump.intersect(parent);
     if (intersections.length === 0) return false;
 
@@ -211,6 +237,7 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
         const dEnd = pointDist(ix.point, bumpEnd);
         if (dStart < BUMP_SPLICE_TOLERANCE) continue;
         if (dEnd < BUMP_SPLICE_TOLERANCE) continue;
+        if (ix.tOther >= tReplacedStart && ix.tOther <= tReplacedEnd) continue;
         return true;
     }
     return false;
