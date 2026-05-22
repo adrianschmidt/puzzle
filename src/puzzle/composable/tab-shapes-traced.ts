@@ -9,6 +9,7 @@
 
 import type { Point } from '../../model/types.js';
 import type { BezierPath } from './bezier-path.js';
+import { reverseBezierPath } from './bezier-path.js';
 import type { TabTemplate } from './tab-shapes.js';
 import { createSeededRandom } from '../seeded-random.js';
 import {
@@ -89,8 +90,15 @@ export const tracedTabTemplate: TabTemplate = {
 
         const idx       = Math.floor(local() * TRACED_TEMPLATES.length); // local 1
         const flip      = local() < 0.5;                                 // local 2
-        const scalex    = lerp(0.85, 1.05, local());                     // local 3
-        const scaley    = lerp(0.85, 1.05, local());                     // local 4
+        // scalex / scaley shrink the unit-length neck-to-neck path so
+        // the traced tab occupies a small fraction of the host edge —
+        // mirroring classic, whose chord (neck-to-neck) sits at
+        // ~0.05–0.27 of template space and whose apex sits ~0.25 above
+        // the chord. scaley is sized so a typical traced apex_y (~0.35)
+        // produces an apex height comparable to classic's. Output has
+        // neck endpoints at (mid ± scalex/2, 0), ready for prepareTab.
+        const scalex    = lerp(0.14, 0.20, local());                     // local 3
+        const scaley    = lerp(0.55, 0.80, local());                     // local 4
         const mid       = lerp(0.45, 0.55, local());                     // local 5
         const neckScale = lerp(0.75, 1.10, local());                     // local 6
 
@@ -99,14 +107,21 @@ export const tracedTabTemplate: TabTemplate = {
         let landmarks = template.landmarks;
 
         if (flip) {
-            path = path.map(p => ({ x: 1 - p.x, y: p.y }));
+            // Mirror across x = 0.5 AND reverse the segment order so the
+            // path still goes left-to-right (start.x < end.x). prepareTab
+            // assumes that convention; without the reverse, splicing
+            // produces a swapped tLeft/tRight and crashes.
+            path = reverseBezierPath(path.map(p => ({ x: 1 - p.x, y: p.y })));
             landmarks = mirrorLandmarksX(landmarks);
         }
 
-        // Pinch neck (uses pre-shift landmarks).
+        // Pinch neck (uses pre-shift landmarks in [0,1] template space).
         path = path.map(p => pinchNeck(p, landmarks, neckScale));
 
-        // Lateral shift + uniform scale around (mid, 0).
+        // Lateral shift + scale around (mid, 0). After this the path
+        // spans [mid - scalex/2, mid + scalex/2] in x and is scaled by
+        // scaley in y — the neck endpoints sit at mid ± scalex/2 in
+        // template space, ready for prepareTab to position on an edge.
         path = path.map(p => ({
             x: mid + (p.x - 0.5) * scalex,
             y: p.y * scaley,
