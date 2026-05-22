@@ -30,4 +30,12 @@ describe('generator-registry', () => {
     it('listTabGeneratorIds returns at least "classic"', () => {
         expect(listTabGeneratorIds()).toContain('classic');
     });
+
+    it('resolves the traced tab generator', () => {
+        expect(getTabGenerator('traced').id).toBe('traced');
+    });
+
+    it('lists traced among the registered tab generators', () => {
+        expect(listTabGeneratorIds()).toContain('traced');
+    });
 });
