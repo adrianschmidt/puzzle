@@ -19,6 +19,14 @@ import tab10 from './10-tab-i.json';
 import tab11 from './11-tab-j.json';
 import tab12 from './12-tab-k.json';
 import tab13 from './13-tab-l.json';
+import tab14 from './14-tab-m.json';
+import tab15 from './15-tab-n.json';
+import tab16 from './16-tab-o.json';
+import tab17 from './17-tab-p.json';
+import tab18 from './18-tab-q.json';
+import tab19 from './19-tab-r.json';
+import tab20 from './20-tab-s.json';
+import tab21 from './21-tab-t.json';
 
 export interface TracedLandmarks {
     /** Y of the highest point of the tab, normalized to chord length. */
@@ -58,4 +66,12 @@ export const TRACED_TEMPLATES: readonly TracedTemplate[] = [
     tab11 as TracedTemplate,
     tab12 as TracedTemplate,
     tab13 as TracedTemplate,
+    tab14 as TracedTemplate,
+    tab15 as TracedTemplate,
+    tab16 as TracedTemplate,
+    tab17 as TracedTemplate,
+    tab18 as TracedTemplate,
+    tab19 as TracedTemplate,
+    tab20 as TracedTemplate,
+    tab21 as TracedTemplate,
 ] as const;
