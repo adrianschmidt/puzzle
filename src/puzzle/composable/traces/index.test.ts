@@ -22,7 +22,11 @@ describe('traced template library', () => {
                 expect(last.y).toBeCloseTo(0, 3);
             });
 
-            it('has all landmark fractions inside [0, 1]', () => {
+            it('has all landmark fractions non-negative', () => {
+                // All values are in chord-length units. Y and width can
+                // exceed 1 for tall or wide tabs (the chord normalises x
+                // to 1, not the shape's bounding box), so only check
+                // non-negativity here. center_x has its own bounds check.
                 const lm = template.landmarks;
                 for (const v of [
                     lm.apex_y,
@@ -30,8 +34,14 @@ describe('traced template library', () => {
                     lm.neck.y, lm.neck.width, lm.neck.center_x,
                 ]) {
                     expect(v).toBeGreaterThanOrEqual(0);
-                    expect(v).toBeLessThanOrEqual(1);
                 }
+            });
+
+            it('has head and neck centers near the chord (center_x in [0, 1])', () => {
+                expect(template.landmarks.head.center_x).toBeGreaterThanOrEqual(0);
+                expect(template.landmarks.head.center_x).toBeLessThanOrEqual(1);
+                expect(template.landmarks.neck.center_x).toBeGreaterThanOrEqual(0);
+                expect(template.landmarks.neck.center_x).toBeLessThanOrEqual(1);
             });
 
             it('has neck below head', () => {
