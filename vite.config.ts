@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { createManifestConfig } from './src/pwa/manifest.js';
@@ -27,4 +28,11 @@ export default defineConfig({
       },
     }),
   ],
+  test: {
+    // Skip any sibling git worktrees a contributor may have checked out
+    // under `.worktrees/`. Without this, vitest's default discovery walks
+    // into them and runs tests from *other* branches alongside this one,
+    // which drifts local test counts away from CI and can mask failures.
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.worktrees/**'],
+  },
 });
