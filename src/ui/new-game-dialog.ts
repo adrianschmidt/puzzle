@@ -360,6 +360,14 @@ interface SegmentedRow<T extends string> {
     getValue(): T;
 }
 
+/**
+ * Module-scoped counter for unique DOM ids in `appendSegmentedRow`.
+ * Increments on each row so two rows with the same label still get
+ * distinct ids — important when the dialog is reopened (each open
+ * builds a fresh DOM tree, but multiple rows may share a label).
+ */
+let nextSegmentedRowSuffix = 0;
+
 /** Append a label + radio-group "segmented" row and return the value getter. */
 function appendSegmentedRow<T extends string>(
     parent: HTMLElement,
@@ -370,7 +378,7 @@ function appendSegmentedRow<T extends string>(
     const row = document.createElement('div');
     row.className = 'dialog-row';
 
-    const groupSlug = `${labelText.replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`;
+    const groupSlug = `${labelText.replace(/\s+/g, '-').toLowerCase()}-${nextSegmentedRowSuffix++}`;
     const labelId = `seg-label-${groupSlug}`;
 
     const label = document.createElement('label');
