@@ -21,6 +21,9 @@ import {
     loadColourPreference,
     saveColourPreference,
     applyBackgroundColour,
+    installPieceOutlineFilter,
+    loadPieceOutlinePreference,
+    applyPieceOutline,
     createBackgroundColourPicker,
     createInfoButton,
     createInfoModal,
@@ -1011,6 +1014,11 @@ function updateRotationUiVisibility(): void {
         rotateHandle.hide();
     }
 }
+
+// Install the SVG filter used by the "Outline" piece-outline mode and
+// apply the saved preference.
+installPieceOutlineFilter();
+applyPieceOutline(loadPieceOutlinePreference());
 
 // Set up the Background Colour picker
 const initialColourId = loadColourPreference();
