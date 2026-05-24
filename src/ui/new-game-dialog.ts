@@ -330,6 +330,11 @@ function buildComposableSlidersSection(args: {
         section.appendChild(row);
     }
 
+    // Traced has no dev/prod gate of its own — it inherits Composable's
+    // visibility via `getVisibleCutStyleOptions()`. When Composable is
+    // promoted to production, the 'Traced' radio ships with it. If
+    // Traced should graduate independently (or stay dev-only), add an
+    // explicit gate here before omitting/including the option.
     const tabGeneratorRow = appendSegmentedRow<'classic' | 'traced' | 'none'>(
         section,
         'Tab style',
