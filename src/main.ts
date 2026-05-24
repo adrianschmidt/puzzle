@@ -477,10 +477,11 @@ function zoomToFitCompletedPuzzle(
  *       tabGenerator: 'none',
  *   })
  *   __newComposableGame({ rotation: 'free' })
+ *   __newComposableGame({ seed: 1086655870 })   // reproduce a specific puzzle
  *
  * Defaults: 8×6 grid, sine base-cut generator with composable's stock
  * defaults, classic tabs, no rotation, current saved image-source
- * preference.
+ * preference. Seed defaults to a fresh random value each call.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).__newComposableGame = (overrides?: {
@@ -493,6 +494,7 @@ function zoomToFitCompletedPuzzle(
     minPieceArea?: number;
     rotation?: 'none' | 'quarter-turn' | 'free';
     imageSource?: 'random' | 'blank';
+    seed?: number;
 }) => {
     const cols = overrides?.cols ?? 8;
     const rows = overrides?.rows ?? 6;
@@ -519,6 +521,7 @@ function zoomToFitCompletedPuzzle(
         loadVibrantPreference(),
         rotation !== 'none',
         rotation === 'free',
+        overrides?.seed,
     );
 };
 
@@ -719,6 +722,7 @@ async function startNewGame(
     vibrant: boolean = false,
     rotationEnabled: boolean = false,
     freeRotation: boolean = false,
+    seed?: number,
 ): Promise<void> {
     showLoadingOverlay();
     try {
@@ -801,6 +805,7 @@ async function startNewGame(
             composableConfig,
             fractalConfig: generatorFractalConfig,
             rotationMode,
+            seed,
         });
 
         if (attribution) {
