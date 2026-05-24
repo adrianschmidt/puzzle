@@ -230,13 +230,13 @@ function buildToleranceSetting(
     setting.appendChild(desc);
 
     const tolContainer = document.createElement('div');
-    tolContainer.className = 'tolerance-options';
+    tolContainer.className = 'preset-options';
     tolContainer.dataset.testid = 'tolerance-options';
 
     const currentToleranceId = loadTolerancePreference();
     getSortedPresets().forEach((preset) => {
         const button = document.createElement('button');
-        button.className = 'tolerance-option';
+        button.className = 'preset-option';
         button.type = 'button';
         button.dataset.testid = `tolerance-${preset.label.toLowerCase()}`;
         if (preset.id === currentToleranceId) {
@@ -244,19 +244,19 @@ function buildToleranceSetting(
         }
 
         const labelSpan = document.createElement('span');
-        labelSpan.className = 'tolerance-option-label';
+        labelSpan.className = 'preset-option-label';
         labelSpan.textContent = preset.label;
         button.appendChild(labelSpan);
 
         const descSpan = document.createElement('span');
-        descSpan.className = 'tolerance-option-desc';
+        descSpan.className = 'preset-option-desc';
         descSpan.textContent = preset.description;
         button.appendChild(descSpan);
 
         button.addEventListener('click', () => {
             saveTolerancePreference(preset.id);
             tolContainer
-                .querySelectorAll('.tolerance-option')
+                .querySelectorAll('.preset-option')
                 .forEach((btn) => btn.classList.remove('selected'));
             button.classList.add('selected');
             onToleranceChanged?.(preset.id);
