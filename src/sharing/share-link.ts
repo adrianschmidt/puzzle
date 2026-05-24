@@ -9,6 +9,10 @@
 import type { GameState } from '../model/types.js';
 import { normaliseDegrees } from '../model/helpers.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
+import {
+    listBaseCutGeneratorIds,
+    listTabGeneratorIds,
+} from '../puzzle/topology/generator-registry.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -152,8 +156,10 @@ function isValidComposableCf(cf: unknown): boolean {
     if (!cf || typeof cf !== 'object') return false;
     const c = cf as Record<string, unknown>;
     if (typeof c.bg !== 'string') return false;
+    if (!listBaseCutGeneratorIds().includes(c.bg)) return false;
     if (typeof c.bgc !== 'object' || c.bgc === null) return false;
     if (typeof c.tg !== 'string') return false;
+    if (!listTabGeneratorIds().includes(c.tg)) return false;
     if (typeof c.tgc !== 'object' || c.tgc === null) return false;
     if (c.mpa !== undefined && typeof c.mpa !== 'number') return false;
     return true;

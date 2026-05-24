@@ -398,6 +398,27 @@ describe('share-link codec — rejection paths', () => {
             ...baseValid, pr: { m: [[0, 1]], sr: [2.5, 90] },
         }))).toBeNull();
     });
+
+    // A crafted composable payload with a generator id we don't know
+    // would otherwise survive surface validation and throw inside
+    // generateTopologyPuzzle. Reject at the gate instead.
+    const baseComposable = {
+        v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'composable', s: 0, r: 'none',
+    };
+
+    it('rejects cf.tg that is not a registered TabGenerator id', () => {
+        expect(decodePayload(encodeRaw({
+            ...baseComposable,
+            cf: { bg: 'sine', bgc: {}, tg: 'bogus', tgc: {} },
+        }))).toBeNull();
+    });
+
+    it('rejects cf.bg that is not a registered BaseCutGenerator id', () => {
+        expect(decodePayload(encodeRaw({
+            ...baseComposable,
+            cf: { bg: 'bogus', bgc: {}, tg: 'classic', tgc: {} },
+        }))).toBeNull();
+    });
 });
 
 describe('buildShareUrl', () => {
