@@ -143,14 +143,14 @@ export function generateTopologyPuzzle(
     const graph = buildDCEL({ curves });
 
     // 3. Apply tabs per edge with collision rejection. The graph's
-    //    topology is unchanged — only edge curves are swapped.
-    if (tabId !== 'none') {
-        const tabGenerator = getTabGenerator(tabId);
-        applyTabs(graph, tabGenerator, random, {
-            tabConfig: config?.tabConfig,
-            onCandidate: config?.tabDebug?.onCandidate,
-        });
-    }
+    //    topology is unchanged — only edge curves are swapped. The
+    //    `none` generator is registered like any other and returns
+    //    null on every edge, so we don't special-case it here.
+    const tabGenerator = getTabGenerator(tabId);
+    applyTabs(graph, tabGenerator, random, {
+        tabConfig: config?.tabConfig,
+        onCandidate: config?.tabDebug?.onCandidate,
+    });
 
     // 4. Faces → piece definitions. Tiny faces are not merged here —
     //    the auto-group pass below handles them by gluing them into
