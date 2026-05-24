@@ -83,6 +83,18 @@ export {
 } from './background-colour.js';
 export type { BackgroundColourPreset } from './background-colour.js';
 
+export {
+    PIECE_OUTLINE_PRESETS,
+    DEFAULT_PIECE_OUTLINE_ID,
+    getPieceOutlinePreset,
+    savePieceOutlinePreference,
+    loadPieceOutlinePreference,
+    applyPieceOutline,
+} from './piece-outline.js';
+export type { PieceOutlinePreset } from './piece-outline.js';
+
+export { installPieceOutlineFilter } from './piece-outline-filter.js';
+
 export { createBackgroundColourPicker } from './background-colour-picker.js';
 export type { BackgroundColourPickerOptions } from './background-colour-picker.js';
 
