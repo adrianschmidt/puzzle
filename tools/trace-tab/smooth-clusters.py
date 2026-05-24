@@ -168,18 +168,35 @@ def main():
 
         new_path = segs_to_path_dicts(segs_out)
         flat_for_landmarks = [(p['x'], p['y']) for p in new_path]
-        shape = pipeline.analyze_tab_shape(flat_for_landmarks) or {}
+        # Fail fast on the Python side: a partial / empty result would
+        # serialise as `None` landmarks and then crash assertTracedTemplate
+        # at TS module load. Catching it here gives a clear, immediate
+        # error tied to the specific trace.
+        shape = pipeline.analyze_tab_shape(flat_for_landmarks)
+        required = (
+            'apex_y',
+            'head_y', 'head_width', 'head_center_x',
+            'neck_y', 'neck_width', 'neck_center_x',
+        )
+        missing = [] if shape else list(required)
+        if shape:
+            missing = [k for k in required if shape.get(k) is None]
+        if missing:
+            raise SystemExit(
+                f"{jp.stem}: analyze_tab_shape returned no value for "
+                f"{missing} — refusing to write incomplete landmarks"
+            )
         landmarks = {
-            'apex_y': shape.get('apex_y'),
+            'apex_y': shape['apex_y'],
             'head': {
-                'y': shape.get('head_y'),
-                'width': shape.get('head_width'),
-                'center_x': shape.get('head_center_x'),
+                'y': shape['head_y'],
+                'width': shape['head_width'],
+                'center_x': shape['head_center_x'],
             },
             'neck': {
-                'y': shape.get('neck_y'),
-                'width': shape.get('neck_width'),
-                'center_x': shape.get('neck_center_x'),
+                'y': shape['neck_y'],
+                'width': shape['neck_width'],
+                'center_x': shape['neck_center_x'],
             },
         }
 
