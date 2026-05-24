@@ -13,6 +13,7 @@ import {
     listBaseCutGeneratorIds,
     listTabGeneratorIds,
 } from '../puzzle/topology/generator-registry.js';
+import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -113,7 +114,7 @@ function translateLegacyComposable(parsed: unknown): unknown {
         cf: {
             bg: 'sine',
             bgc: { ha: cf.ha, hf: cf.hf, va: cf.va, vf: cf.vf },
-            tg: cf.dt === true ? 'none' : 'classic',
+            tg: legacyDisableTabsToTabGenerator(cf.dt),
             tgc: {},
         },
     };
