@@ -230,3 +230,72 @@ describe('createInfoModal — How to Play section', () => {
         expect(Math.abs(wavyIdx - freeRotIdx)).toBeLessThan(60);
     });
 });
+
+describe('createInfoModal — Piece outline setting', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+        localStorage.clear();
+        document.documentElement.style.removeProperty('--piece-edge-filter');
+    });
+
+    afterEach(() => {
+        container.remove();
+    });
+
+    it('renders three Piece outline buttons (None, Shadow, Outline)', () => {
+        createInfoModal({ container });
+
+        const buttons = document.querySelectorAll(
+            'button[data-testid^="piece-outline-"]',
+        );
+        expect(buttons.length).toBe(3);
+        const labels = Array.from(buttons).map(
+            (b) => b.querySelector('.preset-option-label')?.textContent,
+        );
+        expect(labels).toEqual(['None', 'Shadow', 'Outline']);
+    });
+
+    it('marks Shadow as selected by default', () => {
+        createInfoModal({ container });
+
+        const shadowBtn = document.querySelector(
+            '[data-testid="piece-outline-shadow"]',
+        );
+        expect(shadowBtn?.classList.contains('selected')).toBe(true);
+    });
+
+    it('clicking Outline persists the choice and updates the CSS variable', () => {
+        createInfoModal({ container });
+
+        const outlineBtn = document.querySelector(
+            '[data-testid="piece-outline-outline"]',
+        ) as HTMLButtonElement;
+        outlineBtn.click();
+
+        expect(localStorage.getItem('puzzle-piece-outline')).toBe('outline');
+        expect(
+            document.documentElement.style.getPropertyValue('--piece-edge-filter'),
+        ).toBe('url(#piece-outline)');
+        expect(outlineBtn.classList.contains('selected')).toBe(true);
+    });
+
+    it('clicking a second option deselects the first', () => {
+        createInfoModal({ container });
+
+        const noneBtn = document.querySelector(
+            '[data-testid="piece-outline-none"]',
+        ) as HTMLButtonElement;
+        const outlineBtn = document.querySelector(
+            '[data-testid="piece-outline-outline"]',
+        ) as HTMLButtonElement;
+
+        outlineBtn.click();
+        noneBtn.click();
+
+        expect(noneBtn.classList.contains('selected')).toBe(true);
+        expect(outlineBtn.classList.contains('selected')).toBe(false);
+    });
+});

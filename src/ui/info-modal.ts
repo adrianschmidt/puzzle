@@ -21,6 +21,12 @@ import {
     loadOffsetDragPreference,
     saveOffsetDragPreference,
 } from './offset-drag.js';
+import {
+    PIECE_OUTLINE_PRESETS,
+    loadPieceOutlinePreference,
+    savePieceOutlinePreference,
+    applyPieceOutline,
+} from './piece-outline.js';
 import { attachShareSection } from './share-section.js';
 
 export interface InfoModalOptions {
@@ -208,6 +214,7 @@ function buildSettingsSection(args: {
     section.appendChild(heading);
 
     section.appendChild(buildToleranceSetting(args.onToleranceChanged));
+    section.appendChild(buildPieceOutlineSetting());
     section.appendChild(buildOffsetDragSetting());
 
     return section;
@@ -266,6 +273,60 @@ function buildToleranceSetting(
     });
 
     setting.appendChild(tolContainer);
+    return setting;
+}
+
+function buildPieceOutlineSetting(): HTMLElement {
+    const setting = document.createElement('div');
+    setting.className = 'info-setting';
+
+    const label = document.createElement('label');
+    label.className = 'info-setting-label';
+    label.textContent = 'Piece outline';
+    setting.appendChild(label);
+
+    const desc = document.createElement('p');
+    desc.className = 'info-setting-description';
+    desc.textContent = 'The visual edge drawn around each piece group.';
+    setting.appendChild(desc);
+
+    const container = document.createElement('div');
+    container.className = 'preset-options';
+    container.dataset.testid = 'piece-outline-options';
+
+    const currentId = loadPieceOutlinePreference();
+    for (const preset of PIECE_OUTLINE_PRESETS) {
+        const button = document.createElement('button');
+        button.className = 'preset-option';
+        button.type = 'button';
+        button.dataset.testid = `piece-outline-${preset.id}`;
+        if (preset.id === currentId) {
+            button.classList.add('selected');
+        }
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'preset-option-label';
+        labelSpan.textContent = preset.label;
+        button.appendChild(labelSpan);
+
+        const descSpan = document.createElement('span');
+        descSpan.className = 'preset-option-desc';
+        descSpan.textContent = preset.description;
+        button.appendChild(descSpan);
+
+        button.addEventListener('click', () => {
+            savePieceOutlinePreference(preset.id);
+            applyPieceOutline(preset.id);
+            container
+                .querySelectorAll('.preset-option')
+                .forEach((btn) => btn.classList.remove('selected'));
+            button.classList.add('selected');
+        });
+
+        container.appendChild(button);
+    }
+
+    setting.appendChild(container);
     return setting;
 }
 
@@ -546,9 +607,7 @@ function buildDebugToggleSetting(args: {
 }
 
 /**
- * Create and show the info modal.
- *
- * Returns a cleanup function that removes the modal from the DOM.
+ * Create and show the info modal. Returns a cleanup function that removes the modal from the DOM.
  */
 export function createInfoModal(options: InfoModalOptions): () => void {
     const { container, onDismiss, onToleranceChanged, getState } = options;
