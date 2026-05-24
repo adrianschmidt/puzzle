@@ -31,14 +31,6 @@ import { clampTabToCurve } from './curve-clamp.js';
 // ---------------------------------------------------------------------------
 
 /**
- * Compose a puzzle from piece definitions and a tab template.
- *
- * @param pieceDefs - Abstract piece definitions from the grid layer
- * @param template - Tab shape template to use
- * @param random - Seeded PRNG for tab assignment and shape variation
- * @returns Complete Piece[] ready for the game engine
- */
-/**
  * Options for the composition step.
  */
 export interface ComposeOptions {
@@ -46,9 +38,20 @@ export interface ComposeOptions {
     disableTabs?: boolean;
 }
 
+/**
+ * Compose a puzzle from piece definitions.
+ *
+ * @param pieceDefs - Abstract piece definitions from the grid layer
+ * @param template - Tab shape template; only read when tabs are
+ *   enabled (`options.disableTabs` falsy). May be `null` for callers
+ *   that bring their own tab geometry — e.g. the topology pipeline,
+ *   which writes tabs directly into edge curves before calling here.
+ * @param random - Seeded PRNG for tab assignment and shape variation
+ * @returns Complete Piece[] ready for the game engine
+ */
 export function composePuzzle(
     pieceDefs: PieceDefinition[],
-    template: TabTemplate,
+    template: TabTemplate | null,
     random: () => number,
     options?: ComposeOptions,
 ): Piece[] {
@@ -60,6 +63,9 @@ export function composePuzzle(
     const tabIsTab = new Map<string, boolean>();
 
     if (!disableTabs) {
+        if (!template) {
+            throw new Error('composePuzzle: template is required when tabs are enabled');
+        }
         for (const pieceDef of pieceDefs) {
             for (const edge of pieceDef.edges) {
                 if (edge.sharedEdgeKey && edge.isFirstSide && !tabPaths.has(edge.sharedEdgeKey)) {
