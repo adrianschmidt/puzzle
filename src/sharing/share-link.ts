@@ -153,14 +153,31 @@ function isValidPayload(x: unknown): x is SharePayload {
     return true;
 }
 
+// Lazy-cached id sets. The registries are populated at module-import
+// time (see `generator-registry.ts`), so we only need to snapshot them
+// on first lookup. O(1) `Set.has` thereafter beats the previous per-
+// decode array allocation + linear `Array.includes`.
+let knownBaseCutIds: Set<string> | null = null;
+let knownTabIds: Set<string> | null = null;
+
+function isKnownBaseCutId(id: string): boolean {
+    if (!knownBaseCutIds) knownBaseCutIds = new Set(listBaseCutGeneratorIds());
+    return knownBaseCutIds.has(id);
+}
+
+function isKnownTabId(id: string): boolean {
+    if (!knownTabIds) knownTabIds = new Set(listTabGeneratorIds());
+    return knownTabIds.has(id);
+}
+
 function isValidComposableCf(cf: unknown): boolean {
     if (!cf || typeof cf !== 'object') return false;
     const c = cf as Record<string, unknown>;
     if (typeof c.bg !== 'string') return false;
-    if (!listBaseCutGeneratorIds().includes(c.bg)) return false;
+    if (!isKnownBaseCutId(c.bg)) return false;
     if (typeof c.bgc !== 'object' || c.bgc === null) return false;
     if (typeof c.tg !== 'string') return false;
-    if (!listTabGeneratorIds().includes(c.tg)) return false;
+    if (!isKnownTabId(c.tg)) return false;
     if (typeof c.tgc !== 'object' || c.tgc === null) return false;
     if (c.mpa !== undefined && typeof c.mpa !== 'number') return false;
     return true;
