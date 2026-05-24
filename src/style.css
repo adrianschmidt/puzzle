@@ -1133,12 +1133,12 @@ details.info-section[open] > .info-section-summary {
   opacity: 0.7;
 }
 
-.tolerance-options {
+.preset-options {
   display: flex;
   gap: 8px;
 }
 
-.tolerance-option {
+.preset-option {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1157,33 +1157,33 @@ details.info-section[open] > .info-section-summary {
   -webkit-user-select: none;
 }
 
-.tolerance-option:hover {
+.preset-option:hover {
   background: var(--ui-overlay-hover);
   border-color: var(--ui-border);
 }
 
-.tolerance-option:active {
+.preset-option:active {
   transform: scale(0.97);
   background: var(--ui-overlay-hover);
 }
 
-.tolerance-option.selected {
+.preset-option.selected {
   border-color: rgba(100, 160, 255, 0.6);
   background: rgba(100, 160, 255, 0.1);
 }
 
-.tolerance-option.selected:hover {
+.preset-option.selected:hover {
   border-color: rgba(100, 160, 255, 0.8);
   background: rgba(100, 160, 255, 0.15);
 }
 
-.tolerance-option-label {
+.preset-option-label {
   font-size: 0.9rem;
   font-weight: 600;
   line-height: 1;
 }
 
-.tolerance-option-desc {
+.preset-option-desc {
   font-size: 0.65rem;
   opacity: 0.6;
   margin-top: 3px;
