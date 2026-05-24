@@ -11,7 +11,7 @@ import {
 } from './share-link.js';
 import type { GameState } from '../model/types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
-import { DEFAULT_DISABLE_TABS, composePuzzle } from '../puzzle/composable/compose.js';
+import { composePuzzle } from '../puzzle/composable/compose.js';
 import { generateTopologyPuzzle } from '../puzzle/topology/generator.js';
 import { classicTabTemplate } from '../puzzle/composable/tab-shapes.js';
 import type { PieceDefinition } from '../puzzle/composable/types.js';
@@ -772,10 +772,6 @@ describe('disableTabs default agreement (#285)', () => {
         };
     }
 
-    it('canonical default is false (matches the UI checkbox)', () => {
-        expect(DEFAULT_DISABLE_TABS).toBe(false);
-    });
-
     it('share-link encodes an undefined tabGenerator as the canonical default', () => {
         const state = buildState({
             cutStyle: 'composable',
@@ -783,14 +779,11 @@ describe('disableTabs default agreement (#285)', () => {
                 baseCutGenerator: 'sine',
                 baseCutConfig: { ha: 0.1, hf: 1, va: 0.1, vf: 1 },
                 // tabGenerator intentionally left undefined — receiver should
-                // fall back to the canonical default (DEFAULT_DISABLE_TABS).
+                // fall back to the canonical default of 'classic' (tabs on).
             },
         });
         const payload = gameStateToPayload(state, { includeProgress: false });
-        // The new wire format encodes tabGenerator id directly. When the
-        // sender omits it, encode as the canonical default — 'classic' for
-        // tabs-enabled, 'none' for tabs-disabled.
-        expect(payload.cf?.tg).toBe(DEFAULT_DISABLE_TABS ? 'none' : 'classic');
+        expect(payload.cf?.tg).toBe('classic');
     });
 
     it('topology generator treats undefined tabGeneratorId identically to the canonical default', () => {
@@ -808,8 +801,8 @@ describe('disableTabs default agreement (#285)', () => {
         );
         const fromExplicit = generateTopologyPuzzle(
             args.cols, args.rows, args.imageSize, seededRandom(42),
-            // The canonical default is `tabs enabled` → tabGeneratorId 'classic'
-            { ...args.shared, tabGeneratorId: DEFAULT_DISABLE_TABS ? 'none' : 'classic' },
+            // The canonical default is tabs-enabled → tabGeneratorId 'classic'.
+            { ...args.shared, tabGeneratorId: 'classic' },
         );
         expect(fromUndefined.pieces.map((p) => p.shape))
             .toEqual(fromExplicit.pieces.map((p) => p.shape));
@@ -851,7 +844,7 @@ describe('disableTabs default agreement (#285)', () => {
         );
         const fromExplicit = composePuzzle(
             pieceDefs, classicTabTemplate, seededRandom(42),
-            { disableTabs: DEFAULT_DISABLE_TABS },
+            { disableTabs: false },
         );
         expect(fromUndefined.map((p) => p.shape))
             .toEqual(fromExplicit.map((p) => p.shape));
