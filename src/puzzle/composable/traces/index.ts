@@ -53,25 +53,79 @@ export interface TracedTemplate {
     landmarks: TracedLandmarks;
 }
 
+/**
+ * Narrow an unknown JSON value to a {@link TracedTemplate}. Used to
+ * validate each checked-in trace at module import — any structural
+ * problem (missing fields, NaN landmarks, wrong-length `path`) throws
+ * immediately at startup instead of propagating NaNs through the
+ * pinch / scale math later. The same helper backs the schema tests in
+ * `index.test.ts`, so production and tests share one narrowing.
+ */
+export function assertTracedTemplate(raw: unknown, label: string): TracedTemplate {
+    const fail = (msg: string): never => {
+        throw new Error(`Trace ${label}: ${msg}`);
+    };
+    if (!raw || typeof raw !== 'object') fail('not an object');
+    const t = raw as Record<string, unknown>;
+    if (typeof t.id !== 'string') fail('missing string id');
+
+    if (!t.source || typeof t.source !== 'object') fail('missing source object');
+    const src = t.source as Record<string, unknown>;
+    if (typeof src.photo !== 'string') fail('source.photo not a string');
+    if (typeof src.captured !== 'string') fail('source.captured not a string');
+
+    if (!Array.isArray(t.path)) fail('path is not an array');
+    const path = t.path as unknown[];
+    if (path.length < 4 || (path.length - 1) % 3 !== 0) {
+        fail(`path length must be 3n+1 (n ≥ 1); got ${path.length}`);
+    }
+    for (let i = 0; i < path.length; i++) {
+        const p = path[i] as Record<string, unknown> | null;
+        if (!p || typeof p !== 'object'
+            || typeof p.x !== 'number' || !Number.isFinite(p.x)
+            || typeof p.y !== 'number' || !Number.isFinite(p.y)) {
+            fail(`path[${i}] is not a finite Point`);
+        }
+    }
+
+    if (!t.landmarks || typeof t.landmarks !== 'object') fail('missing landmarks');
+    const lm = t.landmarks as Record<string, unknown>;
+    const finiteAt = (path: string, v: unknown): void => {
+        if (typeof v !== 'number' || !Number.isFinite(v)) {
+            fail(`landmarks.${path} is not a finite number`);
+        }
+    };
+    finiteAt('apex_y', lm.apex_y);
+    for (const part of ['head', 'neck'] as const) {
+        const node = lm[part] as Record<string, unknown> | undefined;
+        if (!node || typeof node !== 'object') fail(`landmarks.${part} missing`);
+        finiteAt(`${part}.y`, node!.y);
+        finiteAt(`${part}.width`, node!.width);
+        finiteAt(`${part}.center_x`, node!.center_x);
+    }
+
+    return raw as TracedTemplate;
+}
+
 export const TRACED_TEMPLATES: readonly TracedTemplate[] = [
-    tab02 as TracedTemplate,
-    tab03 as TracedTemplate,
-    tab04 as TracedTemplate,
-    tab05 as TracedTemplate,
-    tab06 as TracedTemplate,
-    tab07 as TracedTemplate,
-    tab08 as TracedTemplate,
-    tab09 as TracedTemplate,
-    tab10 as TracedTemplate,
-    tab11 as TracedTemplate,
-    tab12 as TracedTemplate,
-    tab13 as TracedTemplate,
-    tab14 as TracedTemplate,
-    tab15 as TracedTemplate,
-    tab16 as TracedTemplate,
-    tab17 as TracedTemplate,
-    tab18 as TracedTemplate,
-    tab19 as TracedTemplate,
-    tab20 as TracedTemplate,
-    tab21 as TracedTemplate,
+    assertTracedTemplate(tab02, '02-tab-a'),
+    assertTracedTemplate(tab03, '03-tab-b'),
+    assertTracedTemplate(tab04, '04-tab-c'),
+    assertTracedTemplate(tab05, '05-tab-d'),
+    assertTracedTemplate(tab06, '06-tab-e'),
+    assertTracedTemplate(tab07, '07-tab-f'),
+    assertTracedTemplate(tab08, '08-tab-g'),
+    assertTracedTemplate(tab09, '09-tab-h'),
+    assertTracedTemplate(tab10, '10-tab-i'),
+    assertTracedTemplate(tab11, '11-tab-j'),
+    assertTracedTemplate(tab12, '12-tab-k'),
+    assertTracedTemplate(tab13, '13-tab-l'),
+    assertTracedTemplate(tab14, '14-tab-m'),
+    assertTracedTemplate(tab15, '15-tab-n'),
+    assertTracedTemplate(tab16, '16-tab-o'),
+    assertTracedTemplate(tab17, '17-tab-p'),
+    assertTracedTemplate(tab18, '18-tab-q'),
+    assertTracedTemplate(tab19, '19-tab-r'),
+    assertTracedTemplate(tab20, '20-tab-s'),
+    assertTracedTemplate(tab21, '21-tab-t'),
 ] as const;
