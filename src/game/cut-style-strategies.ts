@@ -29,6 +29,7 @@ import {
 } from '../puzzle/fractal/index.js';
 import type { FractalConfig } from '../puzzle/fractal/index.js';
 import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
+import type { TabDebugSession, TabDebugReport } from '../puzzle/topology/tab-debug.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 import type { CutStyle } from './cut-styles.js';
@@ -40,6 +41,13 @@ import type { CutStyle } from './cut-styles.js';
 export interface StrategyContext {
     fractalConfig?: FractalConfig;
     composableConfig?: ComposableConfig;
+    /**
+     * Optional dev-time tab-debug session. When provided, strategies
+     * whose pipeline supports it (composable, wavy) thread it through
+     * to the topology generator. Classic / fractal ignore it. Set by
+     * `init.ts` based on the `tabDebug=1` URL flag.
+     */
+    tabDebug?: TabDebugSession;
 }
 
 /**
@@ -52,6 +60,8 @@ export interface StrategyContext {
 export interface StrategyPuzzle {
     pieces: Piece[];
     autoGroups?: AutoGroup[];
+    /** Tab-debug report produced when `ctx.tabDebug` was set. */
+    tabDebugReport?: TabDebugReport;
 }
 
 export interface CutStyleStrategy {
@@ -100,7 +110,9 @@ const composableStrategy: CutStyleStrategy = {
             grid.rows,
             puzzleSize,
             seed,
-            ctx.composableConfig,
+            ctx.tabDebug
+                ? { ...ctx.composableConfig, tabDebug: ctx.tabDebug }
+                : ctx.composableConfig,
         ),
     configKey: 'composableConfig',
 };
@@ -136,7 +148,7 @@ const fractalStrategy: CutStyleStrategy = {
 const wavyStrategy: CutStyleStrategy = {
     scaleGrid: (grid) => grid,
     inscribePuzzleSize: (imageSize) => imageSize,
-    generatePieces: (grid, puzzleSize, seed) => {
+    generatePieces: (grid, puzzleSize, seed, ctx) => {
         const avgPieceArea =
             (puzzleSize.width * puzzleSize.height) /
             (grid.cols * grid.rows);
@@ -153,6 +165,7 @@ const wavyStrategy: CutStyleStrategy = {
             tabGenerator: 'classic',
             tabConfig: {},
             minPieceArea: avgPieceArea / 4,
+            tabDebug: ctx.tabDebug,
         });
     },
     // configKey omitted — Wavy is fully reproducible from seed + gridSize.

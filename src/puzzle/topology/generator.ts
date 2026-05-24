@@ -21,6 +21,7 @@ import type { EdgeDefinition } from '../composable/types.js';
 import { classicTabTemplate } from '../composable/tab-shapes.js';
 import { composePuzzle } from '../composable/compose.js';
 import { applyTabs } from './apply-tabs.js';
+import type { TabDebugSession, TabDebugReport } from './tab-debug.js';
 import { autoGroupSmallPieces } from './auto-group.js';
 import type { AutoGroup } from './auto-group.js';
 import { getBaseCutGenerator, getTabGenerator } from './generator-registry.js';
@@ -61,6 +62,16 @@ export interface TopologyGeneratorConfig {
      * callers in tests typically leave this unset.
      */
     minPieceArea?: number;
+    /**
+     * Optional dev-time debug session. When provided, the session
+     * captures every tab candidate the generator produces plus, for
+     * traced tabs, the template-selection and transform parameters.
+     * The aggregated report is returned via
+     * {@link TopologyPuzzle.tabDebugReport}. Production paths omit
+     * this; the only overhead when absent is one undefined-check per
+     * tab generation.
+     */
+    tabDebug?: TabDebugSession;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +92,13 @@ export interface TopologyGeneratorConfig {
 export interface TopologyPuzzle {
     pieces: Piece[];
     autoGroups: AutoGroup[];
+    /**
+     * Populated only when {@link TopologyGeneratorConfig.tabDebug} was
+     * passed in. Each entry on a piece records the half-edge id, edge
+     * position, mate piece, acceptance status, and (for traced tabs)
+     * which template was used.
+     */
+    tabDebugReport?: TabDebugReport;
 }
 
 /**
@@ -128,7 +146,10 @@ export function generateTopologyPuzzle(
     //    topology is unchanged — only edge curves are swapped.
     if (tabId !== 'none') {
         const tabGenerator = getTabGenerator(tabId);
-        applyTabs(graph, tabGenerator, random, { tabConfig: config?.tabConfig });
+        applyTabs(graph, tabGenerator, random, {
+            tabConfig: config?.tabConfig,
+            onCandidate: config?.tabDebug?.onCandidate,
+        });
     }
 
     // 4. Faces → piece definitions. Tiny faces are not merged here —
@@ -186,7 +207,9 @@ export function generateTopologyPuzzle(
     //    logic.
     const pieces = composePuzzle(pieceDefs, classicTabTemplate, random, { disableTabs: true });
 
-    return { pieces, autoGroups };
+    const tabDebugReport = config?.tabDebug?.finish(graph);
+
+    return { pieces, autoGroups, tabDebugReport };
 }
 
 // ---------------------------------------------------------------------------
