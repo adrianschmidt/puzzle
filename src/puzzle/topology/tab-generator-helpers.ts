@@ -335,6 +335,20 @@ export const smoothedTabSplicer: TabSplicer = {
 };
 
 /**
+ * How far past the splice point to extend the tab in the parent's
+ * tangent direction before letting the tab's natural curvature take
+ * over. A multiplier on the template's own outermost control-point
+ * distance; 1.0 = template default, larger = the tab "leaves" the
+ * parent edge in the parent's direction for longer, softening the
+ * visual corner at the splice on curved parents.
+ *
+ * Tuned empirically: 1.0 left visible sharp corners on sine-cut
+ * parents; 2.5 rounds them out without introducing visible
+ * overshoot on the body of the tab.
+ */
+const TANGENT_ALIGN_BOOST = 2.5;
+
+/**
  * Adjust the tabCurve's outermost control points so the tangents at
  * the splice points match the parent's tangents there.
  */
@@ -348,31 +362,33 @@ function alignTangentsAtSplice(prepared: PreparedTab): PreparedTab {
     if (segs.length === 0) return prepared;
 
     // Tab's first segment: rotate cp1 around p0 so (cp1 - p0) is
-    // parallel to beforeTangent, preserving |p0 → cp1|.
+    // parallel to beforeTangent, scaled by TANGENT_ALIGN_BOOST so the
+    // tab follows the parent's direction further into its body.
     const first = segs[0];
     const cp1Distance = Math.hypot(first.cp1.x - first.p0.x, first.cp1.y - first.p0.y);
     if (cp1Distance > 1e-9) {
+        const d = cp1Distance * TANGENT_ALIGN_BOOST;
         segs[0] = {
             ...first,
             cp1: {
-                x: first.p0.x + beforeTangent.x * cp1Distance,
-                y: first.p0.y + beforeTangent.y * cp1Distance,
+                x: first.p0.x + beforeTangent.x * d,
+                y: first.p0.y + beforeTangent.y * d,
             },
         };
     }
 
     // Tab's last segment: rotate cp2 around p3 so (p3 - cp2) is
-    // parallel to afterTangent (parent's direction entering p3),
-    // preserving |p3 → cp2|.
+    // parallel to afterTangent, scaled the same way.
     const lastIdx = segs.length - 1;
     const last = segs[lastIdx];
     const cp2Distance = Math.hypot(last.p3.x - last.cp2.x, last.p3.y - last.cp2.y);
     if (cp2Distance > 1e-9) {
+        const d = cp2Distance * TANGENT_ALIGN_BOOST;
         segs[lastIdx] = {
             ...last,
             cp2: {
-                x: last.p3.x - afterTangent.x * cp2Distance,
-                y: last.p3.y - afterTangent.y * cp2Distance,
+                x: last.p3.x - afterTangent.x * d,
+                y: last.p3.y - afterTangent.y * d,
             },
         };
     }
