@@ -22,6 +22,7 @@ import type { Size } from '../model/types.js';
 import { createSeededRandom } from './seeded-random.js';
 import { generateTopologyPuzzle } from './topology/generator.js';
 import type { TopologyPuzzle } from './topology/generator.js';
+import type { TabDebugSession } from './topology/tab-debug.js';
 
 /**
  * Configuration for the composable generator.
@@ -50,6 +51,12 @@ export interface ComposableConfig {
      * noise without consuming legitimate small pieces.
      */
     minPieceArea?: number;
+    /**
+     * Optional dev-time tab-debug session. Plumbed straight through
+     * to {@link TopologyGeneratorConfig.tabDebug}; see that doc for
+     * details. Production callers leave this undefined.
+     */
+    tabDebug?: TabDebugSession;
 }
 
 /**
@@ -82,5 +89,6 @@ export function generateComposablePuzzle(
         tabGeneratorId: config?.tabGenerator ?? 'classic',
         tabConfig: config?.tabConfig,
         minPieceArea: config?.minPieceArea ?? DEFAULT_MIN_PIECE_AREA,
+        tabDebug: config?.tabDebug,
     });
 }

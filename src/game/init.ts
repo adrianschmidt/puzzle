@@ -16,6 +16,19 @@ import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
+import { TabDebugSession } from '../puzzle/topology/tab-debug.js';
+
+/**
+ * Read-once URL-param check for the tab-debug session opt-in. Returns
+ * true if the page was opened with `?tabDebug=1` (or any truthy value
+ * other than `0` / `false`). Safe under SSR / tests — falls back to
+ * false when `window` isn't available.
+ */
+function tabDebugEnabled(): boolean {
+    if (typeof window === 'undefined' || !window.location) return false;
+    const v = new URLSearchParams(window.location.search).get('tabDebug');
+    return v !== null && v !== '0' && v !== 'false';
+}
 
 /** Default grid dimensions for the MVP puzzle. */
 export const DEFAULT_COLS = 8;
@@ -70,14 +83,25 @@ export function createNewGame(
     const rotationMode = options.rotationMode ?? 'none';
 
     const strategy = getCutStyleStrategy(cutStyle);
+    const tabDebug = tabDebugEnabled() ? new TabDebugSession() : undefined;
     const ctx = {
         fractalConfig: options.fractalConfig,
         composableConfig: options.composableConfig,
+        tabDebug,
     };
 
     const generationGrid = strategy.scaleGrid(gridSize, imageSize, ctx);
     const puzzleSize = strategy.inscribePuzzleSize(imageSize, generationGrid, ctx);
-    const { pieces, autoGroups } = strategy.generatePieces(generationGrid, puzzleSize, seed, ctx);
+    const { pieces, autoGroups, tabDebugReport } =
+        strategy.generatePieces(generationGrid, puzzleSize, seed, ctx);
+
+    if (tabDebugReport) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (globalThis as any).__tabDebug = tabDebugReport;
+        // eslint-disable-next-line no-console
+        console.info('[tabDebug] report attached to window.__tabDebug',
+            { pieceCount: Object.keys(tabDebugReport).length });
+    }
 
     const groups = createInitialGroups(
         pieces, puzzleSize, viewport, gridSize, options, autoGroups,

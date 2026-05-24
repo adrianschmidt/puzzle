@@ -32,6 +32,18 @@ export interface ApplyTabsOptions {
     policy?: TabPolicy;
     /** Tab-generator-specific config, forwarded to TabGenerator.generate. */
     tabConfig?: unknown;
+    /**
+     * Optional dev-time hook fired once per candidate produced by the
+     * generator (regardless of whether the candidate was ultimately
+     * accepted). Receives the half-edge it was generated for and whether
+     * the framework's collision / fold-back checks let it through.
+     *
+     * Intended for debug instrumentation (e.g. correlating each tab
+     * with the piece it ended up on). Production paths leave this
+     * unset and pay an extra branch only — `applyTabs` callers that
+     * don't care don't need to wire anything up.
+     */
+    onCandidate?: (he: HalfEdge, accepted: boolean) => void;
 }
 
 export function applyTabs(
@@ -65,13 +77,17 @@ export function applyTabs(
         if (!policy(view)) continue;
 
         const candidate = generator.generate(he.curve, random, tabConfig);
-        if (!candidate) continue;
+        if (!candidate) {
+            options.onCandidate?.(he, false);
+            continue;
+        }
 
-        if (!endpointsMatch(candidate, he.curve)) continue;
-
-        if (foldsBackThroughSelf(candidate, he.curve)) continue;
-
-        if (introducesNewCrossing(candidate, he, graph)) continue;
+        const accepted =
+            endpointsMatch(candidate, he.curve) &&
+            !foldsBackThroughSelf(candidate, he.curve) &&
+            !introducesNewCrossing(candidate, he, graph);
+        options.onCandidate?.(he, accepted);
+        if (!accepted) continue;
 
         he.curve = candidate;
         he.twin.curve = candidate.reverse();

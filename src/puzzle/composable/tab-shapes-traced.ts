@@ -78,6 +78,38 @@ function pinchNeck(
     return { x: px + (p.x - px) * k, y: p.y };
 }
 
+/**
+ * Per-call template + transform record. Captures everything needed to
+ * reproduce the curve a single tracedTabTemplate.generate() invocation
+ * produced. Used by the optional debug recorder below.
+ */
+export interface TracedTabChoice {
+    templateIdx: number;
+    templateId: string;
+    flip: boolean;
+    scalex: number;
+    scaley: number;
+    mid: number;
+    neckScale: number;
+}
+
+/**
+ * Recorder slot — invoked once per generate() call after the choices
+ * are made. Defaults to a no-op; tests and the dev-time tab-debug
+ * session swap in a real recorder via {@link setTracedTabChoiceRecorder}.
+ *
+ * Keeping it as a function (rather than a nullable, with an `if` guard)
+ * lets V8 inline the no-op away in production builds — zero overhead
+ * when the recorder hasn't been set.
+ */
+let tracedTabRecorder: (choice: TracedTabChoice) => void = () => {};
+
+export function setTracedTabChoiceRecorder(
+    fn: ((choice: TracedTabChoice) => void) | null,
+): void {
+    tracedTabRecorder = fn ?? (() => {});
+}
+
 export const tracedTabTemplate: TabTemplate = {
     name: 'Traced',
 
@@ -90,6 +122,9 @@ export const tracedTabTemplate: TabTemplate = {
 
         const idx       = Math.floor(local() * TRACED_TEMPLATES.length); // local 1
         const flip      = local() < 0.5;                                 // local 2
+        // Cache template id now so the recorder below sees the same
+        // index→id mapping the chosen template will use.
+        const templateId = TRACED_TEMPLATES[idx].id;
         // scalex is the desired neck-to-neck width on the host edge
         // (the same dimension classic's halfWidth × 2 controls). scaley
         // is a multiplicative aspect adjustment around the photo's
@@ -101,6 +136,11 @@ export const tracedTabTemplate: TabTemplate = {
         const scaley    = lerp(0.85, 1.15, local());                     // local 4
         const mid       = lerp(0.45, 0.55, local());                     // local 5
         const neckScale = lerp(0.75, 1.10, local());                     // local 6
+
+        tracedTabRecorder({
+            templateIdx: idx, templateId,
+            flip, scalex, scaley, mid, neckScale,
+        });
 
         const template: TracedTemplate = TRACED_TEMPLATES[idx];
         let path: Point[] = template.path.map(p => ({ x: p.x, y: p.y }));
