@@ -18,7 +18,6 @@ import { buildDCEL, getFaceEdges } from './dcel.js';
 import type { Face, HalfEdge } from './dcel.js';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
 import type { EdgeDefinition } from '../composable/types.js';
-import { classicTabTemplate } from '../composable/tab-shapes.js';
 import { composePuzzle } from '../composable/compose.js';
 import { applyTabs } from './apply-tabs.js';
 import type { TabDebugSession, TabDebugReport } from './tab-debug.js';
@@ -202,10 +201,10 @@ export function generateTopologyPuzzle(
         );
     }
 
-    // 6. Compose final pieces. Tabs (when enabled) are already in the
-    //    edge geometry, so disable the composition layer's own tab
-    //    logic.
-    const pieces = composePuzzle(pieceDefs, classicTabTemplate, random, { disableTabs: true });
+    // 6. Compose final pieces. Tabs (when enabled) are already baked
+    //    into the edge geometry by `applyTabs`, so disable the
+    //    composition layer's own tab logic and pass no template.
+    const pieces = composePuzzle(pieceDefs, null, random, { disableTabs: true });
 
     const tabDebugReport = config?.tabDebug?.finish(graph);
 

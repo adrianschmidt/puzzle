@@ -164,12 +164,13 @@ function introducesNewCrossing(
  * within `BUMP_SPLICE_TOLERANCE` of the bump's own start/end, are
  * by-construction touches rather than transverse fold-backs.
  *
- * Why we don't just `candidate.intersect(parent)`: the candidate
- * returned by classicTabGenerator is `join([before, tab, after])`
- * where `before` and `after` are literal slices of the parent. A
- * direct intersect produces 10+ phantom crossings along those overlap
- * regions, which bezier-js's recursive subdivision happily reports
- * even though the curves coincide rather than cross.
+ * Why we don't just `candidate.intersect(parent)`: every candidate
+ * built via the shared `prepareTab` / `commitTab` helpers (both classic
+ * and traced) is `join([before, tab, after])` where `before` and
+ * `after` are literal slices of the parent. A direct intersect
+ * produces 10+ phantom crossings along those overlap regions, which
+ * bezier-js's recursive subdivision happily reports even though the
+ * curves coincide rather than cross.
  *
  * Why we don't use signed-perpendicular sampling: with sparse samples,
  * shallow fold-backs (where the tab dips just slightly past the parent
