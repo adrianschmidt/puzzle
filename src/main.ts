@@ -1138,7 +1138,18 @@ async function tryLoadSharedPuzzle(): Promise<boolean> {
 
     clearSavedState();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    await loadSharedPuzzle(payload, hasExistingProgress);
+    try {
+        await loadSharedPuzzle(payload, hasExistingProgress);
+    } catch (error) {
+        // Surface-shape validation (`isValidComposableCf` etc.) catches
+        // most malformed payloads at decode time, but a link can still
+        // satisfy the schema and then trip the topology pipeline — e.g.
+        // a config combination the current build doesn't support. A
+        // toast is friendlier than an unhandled rejection.
+        diagnostics.warn('Failed to load shared puzzle:', error);
+        showToast("Couldn't load shared puzzle");
+        return false;
+    }
     return true;
 }
 
