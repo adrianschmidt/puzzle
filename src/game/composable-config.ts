@@ -19,6 +19,21 @@ export type ComposableTabGenerator = 'classic' | 'traced' | 'none';
 export const DEFAULT_TAB_GENERATOR: ComposableTabGenerator = 'classic';
 
 /**
+ * Translate the legacy `disableTabs: boolean` field into the new
+ * `tabGenerator` enum. Centralised so the localStorage preference,
+ * save-file, and share-link legacy paths agree on the mapping.
+ *
+ * Per the keep-old-save-migrations rule this branch is permanent —
+ * users may still hold v1/v2 saves and share links from before the
+ * traced-tabs PR landed.
+ */
+export function legacyDisableTabsToTabGenerator(
+    rawDisableTabs: unknown,
+): ComposableTabGenerator {
+    return rawDisableTabs === true ? 'none' : 'classic';
+}
+
+/**
  * Shape of the composable slider config stored in preferences.
  */
 export interface ComposableSliderPreference {
@@ -50,8 +65,8 @@ function parseComposableConfig(
     let tabGenerator: ComposableTabGenerator;
     if (config.tabGenerator === 'classic' || config.tabGenerator === 'traced' || config.tabGenerator === 'none') {
         tabGenerator = config.tabGenerator;
-    } else if (config.disableTabs === true) {
-        tabGenerator = 'none';
+    } else if ('disableTabs' in config) {
+        tabGenerator = legacyDisableTabsToTabGenerator(config.disableTabs);
     } else {
         tabGenerator = DEFAULT_TAB_GENERATOR;
     }

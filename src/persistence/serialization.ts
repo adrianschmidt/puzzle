@@ -17,6 +17,7 @@ import type {
 import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { getImageDimensions } from '../model/derive.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
+import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
 export const STATE_VERSION = 10;
@@ -274,7 +275,7 @@ function migrateLegacyComposableConfig(
     const config: NonNullable<GameState['composableConfig']> = {
         baseCutGenerator: 'sine',
         baseCutConfig,
-        tabGenerator: legacy.disableTabs === true ? 'none' : 'classic',
+        tabGenerator: legacyDisableTabsToTabGenerator(legacy.disableTabs),
         tabConfig: {},
     };
     return config;
