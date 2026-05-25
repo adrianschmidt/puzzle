@@ -391,7 +391,7 @@ html, body {
 
 /* Selected group highlight — must be clearly visible on any background */
 [data-group-id].selected {
-  filter: var(--piece-edge-filter, none)
+  filter: var(--piece-edge-filter, opacity(1))
           drop-shadow(0 0 6px rgba(60, 130, 255, 0.9))
           drop-shadow(0 0 14px rgba(60, 130, 255, 0.7))
           drop-shadow(0 0 24px rgba(60, 130, 255, 0.4));
@@ -399,7 +399,7 @@ html, body {
 
 /* Selected + dragging: keep the glow while lifted */
 [data-group-id].selected.dragging {
-  filter: var(--piece-edge-filter, none)
+  filter: var(--piece-edge-filter, opacity(1))
           drop-shadow(0 0 12px rgba(0, 0, 0, 0.45))
           drop-shadow(0 0 6px rgba(60, 130, 255, 0.9))
           drop-shadow(0 0 14px rgba(60, 130, 255, 0.7))
@@ -408,7 +408,7 @@ html, body {
 
 /* Lifted shadow when a group is being dragged — symmetric, no rotation tell */
 [data-group-id].dragging {
-  filter: var(--piece-edge-filter, none)
+  filter: var(--piece-edge-filter, opacity(1))
           drop-shadow(0 0 12px rgba(0, 0, 0, 0.45));
 }
 
@@ -418,8 +418,8 @@ html, body {
 }
 
 @keyframes merge-pulse {
-  0%   { filter: var(--piece-edge-filter, none) brightness(1.2); }
-  100% { filter: var(--piece-edge-filter, none) brightness(1); }
+  0%   { filter: var(--piece-edge-filter, opacity(1)) brightness(1.2); }
+  100% { filter: var(--piece-edge-filter, opacity(1)) brightness(1); }
 }
 /* Win detection overlay */
 .completion-overlay {
