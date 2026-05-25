@@ -2,7 +2,8 @@
  * Piece-outline presets and persistence.
  *
  * Three modes for the resting-state edge effect on puzzle groups:
- * - "none":    no filter on resting groups.
+ * - "none":    no visible edge (uses `opacity(1)` as a no-op filter so it
+ *              still composes with state-variant filters like `.selected`).
  * - "shadow":  symmetric soft drop-shadow (rotation-invariant).
  * - "outline": sharp 1px black silhouette via the SVG filter installed
  *              by `installPieceOutlineFilter` (piece-outline-filter.ts).
@@ -30,7 +31,11 @@ export const PIECE_OUTLINE_PRESETS: readonly PieceOutlinePreset[] = [
         id: 'none',
         label: 'None',
         description: 'No edge',
-        filter: 'none',
+        // `opacity(1)` is a no-op filter function. We use it instead of the
+        // bare `none` keyword so the value composes with state-variant
+        // filters (e.g. `.selected`'s blue glow). `filter: none drop-shadow(...)`
+        // is invalid CSS — the whole declaration gets dropped.
+        filter: 'opacity(1)',
     },
     {
         id: 'shadow',

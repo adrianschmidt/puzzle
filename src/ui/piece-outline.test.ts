@@ -36,8 +36,10 @@ describe('PIECE_OUTLINE_PRESETS', () => {
         }
     });
 
-    it('none preset has filter "none"', () => {
-        expect(getPieceOutlinePreset('none').filter).toBe('none');
+    it('none preset uses a no-op filter so it composes with state variants', () => {
+        // Must NOT be the bare `none` keyword — `filter: none drop-shadow(...)`
+        // is invalid CSS. `opacity(1)` is a no-op filter function.
+        expect(getPieceOutlinePreset('none').filter).toBe('opacity(1)');
     });
 
     it('shadow preset uses a zero-offset drop-shadow (rotation-invariant)', () => {
@@ -88,7 +90,7 @@ describe('applyPieceOutline', () => {
         applyPieceOutline('none');
         expect(
             document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY),
-        ).toBe('none');
+        ).toBe('opacity(1)');
     });
 
     it('falls back to the default preset for an unknown id', () => {
