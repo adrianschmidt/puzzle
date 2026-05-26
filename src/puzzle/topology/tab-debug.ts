@@ -23,7 +23,7 @@ import type { HalfEdge, TopologyGraph } from './dcel.js';
 import {
     setTracedTabChoiceRecorder,
     type TracedTabChoice,
-} from '../composable/tab-shapes-traced.js';
+} from '../composable/traced-tab-recorder.js';
 
 /**
  * One tab's debug record, from a piece's point of view.

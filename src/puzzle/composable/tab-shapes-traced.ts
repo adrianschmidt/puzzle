@@ -17,6 +17,7 @@ import {
     type TracedLandmarks,
     type TracedTemplate,
 } from './traces/index.js';
+import { recordTracedTabChoice } from './traced-tab-recorder.js';
 
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
@@ -78,38 +79,6 @@ function pinchNeck(
     return { x: px + (p.x - px) * k, y: p.y };
 }
 
-/**
- * Per-call template + transform record. Captures everything needed to
- * reproduce the curve a single tracedTabTemplate.generate() invocation
- * produced. Used by the optional debug recorder below.
- */
-export interface TracedTabChoice {
-    templateIdx: number;
-    templateId: string;
-    flip: boolean;
-    scalex: number;
-    scaley: number;
-    mid: number;
-    neckScale: number;
-}
-
-/**
- * Recorder slot — invoked once per generate() call after the choices
- * are made. Defaults to a no-op; tests and the dev-time tab-debug
- * session swap in a real recorder via {@link setTracedTabChoiceRecorder}.
- *
- * Keeping it as a function (rather than a nullable, with an `if` guard)
- * lets V8 inline the no-op away in production builds — zero overhead
- * when the recorder hasn't been set.
- */
-let tracedTabRecorder: (choice: TracedTabChoice) => void = () => {};
-
-export function setTracedTabChoiceRecorder(
-    fn: ((choice: TracedTabChoice) => void) | null,
-): void {
-    tracedTabRecorder = fn ?? (() => {});
-}
-
 export const tracedTabTemplate: TabTemplate = {
     name: 'Traced',
 
@@ -137,7 +106,7 @@ export const tracedTabTemplate: TabTemplate = {
         const mid       = lerp(0.45, 0.55, local());                     // local 5
         const neckScale = lerp(0.75, 1.10, local());                     // local 6
 
-        tracedTabRecorder({
+        recordTracedTabChoice({
             templateIdx: idx, templateId,
             flip, scalex, scaley, mid, neckScale,
         });

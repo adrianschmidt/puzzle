@@ -1,9 +1,16 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll } from 'vitest';
 import { TabDebugSession } from './tab-debug.js';
 import { generateComposablePuzzle } from '../composable-generator.js';
-import { setTracedTabChoiceRecorder } from '../composable/tab-shapes-traced.js';
+import { setTracedTabChoiceRecorder } from '../composable/traced-tab-recorder.js';
+import { preloadTracedTabGenerator } from './traced-tab-loader.js';
 
 describe('TabDebugSession', () => {
+    // Traced tabs are registered as a stub that throws unless this
+    // preload has run; await it once for the whole suite.
+    beforeAll(async () => {
+        await preloadTracedTabGenerator();
+    });
+
     afterEach(() => {
         // Make sure no session leaks between tests.
         setTracedTabChoiceRecorder(null);

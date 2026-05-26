@@ -89,6 +89,7 @@ import {
     type SharePayload,
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
+import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
 import { initAnalytics, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 
@@ -733,6 +734,15 @@ async function startNewGame(
         viewportTransform.reset();
         applyViewportTransform();
 
+        // Traced tabs live in a lazy chunk; the dialog kicked off the
+        // preload when the user picked "Traced", so this await typically
+        // resolves instantly. The await is the safety net for paths that
+        // didn't go through the dialog (e.g. the __newComposableGame
+        // console hook).
+        if (composableConfig?.tabGenerator === 'traced') {
+            await preloadTracedTabGenerator();
+        }
+
         const viewport = {
             width: app.clientWidth || window.innerWidth,
             height: app.clientHeight || window.innerHeight,
@@ -867,6 +877,12 @@ createNewGameButton({
             savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
             savedVibrant: savedVibrant,
+            onPreloadTracedTabs: () => {
+                // Fire-and-forget — preloadTracedTabGenerator is
+                // idempotent and the eventual `await` in startNewGame
+                // surfaces any failure.
+                void preloadTracedTabGenerator();
+            },
             onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
                 saveSizePreference(sizeId);
                 saveCutStylePreference(cutStyleId);
@@ -1055,6 +1071,13 @@ async function loadSharedPuzzle(
 ): Promise<void> {
     showLoadingOverlay();
     try {
+        // A share link with `cf.tg: "traced"` needs the lazy chunk before
+        // generation runs. The await is short on warm caches and fits
+        // inside the loading overlay the user already sees.
+        if (payload.cf?.tg === 'traced') {
+            await preloadTracedTabGenerator();
+        }
+
         const imageSize = { width: payload.is[0], height: payload.is[1] };
 
         // If the sentinel is the blank canvas, regenerate it locally.

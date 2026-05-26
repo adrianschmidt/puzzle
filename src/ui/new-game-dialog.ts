@@ -75,6 +75,16 @@ export interface NewGameDialogOptions {
     onSelect: (selection: NewGameSelection) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
+    /**
+     * Fires as soon as the dialog's effective tab generator becomes
+     * `'traced'` (on open with that saved value, on cut-style change
+     * into Composable while traced is active, or when the user picks
+     * the "Traced" radio). The host uses it to kick off the
+     * traced-tab lazy chunk in the background so the click-to-puzzle
+     * path stays snappy. Safe to invoke repeatedly — the preload
+     * helper is idempotent.
+     */
+    onPreloadTracedTabs?: () => void;
 }
 
 /**
@@ -105,6 +115,8 @@ interface ComposableSection {
     element: HTMLElement;
     getValues(): ComposableSliderConfig;
     setVisible(visible: boolean): void;
+    /** Currently picked tab generator, regardless of section visibility. */
+    getTabGenerator(): ComposableSliderConfig['tabGenerator'];
 }
 
 interface ImageSourceSection {
@@ -276,6 +288,7 @@ function buildImageSourceSection(args: {
 
 function buildComposableSlidersSection(args: {
     saved?: ComposableSliderConfig;
+    onTabGeneratorChange?: (value: ComposableSliderConfig['tabGenerator']) => void;
 }): ComposableSection {
     const section = document.createElement('div');
     section.className = 'composable-sliders';
@@ -344,6 +357,7 @@ function buildComposableSlidersSection(args: {
             { value: 'none',    label: 'None'    },
         ],
         args.saved?.tabGenerator ?? 'classic',
+        args.onTabGeneratorChange,
     );
 
     return {
@@ -358,6 +372,7 @@ function buildComposableSlidersSection(args: {
         setVisible: (visible) => {
             section.style.display = visible ? 'block' : 'none';
         },
+        getTabGenerator: () => tabGeneratorRow.getValue(),
     };
 }
 
@@ -379,6 +394,7 @@ function appendSegmentedRow<T extends string>(
     labelText: string,
     options: ReadonlyArray<{ value: T; label: string }>,
     initialValue: T,
+    onChange?: (value: T) => void,
 ): SegmentedRow<T> {
     const row = document.createElement('div');
     row.className = 'dialog-row';
@@ -408,6 +424,11 @@ function appendSegmentedRow<T extends string>(
         input.name = groupName;
         input.value = opt.value;
         if (opt.value === initialValue) input.checked = true;
+        if (onChange) {
+            input.addEventListener('change', () => {
+                if (input.checked) onChange(opt.value);
+            });
+        }
         inputs.push(input);
 
         const text = document.createElement('span');
@@ -494,7 +515,12 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     dialog.appendChild(sizeSubtitle);
 
     const fractalSection = buildFractalOptionsSection({ saved: options.savedFractalConfig });
-    const composableSection = buildComposableSlidersSection({ saved: options.savedComposableConfig });
+    const composableSection = buildComposableSlidersSection({
+        saved: options.savedComposableConfig,
+        onTabGeneratorChange: (value) => {
+            if (value === 'traced') options.onPreloadTracedTabs?.();
+        },
+    });
     const imageSourceSection = buildImageSourceSection({
         savedImageSource: options.savedImageSource,
         savedImageCategory: options.savedImageCategory,
@@ -564,11 +590,20 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             fractalSection.setVisible(id === 'fractal');
             composableSection.setVisible(id === 'composable');
             updateFreeRotationVisibility();
+            if (id === 'composable' && composableSection.getTabGenerator() === 'traced') {
+                options.onPreloadTracedTabs?.();
+            }
         },
     });
 
     fractalSection.setVisible(currentCutStyleId === 'fractal');
     composableSection.setVisible(currentCutStyleId === 'composable');
+
+    // Cover the "open with Composable + traced already saved" path so the
+    // lazy chunk starts loading even if the user never touches a radio.
+    if (currentCutStyleId === 'composable' && composableSection.getTabGenerator() === 'traced') {
+        options.onPreloadTracedTabs?.();
+    }
 
     dialog.appendChild(cutStyleSection);
     dialog.appendChild(rotationRow);
