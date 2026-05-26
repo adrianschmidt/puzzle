@@ -36,15 +36,24 @@ export const tracedTabGeneratorStub: TabGenerator = {
 /**
  * Trigger the dynamic import of the traced tab implementation.
  *
- * Idempotent and safe to call repeatedly — the second and subsequent
- * calls return the same promise. Awaiting the returned promise
- * guarantees that the next synchronous traced-tab generation will
- * use the real implementation.
+ * Idempotent and safe to call repeatedly — concurrent callers and
+ * later retry attempts all share the same in-flight promise.
+ * Awaiting the returned promise guarantees that the next synchronous
+ * traced-tab generation will use the real implementation.
+ *
+ * If the dynamic import rejects (transient network failure, stale
+ * deploy hash mismatch, offline), the cached promise is cleared so
+ * the next call retries from scratch. The rejection is still
+ * propagated to the awaiting caller.
  */
 export function preloadTracedTabGenerator(): Promise<void> {
     if (preloadPromise) return preloadPromise;
-    preloadPromise = import('./traced-tab-generator.js').then((m) => {
+    const inflight = import('./traced-tab-generator.js').then((m) => {
         realGenerator = m.tracedTabGenerator;
+    }).catch((err) => {
+        if (preloadPromise === inflight) preloadPromise = null;
+        throw err;
     });
+    preloadPromise = inflight;
     return preloadPromise;
 }
