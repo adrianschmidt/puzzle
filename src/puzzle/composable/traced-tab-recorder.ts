@@ -31,9 +31,10 @@ export interface TracedTabChoice {
  * dev-time tab-debug session swap in a real recorder via
  * {@link setTracedTabChoiceRecorder}.
  *
- * Keeping it as a function (rather than a nullable, with an `if` guard)
- * lets V8 inline the no-op away in production builds — zero overhead
- * when the recorder hasn't been set.
+ * Holding a no-op default rather than a nullable lets the call site
+ * (`recordTracedTabChoice` below) stay unconditional — no null check
+ * per traced edge, and the optimizer can fold the empty function body
+ * out of the hot path when no recorder is attached.
  */
 let tracedTabRecorder: (choice: TracedTabChoice) => void = () => {};
 
