@@ -879,9 +879,12 @@ createNewGameButton({
             savedVibrant: savedVibrant,
             onPreloadTracedTabs: () => {
                 // Fire-and-forget — preloadTracedTabGenerator is
-                // idempotent and the eventual `await` in startNewGame
-                // surfaces any failure.
-                void preloadTracedTabGenerator();
+                // idempotent and clears its cached promise on failure,
+                // so the eventual `await` in startNewGame triggers a
+                // fresh attempt that surfaces the real error. Swallow
+                // here only to stop the in-flight rejection from
+                // surfacing as an unhandled-rejection warning.
+                preloadTracedTabGenerator().catch(() => {});
             },
             onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
                 saveSizePreference(sizeId);
@@ -900,7 +903,7 @@ createNewGameButton({
                 const option = getSizeOption(sizeId);
                 const cutStyle = cutStyleId as CutStyle;
                 clearSavedState();
-                void startNewGame(
+                startNewGame(
                     toGridSize(option),
                     cutStyle,
                     composableConfig
@@ -912,7 +915,15 @@ createNewGameButton({
                     vibrant,
                     rotationEnabled,
                     freeRotation,
-                );
+                ).catch((error) => {
+                    // The chunk-load path (traced tabs lazy import) is
+                    // the most likely source of a rejection here — a
+                    // network blip or stale deploy hash. Surface a
+                    // toast so the user knows the click didn't silently
+                    // do nothing.
+                    diagnostics.warn('Failed to start new game:', error);
+                    showToast("Couldn't start new game");
+                });
             },
         });
     },
