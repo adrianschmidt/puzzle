@@ -116,7 +116,7 @@ interface ComposableSection {
     getValues(): ComposableSliderConfig;
     setVisible(visible: boolean): void;
     /** Currently picked tab generator, regardless of section visibility. */
-    getTabGenerator(): ComposableSliderConfig['tabGenerator'];
+    getSelectedTabGenerator(): ComposableSliderConfig['tabGenerator'];
 }
 
 interface ImageSourceSection {
@@ -372,7 +372,7 @@ function buildComposableSlidersSection(args: {
         setVisible: (visible) => {
             section.style.display = visible ? 'block' : 'none';
         },
-        getTabGenerator: () => tabGeneratorRow.getValue(),
+        getSelectedTabGenerator: () => tabGeneratorRow.getValue(),
     };
 }
 
@@ -590,7 +590,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             fractalSection.setVisible(id === 'fractal');
             composableSection.setVisible(id === 'composable');
             updateFreeRotationVisibility();
-            if (id === 'composable' && composableSection.getTabGenerator() === 'traced') {
+            if (id === 'composable' && composableSection.getSelectedTabGenerator() === 'traced') {
                 options.onPreloadTracedTabs?.();
             }
         },
@@ -601,7 +601,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
 
     // Cover the "open with Composable + traced already saved" path so the
     // lazy chunk starts loading even if the user never touches a radio.
-    if (currentCutStyleId === 'composable' && composableSection.getTabGenerator() === 'traced') {
+    if (currentCutStyleId === 'composable' && composableSection.getSelectedTabGenerator() === 'traced') {
         options.onPreloadTracedTabs?.();
     }
 
