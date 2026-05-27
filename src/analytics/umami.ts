@@ -61,6 +61,29 @@ export interface PuzzleSharedData {
 }
 
 /**
+ * Data attached to `traced-chunk-loaded`.
+ *
+ * `durationMs` is the wall-clock time between the first
+ * `preloadTracedTabGenerator()` call and the dynamic import settling —
+ * i.e. real-user preload latency. Coarse-grained on purpose (rounded
+ * integer ms) since sub-ms resolution is not meaningful here.
+ */
+export interface TracedChunkLoadedData {
+    durationMs: number;
+}
+
+/**
+ * Data attached to `traced-chunk-load-failed`.
+ *
+ * `reason` is the rejection's message, truncated to a short string so
+ * Umami stays under its per-property size limit and so we don't ship
+ * arbitrary chunk URLs into analytics.
+ */
+export interface TracedChunkLoadFailedData {
+    reason: string;
+}
+
+/**
  * Inject the Umami tracking script if a website ID is configured.
  *
  * Call exactly once, early in app startup, before any rendering.
@@ -86,13 +109,18 @@ export function initAnalytics(): void {
 /**
  * Send a typed analytics event.
  *
- * Drops the call silently when `window.umami` is undefined (script
- * hasn't loaded, is blocked, or analytics aren't configured for this
- * build). Never throws.
+ * Drops the call silently when `window` is undefined (e.g. node-based
+ * unit tests of layers that now call `track()` from non-jsdom suites)
+ * or when `window.umami` is undefined (script hasn't loaded, is
+ * blocked, or analytics aren't configured for this build). Never
+ * throws.
  */
 export function track(name: 'new-game-started', data: NewGameData): void;
 export function track(name: 'puzzle-completed', data: PuzzleCompletedData): void;
 export function track(name: 'puzzle-shared', data: PuzzleSharedData): void;
+export function track(name: 'traced-chunk-loaded', data: TracedChunkLoadedData): void;
+export function track(name: 'traced-chunk-load-failed', data: TracedChunkLoadFailedData): void;
 export function track(name: string, data: object): void {
+    if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);
 }
