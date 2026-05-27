@@ -15,7 +15,17 @@
  * keeps doing the dispatch — no re-registration is required.
  */
 
+import { track } from '../../analytics/index.js';
 import type { TabGenerator } from './plugin-types.js';
+
+const REASON_MAX_LENGTH = 200;
+
+function describeFailure(err: unknown): string {
+    const raw = err instanceof Error ? err.message : String(err);
+    return raw.length > REASON_MAX_LENGTH
+        ? raw.slice(0, REASON_MAX_LENGTH)
+        : raw;
+}
 
 let preloadPromise: Promise<void> | null = null;
 let realGenerator: TabGenerator | null = null;
@@ -45,13 +55,24 @@ export const tracedTabGeneratorStub: TabGenerator = {
  * deploy hash mismatch, offline), the cached promise is cleared so
  * the next call retries from scratch. The rejection is still
  * propagated to the awaiting caller.
+ *
+ * Emits one analytics event per actual import attempt:
+ * `traced-chunk-loaded` (with measured `durationMs`) on success, or
+ * `traced-chunk-load-failed` (with `reason`) on rejection. Repeat
+ * calls that return the cached promise emit nothing, so the events
+ * count real fetches rather than awaits.
  */
 export function preloadTracedTabGenerator(): Promise<void> {
     if (preloadPromise) return preloadPromise;
+    const startedAt = performance.now();
     const inflight = import('./traced-tab-generator.js').then((m) => {
         realGenerator = m.tracedTabGenerator;
+        track('traced-chunk-loaded', {
+            durationMs: Math.round(performance.now() - startedAt),
+        });
     }).catch((err) => {
         if (preloadPromise === inflight) preloadPromise = null;
+        track('traced-chunk-load-failed', { reason: describeFailure(err) });
         throw err;
     });
     preloadPromise = inflight;

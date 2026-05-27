@@ -88,4 +88,26 @@ describe('track', () => {
             });
         }).not.toThrow();
     });
+
+    it('forwards traced-chunk-loaded with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = {
+            track: umamiTrack,
+        };
+
+        track('traced-chunk-loaded', { durationMs: 42 });
+
+        expect(umamiTrack).toHaveBeenCalledWith('traced-chunk-loaded', { durationMs: 42 });
+    });
+
+    it('forwards traced-chunk-load-failed with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = {
+            track: umamiTrack,
+        };
+
+        track('traced-chunk-load-failed', { reason: 'network' });
+
+        expect(umamiTrack).toHaveBeenCalledWith('traced-chunk-load-failed', { reason: 'network' });
+    });
 });
