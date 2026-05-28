@@ -123,13 +123,22 @@ export interface TracedChunkLoadFailedData {
  * Data attached to `unhandled-error` — the app-wide backstop for async
  * failures that no local `try/catch` handled.
  *
- * `kind` distinguishes a rejected promise from a thrown exception.
+ * `source` is the channel that caught it: a rejected promise or a
+ * thrown exception. (Named `source`, not `kind`, to avoid colliding
+ * with the failure-class `kind` on {@link TracedChunkLoadFailedData} —
+ * the two carry different semantics.)
+ *
+ * `name` is the low-cardinality bucket for aggregation/alerting: the
+ * thrown value's constructor name (`TypeError`, `RangeError`, …), or
+ * `'unknown'` when the rejection/error value isn't an `Error`.
+ *
  * `reason` is the sanitized message (URLs/extension origins redacted,
  * empty falls back to `'unknown'`, length-capped); see
  * {@link import('./sanitize-error-reason.js').sanitizeErrorReason}.
  */
 export interface UnhandledErrorData {
-    kind: 'rejection' | 'error';
+    source: 'rejection' | 'error';
+    name: string;
     reason: string;
 }
 
