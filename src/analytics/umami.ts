@@ -79,12 +79,15 @@ export interface TracedChunkPreloadStartedData {
  * `durationMs` is the wall-clock time between the initiating call that
  * started the in-flight import (not necessarily the very first call —
  * the cache resets per attempt after a failure) and the import
- * settling, i.e. real-user preload latency. Rounded to integer ms.
+ * settling, i.e. real-user preload latency. Rounded to 0.1 ms so warm
+ * sub-millisecond hits don't all collapse to `0`.
  *
- * `cacheState` splits a cold network fetch from an HTTP-cache hit
- * (derived from the chunk's Resource Timing `transferSize`) so the
- * latency metric isn't an average of the two; `'unknown'` when the
- * timing entry isn't available.
+ * `cacheState` separates the latency populations so the metric isn't an
+ * average across them: `cold` (full network fetch), `warm` (served from
+ * cache, no network), and `revalidated` (a 304 round trip — headers
+ * only, body from cache). Derived from the chunk's Resource Timing
+ * entry; `'unknown'` when no usable entry is available (API absent or
+ * the entry was evicted from a full buffer — the two aren't separable).
  *
  * `attempt` is the 1-based attempt counter for this client session, so
  * a retry after a failure is distinguishable from an unrelated cold
@@ -92,7 +95,7 @@ export interface TracedChunkPreloadStartedData {
  */
 export interface TracedChunkLoadedData {
     durationMs: number;
-    cacheState: 'cold' | 'warm' | 'unknown';
+    cacheState: 'cold' | 'warm' | 'revalidated' | 'unknown';
     attempt: number;
 }
 

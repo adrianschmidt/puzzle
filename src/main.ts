@@ -116,6 +116,13 @@ app.addEventListener('contextmenu', (e) => {
 
 initAnalytics();
 
+// Resource Timing entries back the traced-chunk `cacheState` dimension
+// (see detectCacheState in traced-tab-loader.ts). The 250-entry default
+// buffer can evict the chunk's entry on long-lived PWA sessions, which
+// would degrade the signal to `unknown`; a larger buffer keeps it
+// reliable at negligible memory cost.
+performance.setResourceTimingBufferSize?.(500);
+
 // Display app version in bottom-right corner.
 // Injected at build time by the deploy workflow via VITE_APP_VERSION.
 const appVersion = import.meta.env.VITE_APP_VERSION as string | undefined;

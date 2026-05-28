@@ -30,8 +30,9 @@ function describeFailure(err: unknown): string {
     const raw = err instanceof Error ? err.message : String(err);
     const redacted = raw
         .replace(/https?:\/\/\S+/gi, '<url>')
-        .replace(/chrome-extension:\/\/\S+/gi, '<ext>')
-        .replace(/moz-extension:\/\/\S+/gi, '<ext>')
+        // Covers chrome-/moz-/safari-web-/ms-browser-extension and the
+        // bare `extension://` form, so ad-blocker origins never ship.
+        .replace(/[a-z-]*extension:\/\/\S+/gi, '<ext>')
         .trim();
     const reason = redacted || 'unknown';
     return reason.length > REASON_MAX_LENGTH
@@ -44,7 +45,8 @@ function describeFailure(err: unknown): string {
  * high-cardinality raw `reason`. Matches the phrasings the major
  * engines use for a failed dynamic `import()` (Chromium "Failed to
  * fetch", Firefox "error loading", Safari "Importing a module script
- * failed") and for a parse/eval failure of the fetched chunk.
+ * failed"), and groups parse/eval failures of the fetched chunk —
+ * including the missing-export invariant below — under `parse`.
  */
 function classifyFailure(reason: string): 'network' | 'parse' | 'unknown' {
     const msg = reason.toLowerCase();
@@ -61,6 +63,7 @@ function classifyFailure(reason: string): 'network' | 'parse' | 'unknown' {
         msg.includes('syntax')
         || msg.includes('unexpected')
         || msg.includes('parse')
+        || msg.includes('export')
     ) {
         return 'parse';
     }
@@ -68,21 +71,58 @@ function classifyFailure(reason: string): 'network' | 'parse' | 'unknown' {
 }
 
 /**
- * Best-effort cache classification for the resolved chunk via the
- * Resource Timing API. A same-origin entry with `transferSize === 0`
- * was served from the HTTP cache (warm); a non-zero transfer was
- * fetched over the network (cold). Returns `'unknown'` when no timing
- * entry is available (API absent, buffer evicted, mocked in tests).
+ * Classify a resolved-chunk timing entry into the latency-relevant
+ * cache states, from transfer size relative to the cached body size
+ * (both populated for our same-origin chunk):
+ *
+ * - `warm`        — `transferSize === 0`: served from cache, no network.
+ * - `revalidated` — a small nonzero transfer below the body size: a 304
+ *                   round trip carried headers only, body from cache.
+ *                   Still pays a round trip, so its latency sits between
+ *                   warm and cold.
+ * - `cold`        — transfer at/above the body size: full download.
+ *
+ * Keeping `revalidated` distinct stops 304s from inflating the
+ * cold-latency distribution this metric exists to measure.
+ * `deliveryType` is intentionally not consulted: it's ambiguous for
+ * 304s across engines and redundant with `transferSize === 0` for a
+ * true cache hit.
  */
-function detectCacheState(): 'cold' | 'warm' | 'unknown' {
+function classifyEntryCache(
+    entry: PerformanceResourceTiming,
+): 'cold' | 'warm' | 'revalidated' {
+    if (entry.transferSize === 0) {
+        return 'warm';
+    }
+    if (entry.encodedBodySize > 0 && entry.transferSize < entry.encodedBodySize) {
+        return 'revalidated';
+    }
+    return 'cold';
+}
+
+/**
+ * Locate the resolved chunk's Resource Timing entry and classify it.
+ *
+ * Returns `'unknown'` when no usable entry is available — the API is
+ * absent (non-browser/jsdom), the entry was evicted from a full
+ * Resource Timing buffer (long-lived PWA sessions; the buffer size is
+ * bumped at boot in main.ts to reduce this), or the import was mocked
+ * in tests. `'unknown'` therefore conflates "unsupported" with
+ * "evicted"; they aren't separable from here.
+ */
+function detectCacheState(): 'cold' | 'warm' | 'revalidated' | 'unknown' {
     if (typeof performance === 'undefined'
         || typeof performance.getEntriesByType !== 'function') {
         return 'unknown';
     }
     const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
     for (let i = entries.length - 1; i >= 0; i--) {
+        // Coupled to the dynamic import below: Vite names the lazy chunk
+        // after its entry module, so the emitted file is
+        // `traced-tab-generator-<hash>.js`. A manualChunks/chunkFileNames
+        // rename would break this match — keep the two in sync.
         if (entries[i].name.includes('traced-tab-generator')) {
-            return entries[i].transferSize === 0 ? 'warm' : 'cold';
+            return classifyEntryCache(entries[i]);
         }
     }
     return 'unknown';
@@ -131,10 +171,18 @@ export function preloadTracedTabGenerator(): Promise<void> {
     const attempt = ++attemptCount;
     const startedAt = performance.now();
     track('traced-chunk-preload-started', { attempt });
+    // The chunk emitted for this specifier is `traced-tab-generator-<hash>.js`;
+    // detectCacheState() matches its Resource Timing entry by that name.
     const inflight = import('./traced-tab-generator.js').then((m) => {
+        if (!m.tracedTabGenerator) {
+            // Chunk fetched and parsed, but the expected export is absent
+            // (a tree-shake / rename regression). Treat as a failure so it
+            // surfaces here instead of as a confusing stub throw later.
+            throw new Error('Traced chunk resolved without a tracedTabGenerator export');
+        }
         realGenerator = m.tracedTabGenerator;
         track('traced-chunk-loaded', {
-            durationMs: Math.round(performance.now() - startedAt),
+            durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
             cacheState: detectCacheState(),
             attempt,
         });
