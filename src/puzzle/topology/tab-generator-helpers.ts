@@ -471,8 +471,13 @@ function farthestAnchorIndex(anchors: Point[]): number {
  * original segment survives between the two bridges (so each bridge's far
  * tangent comes from real template geometry). When neither can be honoured
  * (tab too short), returns the no-removal sentinel.
+ *
+ * Exported for unit tests, which exercise the guard branches directly:
+ * driving the `m < 3`, head-clamp, and "bridges would meet" cases through
+ * the full splice pipeline is brittle (a far-from-chord head is inherently
+ * far in arc distance, so the clamp rarely binds via real templates).
  */
-function computeSpliceZones(
+export function computeSpliceZones(
     segs: readonly BezierSegment[],
     beforeTangent: Point,
     afterTangent: Point,
@@ -562,7 +567,9 @@ function buildLeftBridge(
 /**
  * One cubic from the last surviving anchor to the right splice (anchor m).
  * Leaves the surviving anchor along the preceding segment's tangent (C1);
- * arrives at the splice along the parent tangent.
+ * arrives at the splice along the parent tangent. Control magnitudes =
+ * chord/3, the same cubic-Hermite default `buildLeftBridge` and
+ * smooth-clusters.py use — keep the three in step if you retune it.
  */
 function buildRightBridge(
     segs: readonly BezierSegment[],
