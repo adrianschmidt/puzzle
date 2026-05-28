@@ -10,6 +10,7 @@ import {
     standardTabSplicer,
     DEFAULT_TAB_PLACEMENT,
 } from './tab-generator-helpers.js';
+import { spliceSmoothingChordFraction } from './tab-generator-helpers.js';
 
 function unitTangentLeaving(seg: { cp2: { x: number; y: number }; p3: { x: number; y: number } }) {
     const dx = seg.p3.x - seg.cp2.x;
@@ -129,5 +130,39 @@ describe('smoothedTabSplicer', () => {
         const dx = Math.abs(standardTabIn.x - smoothedTabIn.x);
         const dy = Math.abs(standardTabIn.y - smoothedTabIn.y);
         expect(dx + dy).toBeGreaterThan(1e-3);
+    });
+});
+
+describe('spliceSmoothingChordFraction', () => {
+    const deg = (d: number) => (d * Math.PI) / 180;
+
+    it('is zero at and below the 10° threshold', () => {
+        expect(spliceSmoothingChordFraction(deg(0))).toBe(0);
+        expect(spliceSmoothingChordFraction(deg(10))).toBe(0);
+    });
+
+    it('hits the table breakpoints', () => {
+        expect(spliceSmoothingChordFraction(deg(30))).toBeCloseTo(0.05, 6);
+        expect(spliceSmoothingChordFraction(deg(60))).toBeCloseTo(0.15, 6);
+        expect(spliceSmoothingChordFraction(deg(90))).toBeCloseTo(0.30, 6);
+    });
+
+    it('interpolates linearly between breakpoints', () => {
+        expect(spliceSmoothingChordFraction(deg(45))).toBeCloseTo(0.10, 6);
+        expect(spliceSmoothingChordFraction(deg(20))).toBeCloseTo(0.025, 6);
+    });
+
+    it('clamps flat above 90°', () => {
+        expect(spliceSmoothingChordFraction(deg(120))).toBe(0.30);
+        expect(spliceSmoothingChordFraction(deg(180))).toBe(0.30);
+    });
+
+    it('is monotonically non-decreasing across the range', () => {
+        let prev = -1;
+        for (let d = 0; d <= 180; d += 5) {
+            const v = spliceSmoothingChordFraction(deg(d));
+            expect(v).toBeGreaterThanOrEqual(prev);
+            prev = v;
+        }
     });
 });

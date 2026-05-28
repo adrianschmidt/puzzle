@@ -335,6 +335,40 @@ export const smoothedTabSplicer: TabSplicer = {
 };
 
 /**
+ * Smoothing distance for a splice angle correction, expressed as a
+ * fraction of the tab's splice-to-splice chord. Monotonic
+ * piecewise-linear ramp: 0 at/below 10°, rising to 0.30 at 90° and
+ * clamped flat beyond. A bigger angle correction is spread over a
+ * longer arc (more anchors fall in the smoothing zone).
+ *
+ * Breakpoints are the issue's empirical starting values (issue #371);
+ * retune here after inspecting the seed-1086655870 reference puzzle.
+ */
+const SPLICE_SMOOTHING_RAMP: ReadonlyArray<readonly [number, number]> = [
+    [10, 0.0],
+    [30, 0.05],
+    [60, 0.15],
+    [90, 0.30],
+];
+
+export function spliceSmoothingChordFraction(thetaRadians: number): number {
+    const deg = (thetaRadians * 180) / Math.PI;
+    const ramp = SPLICE_SMOOTHING_RAMP;
+    if (deg <= ramp[0][0]) return 0;
+    const last = ramp[ramp.length - 1];
+    if (deg >= last[0]) return last[1];
+    for (let i = 1; i < ramp.length; i++) {
+        const [d0, v0] = ramp[i - 1];
+        const [d1, v1] = ramp[i];
+        if (deg <= d1) {
+            const t = (deg - d0) / (d1 - d0);
+            return v0 + (v1 - v0) * t;
+        }
+    }
+    return last[1];
+}
+
+/**
  * Adjust the tabCurve's outermost control points so the tangents at
  * the splice points match the parent's tangents there.
  */
