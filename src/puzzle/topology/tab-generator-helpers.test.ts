@@ -232,6 +232,59 @@ describe('smoothedTabSplicer anchor-removal', () => {
         }]);
     }
 
+    // Steep LEFT neck (~73°), shallow RIGHT neck (~8°): on a straight parent
+    // only the left splice removes anchors → exercises the left-only branch.
+    const LEFT_STEEP_ANCHORS: Point[] = [
+        { x: 0.30, y: 0.000 },
+        { x: 0.315, y: 0.050 },
+        { x: 0.35, y: 0.100 },
+        { x: 0.42, y: 0.150 },
+        { x: 0.50, y: 0.170 }, // apex
+        { x: 0.58, y: 0.130 },
+        { x: 0.63, y: 0.060 },
+        { x: 0.69, y: 0.0015 },
+        { x: 0.70, y: 0.000 },
+    ];
+
+    // Mirror: shallow LEFT neck, steep RIGHT neck → right-only branch.
+    const RIGHT_STEEP_ANCHORS: Point[] = [
+        { x: 0.30, y: 0.000 },
+        { x: 0.31, y: 0.0015 },
+        { x: 0.37, y: 0.060 },
+        { x: 0.42, y: 0.130 },
+        { x: 0.50, y: 0.170 }, // apex
+        { x: 0.58, y: 0.150 },
+        { x: 0.65, y: 0.100 },
+        { x: 0.685, y: 0.050 },
+        { x: 0.70, y: 0.000 },
+    ];
+
+    // Near-horizontal necks (~3°) at both ends: on a straight parent θ < 10°,
+    // so neither splice removes anchors → exercises the fallback path.
+    const FLAT_NECK_ANCHORS: Point[] = [
+        { x: 0.30, y: 0.000 },
+        { x: 0.34, y: 0.002 },
+        { x: 0.40, y: 0.080 },
+        { x: 0.45, y: 0.140 },
+        { x: 0.50, y: 0.160 }, // apex
+        { x: 0.55, y: 0.140 },
+        { x: 0.60, y: 0.080 },
+        { x: 0.66, y: 0.002 },
+        { x: 0.70, y: 0.000 },
+    ];
+
+    function expectC1AtBothSplices(result: Curve): void {
+        const N = result.segments.length - 2;
+        const beforeOut = unitTangentLeaving(result.segments[0]);
+        const tabIn = unitTangentEntering(result.segments[1]);
+        expect(tabIn.x).toBeCloseTo(beforeOut.x, 6);
+        expect(tabIn.y).toBeCloseTo(beforeOut.y, 6);
+        const tabOut = unitTangentLeaving(result.segments[N]);
+        const afterIn = unitTangentEntering(result.segments[N + 1]);
+        expect(afterIn.x).toBeCloseTo(tabOut.x, 6);
+        expect(afterIn.y).toBeCloseTo(tabOut.y, 6);
+    }
+
     it('drops near-splice anchors and stays C1 on a strongly curved parent', () => {
         const tmpl = makeTemplate(NECK_HEAVY_ANCHORS);
         const edge = hardCurvedParent();
@@ -258,5 +311,74 @@ describe('smoothedTabSplicer anchor-removal', () => {
         const afterIn = unitTangentEntering(smoothed.segments[N + 1]);
         expect(afterIn.x).toBeCloseTo(tabOut.x, 6);
         expect(afterIn.y).toBeCloseTo(tabOut.y, 6);
+    });
+
+    it('keeps every anchor (fallback) on a near-straight parent', () => {
+        const tmpl = makeTemplate(FLAT_NECK_ANCHORS);
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const placement = { tCenter: 0.5, isTab: true };
+
+        const standard = standardTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+        const smoothed = smoothedTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+
+        // Near-horizontal necks → θ < 10° on a straight parent → no removal.
+        expect(smoothed.segments.length).toBe(standard.segments.length);
+    });
+
+    it('preserves the head anchor under a large correction', () => {
+        const tmpl = makeTemplate(NECK_HEAVY_ANCHORS);
+        const edge = hardCurvedParent();
+        const placement = { tCenter: 0.5, isTab: true };
+
+        const standard = standardTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+        const smoothed = smoothedTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+
+        // The head (anchor farthest from the splice chord) is untouched, so
+        // it appears at the same world position in both results.
+        const apexStd = farthestTabAnchor(standard);
+        const apexSm = farthestTabAnchor(smoothed);
+        expect(apexSm.x).toBeCloseTo(apexStd.x, 3);
+        expect(apexSm.y).toBeCloseTo(apexStd.y, 3);
+    });
+
+    it('builds a left-only bridge when only the left splice angle is large', () => {
+        const tmpl = makeTemplate(LEFT_STEEP_ANCHORS);
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const placement = { tCenter: 0.5, isTab: true };
+
+        const standard = standardTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+        const smoothed = smoothedTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+
+        expect(smoothed.segments.length).toBeLessThan(standard.segments.length);
+        expectC1AtBothSplices(smoothed);
+    });
+
+    it('builds a right-only bridge when only the right splice angle is large', () => {
+        const tmpl = makeTemplate(RIGHT_STEEP_ANCHORS);
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const placement = { tCenter: 0.5, isTab: true };
+
+        const standard = standardTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+        const smoothed = smoothedTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+
+
+        expect(smoothed.segments.length).toBeLessThan(standard.segments.length);
+        expectC1AtBothSplices(smoothed);
     });
 });
