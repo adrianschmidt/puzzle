@@ -10,8 +10,9 @@ import {
     standardTabSplicer,
     DEFAULT_TAB_PLACEMENT,
 } from './tab-generator-helpers.js';
-import { spliceSmoothingChordFraction } from './tab-generator-helpers.js';
+import { spliceSmoothingChordFraction, computeSpliceZones } from './tab-generator-helpers.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
+import type { BezierSegment } from './curve.js';
 import type { Point } from '../../model/types.js';
 
 function unitTangentLeaving(seg: { cp2: { x: number; y: number }; p3: { x: number; y: number } }) {
@@ -380,5 +381,85 @@ describe('smoothedTabSplicer anchor-removal', () => {
 
         expect(smoothed.segments.length).toBeLessThan(standard.segments.length);
         expectC1AtBothSplices(smoothed);
+    });
+});
+
+describe('computeSpliceZones guard branches', () => {
+    // Build segments through anchors with chord-aligned control points
+    // (cp1/cp2 at 1/3 and 2/3), so each segment's tangent points along its
+    // anchor chord — matching makeTemplate above but yielding BezierSegments.
+    function segsFromAnchors(anchors: Point[]): BezierSegment[] {
+        const segs: BezierSegment[] = [];
+        for (let i = 0; i < anchors.length - 1; i++) {
+            const a = anchors[i];
+            const b = anchors[i + 1];
+            segs.push({
+                p0: a,
+                cp1: { x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 },
+                cp2: { x: a.x + (b.x - a.x) * 2 / 3, y: a.y + (b.y - a.y) * 2 / 3 },
+                p3: b,
+            });
+        }
+        return segs;
+    }
+
+    /** Unit vector perpendicular to (dx, dy) — gives a 90° angle correction. */
+    function perpendicular(dx: number, dy: number): Point {
+        const len = Math.hypot(dx, dy);
+        return { x: -dy / len, y: dx / len };
+    }
+
+    it('removes nothing on a tab too short to keep a surviving core (m < 3)', () => {
+        // Two segments → m = 2. Tangents are irrelevant; the m < 3 guard
+        // returns the no-removal sentinel before any angle math runs.
+        const segs = segsFromAnchors([
+            { x: 0, y: 0 }, { x: 0.5, y: 0.3 }, { x: 1, y: 0 },
+        ]);
+        expect(segs.length).toBe(2);
+        expect(computeSpliceZones(segs, { x: 1, y: 0 }, { x: 1, y: 0 }))
+            .toEqual({ firstSurvL: 1, lastSurvR: 1 });
+    });
+
+    it('clamps the left zone to the head index so the head is never dropped', () => {
+        // Anchors stay close to the chord (head perp distance is small) and
+        // cluster near the left neck, so a 90° left correction (dL = 0.30 of
+        // the unit chord) would walk PAST every interior anchor. The head
+        // clamp must pin firstSurvL to headIndex (= 2) — without it the raw
+        // walk would reach 5. The right side is aligned (θ ≈ 0 → no removal).
+        const anchors: Point[] = [
+            { x: 0.00, y: 0.000 },
+            { x: 0.05, y: 0.010 },
+            { x: 0.10, y: 0.025 }, // head: largest perp distance from the chord
+            { x: 0.15, y: 0.010 },
+            { x: 0.20, y: 0.005 },
+            { x: 1.00, y: 0.000 },
+        ];
+        const segs = segsFromAnchors(anchors);
+        const beforeTangent = perpendicular(0.05, 0.010); // ⟂ left neck → θ = 90°
+        const afterTangent = { x: 1, y: 0 };               // ∥ right neck → θ ≈ 0
+        const zones = computeSpliceZones(segs, beforeTangent, afterTangent);
+        expect(zones.firstSurvL).toBe(2); // === headIndex: the clamp is load-bearing
+        expect(zones.lastSurvR).toBe(segs.length - 1); // 5: aligned side keeps all
+    });
+
+    it('removes nothing when both zones would meet at the head', () => {
+        // Symmetric short tab with the head in the middle (index 2). A 90°
+        // correction at BOTH splices drives each raw zone up to the head, so
+        // after clamping firstSurvL === lastSurvR === headIndex. With no
+        // original segment left between the bridges, the disjoint guard
+        // returns the no-removal sentinel rather than a degenerate two-bridge
+        // tab.
+        const anchors: Point[] = [
+            { x: 0.00, y: 0.000 },
+            { x: 0.05, y: 0.010 },
+            { x: 0.10, y: 0.025 }, // head
+            { x: 0.15, y: 0.010 },
+            { x: 0.20, y: 0.000 },
+        ];
+        const segs = segsFromAnchors(anchors);
+        const beforeTangent = perpendicular(0.05, 0.010);  // ⟂ left neck → θ = 90°
+        const afterTangent = perpendicular(-0.05, 0.010);  // ⟂ right neck → θ = 90°
+        expect(computeSpliceZones(segs, beforeTangent, afterTangent))
+            .toEqual({ firstSurvL: 1, lastSurvR: segs.length - 1 });
     });
 });
