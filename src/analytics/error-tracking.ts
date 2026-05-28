@@ -18,6 +18,30 @@ import { track } from './umami.js';
 import { sanitizeErrorReason } from './sanitize-error-reason.js';
 
 /**
+ * Conservatively drop `error` events that are pure noise rather than
+ * signal:
+ *
+ * - Opaque cross-origin script errors. A script loaded without CORS
+ *   surfaces as a bare `"Script error."` with an empty filename and no
+ *   `error` object — the browser strips everything actionable, so it's
+ *   un-triageable.
+ * - Exceptions thrown from browser-extension content scripts, which
+ *   inject into the page but aren't our code (identified by an
+ *   extension-scheme `filename`).
+ *
+ * Kept deliberately narrow so a real application error is never
+ * swallowed. Promise rejections are not filtered: extension content
+ * scripts run in isolated worlds and rarely surface rejections into the
+ * page's realm, so an `unhandledrejection` here is almost always ours.
+ */
+function isIgnorableErrorEvent(event: ErrorEvent): boolean {
+    if (/^script error\.?$/i.test((event.message ?? '').trim())) {
+        return true;
+    }
+    return /^[a-z-]*extension:\/\//i.test(event.filename ?? '');
+}
+
+/**
  * Install the global handlers. Call once at boot, after
  * {@link import('./umami.js').initAnalytics}. No-op when there is no
  * `window` (non-browser/test contexts).
@@ -35,6 +59,7 @@ export function initErrorTracking(): void {
     // window in the capture phase) don't land here — only uncaught
     // script exceptions do.
     window.addEventListener('error', (event) => {
+        if (isIgnorableErrorEvent(event)) return;
         const cause = event.error ?? event.message;
         const reason = sanitizeErrorReason(cause);
         diagnostics.warn('Uncaught error:', cause);
