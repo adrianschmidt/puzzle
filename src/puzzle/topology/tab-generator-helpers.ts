@@ -573,14 +573,14 @@ function buildRightBridge(
     const p0 = segs[lastSurvR].p0; // === anchors[lastSurvR]
     const p3 = segs[m - 1].p3;     // === anchors[m]
     const prev = segs[lastSurvR - 1];
-    const bwd = unitVec(
+    const prevExitDir = unitVec(
         prev.p3.x - prev.cp2.x, prev.p3.y - prev.cp2.y,
         prev.p3.x - prev.p0.x, prev.p3.y - prev.p0.y,
     );
     const mag = Math.hypot(p3.x - p0.x, p3.y - p0.y) / 3;
     return {
         p0,
-        cp1: { x: p0.x + bwd.x * mag, y: p0.y + bwd.y * mag },
+        cp1: { x: p0.x + prevExitDir.x * mag, y: p0.y + prevExitDir.y * mag },
         cp2: { x: p3.x - parentTangent.x * mag, y: p3.y - parentTangent.y * mag },
         p3,
     };
@@ -612,7 +612,7 @@ function rotateLastCp(seg: BezierSegment, tangent: Point): BezierSegment {
  */
 function alignOutermostOnly(
     prepared: PreparedTab,
-    segs: BezierSegment[],
+    segs: readonly BezierSegment[],
     beforeTangent: Point,
     afterTangent: Point,
 ): PreparedTab {
