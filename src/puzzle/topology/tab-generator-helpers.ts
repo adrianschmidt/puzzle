@@ -369,49 +369,262 @@ export function spliceSmoothingChordFraction(thetaRadians: number): number {
 }
 
 /**
- * Adjust the tabCurve's outermost control points so the tangents at
- * the splice points match the parent's tangents there.
+ * Bring the tab to a C1 (smooth-direction) join with the parent at both
+ * splices. On a near-straight parent the angle correction is tiny and we
+ * just rotate the outermost control point (the original behaviour). On a
+ * highly-curved parent the correction is large, so we spread it: drop the
+ * template anchors within a splice-angle-scaled zone of each splice and
+ * bridge the gap with one cubic that leaves the splice along the parent's
+ * tangent. This avoids the sharp corner the single-segment rotation leaves
+ * on curved parents (issue #371, Variant B).
+ *
+ * Pure post-processing on the already-spliced tab — no PRNG involvement,
+ * so the share-link contract is unaffected.
  */
 function alignTangentsAtSplice(prepared: PreparedTab): PreparedTab {
-    const { before, tabCurve, after } = prepared;
-
-    const beforeTangent = tangentAtEnd(before);  // direction of parent travel leaving before.end
-    const afterTangent = tangentAtStart(after);  // direction of parent travel entering after.start
-
-    const segs = tabCurve.segments.slice();
+    const { before, after } = prepared;
+    const segs = prepared.tabCurve.segments.slice();
     if (segs.length === 0) return prepared;
 
-    // Tab's first segment: rotate cp1 around p0 so (cp1 - p0) is
-    // parallel to beforeTangent, preserving |p0 → cp1|.
-    const first = segs[0];
-    const cp1Distance = Math.hypot(first.cp1.x - first.p0.x, first.cp1.y - first.p0.y);
-    if (cp1Distance > 1e-9) {
-        segs[0] = {
-            ...first,
-            cp1: {
-                x: first.p0.x + beforeTangent.x * cp1Distance,
-                y: first.p0.y + beforeTangent.y * cp1Distance,
-            },
-        };
+    const beforeTangent = tangentAtEnd(before);
+    const afterTangent = tangentAtStart(after);
+
+    const { firstSurvL, lastSurvR } = computeSpliceZones(
+        segs, beforeTangent, afterTangent,
+    );
+
+    const leftRemoves = firstSurvL > 1;
+    const rightRemoves = lastSurvR < segs.length - 1;
+
+    if (!leftRemoves && !rightRemoves) {
+        // Small angles at both ends: preserve the original behaviour of
+        // rotating just the outermost cp at each splice.
+        return alignOutermostOnly(prepared, segs, beforeTangent, afterTangent);
     }
 
-    // Tab's last segment: rotate cp2 around p3 so (p3 - cp2) is
-    // parallel to afterTangent (parent's direction entering p3),
-    // preserving |p3 → cp2|.
-    const lastIdx = segs.length - 1;
-    const last = segs[lastIdx];
-    const cp2Distance = Math.hypot(last.p3.x - last.cp2.x, last.p3.y - last.cp2.y);
-    if (cp2Distance > 1e-9) {
-        segs[lastIdx] = {
-            ...last,
-            cp2: {
-                x: last.p3.x - afterTangent.x * cp2Distance,
-                y: last.p3.y - afterTangent.y * cp2Distance,
-            },
-        };
+    const m = segs.length;
+    const result: BezierSegment[] = [];
+
+    // Left end.
+    if (leftRemoves) {
+        result.push(buildLeftBridge(segs, firstSurvL, beforeTangent));
+    } else {
+        result.push(rotateFirstCp(segs[0], beforeTangent));
     }
 
-    return { before, tabCurve: new Curve(segs), after };
+    // Surviving original middle segments.
+    const midStart = leftRemoves ? firstSurvL : 1;
+    const midEnd = rightRemoves ? lastSurvR - 1 : m - 2;
+    for (let i = midStart; i <= midEnd; i++) {
+        result.push(segs[i]);
+    }
+
+    // Right end.
+    if (rightRemoves) {
+        result.push(buildRightBridge(segs, lastSurvR, afterTangent));
+    } else {
+        result.push(rotateLastCp(segs[m - 1], afterTangent));
+    }
+
+    return { before, tabCurve: new Curve(result), after };
+}
+
+/** Angle in radians between two unit vectors. */
+function angleBetweenUnit(a: Point, b: Point): number {
+    const dot = Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y));
+    return Math.acos(dot);
+}
+
+/** Unit vector (dx, dy), falling back to (fbx, fby) when ~zero length. */
+function unitVec(dx: number, dy: number, fbx: number, fby: number): Point {
+    const len = Math.hypot(dx, dy);
+    return len < 1e-9 ? { x: fbx, y: fby } : { x: dx / len, y: dy / len };
+}
+
+/**
+ * Index of the interior anchor farthest (perpendicular distance) from the
+ * chord between the first and last anchors — i.e. the tab's head. Used to
+ * stop the smoothing zones from ever consuming the head.
+ */
+function farthestAnchorIndex(anchors: Point[]): number {
+    const a = anchors[0];
+    const b = anchors[anchors.length - 1];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const nx = -(b.y - a.y) / len;
+    const ny = (b.x - a.x) / len;
+    let best = 1;
+    let bestDist = -1;
+    for (let i = 1; i < anchors.length - 1; i++) {
+        const d = Math.abs((anchors[i].x - a.x) * nx + (anchors[i].y - a.y) * ny);
+        if (d > bestDist) { bestDist = d; best = i; }
+    }
+    return best;
+}
+
+/**
+ * Decide which anchors survive at each end. Returns the index of the first
+ * surviving anchor from the left (`firstSurvL`, >= 1) and the last surviving
+ * anchor from the right (`lastSurvR`, <= m-1). `firstSurvL === 1` /
+ * `lastSurvR === m-1` mean "no removal at that end".
+ *
+ * Guards: the head anchor never falls inside a zone, and at least one
+ * original segment survives between the two bridges (so each bridge's far
+ * tangent comes from real template geometry). When neither can be honoured
+ * (tab too short), returns the no-removal sentinel.
+ */
+function computeSpliceZones(
+    segs: readonly BezierSegment[],
+    beforeTangent: Point,
+    afterTangent: Point,
+): { firstSurvL: number; lastSurvR: number } {
+    const m = segs.length;
+    const noRemoval = { firstSurvL: 1, lastSurvR: m - 1 };
+    if (m < 3) return noRemoval;
+
+    const anchors: Point[] = [segs[0].p0, ...segs.map(s => s.p3)];
+    const chord = Math.hypot(
+        anchors[m].x - anchors[0].x,
+        anchors[m].y - anchors[0].y,
+    );
+    if (chord < 1e-9) return noRemoval;
+
+    const headIndex = farthestAnchorIndex(anchors);
+
+    // Left zone: walk inward from anchor 0 while within dL.
+    const leftNatural = unitVec(
+        segs[0].cp1.x - segs[0].p0.x, segs[0].cp1.y - segs[0].p0.y,
+        segs[0].p3.x - segs[0].p0.x, segs[0].p3.y - segs[0].p0.y,
+    );
+    const dL = spliceSmoothingChordFraction(
+        angleBetweenUnit(beforeTangent, leftNatural),
+    ) * chord;
+    let firstSurvL = 1;
+    let cum = 0;
+    for (let i = 1; i < m; i++) {
+        cum += Math.hypot(
+            anchors[i].x - anchors[i - 1].x, anchors[i].y - anchors[i - 1].y,
+        );
+        if (cum < dL) firstSurvL = i + 1; else break;
+    }
+    firstSurvL = Math.min(firstSurvL, headIndex);
+
+    // Right zone: walk inward from anchor m while within dR.
+    const rightNatural = unitVec(
+        segs[m - 1].p3.x - segs[m - 1].cp2.x, segs[m - 1].p3.y - segs[m - 1].cp2.y,
+        segs[m - 1].p3.x - segs[m - 1].p0.x, segs[m - 1].p3.y - segs[m - 1].p0.y,
+    );
+    const dR = spliceSmoothingChordFraction(
+        angleBetweenUnit(afterTangent, rightNatural),
+    ) * chord;
+    let lastSurvR = m - 1;
+    cum = 0;
+    for (let i = m - 1; i >= 1; i--) {
+        cum += Math.hypot(
+            anchors[i + 1].x - anchors[i].x, anchors[i + 1].y - anchors[i].y,
+        );
+        if (cum < dR) lastSurvR = i - 1; else break;
+    }
+    lastSurvR = Math.max(lastSurvR, headIndex);
+
+    // Need >= 1 surviving original segment strictly between the bridges.
+    if (lastSurvR < firstSurvL + 1) return noRemoval;
+
+    return { firstSurvL, lastSurvR };
+}
+
+/**
+ * One cubic from the left splice (anchor 0) to the first surviving anchor.
+ * Leaves the splice along the parent tangent; arrives along the surviving
+ * segment's forward tangent (C1 with surviving geometry). Control magnitudes
+ * = chord/3 (cubic-Hermite default), matching smooth-clusters.py.
+ */
+function buildLeftBridge(
+    segs: readonly BezierSegment[],
+    firstSurvL: number,
+    parentTangent: Point,
+): BezierSegment {
+    const p0 = segs[0].p0;
+    const surviving = segs[firstSurvL];
+    const p3 = surviving.p0; // === anchors[firstSurvL]
+    const fwd = unitVec(
+        surviving.cp1.x - surviving.p0.x, surviving.cp1.y - surviving.p0.y,
+        surviving.p3.x - surviving.p0.x, surviving.p3.y - surviving.p0.y,
+    );
+    const mag = Math.hypot(p3.x - p0.x, p3.y - p0.y) / 3;
+    return {
+        p0,
+        cp1: { x: p0.x + parentTangent.x * mag, y: p0.y + parentTangent.y * mag },
+        cp2: { x: p3.x - fwd.x * mag, y: p3.y - fwd.y * mag },
+        p3,
+    };
+}
+
+/**
+ * One cubic from the last surviving anchor to the right splice (anchor m).
+ * Leaves the surviving anchor along the preceding segment's tangent (C1);
+ * arrives at the splice along the parent tangent.
+ */
+function buildRightBridge(
+    segs: readonly BezierSegment[],
+    lastSurvR: number,
+    parentTangent: Point,
+): BezierSegment {
+    const m = segs.length;
+    const p0 = segs[lastSurvR].p0; // === anchors[lastSurvR]
+    const p3 = segs[m - 1].p3;     // === anchors[m]
+    const prev = segs[lastSurvR - 1];
+    const bwd = unitVec(
+        prev.p3.x - prev.cp2.x, prev.p3.y - prev.cp2.y,
+        prev.p3.x - prev.p0.x, prev.p3.y - prev.p0.y,
+    );
+    const mag = Math.hypot(p3.x - p0.x, p3.y - p0.y) / 3;
+    return {
+        p0,
+        cp1: { x: p0.x + bwd.x * mag, y: p0.y + bwd.y * mag },
+        cp2: { x: p3.x - parentTangent.x * mag, y: p3.y - parentTangent.y * mag },
+        p3,
+    };
+}
+
+/** Rotate a segment's cp1 onto `tangent`, preserving |p0 -> cp1|. */
+function rotateFirstCp(seg: BezierSegment, tangent: Point): BezierSegment {
+    const d = Math.hypot(seg.cp1.x - seg.p0.x, seg.cp1.y - seg.p0.y);
+    if (d <= 1e-9) return seg;
+    return {
+        ...seg,
+        cp1: { x: seg.p0.x + tangent.x * d, y: seg.p0.y + tangent.y * d },
+    };
+}
+
+/** Rotate a segment's cp2 so (p3 - cp2) is parallel to `tangent`, preserving |p3 -> cp2|. */
+function rotateLastCp(seg: BezierSegment, tangent: Point): BezierSegment {
+    const d = Math.hypot(seg.p3.x - seg.cp2.x, seg.p3.y - seg.cp2.y);
+    if (d <= 1e-9) return seg;
+    return {
+        ...seg,
+        cp2: { x: seg.p3.x - tangent.x * d, y: seg.p3.y - tangent.y * d },
+    };
+}
+
+/**
+ * Original behaviour: rotate only the tab's outermost control points onto
+ * the parent tangents. Used when no anchors fall in either smoothing zone.
+ */
+function alignOutermostOnly(
+    prepared: PreparedTab,
+    segs: BezierSegment[],
+    beforeTangent: Point,
+    afterTangent: Point,
+): PreparedTab {
+    const out = segs.slice();
+    out[0] = rotateFirstCp(out[0], beforeTangent);
+    const lastIdx = out.length - 1;
+    out[lastIdx] = rotateLastCp(out[lastIdx], afterTangent);
+    return {
+        before: prepared.before,
+        tabCurve: new Curve(out),
+        after: prepared.after,
+    };
 }
 
 function tangentAtEnd(curve: Curve): Point {

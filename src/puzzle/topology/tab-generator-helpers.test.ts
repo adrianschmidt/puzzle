@@ -11,6 +11,8 @@ import {
     DEFAULT_TAB_PLACEMENT,
 } from './tab-generator-helpers.js';
 import { spliceSmoothingChordFraction } from './tab-generator-helpers.js';
+import type { TabTemplate } from '../composable/tab-shapes.js';
+import type { Point } from '../../model/types.js';
 
 function unitTangentLeaving(seg: { cp2: { x: number; y: number }; p3: { x: number; y: number } }) {
     const dx = seg.p3.x - seg.cp2.x;
@@ -164,5 +166,97 @@ describe('spliceSmoothingChordFraction', () => {
             expect(v).toBeGreaterThanOrEqual(prev);
             prev = v;
         }
+    });
+});
+
+/**
+ * A template with closely-spaced neck anchors and a head bump, so a
+ * curved parent's smoothing zone drops a predictable number of anchors.
+ * Control points sit at 1/3 and 2/3 between consecutive anchors
+ * (chord-aligned tangents). 9 anchors → 8 segments; apex at index 4.
+ */
+const NECK_HEAVY_ANCHORS: Point[] = [
+    { x: 0.30, y: 0.00 },
+    { x: 0.32, y: 0.03 },
+    { x: 0.34, y: 0.06 },
+    { x: 0.40, y: 0.13 },
+    { x: 0.50, y: 0.17 }, // apex (head)
+    { x: 0.60, y: 0.13 },
+    { x: 0.66, y: 0.06 },
+    { x: 0.68, y: 0.03 },
+    { x: 0.70, y: 0.00 },
+];
+
+function makeTemplate(anchors: Point[]): TabTemplate {
+    const path: Point[] = [anchors[0]];
+    for (let i = 0; i < anchors.length - 1; i++) {
+        const a = anchors[i];
+        const b = anchors[i + 1];
+        path.push({ x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 });
+        path.push({ x: a.x + (b.x - a.x) * 2 / 3, y: a.y + (b.y - a.y) * 2 / 3 });
+        path.push({ x: b.x, y: b.y });
+    }
+    return { name: 'synthetic', generate: () => path };
+}
+
+/** Tab anchor (segment boundary) farthest from the tab's splice chord. */
+function farthestTabAnchor(result: Curve): Point {
+    const segs = result.segments;
+    const N = segs.length - 2;            // tab occupies segs[1..N]
+    const start = segs[1].p0;
+    const end = segs[N].p3;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const anchors: Point[] = [segs[1].p0, ...segs.slice(1, N + 1).map(s => s.p3)];
+    let best = anchors[0];
+    let bestDist = -1;
+    for (const a of anchors) {
+        const d = Math.abs((a.x - start.x) * nx + (a.y - start.y) * ny);
+        if (d > bestDist) { bestDist = d; best = a; }
+    }
+    return best;
+}
+
+describe('smoothedTabSplicer anchor-removal', () => {
+    // A hard parabola-like parent: tangent at the splices is far from the
+    // splice chord, forcing a large angle correction θ at each splice.
+    function hardCurvedParent(): Curve {
+        return new Curve([{
+            p0: { x: 0, y: 0 },
+            cp1: { x: 0, y: 300 },
+            cp2: { x: 240, y: 300 },
+            p3: { x: 240, y: 0 },
+        }]);
+    }
+
+    it('drops near-splice anchors and stays C1 on a strongly curved parent', () => {
+        const tmpl = makeTemplate(NECK_HEAVY_ANCHORS);
+        const edge = hardCurvedParent();
+        const placement = { tCenter: 0.5, isTab: true };
+
+        const standard = standardTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+        const smoothed = smoothedTabSplicer.splice(
+            edge, placement, tmpl, createSeededRandom(1),
+        )!;
+
+        // At least one anchor was dropped → fewer segments overall.
+        expect(smoothed.segments.length).toBeLessThan(standard.segments.length);
+
+        // Splice is still C1 at both ends.
+        const N = smoothed.segments.length - 2;
+        const beforeOut = unitTangentLeaving(smoothed.segments[0]);
+        const tabIn = unitTangentEntering(smoothed.segments[1]);
+        expect(tabIn.x).toBeCloseTo(beforeOut.x, 6);
+        expect(tabIn.y).toBeCloseTo(beforeOut.y, 6);
+
+        const tabOut = unitTangentLeaving(smoothed.segments[N]);
+        const afterIn = unitTangentEntering(smoothed.segments[N + 1]);
+        expect(afterIn.x).toBeCloseTo(tabOut.x, 6);
+        expect(afterIn.y).toBeCloseTo(tabOut.y, 6);
     });
 });
