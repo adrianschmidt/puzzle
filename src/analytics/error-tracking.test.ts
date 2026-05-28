@@ -64,11 +64,46 @@ describe('initErrorTracking', () => {
     it('falls back to the error event message when no error object is present', () => {
         initErrorTracking();
 
-        window.dispatchEvent(new ErrorEvent('error', { message: 'script parse error' }));
+        window.dispatchEvent(new ErrorEvent('error', { message: 'a real parse failure' }));
 
         expect(umamiTrack).toHaveBeenCalledWith('unhandled-error', {
             kind: 'error',
-            reason: 'script parse error',
+            reason: 'a real parse failure',
+        });
+    });
+
+    it('ignores opaque cross-origin "Script error." events', () => {
+        initErrorTracking();
+
+        window.dispatchEvent(new ErrorEvent('error', { message: 'Script error.', filename: '' }));
+
+        expect(umamiTrack).not.toHaveBeenCalled();
+    });
+
+    it('ignores errors thrown from browser-extension scripts', () => {
+        initErrorTracking();
+
+        window.dispatchEvent(new ErrorEvent('error', {
+            message: 'boom',
+            error: new Error('boom'),
+            filename: 'chrome-extension://abcdefg/content.js',
+        }));
+
+        expect(umamiTrack).not.toHaveBeenCalled();
+    });
+
+    it('still reports a genuine same-origin error with a filename', () => {
+        initErrorTracking();
+
+        window.dispatchEvent(new ErrorEvent('error', {
+            message: 'real boom',
+            error: new Error('real boom'),
+            filename: 'https://app.example/assets/index-abc.js',
+        }));
+
+        expect(umamiTrack).toHaveBeenCalledWith('unhandled-error', {
+            kind: 'error',
+            reason: 'real boom',
         });
     });
 });
