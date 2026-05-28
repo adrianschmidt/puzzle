@@ -20,6 +20,22 @@ describe('sanitizeErrorReason', () => {
         ).toBe('Failed to fetch dynamically imported module: <url>');
     });
 
+    it('redacts non-http URI schemes', () => {
+        expect(sanitizeErrorReason(new Error('socket ws://host:8080/feed dropped')))
+            .toBe('socket <url> dropped');
+        expect(sanitizeErrorReason(new Error('cannot read file:///etc/hosts')))
+            .toBe('cannot read <url>');
+        expect(sanitizeErrorReason(new Error('load failed blob:https://app/9f-uuid')))
+            .toBe('load failed <url>');
+    });
+
+    it('redacts (and bounds) data: URIs that would otherwise eat the budget', () => {
+        const reason = sanitizeErrorReason(
+            new Error(`bad image data:image/png;base64,${'A'.repeat(400)}`),
+        );
+        expect(reason).toBe('bad image <url>');
+    });
+
     it('redacts extension origins across schemes', () => {
         expect(sanitizeErrorReason(new Error('blocked chrome-extension://abc/x.js')))
             .toBe('blocked <ext>');

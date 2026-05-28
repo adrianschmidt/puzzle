@@ -136,10 +136,11 @@ describe('track', () => {
             track: umamiTrack,
         };
 
-        track('unhandled-error', { kind: 'rejection', reason: 'boom' });
+        track('unhandled-error', { source: 'rejection', name: 'Error', reason: 'boom' });
 
         expect(umamiTrack).toHaveBeenCalledWith('unhandled-error', {
-            kind: 'rejection',
+            source: 'rejection',
+            name: 'Error',
             reason: 'boom',
         });
     });
