@@ -61,26 +61,59 @@ export interface PuzzleSharedData {
 }
 
 /**
+ * Data attached to `traced-chunk-preload-started`.
+ *
+ * Fired once per real import attempt (cached-promise calls don't
+ * re-emit), so it's the denominator for the loaded/failed funnel and
+ * makes abandonment observable — a started event with no matching
+ * settle means the user left mid-fetch. `attempt` matches the counter
+ * on the settling event.
+ */
+export interface TracedChunkPreloadStartedData {
+    attempt: number;
+}
+
+/**
  * Data attached to `traced-chunk-loaded`.
  *
- * `durationMs` is the wall-clock time between the first
- * `preloadTracedTabGenerator()` call and the dynamic import settling —
- * i.e. real-user preload latency. Coarse-grained on purpose (rounded
- * integer ms) since sub-ms resolution is not meaningful here.
+ * `durationMs` is the wall-clock time between the initiating call that
+ * started the in-flight import (not necessarily the very first call —
+ * the cache resets per attempt after a failure) and the import
+ * settling, i.e. real-user preload latency. Rounded to integer ms.
+ *
+ * `cacheState` splits a cold network fetch from an HTTP-cache hit
+ * (derived from the chunk's Resource Timing `transferSize`) so the
+ * latency metric isn't an average of the two; `'unknown'` when the
+ * timing entry isn't available.
+ *
+ * `attempt` is the 1-based attempt counter for this client session, so
+ * a retry after a failure is distinguishable from an unrelated cold
+ * load.
  */
 export interface TracedChunkLoadedData {
     durationMs: number;
+    cacheState: 'cold' | 'warm' | 'unknown';
+    attempt: number;
 }
 
 /**
  * Data attached to `traced-chunk-load-failed`.
  *
- * `reason` is the rejection's message, truncated to a short string so
- * Umami stays under its per-property size limit and so we don't ship
- * arbitrary chunk URLs into analytics.
+ * `reason` is the rejection's message with URLs and extension origins
+ * redacted (so per-deploy chunk hashes and ad-blocker extension IDs
+ * don't ship to analytics) and truncated to a bounded length; empty
+ * messages fall back to `'unknown'`.
+ *
+ * `kind` buckets the failure (network / parse / unknown) so events
+ * aggregate cleanly in Umami despite the raw `reason` being
+ * high-cardinality.
+ *
+ * `attempt` is the 1-based attempt counter for this client session.
  */
 export interface TracedChunkLoadFailedData {
     reason: string;
+    kind: 'network' | 'parse' | 'unknown';
+    attempt: number;
 }
 
 /**
@@ -109,15 +142,15 @@ export function initAnalytics(): void {
 /**
  * Send a typed analytics event.
  *
- * Drops the call silently when `window` is undefined (e.g. node-based
- * unit tests of layers that now call `track()` from non-jsdom suites)
- * or when `window.umami` is undefined (script hasn't loaded, is
- * blocked, or analytics aren't configured for this build). Never
- * throws.
+ * Drops the call silently in non-browser environments where there is
+ * no `window` (server-side rendering, node-based unit tests) and when
+ * `window.umami` is undefined (the script hasn't loaded, is blocked, or
+ * analytics aren't configured for this build). Never throws.
  */
 export function track(name: 'new-game-started', data: NewGameData): void;
 export function track(name: 'puzzle-completed', data: PuzzleCompletedData): void;
 export function track(name: 'puzzle-shared', data: PuzzleSharedData): void;
+export function track(name: 'traced-chunk-preload-started', data: TracedChunkPreloadStartedData): void;
 export function track(name: 'traced-chunk-loaded', data: TracedChunkLoadedData): void;
 export function track(name: 'traced-chunk-load-failed', data: TracedChunkLoadFailedData): void;
 export function track(name: string, data: object): void {
