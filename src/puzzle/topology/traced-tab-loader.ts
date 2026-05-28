@@ -16,29 +16,8 @@
  */
 
 import { track } from '../../analytics/index.js';
+import { sanitizeErrorReason } from '../../analytics/sanitize-error-reason.js';
 import type { TabGenerator } from './plugin-types.js';
-
-const REASON_MAX_LENGTH = 200;
-
-/**
- * Turn an arbitrary rejection into a bounded, low-disclosure `reason`
- * string for analytics: strip URLs (per-deploy chunk hashes rotate
- * cardinality) and extension origins (ad-blocker IDs are fingerprints),
- * fall back to `'unknown'` for empty messages, then cap the length.
- */
-function describeFailure(err: unknown): string {
-    const raw = err instanceof Error ? err.message : String(err);
-    const redacted = raw
-        .replace(/https?:\/\/\S+/gi, '<url>')
-        // Covers chrome-/moz-/safari-web-/ms-browser-extension and the
-        // bare `extension://` form, so ad-blocker origins never ship.
-        .replace(/[a-z-]*extension:\/\/\S+/gi, '<ext>')
-        .trim();
-    const reason = redacted || 'unknown';
-    return reason.length > REASON_MAX_LENGTH
-        ? reason.slice(0, REASON_MAX_LENGTH)
-        : reason;
-}
 
 /**
  * Bucket a chunk-load failure so events aggregate despite the
@@ -188,7 +167,7 @@ export function preloadTracedTabGenerator(): Promise<void> {
         });
     }).catch((err) => {
         if (preloadPromise === inflight) preloadPromise = null;
-        const reason = describeFailure(err);
+        const reason = sanitizeErrorReason(err);
         track('traced-chunk-load-failed', {
             reason,
             kind: classifyFailure(reason),

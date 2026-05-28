@@ -120,6 +120,20 @@ export interface TracedChunkLoadFailedData {
 }
 
 /**
+ * Data attached to `unhandled-error` — the app-wide backstop for async
+ * failures that no local `try/catch` handled.
+ *
+ * `kind` distinguishes a rejected promise from a thrown exception.
+ * `reason` is the sanitized message (URLs/extension origins redacted,
+ * empty falls back to `'unknown'`, length-capped); see
+ * {@link import('./sanitize-error-reason.js').sanitizeErrorReason}.
+ */
+export interface UnhandledErrorData {
+    kind: 'rejection' | 'error';
+    reason: string;
+}
+
+/**
  * Inject the Umami tracking script if a website ID is configured.
  *
  * Call exactly once, early in app startup, before any rendering.
@@ -156,6 +170,7 @@ export function track(name: 'puzzle-shared', data: PuzzleSharedData): void;
 export function track(name: 'traced-chunk-preload-started', data: TracedChunkPreloadStartedData): void;
 export function track(name: 'traced-chunk-loaded', data: TracedChunkLoadedData): void;
 export function track(name: 'traced-chunk-load-failed', data: TracedChunkLoadFailedData): void;
+export function track(name: 'unhandled-error', data: UnhandledErrorData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);

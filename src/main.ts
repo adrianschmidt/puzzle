@@ -90,7 +90,7 @@ import {
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
 import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
-import { initAnalytics, track } from './analytics/index.js';
+import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 
 /** Fallback image used when Unsplash is unavailable. */
@@ -115,6 +115,10 @@ app.addEventListener('contextmenu', (e) => {
 });
 
 initAnalytics();
+
+// Global backstop: report unhandled rejections / uncaught errors that
+// no local try/catch handled. Observe-only; never swallows them.
+initErrorTracking();
 
 // Resource Timing entries back the traced-chunk `cacheState` dimension
 // (see detectCacheState in traced-tab-loader.ts). The 250-entry default
