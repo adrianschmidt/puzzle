@@ -89,15 +89,30 @@ describe('track', () => {
         }).not.toThrow();
     });
 
+    it('forwards traced-chunk-preload-started with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = {
+            track: umamiTrack,
+        };
+
+        track('traced-chunk-preload-started', { attempt: 1 });
+
+        expect(umamiTrack).toHaveBeenCalledWith('traced-chunk-preload-started', { attempt: 1 });
+    });
+
     it('forwards traced-chunk-loaded with the typed payload', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = {
             track: umamiTrack,
         };
 
-        track('traced-chunk-loaded', { durationMs: 42 });
+        track('traced-chunk-loaded', { durationMs: 42, cacheState: 'warm', attempt: 1 });
 
-        expect(umamiTrack).toHaveBeenCalledWith('traced-chunk-loaded', { durationMs: 42 });
+        expect(umamiTrack).toHaveBeenCalledWith('traced-chunk-loaded', {
+            durationMs: 42,
+            cacheState: 'warm',
+            attempt: 1,
+        });
     });
 
     it('forwards traced-chunk-load-failed with the typed payload', () => {
@@ -106,8 +121,12 @@ describe('track', () => {
             track: umamiTrack,
         };
 
-        track('traced-chunk-load-failed', { reason: 'network' });
+        track('traced-chunk-load-failed', { reason: 'offline', kind: 'network', attempt: 2 });
 
-        expect(umamiTrack).toHaveBeenCalledWith('traced-chunk-load-failed', { reason: 'network' });
+        expect(umamiTrack).toHaveBeenCalledWith('traced-chunk-load-failed', {
+            reason: 'offline',
+            kind: 'network',
+            attempt: 2,
+        });
     });
 });
