@@ -129,4 +129,18 @@ describe('track', () => {
             attempt: 2,
         });
     });
+
+    it('forwards unhandled-error with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = {
+            track: umamiTrack,
+        };
+
+        track('unhandled-error', { kind: 'rejection', reason: 'boom' });
+
+        expect(umamiTrack).toHaveBeenCalledWith('unhandled-error', {
+            kind: 'rejection',
+            reason: 'boom',
+        });
+    });
 });
