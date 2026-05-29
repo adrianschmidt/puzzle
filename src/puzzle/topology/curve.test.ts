@@ -460,6 +460,14 @@ describe('Curve.boundingBox', () => {
         expect(box.maxX).toBeCloseTo(100);
         expect(box.minY).toBeCloseTo(-50);
         expect(box.maxY).toBeCloseTo(0);
+
+        // The box must contain every point actually on the curve.
+        for (const p of c.sample(16)) {
+            expect(p.x).toBeGreaterThanOrEqual(box.minX - 1e-9);
+            expect(p.x).toBeLessThanOrEqual(box.maxX + 1e-9);
+            expect(p.y).toBeGreaterThanOrEqual(box.minY - 1e-9);
+            expect(p.y).toBeLessThanOrEqual(box.maxY + 1e-9);
+        }
     });
 
     it('unions across multiple segments', () => {
