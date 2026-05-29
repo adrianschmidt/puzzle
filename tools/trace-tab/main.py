@@ -901,10 +901,16 @@ def write_review_png(out_path: Path, result: TraceResult) -> None:
     ax.set_ylim(h, 0)
     ax.set_aspect("equal")
     ax.axis("off")
-    ax.legend(loc="lower center", fontsize=8, ncol=3, framealpha=0.9)
+    # Anchor the legend *below* the axes rather than inside it. The legend is
+    # wider than a narrow portrait crop, so leaving it inside and tight-cropping
+    # let it dominate the saved bbox and clipped the photo away entirely. With
+    # the legend outside the axes and passed as an extra artist, the tight bbox
+    # is the union of the image and the legend, so both stay visible.
+    legend = ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.02),
+                       fontsize=8, ncol=3, framealpha=0.9)
 
-    fig.tight_layout(pad=0)
-    fig.savefig(out_path, dpi=100, bbox_inches="tight")
+    fig.savefig(out_path, dpi=100, bbox_inches="tight",
+                bbox_extra_artists=(legend,))
     plt.close(fig)
 
 
