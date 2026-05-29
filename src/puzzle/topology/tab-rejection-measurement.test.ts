@@ -15,7 +15,8 @@ import { buildDCEL } from './dcel.js';
 import { applyTabs } from './apply-tabs.js';
 import { tracedTabGenerator } from './traced-tab-generator.js';
 
-const RUN = process.env.MEASURE_TABS === '1';
+const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+const RUN = env.MEASURE_TABS === '1';
 
 describe('traced-tab rejection measurement', () => {
     (RUN ? it : it.skip)('reports the flat-edge rate at the user settings', { timeout: 300_000 }, () => {
