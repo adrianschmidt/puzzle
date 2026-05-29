@@ -9,6 +9,7 @@ import {
     getGroupOffsetBounds,
     getGroupLocalBounds,
     getGroupVisualBounds,
+    getGroupImageCentre,
 } from './group-bounds.js';
 import { buildPiecesById, makePiece, makeRectPiece } from '../test-helpers/fixtures.js';
 
@@ -249,6 +250,67 @@ describe('getGroupLocalBounds', () => {
             width: 100,
             height: 40,
         });
+    });
+});
+
+describe('getGroupImageCentre', () => {
+    it('returns the centre of a single piece-body rectangle', () => {
+        const piece = makeSquarePiece(0);
+        const group = makeGroup(0, 999, 999); // position is ignored (local space)
+
+        expect(getGroupImageCentre(group, buildPiecesById([piece]))).toEqual({
+            x: 50,
+            y: 50,
+        });
+    });
+
+    it('ignores protruding tab geometry (image-rectangle centre, not tab bbox)', () => {
+        // The tab bulges up to y=-30; a tab-inclusive bbox centre would be
+        // (50, 35). The image centre uses corner geometry only, so it stays
+        // at the body centre (50, 50).
+        const piece = makeTabbedPiece(0);
+        const group = makeGroup(0, 0, 0);
+
+        expect(getGroupImageCentre(group, buildPiecesById([piece]))).toEqual({
+            x: 50,
+            y: 50,
+        });
+    });
+
+    it('ignores group rotation (works in un-rotated local space)', () => {
+        const piece = makeSquarePiece(0);
+        const group = makeGroup(0, 0, 0);
+        group.rotation = 90;
+
+        expect(getGroupImageCentre(group, buildPiecesById([piece]))).toEqual({
+            x: 50,
+            y: 50,
+        });
+    });
+
+    it('spans the full extent of a multi-piece group', () => {
+        const piece0 = makeSquarePiece(0);
+        const piece1 = makeSquarePiece(1);
+        const group = makeMultiGroup(0, { x: 999, y: 999 }, [
+            [0, { x: 0, y: 0 }],
+            [1, { x: 100, y: 0 }],
+        ]);
+
+        expect(getGroupImageCentre(group, buildPiecesById([piece0, piece1]))).toEqual({
+            x: 100,
+            y: 50,
+        });
+    });
+
+    it('returns the origin for an empty group', () => {
+        const group: PieceGroup = {
+            id: 0,
+            pieces: new Map(),
+            position: { x: 5, y: 5 },
+            rotation: 0,
+        };
+
+        expect(getGroupImageCentre(group, buildPiecesById([]))).toEqual({ x: 0, y: 0 });
     });
 });
 

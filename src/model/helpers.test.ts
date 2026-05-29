@@ -387,4 +387,21 @@ describe('signedAngularDelta', () => {
         expect(signedAngularDelta(720, 0)).toBe(0);
         expect(signedAngularDelta(-90, 0)).toBe(-90);
     });
+
+    // The completion spin (zoomToFitCompletedPuzzle) lands the puzzle upright
+    // by animating to `start + signedAngularDelta(0, start)`. The no-jump
+    // reconciliation that follows assumes that target is an upright-equivalent
+    // angle (≡ 0 mod 360) reached by a turn of at most 180°. Pin both, so a
+    // future change to the delta convention fails here rather than producing a
+    // visible jump on completion.
+    it('yields an upright-equivalent target within 180° for any start angle', () => {
+        for (let start = 0; start < 360; start += 7.5) {
+            const turn = signedAngularDelta(0, start);
+            const target = start + turn;
+            expect(Math.abs(turn)).toBeLessThanOrEqual(180);
+            // target is a multiple of 360 (upright), measured directly so a
+            // value just under 360 still counts as upright rather than wrapping.
+            expect(target - Math.round(target / 360) * 360).toBeCloseTo(0);
+        }
+    });
 });

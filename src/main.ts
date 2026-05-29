@@ -1,7 +1,7 @@
 import './style.css';
 import { diagnostics } from './diagnostics.js';
 import type { GameState, GridSize } from './model/types.js';
-import { SvgDomRenderer } from './renderer/index.js';
+import { SvgDomRenderer, applyGroupTransform } from './renderer/index.js';
 import { setupInteraction, ViewportTransform, RotationFocus } from './interaction/index.js';
 import {
     createNewGame,
@@ -11,6 +11,7 @@ import {
     applyGatheredPositions,
     getGroupLocalBounds,
     getGroupVisualBounds,
+    getGroupImageCentre,
     type MergeResult,
 } from './game/index.js';
 import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
@@ -49,7 +50,12 @@ import {
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
 import { rotateGroup } from './game/rotate-group.js';
-import { buildGroupIndexes, rotatePoint, localToWorld } from './model/helpers.js';
+import {
+    buildGroupIndexes,
+    rotatePoint,
+    localToWorld,
+    signedAngularDelta,
+} from './model/helpers.js';
 import { reorderGroupsAfterDrop } from './game/z-order.js';
 import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
 import {
@@ -315,35 +321,68 @@ function zoomToFitCompletedPuzzle(
     const screenWidth = app.clientWidth || window.innerWidth;
     const screenHeight = app.clientHeight || window.innerHeight;
 
-    // If the puzzle was completed at a non-zero rotation, rotate the group
-    // back to 0° in parallel with the viewport zoom. Preserve the group's
-    // visual bbox centre in world space so the animation stays smooth.
+    // If the puzzle was completed at a non-zero rotation, spin the group
+    // upright in parallel with the viewport zoom. Two things matter for how
+    // this looks:
+    //
+    //   1. It should spin about the puzzle's own centre, in place — not orbit.
+    //      CSS interpolates `translate(...)` and `rotate(...)` independently,
+    //      so animating both would swing the centre along an arc. Instead we
+    //      pin the rotation's `transform-origin` to the image centre and
+    //      animate the angle only, keeping the centre fixed throughout.
+    //   2. It should take the shortest path (≤180°): 350° spins +10° to land
+    //      upright, not −350° the long way round.
     let groupTransitionCleanup: (() => void) | null = null;
     if (completedGroup.rotation !== 0) {
-        const localBounds = getGroupLocalBounds(completedGroup, gameState.piecesById);
-        const centreLocal = {
-            x: localBounds.minX + localBounds.width / 2,
-            y: localBounds.minY + localBounds.height / 2,
-        };
-        const rotatedCentre = rotatePoint(centreLocal, completedGroup.rotation);
+        const startRotation = completedGroup.rotation;
 
-        completedGroup.position = {
+        // Pivot about the assembled image centre (corner geometry only, so
+        // asymmetric tabs don't offset it). `getGroupImageCentre` works in
+        // un-rotated local space — the same frame `transform-origin` uses.
+        const centreLocal = getGroupImageCentre(completedGroup, gameState.piecesById);
+
+        // Compensate `position` so that, with the origin moved to the centre,
+        // the puzzle stays exactly where it was rendered. Same world point as
+        // before; only its local-space pivot changed.
+        const rotatedCentre = rotatePoint(centreLocal, startRotation);
+        const finalPosition = {
             x: completedGroup.position.x + rotatedCentre.x - centreLocal.x,
             y: completedGroup.position.y + rotatedCentre.y - centreLocal.y,
         };
-        completedGroup.rotation = 0;
+
+        // Shortest signed turn that lands on an upright (0°-equivalent) angle.
+        // e.g. 350° → 360°, 10° → 0°, 200° → 360°.
+        const targetRotation = startRotation + signedAngularDelta(0, startRotation);
 
         const groupEl = app.querySelector(
             `[data-group-id="${completedGroup.id}"]`,
         ) as HTMLElement | null;
         if (groupEl) {
+            // Re-anchor to the centre origin without moving the puzzle (same
+            // angle, compensated position), then force a reflow so this state
+            // becomes the transition's start frame rather than collapsing into
+            // the spin below.
+            groupEl.style.transition = 'none';
+            applyGroupTransform(groupEl, finalPosition, startRotation, centreLocal);
+            groupEl.getBoundingClientRect();
+
+            // Spin about the centre to upright.
             groupEl.style.transition = 'transform 0.8s ease-in-out';
+            applyGroupTransform(groupEl, finalPosition, targetRotation, centreLocal);
+
             groupTransitionCleanup = () => {
+                // Settle into the normal representation: origin back at 0,0 and
+                // rotation normalised to 0. Visually identical to the spin's
+                // final frame (targetRotation ≡ 0 mod 360), so no jump.
                 groupEl.style.transition = '';
+                renderer.renderState(gameState);
             };
         }
 
-        renderer.renderState(gameState);
+        // Commit the upright resting state. Used immediately below to frame the
+        // viewport on the final orientation, and as the model's settled value.
+        completedGroup.position = finalPosition;
+        completedGroup.rotation = 0;
     }
 
     // Compute the visual bounds of the completed group in its current position
@@ -1030,6 +1069,11 @@ const rotateHandle = createRotateHandle({
     getGroupPivotWorld: (groupId) => {
         const group = gameState?.groupsById.get(groupId);
         if (!group || !gameState) return null;
+        // Interactive rotation pivots about the tab-inclusive bounds centre so
+        // the handle tracks the visible footprint of a mid-assembly group with
+        // exposed tabs/blanks. (The completion spin instead pivots about the
+        // corner-only image centre via getGroupImageCentre — a deliberately
+        // different point, since a solved puzzle has a flat border.)
         const bounds = getGroupLocalBounds(group, gameState.piecesById);
         const centreLocal = {
             x: bounds.minX + bounds.width / 2,

@@ -36,6 +36,30 @@ const PIECE_PADDING = 30;
  */
 const HIT_AREA_EXPANSION_PX = 8;
 
+/**
+ * Write a group container's CSS transform.
+ *
+ * Single source of truth for the `translate(...) rotate(...)` string so
+ * callers outside the renderer (e.g. the completion spin animation) stay in
+ * sync with how groups are normally rendered.
+ *
+ * `origin` is the rotation pivot in the group's local coordinate space,
+ * written as the CSS `transform-origin`. It defaults to the group origin
+ * `(0, 0)` — the renderer's convention, where rotation pivots about that
+ * origin and `group.position` places it in world space. Pass a local point
+ * (e.g. the puzzle centre) to pivot about somewhere else.
+ */
+export function applyGroupTransform(
+    el: HTMLElement,
+    position: Point,
+    rotation: number,
+    origin: Point = { x: 0, y: 0 },
+): void {
+    el.style.transformOrigin = `${origin.x}px ${origin.y}px`;
+    el.style.transform =
+        `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`;
+}
+
 export class SvgDomRenderer implements Renderer {
     private tableEl: HTMLElement | null = null;
     private groupElements = new Map<number, HTMLElement>();
@@ -241,10 +265,7 @@ export class SvgDomRenderer implements Renderer {
             this.groupElements.set(group.id, groupEl);
         }
 
-        const rotateDeg = group.rotation;
-        groupEl.style.transformOrigin = '0 0';
-        groupEl.style.transform =
-            `translate(${group.position.x}px, ${group.position.y}px) rotate(${rotateDeg}deg)`;
+        applyGroupTransform(groupEl, group.position, group.rotation);
 
         // Track which pieces should be in this group
         const expectedPieceIds = new Set(group.pieces.keys());
