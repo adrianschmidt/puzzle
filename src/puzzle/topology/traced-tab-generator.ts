@@ -43,6 +43,11 @@ export const tracedTabGenerator: TabGenerator = {
         // All PRNG draws up front: placement (2 calls) + template path (1).
         const placement = computeTabPlacement(edge, DEFAULT_TAB_PLACEMENT, random);
         if (!placement) return;
+        // Draws the base template path. NOTE: this also fires the traced-tab
+        // debug recorder, which captures the BASE rung's params — if a later
+        // rung (shrink / centre / flip) is the one committed, the recorded
+        // geometry won't match the committed tab (edge/accepted correlation
+        // is still correct; only the recorded scale/flip/mid may differ).
         const basePath = tracedTabTemplate.generate(random);
 
         const { tCenter, isTab } = placement;
