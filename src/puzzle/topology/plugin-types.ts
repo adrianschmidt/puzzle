@@ -65,6 +65,18 @@ export interface TabGenerator {
      *   to leave the edge flat
      */
     generate(edge: Curve, random: () => number, config: unknown): Curve | null;
+    /**
+     * Optional: yield an ordered set of candidate curves (best first) for
+     * one edge. When present, the framework commits the FIRST candidate
+     * that passes its accept gates (endpoint match, no fold-back, no new
+     * crossing) and ignores the rest; if none pass, the edge stays flat.
+     *
+     * All PRNG draws MUST happen before the first yield, so per-edge
+     * randomness consumption is independent of how many candidates the
+     * framework ends up trying. Generators without retry semantics omit
+     * this and rely on {@link generate}.
+     */
+    generateVariants?(edge: Curve, random: () => number, config: unknown): Iterable<Curve>;
 }
 
 /**

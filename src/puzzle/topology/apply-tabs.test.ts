@@ -277,6 +277,77 @@ describe('applyTabs', () => {
         expect(internal.curve).not.toBe(before);
     });
 
+    it('commits the first acceptable variant from generateVariants', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+        const bump = (edge: Curve, perp: number): Curve => {
+            const mid = edge.pointAt(0.5);
+            const dx = edge.end.x - edge.start.x;
+            const dy = edge.end.y - edge.start.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const px = -dy / len * perp, py = dx / len * perp;
+            return Curve.fromBezierPath([
+                edge.start, edge.start,
+                { x: mid.x + px, y: mid.y + py },
+                { x: mid.x + px, y: mid.y + py },
+                { x: mid.x + px, y: mid.y + py },
+                edge.end, edge.end,
+            ]);
+        };
+        // First variant pokes 1000px (crosses neighbours -> rejected);
+        // second is a 1px bump (accepted).
+        const ladder: TabGenerator = {
+            id: 'ladder',
+            generate: (edge) => bump(edge, 1000),
+            *generateVariants(edge) {
+                yield bump(edge, 1000);
+                yield bump(edge, 1);
+            },
+        };
+        const internal = graph.halfEdges.find(he =>
+            !he.face?.isOuter && !he.twin.face?.isOuter)!;
+        const before = internal.curve;
+        applyTabs(graph, ladder, makeSeededRandom(1));
+        expect(internal.curve).not.toBe(before);
+    });
+
+    it('leaves the edge flat when every variant is rejected', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+        const farOut = (edge: Curve): Curve => {
+            const mid = edge.pointAt(0.5);
+            return Curve.fromBezierPath([
+                edge.start, edge.start,
+                { x: mid.x, y: mid.y + 1000 },
+                { x: mid.x, y: mid.y + 1000 },
+                { x: mid.x, y: mid.y + 1000 },
+                edge.end, edge.end,
+            ]);
+        };
+        const allBad: TabGenerator = {
+            id: 'all-bad',
+            generate: (edge) => farOut(edge),
+            *generateVariants(edge) { yield farOut(edge); yield farOut(edge); },
+        };
+        const internal = graph.halfEdges.find(he =>
+            !he.face?.isOuter && !he.twin.face?.isOuter)!;
+        const before = internal.curve;
+        applyTabs(graph, allBad, makeSeededRandom(1));
+        expect(internal.curve).toBe(before);
+    });
+
+    it('fires onCandidate exactly once per eligible edge (variant path)', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+        const gen: TabGenerator = {
+            id: 'twovariants',
+            generate: () => null,
+            *generateVariants() { /* yields nothing -> flat */ },
+        };
+        let calls = 0;
+        applyTabs(graph, gen, makeSeededRandom(1), {
+            onCandidate: () => { calls++; },
+        });
+        expect(calls).toBe(4); // 2x2 grid has 4 internal shared edges
+    });
+
     it('accepts a normal one-sided tab bump (sanity check)', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 

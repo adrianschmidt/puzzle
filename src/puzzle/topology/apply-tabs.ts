@@ -35,10 +35,9 @@ export interface ApplyTabsOptions {
     /** Tab-generator-specific config, forwarded to TabGenerator.generate. */
     tabConfig?: unknown;
     /**
-     * Optional dev-time hook fired once per candidate produced by the
-     * generator (regardless of whether the candidate was ultimately
-     * accepted). Receives the half-edge it was generated for and whether
-     * the framework's collision / fold-back checks let it through.
+     * Optional dev-time hook fired once per eligible edge with whether
+     * a tab was committed. Receives the half-edge and whether the
+     * framework's collision / fold-back checks let a candidate through.
      *
      * Intended for debug instrumentation (e.g. correlating each tab
      * with the piece it ended up on). Production paths leave this
@@ -87,27 +86,43 @@ export function applyTabs(
         };
         if (!policy(view)) continue;
 
-        const candidate = generator.generate(he.curve, random, tabConfig);
-        if (!candidate) {
-            options.onCandidate?.(he, false);
-            continue;
+        let chosen: Curve | null = null;
+        if (generator.generateVariants) {
+            for (const variant of generator.generateVariants(he.curve, random, tabConfig)) {
+                if (!variant) continue;
+                if (isAcceptable(variant, he, graph, boxOf)) { chosen = variant; break; }
+            }
+        } else {
+            const candidate = generator.generate(he.curve, random, tabConfig);
+            if (candidate && isAcceptable(candidate, he, graph, boxOf)) {
+                chosen = candidate;
+            }
         }
 
-        const accepted =
-            endpointsMatch(candidate, he.curve) &&
-            !foldsBackThroughSelf(candidate, he.curve) &&
-            !introducesNewCrossing(candidate, he, graph, boxOf);
-        options.onCandidate?.(he, accepted);
-        if (!accepted) continue;
+        options.onCandidate?.(he, chosen !== null);
+        if (!chosen) continue;
 
-        he.curve = candidate;
-        he.twin.curve = candidate.reverse();
+        he.curve = chosen;
+        he.twin.curve = chosen.reverse();
         boxes.delete(he.id);
         boxes.delete(he.twin.id);
     }
 }
 
 const defaultTabPolicy: TabPolicy = () => true;
+
+function isAcceptable(
+    candidate: Curve,
+    self: HalfEdge,
+    graph: TopologyGraph,
+    boxOf: (he: HalfEdge) => BoundingBox,
+): boolean {
+    return (
+        endpointsMatch(candidate, self.curve) &&
+        !foldsBackThroughSelf(candidate, self.curve) &&
+        !introducesNewCrossing(candidate, self, graph, boxOf)
+    );
+}
 
 function endpointsMatch(candidate: Curve, original: Curve): boolean {
     const ds = pointDist(candidate.start, original.start);
