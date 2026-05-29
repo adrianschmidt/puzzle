@@ -60,8 +60,23 @@ export function prepareTab(
     template: TabTemplate,
     random: () => number,
 ): PreparedTab | null {
-    // Generate tab shape in normalized space
-    let normalizedPath = template.generate(random);
+    return prepareTabFromPath(curve, tCenter, isTab, template.generate(random));
+}
+
+/**
+ * Like {@link prepareTab} but takes an already-generated normalized tab
+ * path instead of a template + PRNG. Pure and deterministic — consumes
+ * no randomness — so the same path can be re-spliced (shrunk, moved,
+ * sign-flipped) without advancing the PRNG. `tabPath` is in the tab
+ * orientation (bump protruding); `isTab=false` mirrors it to a blank here.
+ */
+export function prepareTabFromPath(
+    curve: Curve,
+    tCenter: number,
+    isTab: boolean,
+    tabPath: BezierPath,
+): PreparedTab | null {
+    let normalizedPath = tabPath;
     if (!isTab) {
         normalizedPath = mirrorBezierPathY(normalizedPath);
     }
@@ -315,6 +330,22 @@ export const standardTabSplicer: TabSplicer = {
 };
 
 /**
+ * Smoothed splice from an already-generated path (no PRNG). Same output
+ * as {@link smoothedTabSplicer} for a given path; used by generators that
+ * re-splice one path into several placement/scale variants.
+ */
+export function spliceSmoothedFromPath(
+    edge: Curve,
+    tCenter: number,
+    isTab: boolean,
+    tabPath: BezierPath,
+): Curve | null {
+    const prepared = prepareTabFromPath(edge, tCenter, isTab, tabPath);
+    if (!prepared) return null;
+    return commitTab(alignTangentsAtSplice(prepared));
+}
+
+/**
  * Tangent-aligned splicer: same as `standardTabSplicer` but rotates
  * the tab's first segment's cp1 and last segment's cp2 to lie along
  * the parent edge's tangent at the splice points. Result is a C1
@@ -328,9 +359,9 @@ export const standardTabSplicer: TabSplicer = {
 export const smoothedTabSplicer: TabSplicer = {
     id: 'tangent-smoothed',
     splice(edge, placement, template, random) {
-        const prepared = prepareTab(edge, placement.tCenter, placement.isTab, template, random);
-        if (!prepared) return null;
-        return commitTab(alignTangentsAtSplice(prepared));
+        return spliceSmoothedFromPath(
+            edge, placement.tCenter, placement.isTab, template.generate(random),
+        );
     },
 };
 
