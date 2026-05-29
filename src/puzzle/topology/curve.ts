@@ -423,7 +423,7 @@ export class Curve {
     // -- Sampling ----------------------------------------------------------
 
     /**
-     * Sample the curve at regular intervals for rendering or bbox computation.
+     * Sample the curve at regular intervals (e.g. for rendering or hit-testing).
      * @param pointsPerSegment - Number of sample points per segment (default 8).
      */
     sample(pointsPerSegment = 8): Point[] {
