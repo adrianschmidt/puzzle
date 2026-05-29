@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { tracedTabGenerator } from './traced-tab-generator.js';
 import { Curve } from './curve.js';
 import { createSeededRandom } from '../seeded-random.js';
+import { spliceSmoothedFromPath, computeTabPlacement, DEFAULT_TAB_PLACEMENT } from './tab-generator-helpers.js';
 
 describe('tracedTabGenerator', () => {
     it('has id "traced"', () => {
@@ -35,5 +36,44 @@ describe('tracedTabGenerator', () => {
         const result = tracedTabGenerator.generate(edge, counting, {});
         expect(result).not.toBeNull();
         expect(calls).toBe(3);
+    });
+});
+
+describe('tracedTabGenerator.generateVariants', () => {
+    it('first variant equals generate() for the same seed', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const viaGenerate = tracedTabGenerator.generate(edge, createSeededRandom(7), {});
+        const iter = tracedTabGenerator.generateVariants!(edge, createSeededRandom(7), {})[Symbol.iterator]();
+        const first = iter.next().value as ReturnType<typeof tracedTabGenerator.generate>;
+        expect(first).not.toBeNull();
+        expect(viaGenerate).not.toBeNull();
+        expect(first!.segments).toEqual(viaGenerate!.segments);
+    });
+
+    it('consumes exactly 3 outer PRNG calls regardless of variants pulled', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        let calls = 0;
+        const counting = () => { calls++; return 0.5; };
+        // Drain ALL variants.
+        const all = [...tracedTabGenerator.generateVariants!(edge, counting, {})];
+        expect(all.length).toBeGreaterThan(1);
+        expect(calls).toBe(3);
+    });
+
+    it('yields nothing for a too-short edge (no PRNG drawn)', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 10, y: 0 });
+        let calls = 0;
+        const counting = () => { calls++; return 0.5; };
+        const all = [...tracedTabGenerator.generateVariants!(edge, counting, {})];
+        expect(all).toHaveLength(0);
+        expect(calls).toBe(0);
+    });
+
+    it('every yielded variant keeps the edge endpoints', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        for (const v of tracedTabGenerator.generateVariants!(edge, createSeededRandom(3), {})) {
+            expect(v.start.x).toBeCloseTo(0);
+            expect(v.end.x).toBeCloseTo(240);
+        }
     });
 });
