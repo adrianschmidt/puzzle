@@ -14,7 +14,7 @@
  *   returned as offsets relative to `group.position`.
  */
 
-import type { Edge, Piece, PieceGroup } from '../model/types.js';
+import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import { localToWorld } from '../model/helpers.js';
 import { getPathBounds } from './path-bounds.js';
 
@@ -195,6 +195,36 @@ export function getGroupLocalBounds(
         minY: b.minY,
         width: b.maxX - b.minX,
         height: b.maxY - b.minY,
+    };
+}
+
+/**
+ * Centre of the assembled image rectangle in un-rotated local space.
+ *
+ * Samples piece-body corner vertices only (no tab protrusions), so for a
+ * completed puzzle — whose outer border is flat — this is the geometric
+ * centre of the image. Use it as the pivot when spinning the finished
+ * puzzle upright, so the rotation looks centred rather than offset by the
+ * asymmetric tabs that `getGroupLocalBounds` would include.
+ *
+ * Returns the local origin for a group with no findable pieces.
+ */
+export function getGroupImageCentre(
+    group: PieceGroup,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
+): Point {
+    const b = getGroupBounds(group, piecesById, {
+        space: 'local',
+        includePathGeometry: false,
+    });
+
+    if (!isFinite(b.minX)) {
+        return { x: 0, y: 0 };
+    }
+
+    return {
+        x: (b.minX + b.maxX) / 2,
+        y: (b.minY + b.maxY) / 2,
     };
 }
 
