@@ -21,7 +21,7 @@ import type { TabGenerator, TabPolicy, TopologyEdge } from './plugin-types.js';
 
 const ENDPOINT_TOLERANCE = 0.5;          // px — candidate endpoint must match
 const CROSSING_ENDPOINT_TOLERANCE = 2;   // px — ignore intersections at endpoint joins
-const CROSSING_BBOX_MARGIN = 0.5;        // px — bbox cull margin (>= intersect tolerance)
+const CROSSING_BBOX_MARGIN = 0.5;        // px — conservative cull margin; the control-point box already overshoots the drawn curve
 
 // Bump-extraction tuning: identify where the candidate diverges from
 // its parent edge (the `before`/`after` overlap regions vs the bump).
@@ -137,6 +137,8 @@ function introducesNewCrossing(
     const candEnd = candidate.end;
     const candBox = candidate.boundingBox();
 
+    // Check each twin pair once; skip self and self.twin (the candidate
+    // IS self's new curve). Cull pairs whose boxes can't overlap.
     const seen = new Set<number>();
     for (const he of graph.halfEdges) {
         if (seen.has(he.id) || seen.has(he.twin.id)) continue;
