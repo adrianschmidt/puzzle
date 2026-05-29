@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     reverseBezierPath,
     mirrorBezierPathY,
+    scaleBezierPath,
 } from './bezier-path.js';
 import type { BezierPath } from './bezier-path.js';
 import { classicTabTemplate } from './tab-shapes.js';
@@ -53,6 +54,30 @@ describe('reverseBezierPath', () => {
             { x: 0.25, y: 0.5 },
             { x: 0, y: 0 },
         ]);
+    });
+});
+
+describe('scaleBezierPath', () => {
+    it('scales x and y of every point independently', () => {
+        const path = [
+            { x: 0, y: 0 },
+            { x: 2, y: 4 },
+            { x: 6, y: 8 },
+            { x: 10, y: 0 },
+        ];
+        const out = scaleBezierPath(path, 0.5, 0.25);
+        expect(out).toEqual([
+            { x: 0, y: 0 },
+            { x: 1, y: 1 },
+            { x: 3, y: 2 },
+            { x: 5, y: 0 },
+        ]);
+    });
+
+    it('does not mutate the input', () => {
+        const path = [{ x: 1, y: 1 }];
+        scaleBezierPath(path, 2, 2);
+        expect(path[0]).toEqual({ x: 1, y: 1 });
     });
 });
 

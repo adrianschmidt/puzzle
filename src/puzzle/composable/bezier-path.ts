@@ -84,3 +84,13 @@ export function reverseBezierPath(path: BezierPath): BezierPath {
 export function mirrorBezierPathY(path: BezierPath): BezierPath {
     return path.map(p => ({ x: p.x, y: -p.y }));
 }
+
+/**
+ * Scale a BezierPath's coordinates about the origin. Used to shrink a
+ * tab (smaller footprint and depth) without regenerating its shape.
+ * Tab placement positions everything relative to the path's own
+ * midpoint, so scaling about the origin uniformly shrinks the tab.
+ */
+export function scaleBezierPath(path: BezierPath, sx: number, sy: number): BezierPath {
+    return path.map(p => ({ x: p.x * sx, y: p.y * sy }));
+}
