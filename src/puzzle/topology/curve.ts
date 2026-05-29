@@ -45,6 +45,14 @@ export interface BezierSegment {
     p3: Point;
 }
 
+/** Axis-aligned bounding box in screen coordinates. */
+export interface BoundingBox {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
+
 // ---------------------------------------------------------------------------
 // Curve class
 // ---------------------------------------------------------------------------
@@ -427,6 +435,28 @@ export class Curve {
             }
         }
         return points;
+    }
+
+    /**
+     * Axis-aligned bounding box from the segments' control points.
+     *
+     * This is a conservative superset of the drawn curve (a cubic is
+     * contained in its control polygon's hull), which is exactly what a
+     * crossing pre-filter wants: boxes that don't overlap guarantee the
+     * curves can't intersect, so the expensive intersect call is safe to
+     * skip. Cheap — O(segments), no bezier-js objects.
+     */
+    boundingBox(): BoundingBox {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const s of this.segments) {
+            for (const p of [s.p0, s.cp1, s.cp2, s.p3]) {
+                if (p.x < minX) minX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y > maxY) maxY = p.y;
+            }
+        }
+        return { minX, minY, maxX, maxY };
     }
 
     // -- Reverse -----------------------------------------------------------
