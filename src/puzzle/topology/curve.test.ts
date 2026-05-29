@@ -445,3 +445,33 @@ describe('Curve.circle', () => {
         }
     });
 });
+
+describe('Curve.boundingBox', () => {
+    it('covers all control points (superset of the drawn curve)', () => {
+        // A single cubic whose control points bulge above the chord.
+        const c = Curve.fromBezierPath([
+            { x: 0, y: 0 },
+            { x: 10, y: -50 },
+            { x: 90, y: -50 },
+            { x: 100, y: 0 },
+        ]);
+        const box = c.boundingBox();
+        expect(box.minX).toBeCloseTo(0);
+        expect(box.maxX).toBeCloseTo(100);
+        expect(box.minY).toBeCloseTo(-50);
+        expect(box.maxY).toBeCloseTo(0);
+    });
+
+    it('unions across multiple segments', () => {
+        const c = Curve.fromBezierPath([
+            { x: 0, y: 0 },
+            { x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 0 },
+            { x: 50, y: 0 }, { x: 50, y: 30 }, { x: 50, y: 30 },
+        ]);
+        const box = c.boundingBox();
+        expect(box.minX).toBeCloseTo(0);
+        expect(box.maxX).toBeCloseTo(50);
+        expect(box.minY).toBeCloseTo(0);
+        expect(box.maxY).toBeCloseTo(30);
+    });
+});
