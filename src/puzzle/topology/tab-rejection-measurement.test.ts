@@ -13,16 +13,24 @@ import { createSeededRandom } from '../seeded-random.js';
 import { sineCutGenerator } from './sine-cut-generator.js';
 import { buildDCEL } from './dcel.js';
 import { applyTabs } from './apply-tabs.js';
-import { tracedTabGenerator } from './traced-tab-generator.js';
+import { preloadTracedTabGenerator } from './traced-tab-loader.js';
+import { getTabGenerator } from './generator-registry.js';
 
 const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
 const RUN = env.MEASURE_TABS === '1';
 
 describe('traced-tab rejection measurement', () => {
-    (RUN ? it : it.skip)('reports the flat-edge rate at the user settings', { timeout: 300_000 }, () => {
+    (RUN ? it : it.skip)('reports the flat-edge rate at the user settings', { timeout: 300_000 }, async () => {
         const cfg = { cols: 16, rows: 12, ha: 0.5, hf: 8, va: 0.5, vf: 6 };
         const frame = { width: 1600, height: 1200 };
         const SEEDS = 15;
+
+        // Go through the SAME path the app uses: preload the lazy chunk,
+        // then resolve the generator from the registry (the stub). This
+        // exercises the registry/stub forwarding, so the number reflects
+        // what players actually get — not a direct-import shortcut.
+        await preloadTracedTabGenerator();
+        const generator = getTabGenerator('traced');
 
         let total = 0;
         let accepted = 0;
@@ -30,14 +38,18 @@ describe('traced-tab rejection measurement', () => {
             const random = createSeededRandom(s);
             const curves = sineCutGenerator.generate(frame, random, cfg);
             const graph = buildDCEL({ curves });
-            applyTabs(graph, tracedTabGenerator, random, {
+            applyTabs(graph, generator, random, {
                 onCandidate: (_he, ok) => { total++; if (ok) accepted++; },
             });
         }
         const rejectPct = (100 * (total - accepted)) / total;
         // eslint-disable-next-line no-console
         console.log(`eligible=${total} accepted=${accepted} flat=${(total - accepted)} reject=${rejectPct.toFixed(1)}%`);
-        // Sanity only — the real signal is the printed number vs the 20.7% baseline.
         expect(total).toBeGreaterThan(0);
+        // Regression guard: exercised through the real registry+preload
+        // path, so this fails if the retry ladder silently isn't running
+        // (e.g. a stub that doesn't forward generateVariants). Pre-ladder
+        // this regime sat at ~20.7%; with the ladder it's ~2%.
+        expect(rejectPct).toBeLessThan(6);
     });
 });

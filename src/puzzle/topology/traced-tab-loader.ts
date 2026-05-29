@@ -111,16 +111,33 @@ let preloadPromise: Promise<void> | null = null;
 let realGenerator: TabGenerator | null = null;
 let attemptCount = 0;
 
+function ensureLoaded(): TabGenerator {
+    if (!realGenerator) {
+        throw new Error(
+            'Traced tab library not loaded. '
+            + 'Call preloadTracedTabGenerator() before generating traced tabs.',
+        );
+    }
+    return realGenerator;
+}
+
 export const tracedTabGeneratorStub: TabGenerator = {
     id: 'traced',
     generate(edge, random, config) {
-        if (!realGenerator) {
-            throw new Error(
-                'Traced tab library not loaded. '
-                + 'Call preloadTracedTabGenerator() before generating traced tabs.',
-            );
+        return ensureLoaded().generate(edge, random, config);
+    },
+    // Forward the retry ladder too, so `applyTabs` runs it via the
+    // registry path (not just the single-candidate `generate`). Without
+    // this, the stub looks like a non-variant generator and the ladder
+    // silently never runs in the app. Falls back to a single `generate`
+    // candidate if a future real generator drops `generateVariants`.
+    generateVariants(edge, random, config) {
+        const real = ensureLoaded();
+        if (real.generateVariants) {
+            return real.generateVariants(edge, random, config);
         }
-        return realGenerator.generate(edge, random, config);
+        const candidate = real.generate(edge, random, config);
+        return candidate ? [candidate] : [];
     },
 };
 
