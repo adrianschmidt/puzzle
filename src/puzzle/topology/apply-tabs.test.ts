@@ -308,6 +308,11 @@ describe('applyTabs', () => {
         const before = internal.curve;
         applyTabs(graph, ladder, makeSeededRandom(1));
         expect(internal.curve).not.toBe(before);
+        // The committed curve must be the small (1px) variant, not the
+        // rejected 1000px one: its short bbox dimension stays tiny.
+        const box = internal.curve.boundingBox();
+        const shortSide = Math.min(box.maxX - box.minX, box.maxY - box.minY);
+        expect(shortSide).toBeLessThan(10);
     });
 
     it('leaves the edge flat when every variant is rejected', () => {
