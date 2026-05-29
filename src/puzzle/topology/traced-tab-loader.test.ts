@@ -209,6 +209,50 @@ describe('preloadTracedTabGenerator analytics', () => {
     });
 });
 
+describe('tracedTabGeneratorStub delegation', () => {
+    beforeEach(() => {
+        vi.resetModules();
+        trackMock.mockReset();
+    });
+
+    it('forwards generateVariants to the loaded generator after preload', async () => {
+        // Regression: the stub must expose generateVariants so applyTabs
+        // runs the retry ladder via the registry path. A stub that only
+        // forwards generate() makes applyTabs fall back to a single
+        // candidate and the ladder never runs in the app.
+        const fakeVariants = ['v0', 'v1', 'v2'];
+        vi.doMock('./traced-tab-generator.js', () => ({
+            tracedTabGenerator: {
+                id: 'traced',
+                generate: () => 'base',
+                generateVariants: function* () { yield* fakeVariants; },
+            },
+        }));
+        const mod = await import('./traced-tab-loader.js');
+        await mod.preloadTracedTabGenerator();
+
+        expect(typeof mod.tracedTabGeneratorStub.generateVariants).toBe('function');
+        const yielded = [...mod.tracedTabGeneratorStub.generateVariants!(
+            null as never, () => 0.5, {},
+        )];
+        expect(yielded).toEqual(fakeVariants);
+    });
+
+    it('throws from generateVariants before preload', async () => {
+        vi.doMock('./traced-tab-generator.js', () => ({
+            tracedTabGenerator: {
+                id: 'traced',
+                generate: () => null,
+                generateVariants: function* () { /* unused */ },
+            },
+        }));
+        const mod = await import('./traced-tab-loader.js');
+        expect(() => mod.tracedTabGeneratorStub.generateVariants!(
+            null as never, () => 0.5, {},
+        )).toThrow(/not loaded/);
+    });
+});
+
 describe('detectCacheState classification', () => {
     let originalGetEntriesByType: typeof performance.getEntriesByType;
 
