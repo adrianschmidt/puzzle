@@ -16,6 +16,7 @@
 import type { Curve } from './curve.js';
 import { tracedTabTemplate } from '../composable/tab-shapes-traced.js';
 import { scaleBezierPath } from '../composable/bezier-path.js';
+import type { BezierPath } from '../composable/bezier-path.js';
 import type { TabGenerator } from './plugin-types.js';
 import {
     computeTabPlacement,
@@ -45,16 +46,16 @@ export const tracedTabGenerator: TabGenerator = {
         const basePath = tracedTabTemplate.generate(random);
 
         const { tCenter, isTab } = placement;
-        const tCentre = tCenter + (0.5 - tCenter) * CENTRE_PULL;
+        const tCentre = tCenter + (0.5 - tCenter) * CENTRE_PULL; // lerp toward mid-edge by CENTRE_PULL (0.5 = halfway)
         const shrunk = scaleBezierPath(basePath, SHRINK, SHRINK);
 
         // Best-first ladder: [tCenter, isTab, path].
-        const rungs: ReadonlyArray<readonly [number, boolean, typeof basePath]> = [
+        const rungs: ReadonlyArray<readonly [number, boolean, BezierPath]> = [
             [tCenter, isTab, basePath],   // base (== generate())
             [tCenter, isTab, shrunk],     // shrink
             [tCentre, isTab, basePath],   // pull to centre
             [tCentre, isTab, shrunk],     // shrink + centre
-            [tCenter, !isTab, basePath],  // flip sign
+            [tCenter, !isTab, basePath],  // flip sign (last: changes the tab/blank sense, so least preferred)
         ];
 
         for (const [tc, tab, path] of rungs) {

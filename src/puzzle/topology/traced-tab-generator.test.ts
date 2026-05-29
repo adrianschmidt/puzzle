@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { tracedTabGenerator } from './traced-tab-generator.js';
 import { Curve } from './curve.js';
 import { createSeededRandom } from '../seeded-random.js';
-import { spliceSmoothedFromPath, computeTabPlacement, DEFAULT_TAB_PLACEMENT } from './tab-generator-helpers.js';
 
 describe('tracedTabGenerator', () => {
     it('has id "traced"', () => {
