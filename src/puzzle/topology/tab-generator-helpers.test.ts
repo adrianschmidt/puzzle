@@ -9,11 +9,14 @@ import {
     smoothedTabSplicer,
     standardTabSplicer,
     DEFAULT_TAB_PLACEMENT,
+    prepareTabFromPath,
+    spliceSmoothedFromPath,
 } from './tab-generator-helpers.js';
 import { spliceSmoothingChordFraction, computeSpliceZones } from './tab-generator-helpers.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
 import type { BezierSegment } from './curve.js';
 import type { Point } from '../../model/types.js';
+import type { BezierPath } from '../composable/bezier-path.js';
 
 function unitTangentLeaving(seg: { cp2: { x: number; y: number }; p3: { x: number; y: number } }) {
     const dx = seg.p3.x - seg.cp2.x;
@@ -461,5 +464,42 @@ describe('computeSpliceZones guard branches', () => {
         const afterTangent = perpendicular(-0.05, 0.010);  // ⟂ right neck → θ = 90°
         expect(computeSpliceZones(segs, beforeTangent, afterTangent))
             .toEqual({ firstSurvL: 1, lastSurvR: segs.length - 1 });
+    });
+});
+
+// A fixed, symmetric tab path in template space (x roughly 0.4..0.6,
+// bump up to y = -0.15). Deterministic — no PRNG.
+const FIXED_PATH: BezierPath = [
+    { x: 0.40, y: 0 },
+    { x: 0.44, y: 0 }, { x: 0.46, y: -0.15 }, { x: 0.50, y: -0.15 },
+    { x: 0.54, y: -0.15 }, { x: 0.56, y: 0 }, { x: 0.60, y: 0 },
+];
+
+describe('prepareTabFromPath / spliceSmoothedFromPath', () => {
+    it('prepareTabFromPath consumes no PRNG and is deterministic', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const a = prepareTabFromPath(edge, 0.5, true, FIXED_PATH);
+        const b = prepareTabFromPath(edge, 0.5, true, FIXED_PATH);
+        expect(a).not.toBeNull();
+        expect(b).not.toBeNull();
+        expect(a!.tabCurve.segments).toEqual(b!.tabCurve.segments);
+    });
+
+    it('spliceSmoothedFromPath returns a curve with the edge endpoints', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const c = spliceSmoothedFromPath(edge, 0.5, true, FIXED_PATH);
+        expect(c).not.toBeNull();
+        expect(c!.start.x).toBeCloseTo(0);
+        expect(c!.start.y).toBeCloseTo(0);
+        expect(c!.end.x).toBeCloseTo(240);
+        expect(c!.end.y).toBeCloseTo(0);
+    });
+
+    it('prepareTab still produces the same path-based result for one drawn path', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const template = { name: 'fixed', generate: (): BezierPath => FIXED_PATH };
+        const viaTemplate = prepareTab(edge, 0.5, true, template, () => 0.5);
+        const viaPath = prepareTabFromPath(edge, 0.5, true, FIXED_PATH);
+        expect(viaTemplate!.tabCurve.segments).toEqual(viaPath!.tabCurve.segments);
     });
 });
