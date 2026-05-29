@@ -248,6 +248,35 @@ describe('applyTabs', () => {
         expect(internalEdge.curve).toBe(curveBefore);
     });
 
+    it('accepts a small bump even when distant edges exist (cull does not drop real outcomes)', () => {
+        // 3x3 grid: plenty of edges far from any given small bump. The
+        // bump stays 1px off its own edge, so it crosses nothing and must
+        // be accepted regardless of the bbox cull.
+        const graph = buildDCEL({ curves: simpleGridCurves(3, 3) });
+        const good: TabGenerator = {
+            id: 'good',
+            generate: (edge) => {
+                const mid = edge.pointAt(0.5);
+                const dx = edge.end.x - edge.start.x;
+                const dy = edge.end.y - edge.start.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                const px = -dy / len, py = dx / len;
+                return Curve.fromBezierPath([
+                    edge.start, edge.start,
+                    { x: mid.x + px, y: mid.y + py },
+                    { x: mid.x + px, y: mid.y + py },
+                    { x: mid.x + px, y: mid.y + py },
+                    edge.end, edge.end,
+                ]);
+            },
+        };
+        const internal = graph.halfEdges.find(he =>
+            !he.face?.isOuter && !he.twin.face?.isOuter)!;
+        const before = internal.curve;
+        applyTabs(graph, good, makeSeededRandom(1));
+        expect(internal.curve).not.toBe(before);
+    });
+
     it('accepts a normal one-sided tab bump (sanity check)', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 

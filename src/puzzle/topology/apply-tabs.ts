@@ -15,11 +15,13 @@
  */
 
 import { Curve } from './curve.js';
+import type { BoundingBox } from './curve.js';
 import type { TopologyGraph, HalfEdge } from './dcel.js';
 import type { TabGenerator, TabPolicy, TopologyEdge } from './plugin-types.js';
 
 const ENDPOINT_TOLERANCE = 0.5;          // px — candidate endpoint must match
 const CROSSING_ENDPOINT_TOLERANCE = 2;   // px — ignore intersections at endpoint joins
+const CROSSING_BBOX_MARGIN = 0.5;        // px — bbox cull margin (>= intersect tolerance)
 
 // Bump-extraction tuning: identify where the candidate diverges from
 // its parent edge (the `before`/`after` overlap regions vs the bump).
@@ -69,6 +71,15 @@ export function applyTabs(
         sharedEdges.push(he);
     }
 
+    // Per-edge bounding-box cache for the crossing cull. Invalidated for
+    // a half-edge pair when a tab is committed (its curve grows).
+    const boxes = new Map<number, BoundingBox>();
+    const boxOf = (he: HalfEdge): BoundingBox => {
+        let b = boxes.get(he.id);
+        if (!b) { b = he.curve.boundingBox(); boxes.set(he.id, b); }
+        return b;
+    };
+
     for (const he of sharedEdges) {
         const view: TopologyEdge = {
             id: he.id,
@@ -85,12 +96,14 @@ export function applyTabs(
         const accepted =
             endpointsMatch(candidate, he.curve) &&
             !foldsBackThroughSelf(candidate, he.curve) &&
-            !introducesNewCrossing(candidate, he, graph);
+            !introducesNewCrossing(candidate, he, graph, boxOf);
         options.onCandidate?.(he, accepted);
         if (!accepted) continue;
 
         he.curve = candidate;
         he.twin.curve = candidate.reverse();
+        boxes.delete(he.id);
+        boxes.delete(he.twin.id);
     }
 }
 
@@ -118,19 +131,21 @@ function introducesNewCrossing(
     candidate: Curve,
     self: HalfEdge,
     graph: TopologyGraph,
+    boxOf: (he: HalfEdge) => BoundingBox,
 ): boolean {
     const candStart = candidate.start;
     const candEnd = candidate.end;
+    const candBox = candidate.boundingBox();
 
-    // Build the set of half-edges to check. Each twin pair is
-    // checked once; we skip self and self.twin (the candidate IS
-    // self's new curve).
     const seen = new Set<number>();
     for (const he of graph.halfEdges) {
         if (seen.has(he.id) || seen.has(he.twin.id)) continue;
         seen.add(he.id);
         seen.add(he.twin.id);
         if (he.id === self.id || he.id === self.twin.id) continue;
+
+        // Cull: boxes that can't overlap can't intersect.
+        if (!boxesOverlap(candBox, boxOf(he), CROSSING_BBOX_MARGIN)) continue;
 
         const intersections = candidate.intersect(he.curve);
         for (const ix of intersections) {
@@ -263,4 +278,13 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
 function pointDist(a: { x: number; y: number }, b: { x: number; y: number }): number {
     const dx = a.x - b.x, dy = a.y - b.y;
     return Math.sqrt(dx * dx + dy * dy);
+}
+
+function boxesOverlap(a: BoundingBox, b: BoundingBox, margin: number): boolean {
+    return (
+        a.minX - margin <= b.maxX &&
+        a.maxX + margin >= b.minX &&
+        a.minY - margin <= b.maxY &&
+        a.maxY + margin >= b.minY
+    );
 }
