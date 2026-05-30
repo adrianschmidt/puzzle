@@ -133,22 +133,30 @@ traced sub-PRNG pattern.
 ### 2.3 The ladder
 
 Best-first; the first candidate to pass the gates is committed; if none pass,
-the edge stays flat (today's outcome). Initial composition:
+the edge stays flat (today's outcome). **As shipped** the ladder is four rungs:
 
 1. **base** — exactly today's tab (so unchanged puzzles stay unchanged where
-   the first attempt already succeeds).
-2. **shrink ×0.8** — scale the normalized path in x and y (head reaches less
-   far across the corner). Helps adj/flat and adj/tab.
-3. **pull-to-centre** — move `tCenter` halfway to 0.5 (away from whichever
-   corner it sat near; blind, no feedback needed since ~96% of crossings are
-   at a corner).
-4. **shrink + pull-to-centre** — combined.
-5. **flip sign** — bump to the other piece's side (dodges a subset, esp.
-   adj/tab). Placed last because it perturbs local tab/blank parity.
+   the first attempt already succeeds, and rung 0 is structurally `generate()`).
+2. **flip sign** — bump to the other piece's side. Promoted to the first retry
+   because ~96% of crossings are at a shared corner where the opposite sign
+   clears them, and the §4 per-rung measurement showed it rescues by far the
+   most edges (~933 vs ~80 for the geometric tweaks). It does perturb local
+   tab/blank parity, so confirm aesthetics on dev-deploy (the visual check).
+3. **shrink ×0.8** — scale the normalized path in x and y (head reaches less
+   far across the corner). Helps the residual adj/flat and adj/tab cases.
+4. **shrink + pull-to-centre** — shrink, plus move `tCenter` halfway to 0.5
+   (away from whichever corner it sat near; blind, no feedback needed).
 
-Exact shrink factor, pull fraction, and rung order are **tunable**; they are
-locked empirically in §4 against the user's real settings. The ladder is a
-fixed, small list (≤6 rungs) — no unbounded search.
+There is **no center-only rung**: rung 4 is the same position with a strictly
+smaller footprint, so it clears everything a base-size pull-to-centre would
+(see issue #383, which dropped the redundant rung).
+
+> Earlier draft order was base → shrink → pull-to-centre → shrink+centre →
+> flip (flip last). The flip-first, four-rung order above is what ships, fixed
+> empirically against §4's per-rung recovery data.
+
+Exact shrink factor, pull fraction, and rung order remain **tunable**. The
+ladder is a fixed, small list (≤6 rungs) — no unbounded search.
 
 ### 2.4 Locality culling (baseline speedup, generator-agnostic)
 
