@@ -52,24 +52,10 @@ describe('applyTabs', () => {
     it('rejects a tab candidate that crosses another edge', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
-        // A "bad" generator that always returns a curve protruding
-        // far enough to cross adjacent edges.
-        const protrusion = 1000;
+        // A "bad" generator: a 1000px bump that crosses adjacent edges.
         const badGenerator: TabGenerator = {
             id: 'bad',
-            generate: (edge) => {
-                const mid = edge.pointAt(0.5);
-                // build a wedge that pokes way out to (mid.x, mid.y + 1000)
-                return Curve.fromBezierPath([
-                    edge.start,
-                    edge.start,
-                    { x: mid.x, y: mid.y + protrusion },
-                    { x: mid.x, y: mid.y + protrusion },
-                    { x: mid.x, y: mid.y + protrusion },
-                    edge.end,
-                    edge.end,
-                ]);
-            },
+            generate: (edge) => makePerpBump(edge, 1000),
         };
 
         // Snapshot one half-edge's curve before; expect it unchanged after
@@ -112,30 +98,11 @@ describe('applyTabs', () => {
     it('accepts a tab candidate that does not cross any other edge', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
-        // A "good" generator: a small bump that stays well inside its
-        // own edge's neighbourhood.
+        // A "good" generator: a tiny 1px perpendicular bump that stays
+        // well inside its own edge's neighborhood and crosses nothing.
         const goodGenerator: TabGenerator = {
             id: 'good',
-            generate: (edge) => {
-                const mid = edge.pointAt(0.5);
-                const start = edge.start;
-                const end = edge.end;
-                // Tiny perpendicular bump
-                const dx = end.x - start.x;
-                const dy = end.y - start.y;
-                const len = Math.sqrt(dx * dx + dy * dy);
-                const px = -dy / len * 1; // 1 px perpendicular
-                const py = dx / len * 1;
-                return Curve.fromBezierPath([
-                    start,
-                    start,
-                    { x: mid.x + px, y: mid.y + py },
-                    { x: mid.x + px, y: mid.y + py },
-                    { x: mid.x + px, y: mid.y + py },
-                    end,
-                    end,
-                ]);
-            },
+            generate: (edge) => makePerpBump(edge, 1),
         };
 
         const internalEdge = graph.halfEdges.find(he =>
@@ -255,20 +222,7 @@ describe('applyTabs', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(3, 3) });
         const good: TabGenerator = {
             id: 'good',
-            generate: (edge) => {
-                const mid = edge.pointAt(0.5);
-                const dx = edge.end.x - edge.start.x;
-                const dy = edge.end.y - edge.start.y;
-                const len = Math.sqrt(dx * dx + dy * dy);
-                const px = -dy / len, py = dx / len;
-                return Curve.fromBezierPath([
-                    edge.start, edge.start,
-                    { x: mid.x + px, y: mid.y + py },
-                    { x: mid.x + px, y: mid.y + py },
-                    { x: mid.x + px, y: mid.y + py },
-                    edge.end, edge.end,
-                ]);
-            },
+            generate: (edge) => makePerpBump(edge, 1),
         };
         const internal = graph.halfEdges.find(he =>
             !he.face?.isOuter && !he.twin.face?.isOuter)!;
@@ -279,28 +233,14 @@ describe('applyTabs', () => {
 
     it('commits the first acceptable variant from generateVariants', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
-        const bump = (edge: Curve, perp: number): Curve => {
-            const mid = edge.pointAt(0.5);
-            const dx = edge.end.x - edge.start.x;
-            const dy = edge.end.y - edge.start.y;
-            const len = Math.sqrt(dx * dx + dy * dy);
-            const px = -dy / len * perp, py = dx / len * perp;
-            return Curve.fromBezierPath([
-                edge.start, edge.start,
-                { x: mid.x + px, y: mid.y + py },
-                { x: mid.x + px, y: mid.y + py },
-                { x: mid.x + px, y: mid.y + py },
-                edge.end, edge.end,
-            ]);
-        };
-        // First variant pokes 1000px (crosses neighbours -> rejected);
+        // First variant pokes 1000px (crosses neighbors -> rejected);
         // second is a 1px bump (accepted).
         const ladder: TabGenerator = {
             id: 'ladder',
-            generate: (edge) => bump(edge, 1000),
+            generate: (edge) => makePerpBump(edge, 1000),
             *generateVariants(edge) {
-                yield bump(edge, 1000);
-                yield bump(edge, 1);
+                yield makePerpBump(edge, 1000);
+                yield makePerpBump(edge, 1);
             },
         };
         const internal = graph.halfEdges.find(he =>
@@ -317,20 +257,11 @@ describe('applyTabs', () => {
 
     it('leaves the edge flat when every variant is rejected', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
-        const farOut = (edge: Curve): Curve => {
-            const mid = edge.pointAt(0.5);
-            return Curve.fromBezierPath([
-                edge.start, edge.start,
-                { x: mid.x, y: mid.y + 1000 },
-                { x: mid.x, y: mid.y + 1000 },
-                { x: mid.x, y: mid.y + 1000 },
-                edge.end, edge.end,
-            ]);
-        };
+        // Every candidate pokes 1000px and crosses a neighbor -> all rejected.
         const allBad: TabGenerator = {
             id: 'all-bad',
-            generate: (edge) => farOut(edge),
-            *generateVariants(edge) { yield farOut(edge); yield farOut(edge); },
+            generate: (edge) => makePerpBump(edge, 1000),
+            *generateVariants(edge) { yield makePerpBump(edge, 1000); yield makePerpBump(edge, 1000); },
         };
         const internal = graph.halfEdges.find(he =>
             !he.face?.isOuter && !he.twin.face?.isOuter)!;
@@ -411,6 +342,24 @@ function simpleGridCurves(cols: number, rows: number): Curve[] {
         curves.push(Curve.line({ x: c * 100, y: 0 }, { x: c * 100, y: H }));
     }
     return curves;
+}
+
+/**
+ * A simple tab candidate: a wedge whose apex sits `perp` px perpendicular
+ * to the edge at its midpoint. Small `perp` stays local (crosses nothing);
+ * large `perp` pokes across neighboring edges (rejected by the crossing
+ * check). Shape matches what the real splicer emits: a kept `before`/
+ * `after` overlap plus a single bump.
+ */
+function makePerpBump(edge: Curve, perp: number): Curve {
+    const mid = edge.pointAt(0.5);
+    const dx = edge.end.x - edge.start.x;
+    const dy = edge.end.y - edge.start.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const apex = { x: mid.x - (dy / len) * perp, y: mid.y + (dx / len) * perp };
+    return Curve.fromBezierPath([
+        edge.start, edge.start, apex, apex, apex, edge.end, edge.end,
+    ]);
 }
 
 function makeFlatTabGenerator(): TabGenerator {
