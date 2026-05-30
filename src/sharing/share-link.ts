@@ -81,12 +81,31 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
     }
 }
 
+/**
+ * Upper bound on a decoded grid dimension. The UI tops out at 16×12
+ * (192 pieces); this cap sits generously above that so no real or
+ * dev-console puzzle is altered, while bounding the O(E²) crossing
+ * check against a crafted link with an absurd grid (e.g. 1e9×1e9),
+ * which would otherwise hang the tab. Decode-time clamp keeps every
+ * downstream consumer (generators read `g` as cols/rows) safe.
+ */
+const MAX_GRID_DIM = 64;
+
+/** Clamp a decoded grid dimension to a positive integer within bounds. */
+function clampGridDim(n: number): number {
+    if (!Number.isFinite(n)) return 1;
+    return Math.max(1, Math.min(MAX_GRID_DIM, Math.floor(n)));
+}
+
 export function decodePayload(encoded: string): SharePayload | null {
     try {
         const json = base64UrlDecode(encoded);
         const parsed = JSON.parse(json) as unknown;
         const translated = translateLegacyComposable(parsed);
         if (!isValidPayload(translated)) return null;
+        // Bound the grid before it reaches the generators (O(E²) crossing
+        // check). Normal grids (<= MAX_GRID_DIM) pass through unchanged.
+        translated.g = [clampGridDim(translated.g[0]), clampGridDim(translated.g[1])];
         return translated;
     } catch {
         return null;
