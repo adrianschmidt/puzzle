@@ -284,6 +284,28 @@ describe('applyTabs', () => {
         expect(calls).toBe(4); // 2x2 grid has 4 internal shared edges
     });
 
+    it('reports the committed variant ordinal to onCandidate', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+        // Rung 0 (1000px) crosses neighbors -> rejected; rung 1 (1px) is
+        // accepted, so every committed edge reports index 1.
+        const ladder: TabGenerator = {
+            id: 'ladder-idx',
+            generate: (edge) => makePerpBump(edge, 1000),
+            *generateVariants(edge) {
+                yield makePerpBump(edge, 1000);
+                yield makePerpBump(edge, 1);
+            },
+        };
+        const acceptedIndices: Array<number | undefined> = [];
+        applyTabs(graph, ladder, makeSeededRandom(1), {
+            onCandidate: (_he, accepted, idx) => {
+                if (accepted) acceptedIndices.push(idx);
+            },
+        });
+        expect(acceptedIndices.length).toBeGreaterThan(0);
+        expect(acceptedIndices.every(i => i === 1)).toBe(true);
+    });
+
     it('accepts a normal one-sided tab bump (sanity check)', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
