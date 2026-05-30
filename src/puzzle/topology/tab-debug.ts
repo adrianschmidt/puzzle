@@ -6,9 +6,9 @@
  *
  *   - {@link setTracedTabChoiceRecorder} captures the per-call template
  *     selection inside `tracedTabTemplate.generate()`.
- *   - {@link ApplyTabsOptions.onCandidate} fires once per candidate the
- *     generator produces, with the half-edge it was generated for and
- *     whether it survived the collision / fold-back checks.
+ *   - {@link ApplyTabsOptions.onCandidate} fires once per eligible edge,
+ *     with the half-edge it was generated for and whether a candidate
+ *     survived the collision / fold-back checks.
  *
  * A session zips those two streams (calls are 1:1 and in lockstep)
  * into per-tab records keyed by half-edge, then turns them into a
