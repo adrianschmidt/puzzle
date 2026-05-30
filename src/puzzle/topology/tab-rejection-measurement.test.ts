@@ -35,8 +35,8 @@ describe('traced-tab rejection measurement', () => {
         let total = 0;
         let accepted = 0;
         // Per-rung recovery: how many edges committed at each ladder rung
-        // (0 = base, 1 = shrink, 2 = center, 3 = shrink+center, 4 = flip).
-        const rungCommits = [0, 0, 0, 0, 0];
+        // (0 = base, 1 = flip, 2 = shrink, 3 = shrink+center).
+        const rungCommits = [0, 0, 0, 0];
         for (let s = 0; s < SEEDS; s++) {
             const random = createSeededRandom(s);
             const curves = sineCutGenerator.generate(frame, random, cfg);
@@ -52,11 +52,11 @@ describe('traced-tab rejection measurement', () => {
             });
         }
         const rejectPct = (100 * (total - accepted)) / total;
-        const [base, flip, shrink, center, shrinkCenter] = rungCommits;
+        const [base, flip, shrink, shrinkCenter] = rungCommits;
         // eslint-disable-next-line no-console
         console.log(`eligible=${total} accepted=${accepted} flat=${(total - accepted)} reject=${rejectPct.toFixed(1)}%`);
         // eslint-disable-next-line no-console
-        console.log(`per-rung commits: base=${base} flip=${flip} shrink=${shrink} center=${center} shrink+center=${shrinkCenter}`);
+        console.log(`per-rung commits: base=${base} flip=${flip} shrink=${shrink} shrink+center=${shrinkCenter}`);
         expect(total).toBeGreaterThan(0);
         // MANUAL-ONLY guard: this whole test is it.skip in CI (runs only
         // with MEASURE_TABS=1), so this numeric assertion is NOT a CI gate.
