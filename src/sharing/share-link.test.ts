@@ -49,6 +49,32 @@ describe('share-link codec — minimal round-trip', () => {
     });
 });
 
+describe('share-link codec — grid-size clamp (crafted-link DoS guard)', () => {
+    it('clamps an absurd crafted grid to the max dimension', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [1080, 720], g: [100000, 50000],
+            c: 'classic', s: 1, r: 'none',
+        };
+        expect(decodePayload(encodePayload(payload))?.g).toEqual([64, 64]);
+    });
+
+    it('floors fractional dims and raises non-positive dims to >= 1', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [10, 10], g: [16.9, 0],
+            c: 'classic', s: 1, r: 'none',
+        };
+        expect(decodePayload(encodePayload(payload))?.g).toEqual([16, 1]);
+    });
+
+    it('leaves a within-bounds grid untouched', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [10, 10], g: [16, 12],
+            c: 'classic', s: 1, r: 'none',
+        };
+        expect(decodePayload(encodePayload(payload))?.g).toEqual([16, 12]);
+    });
+});
+
 describe('share-link codec — optional fields', () => {
     it('round-trips attribution', () => {
         const payload: SharePayload = {
