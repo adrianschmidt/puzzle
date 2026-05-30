@@ -5,7 +5,7 @@
  *
  * Both entry points share one ladder generator, `tracedTabVariants`:
  * it yields the base tab first, then a short "retry ladder" of cheap
- * local variations (shrink, pull-to-center, sign flip). The framework
+ * local variations (sign flip, shrink, pull-to-center). The framework
  * commits the first that survives its crossing checks — recovering
  * edges that would otherwise be left flat because the base tab crossed
  * a neighbor. `generate` simply returns the ladder's first rung, so the
@@ -55,13 +55,16 @@ function* tracedTabVariants(edge: Curve, random: () => number): Generator<Curve>
     const tPulled = tCenter + (0.5 - tCenter) * CENTER_PULL;
     const shrunk = scaleBezierPath(basePath, SHRINK, SHRINK);
 
-    // Best-first ladder: [tCenter, isTab, path].
+    // Best-first ladder: [tCenter, isTab, path]. Flip is the first retry
+    // because ~96% of crossings are at a shared corner where the opposite
+    // sign (bump into the other piece) clears them — it rescues far more
+    // than the geometric tweaks, which follow for the residual.
     const rungs: ReadonlyArray<readonly [number, boolean, BezierPath]> = [
         [tCenter, isTab, basePath],   // base (== generate())
+        [tCenter, !isTab, basePath],  // flip sign (first retry)
         [tCenter, isTab, shrunk],     // shrink
         [tPulled, isTab, basePath],   // pull to center
         [tPulled, isTab, shrunk],     // shrink + center
-        [tCenter, !isTab, basePath],  // flip sign (last: changes the tab/blank sense, so least preferred)
     ];
 
     for (const [tc, tab, path] of rungs) {

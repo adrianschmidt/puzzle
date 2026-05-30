@@ -52,11 +52,11 @@ describe('traced-tab rejection measurement', () => {
             });
         }
         const rejectPct = (100 * (total - accepted)) / total;
-        const [base, shrink, center, shrinkCenter, flip] = rungCommits;
+        const [base, flip, shrink, center, shrinkCenter] = rungCommits;
         // eslint-disable-next-line no-console
         console.log(`eligible=${total} accepted=${accepted} flat=${(total - accepted)} reject=${rejectPct.toFixed(1)}%`);
         // eslint-disable-next-line no-console
-        console.log(`per-rung commits: base=${base} shrink=${shrink} center=${center} shrink+center=${shrinkCenter} flip=${flip}`);
+        console.log(`per-rung commits: base=${base} flip=${flip} shrink=${shrink} center=${center} shrink+center=${shrinkCenter}`);
         expect(total).toBeGreaterThan(0);
         // MANUAL-ONLY guard: this whole test is it.skip in CI (runs only
         // with MEASURE_TABS=1), so this numeric assertion is NOT a CI gate.
