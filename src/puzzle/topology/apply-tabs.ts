@@ -36,15 +36,25 @@ export interface ApplyTabsOptions {
     tabConfig?: unknown;
     /**
      * Optional dev-time hook fired once per eligible edge with whether
-     * a tab was committed. Receives the half-edge and whether the
-     * framework's collision / fold-back checks let a candidate through.
+     * a tab was committed. Receives the half-edge, whether the
+     * framework's collision / fold-back checks let a candidate through,
+     * and — for a variant generator — the 0-based ordinal of the
+     * committed variant in the generator's best-first sequence (0 = the
+     * base tab, 1+ = a retry rung). `committedVariantIndex` is
+     * `undefined` when the edge stays flat or the generator has no
+     * `generateVariants` (no rung concept).
      *
      * Intended for debug instrumentation (e.g. correlating each tab
-     * with the piece it ended up on). Production paths leave this
-     * unset and pay an extra branch only — `applyTabs` callers that
-     * don't care don't need to wire anything up.
+     * with the piece it ended up on, or measuring per-rung retry
+     * recovery). Production paths leave this unset and pay an extra
+     * branch only — `applyTabs` callers that don't care don't need to
+     * wire anything up.
      */
-    onCandidate?: (he: HalfEdge, accepted: boolean) => void;
+    onCandidate?: (
+        he: HalfEdge,
+        accepted: boolean,
+        committedVariantIndex?: number,
+    ) => void;
 }
 
 export function applyTabs(
@@ -87,10 +97,17 @@ export function applyTabs(
         if (!policy(view)) continue;
 
         let chosen: Curve | null = null;
+        let chosenIndex: number | undefined;
         if (generator.generateVariants) {
+            let i = -1;
             for (const variant of generator.generateVariants(he.curve, random, tabConfig)) {
+                i++;
                 if (!variant) continue;
-                if (isAcceptable(variant, he, graph, boxOf)) { chosen = variant; break; }
+                if (isAcceptable(variant, he, graph, boxOf)) {
+                    chosen = variant;
+                    chosenIndex = i;
+                    break;
+                }
             }
         } else {
             const candidate = generator.generate(he.curve, random, tabConfig);
@@ -99,7 +116,7 @@ export function applyTabs(
             }
         }
 
-        options.onCandidate?.(he, chosen !== null);
+        options.onCandidate?.(he, chosen !== null, chosenIndex);
         if (!chosen) continue;
 
         he.curve = chosen;

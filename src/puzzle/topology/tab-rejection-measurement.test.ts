@@ -34,17 +34,29 @@ describe('traced-tab rejection measurement', () => {
 
         let total = 0;
         let accepted = 0;
+        // Per-rung recovery: how many edges committed at each ladder rung
+        // (0 = base, 1 = shrink, 2 = center, 3 = shrink+center, 4 = flip).
+        const rungCommits = [0, 0, 0, 0, 0];
         for (let s = 0; s < SEEDS; s++) {
             const random = createSeededRandom(s);
             const curves = sineCutGenerator.generate(frame, random, cfg);
             const graph = buildDCEL({ curves });
             applyTabs(graph, generator, random, {
-                onCandidate: (_he, ok) => { total++; if (ok) accepted++; },
+                onCandidate: (_he, ok, idx) => {
+                    total++;
+                    if (ok) {
+                        accepted++;
+                        if (idx !== undefined && idx < rungCommits.length) rungCommits[idx]++;
+                    }
+                },
             });
         }
         const rejectPct = (100 * (total - accepted)) / total;
+        const [base, shrink, center, shrinkCenter, flip] = rungCommits;
         // eslint-disable-next-line no-console
         console.log(`eligible=${total} accepted=${accepted} flat=${(total - accepted)} reject=${rejectPct.toFixed(1)}%`);
+        // eslint-disable-next-line no-console
+        console.log(`per-rung commits: base=${base} shrink=${shrink} center=${center} shrink+center=${shrinkCenter} flip=${flip}`);
         expect(total).toBeGreaterThan(0);
         // MANUAL-ONLY guard: this whole test is it.skip in CI (runs only
         // with MEASURE_TABS=1), so this numeric assertion is NOT a CI gate.
