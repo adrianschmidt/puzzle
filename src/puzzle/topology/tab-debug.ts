@@ -15,6 +15,12 @@
  * piece-keyed map after the topology graph has been turned into
  * piece definitions.
  *
+ * Lockstep note: the 1:1 pairing holds on COUNT — `onCandidate` and the
+ * recorder each fire once per edge. The recorded {@link TracedTabChoice}
+ * geometry describes the traced generator's BASE rung; with the retry
+ * ladder a different rung may be the committed curve, so the recorded
+ * scale/flip/mid can differ from what's on screen. See TracedTabChoice.
+ *
  * Production paths don't touch any of this — the recorder defaults to
  * a no-op and `onCandidate` is undefined unless a session is active.
  */

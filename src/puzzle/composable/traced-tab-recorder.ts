@@ -14,6 +14,13 @@
  * Per-call template + transform record. Captures everything needed to
  * reproduce the curve a single tracedTabTemplate.generate() invocation
  * produced. Consumed by the dev-time {@link TabDebugSession}.
+ *
+ * Caveat with the traced retry ladder: these params are recorded for the
+ * BASE rung — the single `tracedTabTemplate.generate()` call per edge.
+ * When a later rung (shrink, pull-to-center, or sign-flip) is the one the
+ * framework commits, the params describe the base tab rather than the
+ * committed curve (the sign-flip rung is the sharpest mismatch). The
+ * recorded edge → piece and `accepted` correlation is unaffected.
  */
 export interface TracedTabChoice {
     templateIdx: number;
