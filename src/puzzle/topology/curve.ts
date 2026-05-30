@@ -445,6 +445,10 @@ export class Curve {
      * crossing pre-filter wants: boxes that don't overlap guarantee the
      * curves can't intersect, so the expensive intersect call is safe to
      * skip. Cheap — O(segments), no bezier-js objects.
+     *
+     * Assumes the curve has >= 1 segment (guaranteed by the constructor,
+     * which rejects empty segment lists); on a hypothetical empty curve it
+     * would return inverted Infinity bounds.
      */
     boundingBox(): BoundingBox {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
