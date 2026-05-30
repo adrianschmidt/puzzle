@@ -39,7 +39,7 @@ const CENTER_PULL = 0.5;
  * a caller that pulls only the first element advances the PRNG by the
  * same fixed amount as one that drains the whole ladder.
  */
-function* tracedTabVariants(edge: Curve, random: () => number): Generator<Curve> {
+function* tracedTabVariants(edge: Curve, random: () => number): Generator<Curve | null> {
     // All PRNG draws up front: placement (2 calls) + template path (1).
     const placement = computeTabPlacement(edge, DEFAULT_TAB_PLACEMENT, random);
     if (!placement) return;
@@ -68,9 +68,13 @@ function* tracedTabVariants(edge: Curve, random: () => number): Generator<Curve>
         [tPulled, isTab, shrunk],     // shrink + pull-to-center
     ];
 
+    // Yield one slot per rung, including `null` for a rung whose splice
+    // fails (in practice none do — splice only fails on a too-wide tab,
+    // never observed). Keeping the slot stable means the committed rung's
+    // index equals its position here, so per-rung instrumentation can't
+    // be thrown off by a skipped rung.
     for (const [tc, tab, path] of rungs) {
-        const candidate = spliceSmoothedFromPath(edge, tc, tab, path);
-        if (candidate) yield candidate;
+        yield spliceSmoothedFromPath(edge, tc, tab, path);
     }
 }
 
@@ -83,12 +87,12 @@ export const tracedTabGenerator: TabGenerator = {
     // drift out of sync). In the app, applyTabs always uses generateVariants.
     generate(edge: Curve, random: () => number, _config: unknown): Curve | null {
         for (const variant of tracedTabVariants(edge, random)) {
-            return variant;
+            if (variant) return variant;
         }
         return null;
     },
 
-    generateVariants(edge: Curve, random: () => number, _config: unknown): Iterable<Curve> {
+    generateVariants(edge: Curve, random: () => number, _config: unknown): Iterable<Curve | null> {
         return tracedTabVariants(edge, random);
     },
 };

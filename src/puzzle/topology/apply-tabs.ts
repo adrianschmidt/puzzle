@@ -39,10 +39,12 @@ export interface ApplyTabsOptions {
      * a tab was committed. Receives the half-edge, whether the
      * framework's collision / fold-back checks let a candidate through,
      * and — for a variant generator — the 0-based ordinal of the
-     * committed variant in the generator's best-first sequence (0 = the
-     * base tab, 1+ = a retry rung). `committedVariantIndex` is
-     * `undefined` when the edge stays flat or the generator has no
-     * `generateVariants` (no rung concept).
+     * committed variant in the generator's yielded sequence (0 = the
+     * base tab, 1+ = a retry rung). This counts every yielded slot,
+     * including any the generator yields as `null`, so a generator that
+     * yields one stable slot per rung gets the fixed rung index here.
+     * `committedVariantIndex` is `undefined` when the edge stays flat or
+     * the generator has no `generateVariants` (no rung concept).
      *
      * Intended for debug instrumentation (e.g. correlating each tab
      * with the piece it ended up on, or measuring per-rung retry
