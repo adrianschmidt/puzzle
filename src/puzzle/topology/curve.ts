@@ -448,13 +448,17 @@ export class Curve {
      */
     boundingBox(): BoundingBox {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        // One closure per call (not the per-segment array literal a
+        // `for...of [p0,cp1,cp2,p3]` would allocate) keeps this allocation-
+        // free across segments on the generation hot path.
+        const include = (p: Point): void => {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+        };
         for (const s of this.segments) {
-            for (const p of [s.p0, s.cp1, s.cp2, s.p3]) {
-                if (p.x < minX) minX = p.x;
-                if (p.y < minY) minY = p.y;
-                if (p.x > maxX) maxX = p.x;
-                if (p.y > maxY) maxY = p.y;
-            }
+            include(s.p0); include(s.cp1); include(s.cp2); include(s.p3);
         }
         return { minX, minY, maxX, maxY };
     }
