@@ -168,9 +168,14 @@ edge.
 This runs on **every** candidate's crossing check — including the first
 (and often only) attempt on edges that never retry — and benefits **every**
 generator that uses `applyTabs` (classic in Composable and Wavy, not just
-traced). Expected net effect: the ladder adds work only on the ~20% of edges
-that retry, while culling reduces per-check cost on 100% of edges, so total
-generation time is expected to be net-neutral or better than today.
+traced). Net effect on wall-clock is **not measured** (the gated harness
+measures rejection rate, not duration): the cull is a constant-factor
+saving on 100% of edges while the ladder adds a bounded ≤5-rung cost on
+the retry fraction. Both scale with E per candidate, so at tested grid
+sizes the cull should offset most of the ladder's added cost, but total
+time isn't guaranteed monotonic-better at very large grids with a high
+retry fraction. The crossing check stays O(E²) per generation (the cull
+changes the constant, not the class).
 
 ---
 
@@ -200,9 +205,11 @@ The DCEL/topology, face extraction, and compose layers are untouched.
   after. Expect 20.7% → a substantially lower residual; confirm R1/R2/R3 stay
   ~0; record the residual and the per-rung recovery (how many edges each rung
   rescued) to justify/trim the ladder.
-- **Performance:** measure generation wall-time at the user's settings before
-  vs after (culling on/off, ladder on/off) to confirm the net-neutral-or-better
-  expectation.
+- **Performance:** generation wall-time is not asserted (the shipped harness
+  measures rejection rate only). If a timing question arises, measure at the
+  user's settings before vs after (culling on/off, ladder on/off); the cull is
+  expected to offset most of the ladder's added cost at tested grid sizes, not
+  to be guaranteed faster at every size.
 - **Visual:** dev-deploy pass at the user's settings to confirm no obvious
   "small-tab" / "centred-tab" / parity pattern on wavy-corner edges.
 - **Tests:** unit tests for `Curve.boundingBox`, `spliceWithPath` determinism
