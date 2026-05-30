@@ -46,10 +46,12 @@ describe('traced-tab rejection measurement', () => {
         // eslint-disable-next-line no-console
         console.log(`eligible=${total} accepted=${accepted} flat=${(total - accepted)} reject=${rejectPct.toFixed(1)}%`);
         expect(total).toBeGreaterThan(0);
-        // Regression guard: exercised through the real registry+preload
-        // path, so this fails if the retry ladder silently isn't running
-        // (e.g. a stub that doesn't forward generateVariants). Pre-ladder
-        // this regime sat at ~20.7%; with the ladder it's ~2%.
+        // MANUAL-ONLY guard: this whole test is it.skip in CI (runs only
+        // with MEASURE_TABS=1), so this numeric assertion is NOT a CI gate.
+        // CI's "the ladder is actually wired" guard is the non-gated
+        // stub-forwarding test in traced-tab-loader.test.ts. When run here,
+        // it goes through the real registry+preload path; pre-ladder this
+        // regime sat at ~20.7%, with the ladder ~2%.
         expect(rejectPct).toBeLessThan(6);
     });
 });
