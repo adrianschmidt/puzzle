@@ -306,6 +306,29 @@ describe('applyTabs', () => {
         expect(acceptedIndices.every(i => i === 1)).toBe(true);
     });
 
+    it('counts a yielded null as a slot in the committed ordinal', () => {
+        const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
+        // Slot 0 yields null (a failed splice); slot 1 is acceptable. The
+        // committed ordinal must be 1 — the null still occupies slot 0, so
+        // a skipped rung can't shift later rungs' indices.
+        const gen: TabGenerator = {
+            id: 'null-then-good',
+            generate: (edge) => makePerpBump(edge, 1),
+            *generateVariants(edge) {
+                yield null;
+                yield makePerpBump(edge, 1);
+            },
+        };
+        const acceptedIndices: Array<number | undefined> = [];
+        applyTabs(graph, gen, makeSeededRandom(1), {
+            onCandidate: (_he, accepted, idx) => {
+                if (accepted) acceptedIndices.push(idx);
+            },
+        });
+        expect(acceptedIndices.length).toBeGreaterThan(0);
+        expect(acceptedIndices.every(i => i === 1)).toBe(true);
+    });
+
     it('accepts a normal one-sided tab bump (sanity check)', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 

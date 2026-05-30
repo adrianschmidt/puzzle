@@ -71,6 +71,7 @@ describe('tracedTabGenerator.generateVariants', () => {
     it('every yielded variant keeps the edge endpoints', () => {
         const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
         for (const v of tracedTabGenerator.generateVariants!(edge, createSeededRandom(3), {})) {
+            if (!v) continue; // a rung may yield null if its splice fails
             expect(v.start.x).toBeCloseTo(0);
             expect(v.end.x).toBeCloseTo(240);
         }
