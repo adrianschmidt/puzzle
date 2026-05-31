@@ -132,7 +132,7 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(buttons, [
         '⬚ ',
         ['strong', 'Multi-select'],
-        ' (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all.',
+        ' (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all. Your selection is remembered if you reload, and cleared when you deselect all or start a new game.',
     ]);
     appendInlineLi(buttons, [
         '↺ ↻ ',

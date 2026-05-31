@@ -10,6 +10,7 @@ import type { GameState } from '../model/types.js';
 import {
     serializeState,
     deserializeState,
+    readSelection,
     type SerializedGameState,
 } from './serialization.js';
 
@@ -23,10 +24,11 @@ export const SAVE_DEBOUNCE_MS = 500;
  * Save a GameState to localStorage.
  *
  * Serializes the state (converting Maps to entries arrays)
- * and writes it as JSON.
+ * and writes it as JSON. The optional multi-select `selection` (group ids)
+ * is stored alongside it so it survives a reload.
  */
-export function saveState(state: GameState): void {
-    const serialized = serializeState(state);
+export function saveState(state: GameState, selection?: Iterable<number>): void {
+    const serialized = serializeState(state, selection);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
 }
 
@@ -59,6 +61,32 @@ export function loadState(): GameState | undefined {
 }
 
 /**
+ * Load the persisted multi-select selection (group ids) from the saved
+ * game state.
+ *
+ * Returns `[]` when nothing is saved, the data is unreadable, or no
+ * selection was stored. The ids are sanitized but not checked against the
+ * live groups — the caller prunes ids that no longer exist. Never throws.
+ */
+export function loadSelection(): number[] {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+
+        if (raw === null) {
+            return [];
+        }
+
+        const parsed: SerializedGameState = JSON.parse(raw);
+
+        return readSelection(parsed);
+    } catch (error) {
+        diagnostics.warn('Failed to restore saved selection:', error);
+
+        return [];
+    }
+}
+
+/**
  * Clear any saved game state from localStorage.
  */
 export function clearSavedState(): void {
@@ -77,26 +105,34 @@ export function clearSavedState(): void {
  * a `cancel` method to discard the pending save.
  */
 export function createDebouncedSave(): {
-    save: (state: GameState) => void;
+    save: (state: GameState, selection?: Iterable<number>) => void;
     flush: () => void;
     cancel: () => void;
 } {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let pendingState: GameState | null = null;
+    // Snapshot of the selection captured with the pending state. `null` means
+    // "no pending save"; an empty array means "save with an empty selection".
+    let pendingSelection: number[] | null = null;
 
-    function save(state: GameState): void {
+    function flushPending(): void {
+        if (pendingState !== null) {
+            saveState(pendingState, pendingSelection ?? []);
+            pendingState = null;
+            pendingSelection = null;
+        }
+    }
+
+    function save(state: GameState, selection?: Iterable<number>): void {
         pendingState = state;
+        pendingSelection = selection === undefined ? [] : [...selection];
 
         if (timer !== null) {
             clearTimeout(timer);
         }
 
         timer = setTimeout(() => {
-            if (pendingState !== null) {
-                saveState(pendingState);
-                pendingState = null;
-            }
-
+            flushPending();
             timer = null;
         }, SAVE_DEBOUNCE_MS);
     }
@@ -107,10 +143,7 @@ export function createDebouncedSave(): {
             timer = null;
         }
 
-        if (pendingState !== null) {
-            saveState(pendingState);
-            pendingState = null;
-        }
+        flushPending();
     }
 
     function cancel(): void {
@@ -120,6 +153,7 @@ export function createDebouncedSave(): {
         }
 
         pendingState = null;
+        pendingSelection = null;
     }
 
     return { save, flush, cancel };

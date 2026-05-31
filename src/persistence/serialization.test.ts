@@ -7,6 +7,7 @@ import type { GameState, PieceGroup } from '../model/types.js';
 import {
     serializeState,
     deserializeState,
+    readSelection,
     STATE_VERSION,
     type SerializedGameState,
 } from './serialization.js';
@@ -79,6 +80,27 @@ describe('serializeState', () => {
 
         expect(serialized.groups[0].position).toEqual({ x: 50, y: 50 });
         expect(serialized.groups[1].position).toEqual({ x: 300, y: 200 });
+    });
+
+    it('omits the selection field when none is passed', () => {
+        const state = makeGameState();
+        const serialized = serializeState(state);
+
+        expect(serialized.selection).toBeUndefined();
+    });
+
+    it('omits the selection field when the selection is empty', () => {
+        const state = makeGameState();
+        const serialized = serializeState(state, []);
+
+        expect(serialized.selection).toBeUndefined();
+    });
+
+    it('includes the selection ids when present', () => {
+        const state = makeGameState();
+        const serialized = serializeState(state, new Set([2, 0]));
+
+        expect(serialized.selection).toEqual([2, 0]);
     });
 
     it('produces JSON-safe output', () => {
@@ -748,5 +770,41 @@ describe('deserializeState', () => {
         expect(() => deserializeState(serialized)).toThrow(
             'must have at least one piece',
         );
+    });
+});
+
+describe('readSelection', () => {
+    function makeSerialized(
+        selection?: SerializedGameState['selection'],
+    ): SerializedGameState {
+        return {
+            version: STATE_VERSION,
+            pieces: [makeRectPiece({ id: 0 })],
+            groups: [{ id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } }],
+            imageUrl: 'test.jpg',
+            completed: false,
+            selection,
+        };
+    }
+
+    it('returns the stored selection ids', () => {
+        expect(readSelection(makeSerialized([3, 1, 4]))).toEqual([3, 1, 4]);
+    });
+
+    it('returns an empty array when no selection field is present', () => {
+        expect(readSelection(makeSerialized())).toEqual([]);
+    });
+
+    it('returns an empty array when selection is not an array', () => {
+        const data = { ...makeSerialized(), selection: 'nope' } as unknown as SerializedGameState;
+        expect(readSelection(data)).toEqual([]);
+    });
+
+    it('drops non-finite and non-number entries', () => {
+        const data = {
+            ...makeSerialized(),
+            selection: [1, NaN, 2, Infinity, 3],
+        } as unknown as SerializedGameState;
+        expect(readSelection(data)).toEqual([1, 2, 3]);
     });
 });

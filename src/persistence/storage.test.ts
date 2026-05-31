@@ -13,6 +13,7 @@ import type { GameState, PieceGroup } from '../model/types.js';
 import {
     saveState,
     loadState,
+    loadSelection,
     clearSavedState,
     createDebouncedSave,
     STORAGE_KEY,
@@ -134,6 +135,51 @@ describe('saveState / loadState', () => {
     });
 });
 
+describe('saveState / loadSelection', () => {
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('round-trips a multi-select selection alongside the state', () => {
+        const state = makeGameState();
+        saveState(state, [1, 0]);
+
+        expect(loadSelection()).toEqual([1, 0]);
+    });
+
+    it('returns an empty array when no selection was saved', () => {
+        const state = makeGameState();
+        saveState(state);
+
+        expect(loadSelection()).toEqual([]);
+    });
+
+    it('treats an empty selection as no selection (omits the field)', () => {
+        const state = makeGameState();
+        saveState(state, []);
+
+        expect(loadSelection()).toEqual([]);
+    });
+
+    it('returns an empty array when nothing is saved at all', () => {
+        expect(loadSelection()).toEqual([]);
+    });
+
+    it('returns an empty array for corrupted JSON', () => {
+        localStorage.setItem(STORAGE_KEY, '{ not json');
+        expect(loadSelection()).toEqual([]);
+    });
+
+    it('does not affect the game-state round-trip', () => {
+        const state = makeGameState();
+        saveState(state, [0, 1]);
+
+        const restored = loadState();
+        expect(restored!.imageUrl).toBe('test-image.jpg');
+        expect(restored!.groups.length).toBe(2);
+    });
+});
+
 describe('clearSavedState', () => {
     beforeEach(() => {
         localStorage.clear();
@@ -182,6 +228,28 @@ describe('createDebouncedSave', () => {
         expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
         const restored = loadState();
         expect(restored!.imageUrl).toBe('test-image.jpg');
+    });
+
+    it('carries the selection captured at save time', () => {
+        const { save } = createDebouncedSave();
+        const state = makeGameState();
+
+        save(state, [1, 0]);
+        vi.advanceTimersByTime(500);
+
+        expect(loadSelection()).toEqual([1, 0]);
+    });
+
+    it('persists an empty selection when called without one', () => {
+        const { save } = createDebouncedSave();
+        const state = makeGameState();
+
+        // Pre-seed a selection, then a save with no selection should clear it.
+        saveState(state, [0, 1]);
+        save(state);
+        vi.advanceTimersByTime(500);
+
+        expect(loadSelection()).toEqual([]);
     });
 
     it('resets the timer on repeated calls', () => {
