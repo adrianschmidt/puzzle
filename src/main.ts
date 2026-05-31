@@ -14,7 +14,12 @@ import {
     getGroupImageCentre,
     type MergeResult,
 } from './game/index.js';
-import { loadState, clearSavedState, createDebouncedSave } from './persistence/index.js';
+import {
+    loadState,
+    loadSavedGame,
+    clearSavedState,
+    createDebouncedSave,
+} from './persistence/index.js';
 import {
     createNewGameButton,
     createCentreViewButton,
@@ -263,12 +268,16 @@ const selectionManager = new SelectionManager();
 // Floating rotate-buttons focus tracker
 const rotationFocus = new RotationFocus();
 
-// When selection changes, update group visuals
+// When selection changes, update group visuals and persist it (debounced)
+// so the selection survives a reload. The selection is stored alongside the
+// game state, so it is cleared automatically when the user deselects all or
+// starts a new game, and never leaks into share links.
 selectionManager.onChange((selectedIds) => {
     // Remove highlight from all groups, then re-apply to selected
     for (const group of gameState?.groups ?? []) {
         renderer.setGroupSelected(group.id, selectedIds.has(group.id));
     }
+    if (gameState) autoSave();
 });
 
 /**
@@ -592,6 +601,17 @@ function applyViewportTransform(): void {
 
 const debouncedSave = createDebouncedSave();
 
+// Persist any pending debounced save before the page goes away, so a change
+// made within the 500ms debounce window (e.g. a just-tapped selection) is not
+// lost on a fast reload or tab close. `pagehide` covers reloads, navigations
+// and closes; `visibilitychange` → hidden additionally covers mobile
+// app-switch / background-kill, where `pagehide` is not guaranteed to fire.
+// `flush()` is a no-op when nothing is pending, so firing on both is safe.
+window.addEventListener('pagehide', () => debouncedSave.flush());
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') debouncedSave.flush();
+});
+
 /**
  * Project the visual bounds of the given group from world space into
  * screen space, using the current viewport transform. Returns `null` if
@@ -613,10 +633,11 @@ function getFocusedGroupScreenBounds(
 }
 
 /**
- * Trigger a debounced auto-save of the current game state.
+ * Trigger a debounced auto-save of the current game state, including the
+ * current multi-select selection so it survives a reload.
  */
 function autoSave(): void {
-    debouncedSave.save(gameState);
+    debouncedSave.save(gameState, selectionManager.selectedGroupIds);
 }
 
 /**
@@ -757,6 +778,43 @@ function initGame(state: GameState): void {
         selectionManager,
         rotationFocus,
     });
+}
+
+/**
+ * Re-apply a multi-select selection persisted from a previous session.
+ *
+ * Called only on the saved-game restore path, after {@link initGame} has
+ * installed the restored `gameState` (and cleared any in-memory selection).
+ * Group ids are stable across a reload, so the saved ids map back to the
+ * same groups; any id that no longer exists (defensive — shouldn't happen
+ * on a pure reload) is dropped. When a non-empty selection is restored the
+ * multi-select tool is switched on so the selection is visible and
+ * draggable, mirroring the state the user left.
+ */
+function restorePersistedSelection(savedSelection: readonly number[]): void {
+    if (savedSelection.length === 0) return;
+
+    const validIds = new Set(gameState.groups.map((g) => g.id));
+    const toSelect = savedSelection.filter((id) => validIds.has(id));
+
+    if (toSelect.length < savedSelection.length) {
+        // The saved selection comes from the same blob as the restored game,
+        // so on a pure reload every id should still exist. A mismatch points
+        // at a genuine inconsistency (id-allocation drift, a save/restore
+        // ordering bug) worth surfacing in dev rather than dropping silently.
+        const dropped = savedSelection.filter((id) => !validIds.has(id));
+        diagnostics.warn(
+            'restorePersistedSelection: dropped saved selection id(s) with no matching group',
+            { dropped, liveGroupCount: validIds.size },
+        );
+    }
+
+    if (toSelect.length === 0) return;
+
+    selectionManager.toolActive = true;
+    for (const id of toSelect) {
+        selectionManager.select(id);
+    }
 }
 
 /**
@@ -1259,9 +1317,10 @@ void (async () => {
         const loadedFromShare = await tryLoadSharedPuzzle();
         if (loadedFromShare) return;
 
-        const savedState = loadState();
-        if (savedState) {
-            initGame(savedState);
+        const saved = loadSavedGame();
+        if (saved) {
+            initGame(saved.state);
+            restorePersistedSelection(saved.selection);
             return;
         }
 

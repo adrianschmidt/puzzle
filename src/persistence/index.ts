@@ -1,6 +1,7 @@
 export {
     serializeState,
     deserializeState,
+    readSelection,
     STATE_VERSION,
 } from './serialization.js';
 export type {
@@ -11,6 +12,7 @@ export type {
 export {
     saveState,
     loadState,
+    loadSavedGame,
     clearSavedState,
     createDebouncedSave,
     STORAGE_KEY,

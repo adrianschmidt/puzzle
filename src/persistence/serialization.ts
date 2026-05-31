@@ -88,14 +88,35 @@ export interface SerializedGameState {
      * the field around for input validation.
      */
     generatorConfig?: Record<string, unknown>;
+    /**
+     * The user's multi-select selection: the group ids they have tapped to
+     * select for batch movement. Omitted when nothing is selected.
+     *
+     * Deliberately **not** gated behind a `STATE_VERSION` bump: it is a
+     * purely additive, optional field that the selection itself lives
+     * outside `GameState`. Older builds ignore the unknown key and still
+     * load the save as their current version; newer builds restore the
+     * selection when present. Bumping the version would instead make older
+     * builds reject the whole save during a deploy — far worse than a
+     * selection that fails to restore.
+     */
+    selection?: number[];
 }
 
 /**
  * Convert a GameState to a JSON-safe object.
  *
  * Maps are converted to `[key, value][]` entries arrays.
+ *
+ * The multi-select `selection` lives outside `GameState` (in the
+ * SelectionManager), so it is passed in separately. Any ids are written
+ * verbatim; callers are responsible for passing only currently-valid group
+ * ids. An empty/omitted selection leaves the field off the output.
  */
-export function serializeState(state: GameState): SerializedGameState {
+export function serializeState(
+    state: GameState,
+    selection?: Iterable<number>,
+): SerializedGameState {
     const serialized: SerializedGameState = {
         version: STATE_VERSION,
         pieces: state.pieces,
@@ -105,6 +126,13 @@ export function serializeState(state: GameState): SerializedGameState {
         gridSize: state.gridSize,
         completed: state.completed,
     };
+
+    if (selection !== undefined) {
+        const ids = [...selection];
+        if (ids.length > 0) {
+            serialized.selection = ids;
+        }
+    }
 
     if (state.attribution) {
         serialized.attribution = state.attribution;
@@ -358,6 +386,23 @@ function deriveImageSize(data: SerializedGameState): Size {
     };
 
     return getImageDimensions(tempState);
+}
+
+/**
+ * Extract a sanitized multi-select selection from a serialized state.
+ *
+ * Tolerates missing/garbage data (older saves, hand-edited storage): a
+ * non-array or absent `selection` yields `[]`, and non-finite-number
+ * entries are dropped. Returned ids are not checked against the live
+ * groups — the caller prunes ids that no longer exist.
+ */
+export function readSelection(data: SerializedGameState): number[] {
+    if (!Array.isArray(data.selection)) {
+        return [];
+    }
+    return data.selection.filter(
+        (id): id is number => typeof id === 'number' && Number.isFinite(id),
+    );
 }
 
 function serializeGroup(group: PieceGroup): SerializedPieceGroup {

@@ -13,10 +13,16 @@ import type { GameState, PieceGroup } from '../model/types.js';
 import {
     saveState,
     loadState,
+    loadSavedGame,
     clearSavedState,
     createDebouncedSave,
     STORAGE_KEY,
 } from './storage.js';
+
+/** The persisted selection, or `[]` when nothing/none is saved. */
+function loadedSelection(): number[] {
+    return loadSavedGame()?.selection ?? [];
+}
 import { STATE_VERSION } from './serialization.js';
 import {
     makeRectPiece,
@@ -134,6 +140,54 @@ describe('saveState / loadState', () => {
     });
 });
 
+describe('saveState / loadSavedGame selection', () => {
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('round-trips a multi-select selection alongside the state', () => {
+        const state = makeGameState();
+        saveState(state, [1, 0]);
+
+        expect(loadedSelection()).toEqual([1, 0]);
+    });
+
+    it('returns an empty array when no selection was saved', () => {
+        const state = makeGameState();
+        saveState(state);
+
+        expect(loadedSelection()).toEqual([]);
+    });
+
+    it('treats an empty selection as no selection (omits the field)', () => {
+        const state = makeGameState();
+        saveState(state, []);
+
+        expect(loadedSelection()).toEqual([]);
+    });
+
+    it('returns an empty array (undefined game) when nothing is saved at all', () => {
+        expect(loadSavedGame()).toBeUndefined();
+        expect(loadedSelection()).toEqual([]);
+    });
+
+    it('returns undefined for corrupted JSON', () => {
+        localStorage.setItem(STORAGE_KEY, '{ not json');
+        expect(loadSavedGame()).toBeUndefined();
+        expect(loadedSelection()).toEqual([]);
+    });
+
+    it('returns the state and selection from a single parse', () => {
+        const state = makeGameState();
+        saveState(state, [0, 1]);
+
+        const saved = loadSavedGame();
+        expect(saved!.state.imageUrl).toBe('test-image.jpg');
+        expect(saved!.state.groups.length).toBe(2);
+        expect(saved!.selection).toEqual([0, 1]);
+    });
+});
+
 describe('clearSavedState', () => {
     beforeEach(() => {
         localStorage.clear();
@@ -182,6 +236,28 @@ describe('createDebouncedSave', () => {
         expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
         const restored = loadState();
         expect(restored!.imageUrl).toBe('test-image.jpg');
+    });
+
+    it('carries the selection captured at save time', () => {
+        const { save } = createDebouncedSave();
+        const state = makeGameState();
+
+        save(state, [1, 0]);
+        vi.advanceTimersByTime(500);
+
+        expect(loadedSelection()).toEqual([1, 0]);
+    });
+
+    it('persists an empty selection when called without one', () => {
+        const { save } = createDebouncedSave();
+        const state = makeGameState();
+
+        // Pre-seed a selection, then a save with no selection should clear it.
+        saveState(state, [0, 1]);
+        save(state);
+        vi.advanceTimersByTime(500);
+
+        expect(loadedSelection()).toEqual([]);
     });
 
     it('resets the timer on repeated calls', () => {

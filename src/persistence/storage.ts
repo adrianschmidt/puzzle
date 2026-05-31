@@ -10,6 +10,7 @@ import type { GameState } from '../model/types.js';
 import {
     serializeState,
     deserializeState,
+    readSelection,
     type SerializedGameState,
 } from './serialization.js';
 
@@ -23,24 +24,31 @@ export const SAVE_DEBOUNCE_MS = 500;
  * Save a GameState to localStorage.
  *
  * Serializes the state (converting Maps to entries arrays)
- * and writes it as JSON.
+ * and writes it as JSON. The optional multi-select `selection` (group ids)
+ * is stored alongside it so it survives a reload.
  */
-export function saveState(state: GameState): void {
-    const serialized = serializeState(state);
+export function saveState(state: GameState, selection?: Iterable<number>): void {
+    const serialized = serializeState(state, selection);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
 }
 
 /**
- * Load a saved GameState from localStorage.
+ * Load the saved game together with its persisted multi-select selection.
  *
- * Returns the restored GameState, or `undefined` if:
+ * Both come from a single parse of the one `STORAGE_KEY` blob — the
+ * selection is stored *inside* the serialized state, so reading them
+ * together preserves the "one key, one parse" model. The selection ids are
+ * sanitized but not checked against the live groups — the caller prunes ids
+ * that no longer exist.
+ *
+ * Returns `undefined` if:
  * - No saved state exists
  * - The saved data is corrupted or unparseable
  * - The state version is unsupported
  *
  * Never throws — all errors are caught and logged.
  */
-export function loadState(): GameState | undefined {
+export function loadSavedGame(): { state: GameState; selection: number[] } | undefined {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
 
@@ -50,12 +58,22 @@ export function loadState(): GameState | undefined {
 
         const parsed: SerializedGameState = JSON.parse(raw);
 
-        return deserializeState(parsed);
+        return { state: deserializeState(parsed), selection: readSelection(parsed) };
     } catch (error) {
         diagnostics.warn('Failed to restore saved game state:', error);
 
         return undefined;
     }
+}
+
+/**
+ * Load just the saved GameState, discarding any persisted selection.
+ *
+ * Thin wrapper over {@link loadSavedGame} for the existence check and any
+ * caller that does not need the selection.
+ */
+export function loadState(): GameState | undefined {
+    return loadSavedGame()?.state;
 }
 
 /**
@@ -77,26 +95,34 @@ export function clearSavedState(): void {
  * a `cancel` method to discard the pending save.
  */
 export function createDebouncedSave(): {
-    save: (state: GameState) => void;
+    save: (state: GameState, selection?: Iterable<number>) => void;
     flush: () => void;
     cancel: () => void;
 } {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let pendingState: GameState | null = null;
+    // Snapshot of the selection captured with the pending state. `null` means
+    // "no pending save"; an empty array means "save with an empty selection".
+    let pendingSelection: number[] | null = null;
 
-    function save(state: GameState): void {
+    function flushPending(): void {
+        if (pendingState !== null) {
+            saveState(pendingState, pendingSelection ?? []);
+            pendingState = null;
+            pendingSelection = null;
+        }
+    }
+
+    function save(state: GameState, selection?: Iterable<number>): void {
         pendingState = state;
+        pendingSelection = selection === undefined ? [] : [...selection];
 
         if (timer !== null) {
             clearTimeout(timer);
         }
 
         timer = setTimeout(() => {
-            if (pendingState !== null) {
-                saveState(pendingState);
-                pendingState = null;
-            }
-
+            flushPending();
             timer = null;
         }, SAVE_DEBOUNCE_MS);
     }
@@ -107,10 +133,7 @@ export function createDebouncedSave(): {
             timer = null;
         }
 
-        if (pendingState !== null) {
-            saveState(pendingState);
-            pendingState = null;
-        }
+        flushPending();
     }
 
     function cancel(): void {
@@ -120,6 +143,7 @@ export function createDebouncedSave(): {
         }
 
         pendingState = null;
+        pendingSelection = null;
     }
 
     return { save, flush, cancel };
