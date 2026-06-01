@@ -46,7 +46,7 @@ export function saveState(state: GameState, selection?: Iterable<number>): SaveR
             return 'ok-compressed';
         } catch (error) {
             diagnostics.warn(
-                'Failed to save game state (quota exceeded even after compression):',
+                'Failed to save game state (quota or other storage error, even after compression):',
                 error,
             );
             return 'failed';
