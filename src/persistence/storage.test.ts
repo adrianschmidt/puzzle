@@ -315,18 +315,24 @@ describe('split storage', () => {
         expect(loadSavedGame()!.selection).toEqual([2]);
     });
 
-    it('discards a torn pair: geometry present, progress missing (v11 static)', () => {
+    it('discards a torn pair (geometry present, progress missing) and logs why', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         saveGeometry(makeGameState({ seed: 5 })); // writes only the v11 static key
         expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
         expect(loadSavedGame()).toBeUndefined();
+        expect(warnSpy).toHaveBeenCalled(); // intentional discard leaves a trail
+        warnSpy.mockRestore();
     });
 
-    it('discards a seed-mismatched pair', () => {
+    it('discards a seed-mismatched pair and logs why', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const a = makeGameState({ seed: 1 });
         const b = makeGameState({ seed: 2 });
         saveGeometry(a);
         saveProgress(b, []); // different seed
         expect(loadSavedGame()).toBeUndefined();
+        expect(warnSpy).toHaveBeenCalled(); // intentional discard leaves a trail
+        warnSpy.mockRestore();
     });
 
     it('still loads a legacy single-key v10 save (groups inline, no progress key)', () => {
@@ -373,6 +379,8 @@ describe('split storage', () => {
         saveProgress(state, [0]);
         const loaded = loadSavedGame();
         expect(loaded!.selection).toEqual([0]); // from progress, not the legacy blob
+        expect(loaded!.state.pieces).toEqual(state.pieces); // geometry from the legacy static blob
+        expect(loaded!.state.groups.length).toBe(state.groups.length); // groups recombined from progress
     });
 
     it('clearSavedState removes both keys', () => {

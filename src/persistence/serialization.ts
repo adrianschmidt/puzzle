@@ -133,9 +133,14 @@ export interface SerializedProgress {
 }
 
 /**
- * Serializes the full single-blob format. Retained as the symmetric counterpart to {@link deserializeState} (the legacy load path) and for tests; the live save path uses {@link serializeStatic} + {@link serializeProgress}.
+ * Convert a GameState to a JSON-safe object in the full single-blob (v≤10)
+ * format.
  *
- * Convert a GameState to a JSON-safe object.
+ * The live save path no longer uses this — it writes the split
+ * {@link serializeStatic} + {@link serializeProgress} blobs. `serializeState`
+ * is retained as the symmetric counterpart to {@link deserializeState} (which
+ * still loads legacy single-key saves) and for tests that exercise the full
+ * blob shape.
  *
  * Maps are converted to `[key, value][]` entries arrays.
  *

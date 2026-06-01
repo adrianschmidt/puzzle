@@ -4,7 +4,7 @@
  * Wraps lz-string's UTF-16 codec and a marker prefix so the storage layer
  * can store a compressed payload and still recognise it on load. Compression
  * is used only as a fallback when an uncompressed write exceeds the quota
- * (see saveState), so most saves never pass through here.
+ * (see `writeWithOverflow` in storage.ts), so most saves never pass through here.
  */
 
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';

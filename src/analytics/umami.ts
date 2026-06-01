@@ -143,6 +143,32 @@ export interface UnhandledErrorData {
 }
 
 /**
+ * Data attached to `save-failed` — a `localStorage` write failed even after
+ * the lz-string compression fallback (typically quota exhaustion).
+ *
+ * On `main` this surfaced incidentally as an `unhandled-error`; the persistence
+ * layer now catches it, so this is the explicit replacement signal.
+ *
+ * `op` distinguishes the per-move progress write from the one-time new-puzzle
+ * (geometry) write, so an operator can tell whether a save failed at creation
+ * (nothing persisted) or mid-play (only the latest moves were dropped).
+ */
+export interface SaveFailedData {
+    op: 'progress' | 'new-puzzle';
+}
+
+/**
+ * Data attached to `save-compressed` — a write exceeded the plain-write quota
+ * and fell back to the lz-string-compressed payload. Emitted for the one-time
+ * geometry write so an operator can see a puzzle crossing into the near-quota
+ * regime (one growth step from total failure) before it tips into `save-failed`.
+ */
+export interface SaveCompressedData {
+    cutStyle: string;
+    pieceCount: number;
+}
+
+/**
  * Inject the Umami tracking script if a website ID is configured.
  *
  * Call exactly once, early in app startup, before any rendering.
@@ -180,6 +206,8 @@ export function track(name: 'traced-chunk-preload-started', data: TracedChunkPre
 export function track(name: 'traced-chunk-loaded', data: TracedChunkLoadedData): void;
 export function track(name: 'traced-chunk-load-failed', data: TracedChunkLoadFailedData): void;
 export function track(name: 'unhandled-error', data: UnhandledErrorData): void;
+export function track(name: 'save-failed', data: SaveFailedData): void;
+export function track(name: 'save-compressed', data: SaveCompressedData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);
