@@ -133,6 +133,8 @@ export interface SerializedProgress {
 }
 
 /**
+ * Serializes the full single-blob format. Retained as the symmetric counterpart to {@link deserializeState} (the legacy load path) and for tests; the live save path uses {@link serializeStatic} + {@link serializeProgress}.
+ *
  * Convert a GameState to a JSON-safe object.
  *
  * Maps are converted to `[key, value][]` entries arrays.
