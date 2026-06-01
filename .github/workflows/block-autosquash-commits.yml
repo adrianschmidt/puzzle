@@ -1,0 +1,50 @@
+name: Block autosquash commits
+
+# Fails a PR while any of its commits is still an autosquash commit
+# (`fixup!`, `squash!`, or `amend!`). These are meant to be folded into the
+# commit they target via `git rebase -i --autosquash` before merge; this
+# repo merges with "Rebase and merge", which replays them verbatim onto a
+# linear `main`, so an un-squashed one would pollute the history permanently.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail on fixup!/squash!/amend! commits
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+
+            // Match git's autosquash rule: the prefix must start the subject
+            // line and is case-sensitive (`Fixup!` is not treated specially).
+            const autosquash = /^(fixup|squash|amend)!/;
+            const offenders = commits.filter((c) =>
+              autosquash.test(c.commit.message.split('\n', 1)[0]),
+            );
+
+            if (offenders.length === 0) {
+              core.info(`No autosquash commits found in ${commits.length} commit(s).`);
+              return;
+            }
+
+            const list = offenders
+              .map((c) => `  ${c.sha.slice(0, 9)} ${c.commit.message.split('\n', 1)[0]}`)
+              .join('\n');
+            core.setFailed(
+              `This PR has ${offenders.length} autosquash commit(s) that must be folded ` +
+                `in before merge (git rebase -i --autosquash):\n${list}`,
+            );
