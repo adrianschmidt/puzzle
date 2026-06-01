@@ -169,6 +169,30 @@ export interface SaveCompressedData {
 }
 
 /**
+ * Data attached to `save-unreadable` — a saved game was present but could not
+ * be restored, so the player was offered the recovery dialog instead of having
+ * their puzzle silently regenerated over.
+ *
+ * `reason` distinguishes the failure class (the persistence layer already
+ * separates these internally): a parse/deserialize failure, a geometry/progress
+ * seed mismatch, or a torn write with no usable progress. Low cardinality, so
+ * it groups cleanly in the dashboard.
+ */
+export interface SaveUnreadableData {
+    reason: 'parse-error' | 'seed-mismatch' | 'torn-write';
+}
+
+/**
+ * Data attached to `save-recovery` — emitted once when the player closes the
+ * unreadable-save dialog. `downloaded` records whether they took a copy of the
+ * raw data before starting over, so an operator can tell whether the recovery
+ * affordance is actually used.
+ */
+export interface SaveRecoveryData {
+    downloaded: boolean;
+}
+
+/**
  * Inject the Umami tracking script if a website ID is configured.
  *
  * Call exactly once, early in app startup, before any rendering.
@@ -208,6 +232,8 @@ export function track(name: 'traced-chunk-load-failed', data: TracedChunkLoadFai
 export function track(name: 'unhandled-error', data: UnhandledErrorData): void;
 export function track(name: 'save-failed', data: SaveFailedData): void;
 export function track(name: 'save-compressed', data: SaveCompressedData): void;
+export function track(name: 'save-unreadable', data: SaveUnreadableData): void;
+export function track(name: 'save-recovery', data: SaveRecoveryData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);

@@ -19,9 +19,11 @@ export interface CorruptSaveDialogOptions {
     raw: CorruptSaveData;
     /**
      * Fires once when the player closes the dialog (via "Start new game" or
-     * Escape). The host proceeds with a fresh puzzle from here.
+     * Escape). The host proceeds with a fresh puzzle from here. `downloaded`
+     * reports whether the player took a copy of the raw data first, for
+     * recovery-usage telemetry.
      */
-    onDismiss: () => void;
+    onDismiss: (info: { downloaded: boolean }) => void;
     /**
      * Injectable download trigger. Defaults to an anchor-click download of a
      * JSON file. Overridden in tests to capture the filename/contents without
@@ -73,11 +75,12 @@ export function createCorruptSaveDialog(options: CorruptSaveDialogOptions): () =
         now = Date.now,
     } = options;
 
+    let downloaded = false;
     let proceeded = false;
     function proceed(): void {
         if (proceeded) return;
         proceeded = true;
-        onDismiss();
+        onDismiss({ downloaded });
     }
 
     // No backdrop dismissal: losing the only copy of the data to a stray
@@ -118,10 +121,15 @@ export function createCorruptSaveDialog(options: CorruptSaveDialogOptions): () =
     downloadBtn.addEventListener('click', () => {
         const { filename, contents } = buildCorruptSaveDownload(raw, now());
         triggerDownload(filename, contents);
+        downloaded = true;
         // Keep the dialog open after a download so the player can read it and
         // then dismiss deliberately; mark the button as done for feedback.
         downloadBtn.textContent = 'Downloaded ✓';
         downloadBtn.disabled = true;
+        // Disabling the focused button would drop focus to <body>; move it to
+        // the remaining action so keyboard/screen-reader users keep a focus
+        // anchor and hear the next step announced.
+        newGameBtn.focus();
     });
     buttons.appendChild(downloadBtn);
 

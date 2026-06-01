@@ -68,7 +68,7 @@ describe('createCorruptSaveDialog', () => {
         expect(buttons.length).toBe(2);
     });
 
-    it('downloads the raw blobs and keeps the dialog open', () => {
+    it('downloads the raw blobs, keeps the dialog open, and moves focus', () => {
         const triggerDownload = vi.fn();
         const { container, onDismiss } = mount({ triggerDownload });
 
@@ -86,9 +86,15 @@ describe('createCorruptSaveDialog', () => {
         expect(container.querySelector('.corrupt-save-dialog')).not.toBeNull();
         expect(downloadBtn.disabled).toBe(true);
         expect(onDismiss).not.toHaveBeenCalled();
+
+        // Focus moves off the now-disabled button to the remaining action.
+        const newGameBtn = Array.from(
+            container.querySelectorAll<HTMLButtonElement>('.corrupt-save-btn'),
+        ).find((b) => b.textContent === 'Start new game')!;
+        expect(document.activeElement).toBe(newGameBtn);
     });
 
-    it('"Start new game" dismisses the dialog and fires onDismiss', () => {
+    it('"Start new game" dismisses and reports downloaded:false when not downloaded', () => {
         const { container, onDismiss } = mount();
         const newGameBtn = Array.from(
             container.querySelectorAll<HTMLButtonElement>('.corrupt-save-btn'),
@@ -97,13 +103,27 @@ describe('createCorruptSaveDialog', () => {
         newGameBtn.click();
 
         expect(onDismiss).toHaveBeenCalledOnce();
+        expect(onDismiss).toHaveBeenCalledWith({ downloaded: false });
         expect(container.querySelector('.corrupt-save-dialog')).toBeNull();
+    });
+
+    it('reports downloaded:true when the player downloaded before dismissing', () => {
+        const { container, onDismiss } = mount({ triggerDownload: vi.fn() });
+        (container.querySelector('.corrupt-save-btn--primary') as HTMLButtonElement).click();
+        const newGameBtn = Array.from(
+            container.querySelectorAll<HTMLButtonElement>('.corrupt-save-btn'),
+        ).find((b) => b.textContent === 'Start new game')!;
+
+        newGameBtn.click();
+
+        expect(onDismiss).toHaveBeenCalledWith({ downloaded: true });
     });
 
     it('Escape dismisses and fires onDismiss', () => {
         const { container, onDismiss } = mount();
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
         expect(onDismiss).toHaveBeenCalledOnce();
+        expect(onDismiss).toHaveBeenCalledWith({ downloaded: false });
         expect(container.querySelector('.corrupt-save-dialog')).toBeNull();
     });
 
