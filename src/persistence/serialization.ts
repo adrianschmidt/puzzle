@@ -20,7 +20,7 @@ import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 10;
+export const STATE_VERSION = 11;
 
 /**
  * Supported schema versions.
@@ -39,8 +39,10 @@ export const STATE_VERSION = 10;
  *        to the opaque `{baseCutGenerator, baseCutConfig, tabGenerator, tabConfig}`
  *        shape that the topology refactor introduced. v9 and earlier saves are
  *        migrated on load (see `migrateLegacyComposableConfig`).
+ * - v11: split storage — STATIC blob omits groups/selection/completed (those live in
+ *        the separate progress blob); v≤10 full blobs still load via deserializeState.
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
@@ -103,6 +105,33 @@ export interface SerializedGameState {
     selection?: number[];
 }
 
+/** Static portion: geometry + immutable metadata. No groups/selection/completed. */
+export interface SerializedStaticState {
+    version: number;
+    pieces: GameState['pieces'];
+    imageUrl: string;
+    imageSize?: Size;
+    gridSize?: GridSize;
+    attribution?: ImageAttribution;
+    seed?: number;
+    cutStyle?: string;
+    rotationMode?: 'none' | 'quarter-turn' | 'free';
+    composableConfig?: GameState['composableConfig'];
+    fractalConfig?: GameState['fractalConfig'];
+    /** Present only on legacy v7 blobs read through the static path. */
+    generatorConfig?: Record<string, unknown>;
+}
+
+/** Mutable portion: changes as the player plays. */
+export interface SerializedProgress {
+    version: number;
+    /** Seed of the puzzle this progress belongs to, for pairing with the static blob. */
+    seed?: number;
+    groups: SerializedPieceGroup[];
+    selection?: number[];
+    completed: boolean;
+}
+
 /**
  * Convert a GameState to a JSON-safe object.
  *
@@ -161,6 +190,42 @@ export function serializeState(
     return serialized;
 }
 
+/** Serialize only the static geometry + metadata (no groups/selection/completed). */
+export function serializeStatic(state: GameState): SerializedStaticState {
+    const s: SerializedStaticState = {
+        version: STATE_VERSION,
+        pieces: state.pieces,
+        imageUrl: state.imageUrl,
+        imageSize: state.imageSize,
+        gridSize: state.gridSize,
+    };
+    if (state.attribution) s.attribution = state.attribution;
+    if (state.seed !== undefined) s.seed = state.seed;
+    if (state.cutStyle) s.cutStyle = state.cutStyle;
+    if (state.rotationMode) s.rotationMode = state.rotationMode;
+    if (state.composableConfig) s.composableConfig = state.composableConfig;
+    if (state.fractalConfig) s.fractalConfig = state.fractalConfig;
+    return s;
+}
+
+/** Serialize only the mutable progress (groups, selection, completed). */
+export function serializeProgress(
+    state: GameState,
+    selection?: Iterable<number>,
+): SerializedProgress {
+    const p: SerializedProgress = {
+        version: STATE_VERSION,
+        groups: state.groups.map(serializeGroup),
+        completed: state.completed,
+    };
+    if (state.seed !== undefined) p.seed = state.seed;
+    if (selection !== undefined) {
+        const ids = [...selection];
+        if (ids.length > 0) p.selection = ids;
+    }
+    return p;
+}
+
 /**
  * Restore a GameState from its serialized form.
  *
@@ -190,7 +255,7 @@ export function deserializeState(data: SerializedGameState): GameState {
     const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
 
     // For v1 saves (no imageSize), derive it from piece data
-    const imageSize = data.imageSize ?? deriveImageSize(data);
+    const imageSize = data.imageSize ?? deriveImageSize(data.pieces);
 
     // For v1/v2 saves (no gridSize), assume the original 8×6 default
     const gridSize = data.gridSize ?? { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
@@ -235,6 +300,65 @@ export function deserializeState(data: SerializedGameState): GameState {
 }
 
 /**
+ * Rebuild a full GameState from a static blob + a progress blob.
+ *
+ * The static blob may be a v11 static-only blob or a legacy v≤10 full blob
+ * (its inline groups are ignored — groups come from `progress`).
+ *
+ * Progress blobs are always written at the current version (rotations in
+ * degrees); no quarter-turn→degrees migration is applied here — legacy v≤10
+ * saves load via `deserializeState`.
+ */
+export function recombine(
+    staticData: SerializedStaticState,
+    progress: SerializedProgress,
+): GameState {
+    if (!SUPPORTED_VERSIONS.includes(staticData.version)) {
+        throw new Error(
+            `Unsupported state version: ${staticData.version} (expected one of ${SUPPORTED_VERSIONS.join(', ')})`,
+        );
+    }
+    if (!SUPPORTED_VERSIONS.includes(progress.version)) {
+        throw new Error(
+            `Unsupported progress version: ${progress.version} (expected one of ${SUPPORTED_VERSIONS.join(', ')})`,
+        );
+    }
+    if (!Array.isArray(staticData.pieces) || staticData.pieces.length === 0) {
+        throw new Error('Invalid state: pieces must be a non-empty array');
+    }
+    if (typeof staticData.imageUrl !== 'string' || staticData.imageUrl.length === 0) {
+        throw new Error('Invalid state: imageUrl must be a non-empty string');
+    }
+    validateGroups(progress.groups);
+
+    const groups = progress.groups.map(deserializeGroup);
+    const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
+    const imageSize = staticData.imageSize ?? deriveImageSize(staticData.pieces);
+    const gridSize = staticData.gridSize ?? { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
+
+    const state: GameState = {
+        pieces: staticData.pieces,
+        groups,
+        piecesById: buildPiecesById(staticData.pieces),
+        groupsById,
+        pieceToGroup,
+        imageUrl: staticData.imageUrl,
+        imageSize,
+        gridSize,
+        completed: progress.completed,
+    };
+    if (staticData.attribution) state.attribution = staticData.attribution;
+    if (staticData.seed !== undefined) state.seed = staticData.seed;
+    if (staticData.cutStyle) state.cutStyle = staticData.cutStyle;
+    state.rotationMode = resolveRotationMode(staticData, groups);
+    const composableConfig = resolveComposableConfig(staticData);
+    if (composableConfig) state.composableConfig = composableConfig;
+    const fractalConfig = resolveFractalConfig(staticData);
+    if (fractalConfig) state.fractalConfig = fractalConfig;
+    return state;
+}
+
+/**
  * Resolve the composable config from a serialized state.
  *
  * The on-disk shape changed at v10 from the legacy long-named fields
@@ -251,7 +375,7 @@ export function deserializeState(data: SerializedGameState): GameState {
  * not exist yet, or the field had not been added).
  */
 function resolveComposableConfig(
-    data: SerializedGameState,
+    data: SerializedStaticState,
 ): GameState['composableConfig'] | undefined {
     if (data.composableConfig) {
         const cfg = data.composableConfig as Record<string, unknown>;
@@ -316,7 +440,7 @@ function migrateLegacyComposableConfig(
  * for fractal puzzles, migrate the `borderless` flag into the typed shape.
  */
 function resolveFractalConfig(
-    data: SerializedGameState,
+    data: SerializedStaticState,
 ): GameState['fractalConfig'] | undefined {
     if (data.fractalConfig) {
         return data.fractalConfig;
@@ -344,7 +468,7 @@ function resolveFractalConfig(
  * - Everything else defaults to 'none'.
  */
 function resolveRotationMode(
-    data: SerializedGameState,
+    data: SerializedStaticState,
     groups: PieceGroup[],
 ): 'none' | 'quarter-turn' | 'free' {
     if (
@@ -367,16 +491,18 @@ function resolveRotationMode(
 }
 
 /**
- * Derive image dimensions from piece data (for v1 migration).
+ * Derive image dimensions from piece data (for v1 migration and static-blob
+ * fallback).
  *
  * Uses `getImageDimensions` on a temporary partial state synthesised
- * from the serialized pieces.
+ * from the pieces array. The other fields are inert padding — `getImageDimensions`
+ * only reads `pieces`.
  */
-function deriveImageSize(data: SerializedGameState): Size {
+function deriveImageSize(pieces: GameState['pieces']): Size {
     const tempState: GameState = {
-        pieces: data.pieces,
+        pieces,
         groups: [],
-        piecesById: buildPiecesById(data.pieces),
+        piecesById: buildPiecesById(pieces),
         groupsById: new Map(),
         pieceToGroup: new Map(),
         imageUrl: '',
@@ -396,7 +522,7 @@ function deriveImageSize(data: SerializedGameState): Size {
  * entries are dropped. Returned ids are not checked against the live
  * groups — the caller prunes ids that no longer exist.
  */
-export function readSelection(data: SerializedGameState): number[] {
+export function readSelection(data: SerializedGameState | SerializedProgress): number[] {
     if (!Array.isArray(data.selection)) {
         return [];
     }
@@ -437,6 +563,24 @@ function normaliseStoredRotation(value: unknown): number {
     return 0;
 }
 
+/** Validate the serialized groups array (shape + per-group invariants). */
+function validateGroups(groups: SerializedPieceGroup[] | undefined): void {
+    if (!Array.isArray(groups) || groups.length === 0) {
+        throw new Error('Invalid state: groups must be a non-empty array');
+    }
+    for (const group of groups) {
+        if (typeof group.id !== 'number') {
+            throw new Error('Invalid state: group id must be a number');
+        }
+        if (!Array.isArray(group.pieces) || group.pieces.length === 0) {
+            throw new Error(`Invalid state: group ${group.id} must have at least one piece`);
+        }
+        if (!Number.isFinite(group.position?.x) || !Number.isFinite(group.position?.y)) {
+            throw new Error(`Invalid state: group ${group.id} must have a valid position`);
+        }
+    }
+}
+
 /**
  * Basic structural validation of the serialized state.
  * Throws descriptive errors on invalid data.
@@ -444,10 +588,6 @@ function normaliseStoredRotation(value: unknown): number {
 function validateSerializedState(data: SerializedGameState): void {
     if (!Array.isArray(data.pieces) || data.pieces.length === 0) {
         throw new Error('Invalid state: pieces must be a non-empty array');
-    }
-
-    if (!Array.isArray(data.groups) || data.groups.length === 0) {
-        throw new Error('Invalid state: groups must be a non-empty array');
     }
 
     if (typeof data.imageUrl !== 'string' || data.imageUrl.length === 0) {
@@ -458,24 +598,5 @@ function validateSerializedState(data: SerializedGameState): void {
         throw new Error('Invalid state: completed must be a boolean');
     }
 
-    for (const group of data.groups) {
-        if (typeof group.id !== 'number') {
-            throw new Error('Invalid state: group id must be a number');
-        }
-
-        if (!Array.isArray(group.pieces) || group.pieces.length === 0) {
-            throw new Error(
-                `Invalid state: group ${group.id} must have at least one piece`,
-            );
-        }
-
-        if (
-            !Number.isFinite(group.position?.x) ||
-            !Number.isFinite(group.position?.y)
-        ) {
-            throw new Error(
-                `Invalid state: group ${group.id} must have a valid position`,
-            );
-        }
-    }
+    validateGroups(data.groups);
 }
