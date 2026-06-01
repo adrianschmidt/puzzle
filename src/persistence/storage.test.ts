@@ -381,6 +381,12 @@ describe('split storage', () => {
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
         expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
     });
+
+    it('discards an orphaned progress key when geometry is missing', () => {
+        saveProgress(makeGameState({ seed: 5 }), [1]); // only the progress key, no geometry
+        expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+        expect(loadSavedGame()).toBeUndefined();
+    });
 });
 
 describe('createDebouncedSave', () => {
