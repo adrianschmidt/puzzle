@@ -19,6 +19,7 @@ import {
     loadSavedGame,
     clearSavedState,
     createDebouncedSave,
+    saveNewPuzzle,
 } from './persistence/index.js';
 import {
     createNewGameButton,
@@ -948,7 +949,7 @@ async function startNewGame(
         initGame(state);
         gatherAndZoomToFit();
         renderer.renderState(gameState);
-        autoSave();
+        saveNewPuzzle(gameState, selectionManager.selectedGroupIds);
 
         const data: NewGameData = {
             source: 'fresh',
@@ -1264,7 +1265,7 @@ async function loadSharedPuzzle(
         initGame(state);
         gatherAndZoomToFit();
         renderer.renderState(gameState);
-        autoSave();
+        saveNewPuzzle(gameState, selectionManager.selectedGroupIds);
 
         const data: NewGameData = {
             source: 'shared',
