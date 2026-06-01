@@ -796,6 +796,19 @@ function restorePersistedSelection(savedSelection: readonly number[]): void {
 
     const validIds = new Set(gameState.groups.map((g) => g.id));
     const toSelect = savedSelection.filter((id) => validIds.has(id));
+
+    if (toSelect.length < savedSelection.length) {
+        // The saved selection comes from the same blob as the restored game,
+        // so on a pure reload every id should still exist. A mismatch points
+        // at a genuine inconsistency (id-allocation drift, a save/restore
+        // ordering bug) worth surfacing in dev rather than dropping silently.
+        const dropped = savedSelection.filter((id) => !validIds.has(id));
+        diagnostics.warn(
+            'restorePersistedSelection: dropped saved selection id(s) with no matching group',
+            { dropped, liveGroupCount: validIds.size },
+        );
+    }
+
     if (toSelect.length === 0) return;
 
     selectionManager.toolActive = true;
