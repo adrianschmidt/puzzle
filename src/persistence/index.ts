@@ -26,4 +26,9 @@ export {
     PROGRESS_KEY,
     SAVE_DEBOUNCE_MS,
 } from './storage.js';
-export type { SaveResult, LoadOutcome, CorruptSaveData } from './storage.js';
+export type {
+    SaveResult,
+    LoadOutcome,
+    CorruptSaveData,
+    UnreadableReason,
+} from './storage.js';

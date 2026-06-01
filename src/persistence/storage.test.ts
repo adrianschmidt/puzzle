@@ -421,17 +421,33 @@ describe('unreadable save carries the raw blobs for download', () => {
         warnSpy.mockRestore();
     });
 
-    it('attaches the raw geometry verbatim on corrupt JSON', () => {
+    it('attaches the raw geometry verbatim on corrupt JSON (reason: parse-error)', () => {
         localStorage.setItem(STORAGE_KEY, '{not valid json!!!');
 
         const outcome = loadSavedGame();
         expect(outcome.status).toBe('unreadable');
         if (outcome.status !== 'unreadable') throw new Error('expected unreadable');
+        expect(outcome.reason).toBe('parse-error');
         expect(outcome.raw.geometry).toBe('{not valid json!!!');
         expect(outcome.raw.progress).toBeNull();
     });
 
-    it('attaches both raw blobs for a seed-mismatched pair', () => {
+    it('still captures the progress blob when the geometry itself is corrupt', () => {
+        // A corrupt geometry blob throws on parse before the progress key would
+        // otherwise be decoded; the raw snapshot must still include progress so
+        // the download is complete.
+        localStorage.setItem(STORAGE_KEY, '{not valid json!!!');
+        saveProgress(makeGameState({ seed: 7 }), [1]);
+        const progressRaw = localStorage.getItem(PROGRESS_KEY);
+
+        const outcome = loadSavedGame();
+        if (outcome.status !== 'unreadable') throw new Error('expected unreadable');
+        expect(outcome.reason).toBe('parse-error');
+        expect(outcome.raw.geometry).toBe('{not valid json!!!');
+        expect(outcome.raw.progress).toBe(progressRaw);
+    });
+
+    it('attaches both raw blobs for a seed-mismatched pair (reason: seed-mismatch)', () => {
         saveGeometry(makeGameState({ seed: 1 }));
         saveProgress(makeGameState({ seed: 2 }), []);
         const staticRaw = localStorage.getItem(STORAGE_KEY);
@@ -440,8 +456,16 @@ describe('unreadable save carries the raw blobs for download', () => {
         const outcome = loadSavedGame();
         expect(outcome.status).toBe('unreadable');
         if (outcome.status !== 'unreadable') throw new Error('expected unreadable');
+        expect(outcome.reason).toBe('seed-mismatch');
         expect(outcome.raw.geometry).toBe(staticRaw);
         expect(outcome.raw.progress).toBe(progressRaw);
+    });
+
+    it('reports reason "torn-write" for geometry present with no progress', () => {
+        saveGeometry(makeGameState({ seed: 5 }));
+        const outcome = loadSavedGame();
+        if (outcome.status !== 'unreadable') throw new Error('expected unreadable');
+        expect(outcome.reason).toBe('torn-write');
     });
 
     it('does not modify localStorage (read-only — the live keys are left intact)', () => {

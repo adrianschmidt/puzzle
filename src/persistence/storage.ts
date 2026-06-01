@@ -49,28 +49,30 @@ export interface CorruptSaveData {
 }
 
 /**
+ * Why a present save could not be restored. Low-cardinality, suitable as an
+ * analytics dimension.
+ *
+ * - `parse-error`   — JSON/decompress/deserialize threw (corruption or an
+ *                     unsupported version).
+ * - `seed-mismatch` — geometry and progress blobs are from different puzzles.
+ * - `torn-write`    — geometry present but no usable progress (interrupted save).
+ */
+export type UnreadableReason = 'parse-error' | 'seed-mismatch' | 'torn-write';
+
+/**
  * Outcome of a load call.
  *
  * - `ok`         — a playable state was restored.
  * - `empty`      — no save is present (the geometry key is absent).
  * - `unreadable` — a save was present but could not be turned into a playable
- *                  state (corruption, an unsupported version, or a torn /
- *                  seed-mismatched key pair). Carries the raw blobs so the
- *                  caller can offer them for download before they are
- *                  overwritten, rather than silently destroying the data.
+ *                  state. Carries `reason` (for telemetry) and the verbatim raw
+ *                  blobs so the caller can offer them for download before they
+ *                  are overwritten, rather than silently destroying the data.
  */
 export type LoadOutcome =
     | { status: 'ok'; state: GameState; selection: number[] }
     | { status: 'empty' }
-    | { status: 'unreadable'; raw: CorruptSaveData };
-
-/** Snapshot the raw save blobs verbatim (before any overwrite). */
-function snapshotRawSave(): CorruptSaveData {
-    return {
-        geometry: localStorage.getItem(STORAGE_KEY),
-        progress: localStorage.getItem(PROGRESS_KEY),
-    };
-}
+    | { status: 'unreadable'; reason: UnreadableReason; raw: CorruptSaveData };
 
 /**
  * Write a value to a localStorage key with compress-on-overflow.
@@ -146,12 +148,18 @@ export function loadSavedGame(): LoadOutcome {
     // state reports `unreadable` with the raw blobs attached, so startup can
     // warn the user and offer the data for download instead of silently
     // regenerating over a lost puzzle.
+    //
+    // Read both raw blobs up front (one read each) so every unreadable branch —
+    // including the catch, where a parse can throw before the progress key is
+    // decoded — can attach the verbatim data without a second large-blob read.
+    const progressRaw = localStorage.getItem(PROGRESS_KEY);
+    const raw: CorruptSaveData = { geometry: staticRaw, progress: progressRaw };
+
     try {
         const staticData: SerializedStaticState & SerializedGameState = JSON.parse(
             decompressFromStorage(staticRaw),
         );
 
-        const progressRaw = localStorage.getItem(PROGRESS_KEY);
         if (progressRaw !== null) {
             const progress: SerializedProgress = JSON.parse(decompressFromStorage(progressRaw));
             // The guard only fires when both seeds are present. That is safe:
@@ -168,7 +176,7 @@ export function loadSavedGame(): LoadOutcome {
                 diagnostics.warn(
                     'Discarding saved game: geometry/progress seeds do not match (torn or cross-puzzle write).',
                 );
-                return { status: 'unreadable', raw: snapshotRawSave() };
+                return { status: 'unreadable', reason: 'seed-mismatch', raw };
             }
             return {
                 status: 'ok',
@@ -190,10 +198,10 @@ export function loadSavedGame(): LoadOutcome {
         diagnostics.warn(
             'Discarding saved game: geometry present but no progress (torn write).',
         );
-        return { status: 'unreadable', raw: snapshotRawSave() };
+        return { status: 'unreadable', reason: 'torn-write', raw };
     } catch (error) {
         diagnostics.warn('Failed to restore saved game state:', error);
-        return { status: 'unreadable', raw: snapshotRawSave() };
+        return { status: 'unreadable', reason: 'parse-error', raw };
     }
 }
 
@@ -201,8 +209,9 @@ export function loadSavedGame(): LoadOutcome {
  * Load just the saved GameState, discarding any persisted selection.
  *
  * Thin wrapper over {@link loadSavedGame} for the existence check and any
- * caller that does not need the selection. An unreadable save reads as "no
- * state" here (and is backed up as a side effect of the call).
+ * caller that does not need the selection. The load is read-only; an
+ * unreadable save reads as "no state" here and its recovery blobs are
+ * discarded — only the startup path surfaces them for download.
  */
 export function loadState(): GameState | undefined {
     const outcome = loadSavedGame();
