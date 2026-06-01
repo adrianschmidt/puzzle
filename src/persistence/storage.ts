@@ -13,6 +13,7 @@ import {
     readSelection,
     type SerializedGameState,
 } from './serialization.js';
+import { compressForStorage, decompressFromStorage } from './compression.js';
 
 /** localStorage key for the saved game state. */
 export const STORAGE_KEY = 'puzzle-game-state';
@@ -20,16 +21,37 @@ export const STORAGE_KEY = 'puzzle-game-state';
 /** Debounce interval for auto-save (milliseconds). */
 export const SAVE_DEBOUNCE_MS = 500;
 
+/** Outcome of a {@link saveState} call. */
+export type SaveResult = 'ok' | 'ok-compressed' | 'failed';
+
 /**
  * Save a GameState to localStorage.
  *
- * Serializes the state (converting Maps to entries arrays)
- * and writes it as JSON. The optional multi-select `selection` (group ids)
- * is stored alongside it so it survives a reload.
+ * Tries a plain JSON write first. If that throws (quota exceeded — large
+ * traced-tab puzzles can exceed the ~4.75 MB ceiling), retries once with an
+ * lz-string-compressed payload. If the compressed write also throws, the
+ * previous save is left intact (we never clear it first) and `'failed'` is
+ * returned so the caller can warn the user.
  */
-export function saveState(state: GameState, selection?: Iterable<number>): void {
-    const serialized = serializeState(state, selection);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+export function saveState(state: GameState, selection?: Iterable<number>): SaveResult {
+    const json = JSON.stringify(serializeState(state, selection));
+
+    try {
+        localStorage.setItem(STORAGE_KEY, json);
+        return 'ok';
+    } catch {
+        // Any setItem failure (quota on most browsers) — retry compressed.
+        try {
+            localStorage.setItem(STORAGE_KEY, compressForStorage(json));
+            return 'ok-compressed';
+        } catch (error) {
+            diagnostics.warn(
+                'Failed to save game state (quota exceeded even after compression):',
+                error,
+            );
+            return 'failed';
+        }
+    }
 }
 
 /**
@@ -56,7 +78,7 @@ export function loadSavedGame(): { state: GameState; selection: number[] } | und
             return undefined;
         }
 
-        const parsed: SerializedGameState = JSON.parse(raw);
+        const parsed: SerializedGameState = JSON.parse(decompressFromStorage(raw));
 
         return { state: deserializeState(parsed), selection: readSelection(parsed) };
     } catch (error) {
