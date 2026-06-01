@@ -22,6 +22,11 @@ import {
     PROGRESS_KEY,
 } from './storage.js';
 import { COMPRESSED_MARKER } from './compression.js';
+import { STATE_VERSION } from './serialization.js';
+import {
+    makeRectPiece,
+    makeGameState as makeBaseGameState,
+} from '../test-helpers/fixtures.js';
 
 /** The persisted selection, or `[]` when nothing/none is saved. */
 function loadedSelection(): number[] {
@@ -36,11 +41,6 @@ function expectLoaded(): { state: GameState; selection: number[] } {
     if (outcome.status !== 'ok') throw new Error('expected an ok load outcome');
     return outcome;
 }
-import { STATE_VERSION } from './serialization.js';
-import {
-    makeRectPiece,
-    makeGameState as makeBaseGameState,
-} from '../test-helpers/fixtures.js';
 
 function makeGameState(overrides?: Partial<GameState>): GameState {
     const pieces = [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 })];
