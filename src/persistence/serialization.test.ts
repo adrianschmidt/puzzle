@@ -800,11 +800,25 @@ describe('readSelection', () => {
         expect(readSelection(data)).toEqual([]);
     });
 
-    it('drops non-finite and non-number entries', () => {
-        const data = {
+    it('drops entries that do not survive JSON as finite numbers', () => {
+        // The real load path always comes through JSON.parse, where
+        // JSON.stringify has already turned NaN/Infinity into `null`. Exercise
+        // that round-tripped shape rather than the impossible literal one.
+        const onDisk = JSON.stringify({
             ...makeSerialized(),
             selection: [1, NaN, 2, Infinity, 3],
+        });
+        const parsed = JSON.parse(onDisk) as SerializedGameState;
+        // Sanity-check the precondition: NaN/Infinity serialized to null.
+        expect(parsed.selection).toEqual([1, null, 2, null, 3]);
+        expect(readSelection(parsed)).toEqual([1, 2, 3]);
+    });
+
+    it('drops non-number entries from hand-edited storage', () => {
+        const data = {
+            ...makeSerialized(),
+            selection: [1, 'x', null, 2],
         } as unknown as SerializedGameState;
-        expect(readSelection(data)).toEqual([1, 2, 3]);
+        expect(readSelection(data)).toEqual([1, 2]);
     });
 });
