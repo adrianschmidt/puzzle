@@ -196,6 +196,26 @@ describe('saveState quota handling', () => {
         // The earlier good save is untouched (we never removeItem first).
         expect(loadState()!.imageUrl).toBe('good.jpg');
     });
+
+    it('round-trips a compressed save (including selection) through loadSavedGame', () => {
+        const state = makeGameState();
+        const realSetItem = Storage.prototype.setItem;
+        const spy = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(function (this: Storage, key: string, value: string) {
+                if (!value.startsWith(COMPRESSED_MARKER)) {
+                    throw new DOMException('quota', 'QuotaExceededError');
+                }
+                realSetItem.call(this, key, value);
+            });
+        saveState(state, [1, 0]);
+        spy.mockRestore();
+
+        const loaded = loadSavedGame();
+        expect(loaded).toBeDefined();
+        expect(loaded!.state.pieces).toEqual(state.pieces);
+        expect(loaded!.selection).toEqual([1, 0]);
+    });
 });
 
 describe('saveState / loadSavedGame selection', () => {
