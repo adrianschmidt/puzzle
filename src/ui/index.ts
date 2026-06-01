@@ -74,6 +74,12 @@ export type {
 } from './new-game-dialog.js';
 
 export {
+    createCorruptSaveDialog,
+    buildCorruptSaveDownload,
+} from './corrupt-save-dialog.js';
+export type { CorruptSaveDialogOptions } from './corrupt-save-dialog.js';
+
+export {
     BACKGROUND_COLOUR_PRESETS,
     DEFAULT_COLOUR_ID,
     getColourPreset,

@@ -36,6 +36,43 @@ export const SAVE_DEBOUNCE_MS = 500;
 export type SaveResult = 'ok' | 'ok-compressed' | 'failed';
 
 /**
+ * Raw, undecoded copy of the save blobs as they sat in localStorage.
+ *
+ * Captured when a save is found to be unreadable so the UI can offer it for
+ * download before startup overwrites the keys with a fresh puzzle. `null`
+ * for a key that was absent. Values are verbatim — possibly compressed,
+ * possibly corrupt — which is exactly what a recovery/bug-report copy wants.
+ */
+export interface CorruptSaveData {
+    geometry: string | null;
+    progress: string | null;
+}
+
+/**
+ * Outcome of a load call.
+ *
+ * - `ok`         — a playable state was restored.
+ * - `empty`      — no save is present (the geometry key is absent).
+ * - `unreadable` — a save was present but could not be turned into a playable
+ *                  state (corruption, an unsupported version, or a torn /
+ *                  seed-mismatched key pair). Carries the raw blobs so the
+ *                  caller can offer them for download before they are
+ *                  overwritten, rather than silently destroying the data.
+ */
+export type LoadOutcome =
+    | { status: 'ok'; state: GameState; selection: number[] }
+    | { status: 'empty' }
+    | { status: 'unreadable'; raw: CorruptSaveData };
+
+/** Snapshot the raw save blobs verbatim (before any overwrite). */
+function snapshotRawSave(): CorruptSaveData {
+    return {
+        geometry: localStorage.getItem(STORAGE_KEY),
+        progress: localStorage.getItem(PROGRESS_KEY),
+    };
+}
+
+/**
  * Write a value to a localStorage key with compress-on-overflow.
  *
  * Tries a plain write; on any throw (quota on most browsers) retries once with
@@ -89,16 +126,27 @@ export function saveNewPuzzle(state: GameState, selection?: Iterable<number>): S
  * (groups/selection/completed) recombined into a GameState. Falls back to the
  * legacy single-key full blob (groups inline) when no progress key exists.
  * A geometry/progress pair with mismatched seeds, or a v11 static blob with no
- * progress, is treated as "no valid save".
+ * progress, is treated as a present-but-unreadable save.
  *
- * Never throws — all errors are caught and logged.
+ * Never throws. The geometry key being absent yields `empty`; any other
+ * failure to restore yields `unreadable` carrying the raw blobs (see
+ * {@link CorruptSaveData}) so the caller can offer them for download instead
+ * of silently destroying the data.
  */
-export function loadSavedGame(): { state: GameState; selection: number[] } | undefined {
+export function loadSavedGame(): LoadOutcome {
+    const staticRaw = localStorage.getItem(STORAGE_KEY);
+    if (staticRaw === null) {
+        // No geometry anchor = no save the player would recognize. (A stray
+        // progress key, if any, is a harmless torn-write artifact that the
+        // next save overwrites.)
+        return { status: 'empty' };
+    }
+
+    // From here a save is present. Any path that fails to produce a playable
+    // state reports `unreadable` with the raw blobs attached, so startup can
+    // warn the user and offer the data for download instead of silently
+    // regenerating over a lost puzzle.
     try {
-        const staticRaw = localStorage.getItem(STORAGE_KEY);
-        if (staticRaw === null) {
-            return undefined;
-        }
         const staticData: SerializedStaticState & SerializedGameState = JSON.parse(
             decompressFromStorage(staticRaw),
         );
@@ -120,24 +168,32 @@ export function loadSavedGame(): { state: GameState; selection: number[] } | und
                 diagnostics.warn(
                     'Discarding saved game: geometry/progress seeds do not match (torn or cross-puzzle write).',
                 );
-                return undefined;
+                return { status: 'unreadable', raw: snapshotRawSave() };
             }
-            return { state: recombine(staticData, progress), selection: readSelection(progress) };
+            return {
+                status: 'ok',
+                state: recombine(staticData, progress),
+                selection: readSelection(progress),
+            };
         }
 
         // No progress key: a legacy single-key blob has groups inline.
         if (Array.isArray(staticData.groups) && staticData.groups.length > 0) {
-            return { state: deserializeState(staticData), selection: readSelection(staticData) };
+            return {
+                status: 'ok',
+                state: deserializeState(staticData),
+                selection: readSelection(staticData),
+            };
         }
 
         // v11 static blob with no progress = torn write — nothing to restore.
         diagnostics.warn(
             'Discarding saved game: geometry present but no progress (torn write).',
         );
-        return undefined;
+        return { status: 'unreadable', raw: snapshotRawSave() };
     } catch (error) {
         diagnostics.warn('Failed to restore saved game state:', error);
-        return undefined;
+        return { status: 'unreadable', raw: snapshotRawSave() };
     }
 }
 
@@ -145,10 +201,12 @@ export function loadSavedGame(): { state: GameState; selection: number[] } | und
  * Load just the saved GameState, discarding any persisted selection.
  *
  * Thin wrapper over {@link loadSavedGame} for the existence check and any
- * caller that does not need the selection.
+ * caller that does not need the selection. An unreadable save reads as "no
+ * state" here (and is backed up as a side effect of the call).
  */
 export function loadState(): GameState | undefined {
-    return loadSavedGame()?.state;
+    const outcome = loadSavedGame();
+    return outcome.status === 'ok' ? outcome.state : undefined;
 }
 
 /**
