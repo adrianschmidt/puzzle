@@ -115,8 +115,12 @@ export function clearSavedState(): void {
  *
  * Also returns a `flush` method to save immediately and
  * a `cancel` method to discard the pending save.
+ *
+ * The optional `onSaveFailed` callback is invoked when a flushed save cannot
+ * be persisted (quota exceeded even after compression), so the caller can
+ * warn the user that their progress was not saved.
  */
-export function createDebouncedSave(): {
+export function createDebouncedSave(onSaveFailed?: () => void): {
     save: (state: GameState, selection?: Iterable<number>) => void;
     flush: () => void;
     cancel: () => void;
@@ -129,9 +133,12 @@ export function createDebouncedSave(): {
 
     function flushPending(): void {
         if (pendingState !== null) {
-            saveState(pendingState, pendingSelection ?? []);
+            const result = saveState(pendingState, pendingSelection ?? []);
             pendingState = null;
             pendingSelection = null;
+            if (result === 'failed') {
+                onSaveFailed?.();
+            }
         }
     }
 
