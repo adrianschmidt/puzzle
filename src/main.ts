@@ -16,7 +16,7 @@ import {
 } from './game/index.js';
 import {
     loadState,
-    loadSelection,
+    loadSavedGame,
     clearSavedState,
     createDebouncedSave,
 } from './persistence/index.js';
@@ -1317,11 +1317,10 @@ void (async () => {
         const loadedFromShare = await tryLoadSharedPuzzle();
         if (loadedFromShare) return;
 
-        const savedState = loadState();
-        if (savedState) {
-            const savedSelection = loadSelection();
-            initGame(savedState);
-            restorePersistedSelection(savedSelection);
+        const saved = loadSavedGame();
+        if (saved) {
+            initGame(saved.state);
+            restorePersistedSelection(saved.selection);
             return;
         }
 

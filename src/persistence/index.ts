@@ -12,7 +12,7 @@ export type {
 export {
     saveState,
     loadState,
-    loadSelection,
+    loadSavedGame,
     clearSavedState,
     createDebouncedSave,
     STORAGE_KEY,
