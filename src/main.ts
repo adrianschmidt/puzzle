@@ -1364,12 +1364,16 @@ void (async () => {
             // (in-memory) blobs for recovery. Boot continues once they close
             // the dialog. The pre-boot loading overlay (z-index above the
             // dialog) is hidden so the modal is visible.
+            track('save-unreadable', { reason: saved.reason });
             hideLoadingOverlay();
             await new Promise<void>((resolve) => {
                 createCorruptSaveDialog({
                     container: app,
                     raw: saved.raw,
-                    onDismiss: resolve,
+                    onDismiss: ({ downloaded }) => {
+                        track('save-recovery', { downloaded });
+                        resolve();
+                    },
                 });
             });
         }
