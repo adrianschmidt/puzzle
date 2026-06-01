@@ -18,6 +18,7 @@ import {
     createDebouncedSave,
     STORAGE_KEY,
 } from './storage.js';
+import { COMPRESSED_MARKER } from './compression.js';
 
 /** The persisted selection, or `[]` when nothing/none is saved. */
 function loadedSelection(): number[] {
@@ -137,6 +138,63 @@ describe('saveState / loadState', () => {
 
         const restored = loadState();
         expect(restored!.completed).toBe(true);
+    });
+});
+
+describe('saveState quota handling', () => {
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('returns "ok" and stores an uncompressed value for a normal save', () => {
+        const result = saveState(makeGameState());
+        expect(result).toBe('ok');
+        expect(localStorage.getItem(STORAGE_KEY)!.startsWith(COMPRESSED_MARKER)).toBe(false);
+    });
+
+    it('falls back to a compressed write when the plain write exceeds quota', () => {
+        const state = makeGameState();
+        const realSetItem = Storage.prototype.setItem;
+
+        // Reject the large uncompressed write; accept the compressed retry.
+        // Discriminate by the marker, not by size, so the test is robust.
+        const spy = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(function (this: Storage, key: string, value: string) {
+                if (!value.startsWith(COMPRESSED_MARKER)) {
+                    throw new DOMException('quota', 'QuotaExceededError');
+                }
+                realSetItem.call(this, key, value);
+            });
+
+        const result = saveState(state);
+        spy.mockRestore();
+
+        expect(result).toBe('ok-compressed');
+        const stored = localStorage.getItem(STORAGE_KEY)!;
+        expect(stored.startsWith(COMPRESSED_MARKER)).toBe(true);
+
+        const restored = loadState();
+        expect(restored!.pieces).toEqual(state.pieces);
+    });
+
+    it('preserves a prior good save and returns "failed" when both writes throw', () => {
+        saveState(makeGameState({ imageUrl: 'good.jpg' }));
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const spy = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(() => {
+                throw new DOMException('quota', 'QuotaExceededError');
+            });
+
+        const result = saveState(makeGameState({ imageUrl: 'too-big.jpg' }));
+        spy.mockRestore();
+        warnSpy.mockRestore();
+
+        expect(result).toBe('failed');
+        // The earlier good save is untouched (we never removeItem first).
+        expect(loadState()!.imageUrl).toBe('good.jpg');
     });
 });
 
