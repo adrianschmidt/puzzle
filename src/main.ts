@@ -1382,21 +1382,29 @@ void (async () => {
             });
         }
 
-        // No (readable) saved game: use the preferred size and cut style
+        // No (readable) saved game: use the saved preferences. Mirror the
+        // New Game dialog path so a first-load (or post-regeneration) puzzle
+        // respects every remembered preference — otherwise composable cuts,
+        // image source/category, and vibrancy silently fall back to defaults
+        // and the resulting save (and any share link from it) wouldn't match
+        // what the user last chose.
         const preferredSizeId = loadSizePreference();
         const option = getSizeOption(preferredSizeId);
         const preferredCutStyle = loadCutStylePreference() as CutStyle;
+        const preferredComposable = loadComposableConfigPreference();
         const preferredFractalConfig = loadFractalConfigPreference();
         const preferredRotationEnabled = loadRotationEnabledPreference();
         const preferredFreeRotationEnabled = loadFreeRotationEnabledPreference();
         await startNewGame(
             toGridSize(option),
             preferredCutStyle,
-            undefined,
-            undefined,
-            undefined,
+            preferredCutStyle === 'composable' && preferredComposable
+                ? sliderConfigToGeneratorConfig(preferredComposable)
+                : undefined,
+            loadImageSourcePreference(),
+            loadImageCategoryPreference(),
             preferredFractalConfig,
-            undefined,
+            loadVibrantPreference(),
             preferredRotationEnabled,
             preferredFreeRotationEnabled,
         );
