@@ -391,4 +391,32 @@ describe('createDebouncedSave', () => {
 
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     });
+
+    it('invokes onSaveFailed when a flushed save fails', () => {
+        const onSaveFailed = vi.fn();
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const setItemSpy = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(() => {
+                throw new DOMException('quota', 'QuotaExceededError');
+            });
+
+        const { save } = createDebouncedSave(onSaveFailed);
+        save(makeGameState());
+        vi.advanceTimersByTime(500);
+
+        expect(onSaveFailed).toHaveBeenCalledOnce();
+        setItemSpy.mockRestore();
+        warnSpy.mockRestore();
+    });
+
+    it('does not invoke onSaveFailed on a successful save', () => {
+        const onSaveFailed = vi.fn();
+        const { save } = createDebouncedSave(onSaveFailed);
+
+        save(makeGameState());
+        vi.advanceTimersByTime(500);
+
+        expect(onSaveFailed).not.toHaveBeenCalled();
+    });
 });
