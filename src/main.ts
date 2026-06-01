@@ -1317,6 +1317,10 @@ async function tryLoadSharedPuzzle(): Promise<boolean> {
         return false;
     }
 
+    // An unreadable save reads as no progress here, so its recovery blobs are
+    // not offered for download on this path — corrupt-save recovery is
+    // deliberately startup-only. The user is explicitly navigating to a new
+    // puzzle, and clearSavedState() below would overwrite the blobs anyway.
     const hasExistingProgress = !!loadState();
     if (hasExistingProgress) {
         const ok = window.confirm('Load shared puzzle? Your current progress will be lost.');
