@@ -1,52 +1,58 @@
 /**
  * Persistence layer for puzzle game state.
  *
- * Saves and loads GameState to/from localStorage with debounced writes.
+ * Two-key model:
+ * - STORAGE_KEY  ('puzzle-game-state')  — static geometry + metadata, written once per puzzle.
+ * - PROGRESS_KEY ('puzzle-progress')    — small mutable blob (groups/selection/completed),
+ *                                         written on every debounced save.
+ *
  * All serialization/deserialization goes through the serialization module.
  */
 
 import { diagnostics } from '../diagnostics.js';
 import type { GameState } from '../model/types.js';
 import {
-    serializeState,
+    serializeStatic,
+    serializeProgress,
     deserializeState,
+    recombine,
     readSelection,
+    type SerializedStaticState,
+    type SerializedProgress,
     type SerializedGameState,
 } from './serialization.js';
 import { compressForStorage, decompressFromStorage } from './compression.js';
 
-/** localStorage key for the saved game state. */
+/** localStorage key for the static geometry + metadata blob. */
 export const STORAGE_KEY = 'puzzle-game-state';
+
+/** localStorage key for the small mutable progress blob (groups/selection/completed). */
+export const PROGRESS_KEY = 'puzzle-progress';
 
 /** Debounce interval for auto-save (milliseconds). */
 export const SAVE_DEBOUNCE_MS = 500;
 
-/** Outcome of a {@link saveState} call. */
+/** Outcome of a save call. */
 export type SaveResult = 'ok' | 'ok-compressed' | 'failed';
 
 /**
- * Save a GameState to localStorage.
+ * Write a value to a localStorage key with compress-on-overflow.
  *
- * Tries a plain JSON write first. If that throws (quota exceeded — large
- * traced-tab puzzles can exceed the ~4.75 MB ceiling), retries once with an
- * lz-string-compressed payload. If the compressed write also throws, the
- * previous save is left intact (we never clear it first) and `'failed'` is
- * returned so the caller can warn the user.
+ * Tries a plain write; on any throw (quota on most browsers) retries once with
+ * an lz-string-compressed payload. If both throw, the previous value at `key`
+ * is left intact (we never clear it first) and `'failed'` is returned.
  */
-export function saveState(state: GameState, selection?: Iterable<number>): SaveResult {
-    const json = JSON.stringify(serializeState(state, selection));
-
+function writeWithOverflow(key: string, json: string): SaveResult {
     try {
-        localStorage.setItem(STORAGE_KEY, json);
+        localStorage.setItem(key, json);
         return 'ok';
     } catch {
-        // Any setItem failure (quota on most browsers) — retry compressed.
         try {
-            localStorage.setItem(STORAGE_KEY, compressForStorage(json));
+            localStorage.setItem(key, compressForStorage(json));
             return 'ok-compressed';
         } catch (error) {
             diagnostics.warn(
-                'Failed to save game state (quota or other storage error, even after compression):',
+                `Failed to save "${key}" (quota or other storage error, even after compression):`,
                 error,
             );
             return 'failed';
@@ -54,36 +60,72 @@ export function saveState(state: GameState, selection?: Iterable<number>): SaveR
     }
 }
 
+/** Persist the static geometry + metadata blob. Written once per puzzle. */
+export function saveGeometry(state: GameState): SaveResult {
+    return writeWithOverflow(STORAGE_KEY, JSON.stringify(serializeStatic(state)));
+}
+
+/** Persist the small mutable progress blob. Written on every debounced save. */
+export function saveProgress(state: GameState, selection?: Iterable<number>): SaveResult {
+    return writeWithOverflow(PROGRESS_KEY, JSON.stringify(serializeProgress(state, selection)));
+}
+
 /**
- * Load the saved game together with its persisted multi-select selection.
+ * Persist a freshly created puzzle: geometry (once) + initial progress.
+ * Used on new game and share-link load. Worst sub-result wins.
+ */
+export function saveNewPuzzle(state: GameState, selection?: Iterable<number>): SaveResult {
+    const g = saveGeometry(state);
+    const p = saveProgress(state, selection);
+    if (g === 'failed' || p === 'failed') return 'failed';
+    if (g === 'ok-compressed' || p === 'ok-compressed') return 'ok-compressed';
+    return 'ok';
+}
+
+/**
+ * Load the saved game and its multi-select selection.
  *
- * Both come from a single parse of the one `STORAGE_KEY` blob — the
- * selection is stored *inside* the serialized state, so reading them
- * together preserves the "one key, one parse" model. The selection ids are
- * sanitized but not checked against the live groups — the caller prunes ids
- * that no longer exist.
- *
- * Returns `undefined` if:
- * - No saved state exists
- * - The saved data is corrupted or unparseable
- * - The state version is unsupported
+ * New split format: a STATIC blob (geometry + metadata) plus a PROGRESS blob
+ * (groups/selection/completed) recombined into a GameState. Falls back to the
+ * legacy single-key full blob (groups inline) when no progress key exists.
+ * A geometry/progress pair with mismatched seeds, or a v11 static blob with no
+ * progress, is treated as "no valid save".
  *
  * Never throws — all errors are caught and logged.
  */
 export function loadSavedGame(): { state: GameState; selection: number[] } | undefined {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-
-        if (raw === null) {
+        const staticRaw = localStorage.getItem(STORAGE_KEY);
+        if (staticRaw === null) {
             return undefined;
         }
+        const staticData: SerializedStaticState & SerializedGameState = JSON.parse(
+            decompressFromStorage(staticRaw),
+        );
 
-        const parsed: SerializedGameState = JSON.parse(decompressFromStorage(raw));
+        const progressRaw = localStorage.getItem(PROGRESS_KEY);
+        if (progressRaw !== null) {
+            const progress: SerializedProgress = JSON.parse(decompressFromStorage(progressRaw));
+            if (
+                staticData.seed !== undefined &&
+                progress.seed !== undefined &&
+                staticData.seed !== progress.seed
+            ) {
+                // Torn / cross-puzzle pair — don't load a mismatched puzzle.
+                return undefined;
+            }
+            return { state: recombine(staticData, progress), selection: readSelection(progress) };
+        }
 
-        return { state: deserializeState(parsed), selection: readSelection(parsed) };
+        // No progress key: a legacy single-key blob has groups inline.
+        if (Array.isArray(staticData.groups) && staticData.groups.length > 0) {
+            return { state: deserializeState(staticData), selection: readSelection(staticData) };
+        }
+
+        // v11 static blob with no progress = torn write — nothing to restore.
+        return undefined;
     } catch (error) {
         diagnostics.warn('Failed to restore saved game state:', error);
-
         return undefined;
     }
 }
@@ -103,15 +145,15 @@ export function loadState(): GameState | undefined {
  */
 export function clearSavedState(): void {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PROGRESS_KEY);
 }
 
 /**
  * Create a debounced save function.
  *
  * Returns a function that, when called with a GameState,
- * schedules a save after SAVE_DEBOUNCE_MS. Repeated calls
- * within the interval reset the timer (only the last state
- * is saved).
+ * schedules a progress save after SAVE_DEBOUNCE_MS. Repeated calls
+ * within the interval reset the timer (only the last state is saved).
  *
  * Also returns a `flush` method to save immediately and
  * a `cancel` method to discard the pending save.
@@ -133,7 +175,7 @@ export function createDebouncedSave(onSaveFailed?: () => void): {
 
     function flushPending(): void {
         if (pendingState !== null) {
-            const result = saveState(pendingState, pendingSelection ?? []);
+            const result = saveProgress(pendingState, pendingSelection ?? []);
             pendingState = null;
             pendingSelection = null;
             if (result === 'failed') {
