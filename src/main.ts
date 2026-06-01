@@ -601,6 +601,17 @@ function applyViewportTransform(): void {
 
 const debouncedSave = createDebouncedSave();
 
+// Persist any pending debounced save before the page goes away, so a change
+// made within the 500ms debounce window (e.g. a just-tapped selection) is not
+// lost on a fast reload or tab close. `pagehide` covers reloads, navigations
+// and closes; `visibilitychange` → hidden additionally covers mobile
+// app-switch / background-kill, where `pagehide` is not guaranteed to fire.
+// `flush()` is a no-op when nothing is pending, so firing on both is safe.
+window.addEventListener('pagehide', () => debouncedSave.flush());
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') debouncedSave.flush();
+});
+
 /**
  * Project the visual bounds of the given group from world space into
  * screen space, using the current viewport transform. Returns `null` if
