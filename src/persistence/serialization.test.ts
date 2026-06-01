@@ -8,6 +8,9 @@ import {
     serializeState,
     deserializeState,
     readSelection,
+    serializeStatic,
+    serializeProgress,
+    recombine,
     STATE_VERSION,
     type SerializedGameState,
 } from './serialization.js';
@@ -820,5 +823,69 @@ describe('readSelection', () => {
             selection: [1, 'x', null, 2],
         } as unknown as SerializedGameState;
         expect(readSelection(data)).toEqual([1, 2]);
+    });
+});
+
+describe('static/progress split (v11)', () => {
+    it('serializeStatic omits groups/selection/completed and tags v11', () => {
+        const state = makeGameState();
+        const s = serializeStatic(state);
+        expect(s.version).toBe(11);
+        expect('groups' in s).toBe(false);
+        expect('completed' in s).toBe(false);
+        expect(s.pieces).toEqual(state.pieces);
+        expect(s.imageUrl).toBe(state.imageUrl);
+    });
+
+    it('serializeProgress carries groups, completed, selection and seed', () => {
+        const state = makeGameState({ completed: true, seed: 42 });
+        const p = serializeProgress(state, [1, 0]);
+        expect(p.version).toBe(11);
+        expect(p.completed).toBe(true);
+        expect(p.seed).toBe(42);
+        expect(p.selection).toEqual([1, 0]);
+        expect(p.groups.length).toBe(state.groups.length);
+    });
+
+    it('serializeProgress omits an empty selection', () => {
+        const p = serializeProgress(makeGameState(), []);
+        expect('selection' in p).toBe(false);
+    });
+
+    it('recombine rebuilds an equal GameState from static + progress', () => {
+        const state = makeGameState({ seed: 7, cutStyle: 'composable', completed: true });
+        const restored = recombine(serializeStatic(state), serializeProgress(state, []));
+        expect(restored.pieces).toEqual(state.pieces);
+        expect(restored.groups.length).toBe(state.groups.length);
+        expect(restored.groups[0].pieces).toBeInstanceOf(Map);
+        expect(restored.completed).toBe(true);
+        expect(restored.seed).toBe(7);
+        expect(restored.cutStyle).toBe('composable');
+        expect(restored.piecesById.size).toBe(state.pieces.length);
+    });
+
+    it('recombine throws on empty pieces', () => {
+        const state = makeGameState();
+        const bad = { ...serializeStatic(state), pieces: [] };
+        expect(() => recombine(bad as never, serializeProgress(state, []))).toThrow();
+    });
+
+    it('round-trips the selection through serializeProgress + readSelection', () => {
+        expect(readSelection(serializeProgress(makeGameState(), [2, 0]))).toEqual([2, 0]);
+    });
+
+    it('preserves a non-default rotationMode through the split', () => {
+        const state = makeGameState({ rotationMode: 'free' });
+        const restored = recombine(serializeStatic(state), serializeProgress(state, []));
+        expect(restored.rotationMode).toBe('free');
+    });
+
+    it('derives imageSize from pieces when the static blob omits it', () => {
+        const state = makeGameState();
+        const s = serializeStatic(state);
+        delete (s as { imageSize?: unknown }).imageSize;
+        const restored = recombine(s, serializeProgress(state, []));
+        expect(restored.imageSize.width).toBeGreaterThan(0);
+        expect(restored.imageSize.height).toBeGreaterThan(0);
     });
 });
