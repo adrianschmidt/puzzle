@@ -949,7 +949,9 @@ async function startNewGame(
         initGame(state);
         gatherAndZoomToFit();
         renderer.renderState(gameState);
-        saveNewPuzzle(gameState, selectionManager.selectedGroupIds);
+        if (saveNewPuzzle(gameState, selectionManager.selectedGroupIds) === 'failed') {
+            notifySaveFailed();
+        }
 
         const data: NewGameData = {
             source: 'fresh',
@@ -1265,7 +1267,9 @@ async function loadSharedPuzzle(
         initGame(state);
         gatherAndZoomToFit();
         renderer.renderState(gameState);
-        saveNewPuzzle(gameState, selectionManager.selectedGroupIds);
+        if (saveNewPuzzle(gameState, selectionManager.selectedGroupIds) === 'failed') {
+            notifySaveFailed();
+        }
 
         const data: NewGameData = {
             source: 'shared',
