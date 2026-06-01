@@ -25,7 +25,16 @@ import { COMPRESSED_MARKER } from './compression.js';
 
 /** The persisted selection, or `[]` when nothing/none is saved. */
 function loadedSelection(): number[] {
-    return loadSavedGame()?.selection ?? [];
+    const outcome = loadSavedGame();
+    return outcome.status === 'ok' ? outcome.selection : [];
+}
+
+/** Assert the save loaded successfully and return its `ok` payload. */
+function expectLoaded(): { state: GameState; selection: number[] } {
+    const outcome = loadSavedGame();
+    expect(outcome.status).toBe('ok');
+    if (outcome.status !== 'ok') throw new Error('expected an ok load outcome');
+    return outcome;
 }
 import { STATE_VERSION } from './serialization.js';
 import {
@@ -215,10 +224,9 @@ describe('saveNewPuzzle quota handling', () => {
         saveNewPuzzle(state, [1, 0]);
         spy.mockRestore();
 
-        const loaded = loadSavedGame();
-        expect(loaded).toBeDefined();
-        expect(loaded!.state.pieces).toEqual(state.pieces);
-        expect(loaded!.selection).toEqual([1, 0]);
+        const loaded = expectLoaded();
+        expect(loaded.state.pieces).toEqual(state.pieces);
+        expect(loaded.selection).toEqual([1, 0]);
     });
 });
 
@@ -248,25 +256,27 @@ describe('saveNewPuzzle / loadSavedGame selection', () => {
         expect(loadedSelection()).toEqual([]);
     });
 
-    it('returns an empty array (undefined game) when nothing is saved at all', () => {
-        expect(loadSavedGame()).toBeUndefined();
+    it('reports "empty" when nothing is saved at all', () => {
+        expect(loadSavedGame().status).toBe('empty');
         expect(loadedSelection()).toEqual([]);
     });
 
-    it('returns undefined for corrupted JSON', () => {
+    it('reports "unreadable" for corrupted JSON', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         localStorage.setItem(STORAGE_KEY, '{ not json');
-        expect(loadSavedGame()).toBeUndefined();
+        expect(loadSavedGame().status).toBe('unreadable');
         expect(loadedSelection()).toEqual([]);
+        warnSpy.mockRestore();
     });
 
     it('returns the state and selection from a recombined pair', () => {
         const state = makeGameState();
         saveNewPuzzle(state, [0, 1]);
 
-        const saved = loadSavedGame();
-        expect(saved!.state.imageUrl).toBe('test-image.jpg');
-        expect(saved!.state.groups.length).toBe(2);
-        expect(saved!.selection).toEqual([0, 1]);
+        const saved = expectLoaded();
+        expect(saved.state.imageUrl).toBe('test-image.jpg');
+        expect(saved.state.groups.length).toBe(2);
+        expect(saved.selection).toEqual([0, 1]);
     });
 });
 
@@ -299,10 +309,10 @@ describe('split storage', () => {
         expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
         expect(localStorage.getItem(PROGRESS_KEY)).not.toBeNull();
 
-        const loaded = loadSavedGame();
-        expect(loaded!.state.pieces).toEqual(state.pieces);
-        expect(loaded!.state.groups.length).toBe(state.groups.length);
-        expect(loaded!.selection).toEqual([1, 0]);
+        const loaded = expectLoaded();
+        expect(loaded.state.pieces).toEqual(state.pieces);
+        expect(loaded.state.groups.length).toBe(state.groups.length);
+        expect(loaded.selection).toEqual([1, 0]);
     });
 
     it('saveProgress writes only the progress key, leaving the geometry untouched', () => {
@@ -312,25 +322,25 @@ describe('split storage', () => {
 
         saveProgress(state, [2]);
         expect(localStorage.getItem(STORAGE_KEY)).toBe(geometryBefore); // unchanged
-        expect(loadSavedGame()!.selection).toEqual([2]);
+        expect(expectLoaded().selection).toEqual([2]);
     });
 
-    it('discards a torn pair (geometry present, progress missing) and logs why', () => {
+    it('reports "unreadable" for a torn pair (geometry present, progress missing) and logs why', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         saveGeometry(makeGameState({ seed: 5 })); // writes only the v11 static key
         expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
-        expect(loadSavedGame()).toBeUndefined();
+        expect(loadSavedGame().status).toBe('unreadable');
         expect(warnSpy).toHaveBeenCalled(); // intentional discard leaves a trail
         warnSpy.mockRestore();
     });
 
-    it('discards a seed-mismatched pair and logs why', () => {
+    it('reports "unreadable" for a seed-mismatched pair and logs why', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const a = makeGameState({ seed: 1 });
         const b = makeGameState({ seed: 2 });
         saveGeometry(a);
         saveProgress(b, []); // different seed
-        expect(loadSavedGame()).toBeUndefined();
+        expect(loadSavedGame().status).toBe('unreadable');
         expect(warnSpy).toHaveBeenCalled(); // intentional discard leaves a trail
         warnSpy.mockRestore();
     });
@@ -357,10 +367,10 @@ describe('split storage', () => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy));
         expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
 
-        const loaded = loadSavedGame();
-        expect(loaded!.state.pieces).toEqual(state.pieces);
-        expect(loaded!.state.groups.length).toBe(state.groups.length);
-        expect(loaded!.selection).toEqual([1]);
+        const loaded = expectLoaded();
+        expect(loaded.state.pieces).toEqual(state.pieces);
+        expect(loaded.state.groups.length).toBe(state.groups.length);
+        expect(loaded.selection).toEqual([1]);
     });
 
     it('prefers the progress key over a legacy inline-groups blob (migration)', () => {
@@ -377,10 +387,10 @@ describe('split storage', () => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy));
         // A newer progress write lands in the progress key.
         saveProgress(state, [0]);
-        const loaded = loadSavedGame();
-        expect(loaded!.selection).toEqual([0]); // from progress, not the legacy blob
-        expect(loaded!.state.pieces).toEqual(state.pieces); // geometry from the legacy static blob
-        expect(loaded!.state.groups.length).toBe(state.groups.length); // groups recombined from progress
+        const loaded = expectLoaded();
+        expect(loaded.selection).toEqual([0]); // from progress, not the legacy blob
+        expect(loaded.state.pieces).toEqual(state.pieces); // geometry from the legacy static blob
+        expect(loaded.state.groups.length).toBe(state.groups.length); // groups recombined from progress
     });
 
     it('clearSavedState removes both keys', () => {
@@ -390,10 +400,63 @@ describe('split storage', () => {
         expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
     });
 
-    it('discards an orphaned progress key when geometry is missing', () => {
+    it('reports "empty" for an orphaned progress key when geometry is missing', () => {
         saveProgress(makeGameState({ seed: 5 }), [1]); // only the progress key, no geometry
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-        expect(loadSavedGame()).toBeUndefined();
+        // No geometry anchor: the stray progress key is a harmless torn-write
+        // artifact, not a recognizable save, so this is "empty" not "unreadable".
+        expect(loadSavedGame().status).toBe('empty');
+    });
+});
+
+describe('unreadable save carries the raw blobs for download', () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        localStorage.clear();
+        warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        warnSpy.mockRestore();
+    });
+
+    it('attaches the raw geometry verbatim on corrupt JSON', () => {
+        localStorage.setItem(STORAGE_KEY, '{not valid json!!!');
+
+        const outcome = loadSavedGame();
+        expect(outcome.status).toBe('unreadable');
+        if (outcome.status !== 'unreadable') throw new Error('expected unreadable');
+        expect(outcome.raw.geometry).toBe('{not valid json!!!');
+        expect(outcome.raw.progress).toBeNull();
+    });
+
+    it('attaches both raw blobs for a seed-mismatched pair', () => {
+        saveGeometry(makeGameState({ seed: 1 }));
+        saveProgress(makeGameState({ seed: 2 }), []);
+        const staticRaw = localStorage.getItem(STORAGE_KEY);
+        const progressRaw = localStorage.getItem(PROGRESS_KEY);
+
+        const outcome = loadSavedGame();
+        expect(outcome.status).toBe('unreadable');
+        if (outcome.status !== 'unreadable') throw new Error('expected unreadable');
+        expect(outcome.raw.geometry).toBe(staticRaw);
+        expect(outcome.raw.progress).toBe(progressRaw);
+    });
+
+    it('does not modify localStorage (read-only — the live keys are left intact)', () => {
+        localStorage.setItem(STORAGE_KEY, '{not valid json!!!');
+        const before = localStorage.getItem(STORAGE_KEY);
+        const keyCountBefore = localStorage.length;
+
+        loadSavedGame();
+
+        expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
+        expect(localStorage.length).toBe(keyCountBefore); // no extra backup keys written
+    });
+
+    it('reports "empty" (no raw) when nothing is saved', () => {
+        expect(loadSavedGame()).toEqual({ status: 'empty' });
     });
 });
 

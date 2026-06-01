@@ -43,6 +43,7 @@ import {
     createAttributionElement,
     removeAttribution,
     createNewGameDialog,
+    createCorruptSaveDialog,
     showCompletionOverlay as renderCompletionOverlay,
     showToast,
     showLoadingOverlay,
@@ -1352,13 +1353,28 @@ void (async () => {
         if (loadedFromShare) return;
 
         const saved = loadSavedGame();
-        if (saved) {
+        if (saved.status === 'ok') {
             initGame(saved.state);
             restorePersistedSelection(saved.selection);
             return;
         }
+        if (saved.status === 'unreadable') {
+            // A save was present but couldn't be restored. Stop before the
+            // fresh puzzle overwrites it: let the player download the raw
+            // (in-memory) blobs for recovery. Boot continues once they close
+            // the dialog. The pre-boot loading overlay (z-index above the
+            // dialog) is hidden so the modal is visible.
+            hideLoadingOverlay();
+            await new Promise<void>((resolve) => {
+                createCorruptSaveDialog({
+                    container: app,
+                    raw: saved.raw,
+                    onDismiss: resolve,
+                });
+            });
+        }
 
-        // First load with no saved game: use the preferred size and cut style
+        // No (readable) saved game: use the preferred size and cut style
         const preferredSizeId = loadSizePreference();
         const option = getSizeOption(preferredSizeId);
         const preferredCutStyle = loadCutStylePreference() as CutStyle;
