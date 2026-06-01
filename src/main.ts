@@ -600,19 +600,40 @@ function applyViewportTransform(): void {
     renderer.setViewportTransform(state.scale, state.offset.x, state.offset.y);
 }
 
-// Surface a save failure (quota exceeded even after compression) once, then
-// suppress repeats for a while so the debounced save loop can't spam toasts.
+// Surface a save failure (quota exceeded even after compression). Every failure
+// emits telemetry so the regression is observable; the user-facing toast is
+// rate-limited so a fast debounced save loop can't spam it — and a suppressed
+// repeat still leaves a diagnostic trail rather than vanishing silently.
 let lastSaveFailedToastAt = 0;
-function notifySaveFailed(): void {
+function notifySaveFailed(op: 'progress' | 'new-puzzle'): void {
+    track('save-failed', { op });
     const now = Date.now();
     if (now - lastSaveFailedToastAt < 10_000) {
+        diagnostics.warn(`Save failed (${op}) within the toast-dedup window; toast suppressed.`);
         return;
     }
     lastSaveFailedToastAt = now;
     showToast("This puzzle is too large to save — your progress won't be kept across reloads.");
 }
 
-const debouncedSave = createDebouncedSave(notifySaveFailed);
+/**
+ * Persist a freshly created or loaded puzzle: geometry (once) + initial progress.
+ * Surfaces a failed write as a toast, and records when the geometry write crossed
+ * into the compression regime (near-quota — one growth step from total failure).
+ */
+function persistNewPuzzle(): void {
+    const result = saveNewPuzzle(gameState, selectionManager.selectedGroupIds);
+    if (result === 'failed') {
+        notifySaveFailed('new-puzzle');
+    } else if (result === 'ok-compressed') {
+        track('save-compressed', {
+            cutStyle: gameState.cutStyle ?? 'classic',
+            pieceCount: gameState.pieces.length,
+        });
+    }
+}
+
+const debouncedSave = createDebouncedSave(() => notifySaveFailed('progress'));
 
 // Persist any pending debounced save before the page goes away, so a change
 // made within the 500ms debounce window (e.g. a just-tapped selection) is not
@@ -949,9 +970,7 @@ async function startNewGame(
         initGame(state);
         gatherAndZoomToFit();
         renderer.renderState(gameState);
-        if (saveNewPuzzle(gameState, selectionManager.selectedGroupIds) === 'failed') {
-            notifySaveFailed();
-        }
+        persistNewPuzzle();
 
         const data: NewGameData = {
             source: 'fresh',
@@ -1267,9 +1286,7 @@ async function loadSharedPuzzle(
         initGame(state);
         gatherAndZoomToFit();
         renderer.renderState(gameState);
-        if (saveNewPuzzle(gameState, selectionManager.selectedGroupIds) === 'failed') {
-            notifySaveFailed();
-        }
+        persistNewPuzzle();
 
         const data: NewGameData = {
             source: 'shared',

@@ -106,12 +106,20 @@ export function loadSavedGame(): { state: GameState; selection: number[] } | und
         const progressRaw = localStorage.getItem(PROGRESS_KEY);
         if (progressRaw !== null) {
             const progress: SerializedProgress = JSON.parse(decompressFromStorage(progressRaw));
+            // The guard only fires when both seeds are present. That is safe:
+            // every puzzle created by `createNewGame` is assigned a seed, so both
+            // blobs always carry one; the only seedless blobs are pre-v4 legacy
+            // saves, which have no progress key and take the single-key path
+            // below. Two seedless blobs from different puzzles is unreachable.
             if (
                 staticData.seed !== undefined &&
                 progress.seed !== undefined &&
                 staticData.seed !== progress.seed
             ) {
                 // Torn / cross-puzzle pair — don't load a mismatched puzzle.
+                diagnostics.warn(
+                    'Discarding saved game: geometry/progress seeds do not match (torn or cross-puzzle write).',
+                );
                 return undefined;
             }
             return { state: recombine(staticData, progress), selection: readSelection(progress) };
@@ -123,6 +131,9 @@ export function loadSavedGame(): { state: GameState; selection: number[] } | und
         }
 
         // v11 static blob with no progress = torn write — nothing to restore.
+        diagnostics.warn(
+            'Discarding saved game: geometry present but no progress (torn write).',
+        );
         return undefined;
     } catch (error) {
         diagnostics.warn('Failed to restore saved game state:', error);
