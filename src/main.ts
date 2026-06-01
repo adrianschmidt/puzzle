@@ -599,7 +599,19 @@ function applyViewportTransform(): void {
     renderer.setViewportTransform(state.scale, state.offset.x, state.offset.y);
 }
 
-const debouncedSave = createDebouncedSave();
+// Surface a save failure (quota exceeded even after compression) once, then
+// suppress repeats for a while so the debounced save loop can't spam toasts.
+let lastSaveFailedToastAt = 0;
+function notifySaveFailed(): void {
+    const now = Date.now();
+    if (now - lastSaveFailedToastAt < 10_000) {
+        return;
+    }
+    lastSaveFailedToastAt = now;
+    showToast("This puzzle is too large to save — your progress won't be kept across reloads.");
+}
+
+const debouncedSave = createDebouncedSave(notifySaveFailed);
 
 // Persist any pending debounced save before the page goes away, so a change
 // made within the 500ms debounce window (e.g. a just-tapped selection) is not
