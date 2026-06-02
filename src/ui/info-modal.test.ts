@@ -114,6 +114,29 @@ describe('createInfoModal', () => {
         ).toBe(false);
     });
 
+    it('gives every toggle checkbox the shared form-checkbox accent class', () => {
+        // Pass state so the share section (guarded on options.state) renders;
+        // its "Include my current progress" checkbox is itself an
+        // .info-setting-toggle and must carry the shared accent class too.
+        createInfoModal({ container, state: makeState() });
+
+        const checkboxes = container.querySelectorAll<HTMLInputElement>(
+            '.info-setting-toggle input[type="checkbox"]',
+        );
+        expect(checkboxes.length).toBeGreaterThan(0);
+        for (const checkbox of checkboxes) {
+            expect(checkbox.classList.contains('form-checkbox')).toBe(true);
+        }
+
+        // Explicitly assert the share checkbox is among those covered, so the
+        // loop above can't pass vacuously by the share section not rendering.
+        const shareCheckbox = container.querySelector<HTMLInputElement>(
+            '[data-testid="share-include-progress"]',
+        );
+        expect(shareCheckbox).not.toBeNull();
+        expect(shareCheckbox!.classList.contains('form-checkbox')).toBe(true);
+    });
+
     it('reflects pre-existing show-debug-pieces class as the checkbox state on open', () => {
         document.documentElement.classList.add('show-debug-pieces');
         createInfoModal({ container });

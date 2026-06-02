@@ -339,6 +339,7 @@ function buildOffsetDragSetting(): HTMLElement {
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
+    checkbox.className = 'form-checkbox';
     checkbox.dataset.testid = 'offset-drag-toggle';
     checkbox.checked = loadOffsetDragPreference();
     checkbox.addEventListener('change', () => {
@@ -584,6 +585,7 @@ function buildDebugToggleSetting(args: {
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
+    checkbox.className = 'form-checkbox';
     checkbox.dataset.testid = args.testid;
     checkbox.checked = document.documentElement.classList.contains(args.htmlClass);
     checkbox.addEventListener('change', () => {

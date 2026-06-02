@@ -757,6 +757,19 @@ html, body {
   cursor: pointer;
 }
 
+/*
+ * Shared checkbox styling for form controls across dialogs (New Game dialog
+ * and info modal). A single class governs both size and accent so checkboxes
+ * match everywhere. Uses the same purple accent as the other dialog inputs so
+ * the native check contrasts clearly in both light and dark UI schemes.
+ */
+.form-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--lime-primary-color, #7c6faa);
+  cursor: pointer;
+}
+
 .dialog-row-value {
   font-size: 0.75rem;
   opacity: 0.6;
@@ -1106,12 +1119,10 @@ details.info-section[open] > .info-section-summary {
   cursor: pointer;
 }
 
+/* Size, accent and cursor come from .form-checkbox; only the layout margin
+ * reset is specific to the info-modal toggle rows. */
 .info-setting-toggle input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
   margin: 0;
-  cursor: pointer;
-  accent-color: var(--ui-fg);
 }
 
 .info-setting-slider {

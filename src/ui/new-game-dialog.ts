@@ -262,6 +262,7 @@ function buildImageSourceSection(args: {
     vibrantLabel.textContent = 'Vibrant colours';
     const vibrantCheckbox = document.createElement('input');
     vibrantCheckbox.type = 'checkbox';
+    vibrantCheckbox.className = 'form-checkbox';
     vibrantCheckbox.checked = args.savedVibrant ?? false;
     vibrantRow.appendChild(vibrantLabel);
     vibrantRow.appendChild(vibrantCheckbox);
@@ -466,6 +467,7 @@ function appendCheckboxRow(
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
+    checkbox.className = 'form-checkbox';
     checkbox.checked = initialChecked;
 
     row.appendChild(label);

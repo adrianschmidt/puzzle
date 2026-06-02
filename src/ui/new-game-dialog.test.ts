@@ -261,6 +261,19 @@ describe('createNewGameDialog', () => {
         expect(checkbox!.checked).toBe(false);
     });
 
+    it('gives the rotation checkbox the shared form-checkbox accent class', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            onSelect: vi.fn(),
+        });
+
+        const checkbox = container.querySelector<HTMLInputElement>(
+            '.rotation-row input[type="checkbox"]',
+        );
+        expect(checkbox!.classList.contains('form-checkbox')).toBe(true);
+    });
+
     it('passes rotationEnabled: true when the top-level checkbox is ticked, regardless of cut style', () => {
         const onSelect = vi.fn();
         createNewGameDialog({
