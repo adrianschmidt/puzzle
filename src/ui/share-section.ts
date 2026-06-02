@@ -38,6 +38,7 @@ export function attachShareSection(
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
+    checkbox.className = 'form-checkbox';
     checkbox.dataset.testid = 'share-include-progress';
 
     const labelText = document.createElement('span');
