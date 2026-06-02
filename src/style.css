@@ -8,6 +8,12 @@
   --ui-overlay: rgba(255, 255, 255, 0.1);
   --ui-overlay-hover: rgba(255, 255, 255, 0.18);
   --ui-overlay-active: rgba(255, 255, 255, 0.25);
+  /* Floating-control scrim — opposite tone to the foreground so controls
+     stay legible over same-tone pieces (issue #388). Dark scheme (light
+     controls) = dark scrim to contrast same-tone pieces. */
+  --ui-control-scrim: rgba(0, 0, 0, 0.45);
+  --ui-control-scrim-hover: rgba(0, 0, 0, 0.55);
+  --ui-control-scrim-active: rgba(0, 0, 0, 0.65);
   --ui-border-subtle: rgba(255, 255, 255, 0.1);
   --ui-border: rgba(255, 255, 255, 0.2);
   --ui-border-hover: rgba(255, 255, 255, 0.35);
@@ -27,6 +33,10 @@
   --ui-overlay: rgba(0, 0, 0, 0.07);
   --ui-overlay-hover: rgba(0, 0, 0, 0.12);
   --ui-overlay-active: rgba(0, 0, 0, 0.18);
+  /* Light scheme = light scrim under the dark-foreground controls. */
+  --ui-control-scrim: rgba(255, 255, 255, 0.55);
+  --ui-control-scrim-hover: rgba(255, 255, 255, 0.65);
+  --ui-control-scrim-active: rgba(255, 255, 255, 0.75);
   --ui-border-subtle: rgba(0, 0, 0, 0.1);
   --ui-border: rgba(0, 0, 0, 0.18);
   --ui-border-hover: rgba(0, 0, 0, 0.35);
@@ -73,7 +83,7 @@ html, body {
   font-family: inherit;
   font-weight: 500;
   color: var(--ui-fg);
-  background: var(--ui-overlay);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
@@ -86,12 +96,12 @@ html, body {
 }
 
 .new-game-button:hover {
-  background: var(--ui-overlay-hover);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
 .new-game-button:active {
-  background: var(--ui-overlay-active);
+  background: var(--ui-control-scrim-active);
 }
 
 /* Centre View button */
@@ -105,7 +115,7 @@ html, body {
   font-family: inherit;
   font-weight: 500;
   color: var(--ui-fg);
-  background: var(--ui-overlay);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
@@ -118,12 +128,12 @@ html, body {
 }
 
 .centre-view-button:hover {
-  background: var(--ui-overlay-hover);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
 .centre-view-button:active {
-  background: var(--ui-overlay-active);
+  background: var(--ui-control-scrim-active);
 }
 
 /* Gather Pieces button */
@@ -137,7 +147,7 @@ html, body {
   font-family: inherit;
   font-weight: 500;
   color: var(--ui-fg);
-  background: var(--ui-overlay);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
@@ -150,12 +160,12 @@ html, body {
 }
 
 .gather-pieces-button:hover {
-  background: var(--ui-overlay-hover);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
 .gather-pieces-button:active {
-  background: var(--ui-overlay-active);
+  background: var(--ui-control-scrim-active);
 }
 
 /* Multi-select tool button (top-left) */
@@ -171,7 +181,7 @@ html, body {
   align-items: center;
   justify-content: center;
   color: var(--ui-fg);
-  background: var(--ui-overlay);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 10px;
   cursor: pointer;
@@ -184,12 +194,12 @@ html, body {
 }
 
 .select-tool-button:hover {
-  background: var(--ui-overlay-hover);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
 .select-tool-button:active {
-  background: var(--ui-overlay-active);
+  background: var(--ui-control-scrim-active);
 }
 
 .select-tool-button--active {
@@ -217,7 +227,7 @@ html, body {
   align-items: center;
   justify-content: center;
   color: var(--ui-fg);
-  background: var(--ui-overlay);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 10px;
   cursor: pointer;
@@ -230,12 +240,12 @@ html, body {
 }
 
 .rotate-button:hover {
-  background: var(--ui-overlay-hover);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
 .rotate-button:active {
-  background: var(--ui-overlay-active);
+  background: var(--ui-control-scrim-active);
 }
 
 /* Fade-in: snappy, near-instant. */
@@ -278,7 +288,7 @@ html, body {
   align-items: center;
   justify-content: center;
   color: var(--ui-fg);
-  background: var(--ui-overlay);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 50%;
   cursor: pointer;
@@ -291,12 +301,12 @@ html, body {
 }
 
 .rotate-handle:hover {
-  background: var(--ui-overlay-hover);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
 .rotate-handle:active {
-  background: var(--ui-overlay-active);
+  background: var(--ui-control-scrim-active);
 }
 
 .rotate-handle--fade-in {
@@ -329,7 +339,7 @@ html, body {
   align-items: center;
   justify-content: center;
   color: var(--ui-fg);
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 50%;
   cursor: pointer;
@@ -343,13 +353,13 @@ html, body {
 }
 
 .deselect-button:hover {
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
   transform: translateX(-50%) scale(1.05);
 }
 
 .deselect-button:active {
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--ui-control-scrim-active);
   transform: translateX(-50%) scale(0.95);
 }
 
@@ -840,7 +850,7 @@ html, body {
   line-height: 36px;
   text-align: center;
   color: var(--ui-fg);
-  background: var(--ui-overlay);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
@@ -853,12 +863,12 @@ html, body {
 }
 
 .bg-colour-button:hover {
-  background: var(--ui-overlay-hover);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
 .bg-colour-button:active {
-  background: var(--ui-overlay-active);
+  background: var(--ui-control-scrim-active);
 }
 
 /* Background colour picker panel */
@@ -921,7 +931,7 @@ html, body {
   line-height: 36px;
   text-align: center;
   color: var(--ui-fg);
-  background: var(--ui-overlay);
+  background: var(--ui-control-scrim);
   border: 1px solid var(--ui-border);
   border-radius: 8px;
   cursor: pointer;
@@ -934,12 +944,12 @@ html, body {
 }
 
 .info-button:hover {
-  background: var(--ui-overlay-hover);
+  background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
 .info-button:active {
-  background: var(--ui-overlay-active);
+  background: var(--ui-control-scrim-active);
 }
 
 /* Info modal */
