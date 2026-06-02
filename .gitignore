@@ -24,3 +24,6 @@ scripts/diag-output/
 
 # Debug artefacts
 debug-*.png
+
+# Visual brainstorming companion (local mockups)
+.superpowers/
