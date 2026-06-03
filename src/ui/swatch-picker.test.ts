@@ -1,0 +1,123 @@
+/**
+ * @vitest-environment jsdom
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+    createSwatch,
+    createSwatchGrid,
+    createSwatchPicker,
+    type SwatchEntry,
+} from './swatch-picker.js';
+
+const SWATCHES: SwatchEntry[] = [
+    { id: 'a', label: 'Alpha', colour: '#ff0000' },
+    { id: 'b', label: 'Beta', colour: '#00ff00' },
+    { id: 'c', label: 'Gamma', colour: '#0000ff' },
+];
+
+describe('createSwatch', () => {
+    it('creates a labelled button carrying the id and colour', () => {
+        const swatch = createSwatch(SWATCHES[0], false);
+        expect(swatch.tagName).toBe('BUTTON');
+        expect(swatch.dataset.swatchId).toBe('a');
+        expect(swatch.getAttribute('aria-label')).toBe('Alpha');
+        expect(swatch.style.backgroundColor).toBeTruthy();
+    });
+
+    it('marks the selected swatch', () => {
+        const swatch = createSwatch(SWATCHES[0], true);
+        expect(swatch.classList.contains('swatch--selected')).toBe(true);
+        expect(swatch.getAttribute('aria-selected')).toBe('true');
+    });
+});
+
+describe('createSwatchGrid', () => {
+    it('renders one option per entry and sets the column count', () => {
+        const grid = createSwatchGrid(SWATCHES, 'b', vi.fn(), vi.fn(), {
+            ariaLabel: 'Test',
+            columnCount: 3,
+        });
+        expect(grid.querySelectorAll('button').length).toBe(3);
+        expect(grid.getAttribute('aria-label')).toBe('Test');
+        expect(grid.style.getPropertyValue('--swatch-columns')).toBe('3');
+        const selected = grid.querySelector('.swatch--selected');
+        expect((selected as HTMLElement).dataset.swatchId).toBe('b');
+    });
+
+    it('calls onSelect with the id and dismisses on click', () => {
+        const onSelect = vi.fn();
+        const onDismiss = vi.fn();
+        const grid = createSwatchGrid(SWATCHES, 'a', onSelect, onDismiss, {
+            ariaLabel: 'Test',
+            columnCount: 3,
+        });
+        (grid.querySelector('[data-swatch-id="c"]') as HTMLButtonElement).click();
+        expect(onSelect).toHaveBeenCalledWith('c');
+        expect(onDismiss).toHaveBeenCalledOnce();
+    });
+});
+
+describe('createSwatchPicker', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        container.remove();
+    });
+
+    function open() {
+        const onSelect = vi.fn();
+        const cleanup = createSwatchPicker({
+            container,
+            button: { icon: '🎨', title: 'Colour', className: 'bg-colour-button' },
+            ariaLabel: 'Colour',
+            swatches: SWATCHES,
+            selectedId: 'a',
+            onSelect,
+            columnCount: 3,
+        });
+        const button = container.querySelector(
+            'button.bg-colour-button',
+        ) as HTMLButtonElement;
+        return { button, cleanup, onSelect };
+    }
+
+    it('appends a button and toggles the grid open/closed on click', () => {
+        const { button, cleanup } = open();
+        expect(button).toBeTruthy();
+        expect(container.querySelector('.swatch-grid')).toBeNull();
+
+        button.click();
+        expect(container.querySelector('.swatch-grid')).toBeTruthy();
+
+        button.click();
+        expect(container.querySelector('.swatch-grid')).toBeNull();
+
+        cleanup();
+    });
+
+    it('reports the selected id and dismisses on swatch click', () => {
+        const { button, cleanup, onSelect } = open();
+        button.click();
+        (
+            container.querySelector('[data-swatch-id="b"]') as HTMLButtonElement
+        ).click();
+        expect(onSelect).toHaveBeenCalledWith('b');
+        expect(container.querySelector('.swatch-grid')).toBeNull();
+        cleanup();
+    });
+
+    it('cleanup removes the button and any open grid', () => {
+        const { button, cleanup } = open();
+        button.click();
+        expect(container.querySelector('.swatch-grid')).toBeTruthy();
+        cleanup();
+        expect(container.querySelector('button.bg-colour-button')).toBeNull();
+        expect(container.querySelector('.swatch-grid')).toBeNull();
+    });
+});
