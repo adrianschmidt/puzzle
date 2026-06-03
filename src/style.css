@@ -538,7 +538,7 @@ html, body {
  */
 .size-picker-dialog,
 .info-modal,
-.bg-colour-panel {
+.swatch-grid {
   --ui-fg: #e0e0e0;
   --ui-overlay-subtle: rgba(255, 255, 255, 0.05);
   --ui-overlay: rgba(255, 255, 255, 0.1);
@@ -871,15 +871,16 @@ html, body {
   background: var(--ui-control-scrim-active);
 }
 
-/* Background colour picker panel */
-.bg-colour-panel {
+/* Reusable swatch-grid popover (background picker, outline picker …) */
+.swatch-grid {
   position: absolute;
   top: 132px;
-  right: 54px;
+  right: 8px;
   z-index: 10000;
   display: grid;
-  grid-template-columns: repeat(6, 28px);
-  gap: 6px;
+  grid-template-columns: repeat(var(--swatch-columns, 20), minmax(0, 1fr));
+  gap: 4px;
+  width: min(440px, calc(100vw - 16px));
   padding: 8px;
   background: rgba(30, 30, 50, 0.95);
   border: 1px solid var(--ui-border-subtle);
@@ -889,32 +890,33 @@ html, body {
   animation: fade-in 0.15s ease-out;
 }
 
-.bg-colour-swatch {
-  width: 28px;
-  height: 28px;
-  border: 2px solid var(--ui-border);
-  border-radius: 50%;
+.swatch {
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 3px;
   cursor: pointer;
   padding: 0;
   transition: border-color 0.15s ease, transform 0.1s ease;
   touch-action: manipulation;
 }
 
-.bg-colour-swatch:hover {
+.swatch:hover {
   border-color: var(--ui-muted);
-  transform: scale(1.1);
+  transform: scale(1.15);
 }
 
-.bg-colour-swatch:active {
+.swatch:active {
   transform: scale(0.95);
 }
 
-.bg-colour-swatch--selected {
-  border-color: rgba(100, 160, 255, 0.8);
-  box-shadow: 0 0 0 2px rgba(100, 160, 255, 0.3);
+.swatch--selected {
+  border-radius: 50%;
+  border-color: rgba(100, 160, 255, 0.9);
+  box-shadow: 0 0 0 2px rgba(100, 160, 255, 0.4);
 }
 
-.bg-colour-swatch--selected:hover {
+.swatch--selected:hover {
   border-color: rgba(100, 160, 255, 1);
 }
 
@@ -1226,7 +1228,7 @@ details.info-section[open] > .info-section-summary {
   .gather-pieces-button { top: 72px; right: 8px; }
 
   .bg-colour-button { top: 96px; right: 8px; }
-  .bg-colour-panel { top: 96px; right: 46px; }
+  .swatch-grid { top: 96px; right: 8px; }
 
   .info-button { 
     top: 120px; 
