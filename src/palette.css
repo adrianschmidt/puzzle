@@ -1,0 +1,253 @@
+/**
+ * Extended color palette ported from lime-elements'
+ * color-palette-extended.css (hues only — brand colors, absolute
+ * white/black, and the contrast grayscale are excluded). Light values on
+ * :root; the dark-mode override redefines each to its dimmer dark shade,
+ * so anything using var(--color-*) flips with the OS theme for free.
+ */
+
+:root {
+  --color-red-lighter: #ffcdd2;
+  --color-red-light: #ff756b;
+  --color-red-default: #f44336;
+  --color-red-dark: #d32f2f;
+  --color-red-darker: #b71c1c;
+
+  --color-pink-lighter: #f8bbd0;
+  --color-pink-light: #f06292;
+  --color-pink-default: #e91e63;
+  --color-pink-dark: #c2185b;
+  --color-pink-darker: #880e4f;
+
+  --color-magenta-lighter: #f9b0d4;
+  --color-magenta-light: #f759a6;
+  --color-magenta-default: #f34197;
+  --color-magenta-dark: #c72e79;
+  --color-magenta-darker: #9c1657;
+
+  --color-purple-lighter: #e1bee7;
+  --color-purple-light: #ba68c8;
+  --color-purple-default: #9c27b0;
+  --color-purple-dark: #7b1fa2;
+  --color-purple-darker: #4a148c;
+
+  --color-violet-lighter: #d1c4e9;
+  --color-violet-light: #9575cd;
+  --color-violet-default: #673ab7;
+  --color-violet-dark: #512da8;
+  --color-violet-darker: #311b92;
+
+  --color-indigo-lighter: #c5cae9;
+  --color-indigo-light: #7986cb;
+  --color-indigo-default: #3f51b5;
+  --color-indigo-dark: #303f9f;
+  --color-indigo-darker: #1a237e;
+
+  --color-blue-lighter: #bbdefb;
+  --color-blue-light: #64b5f6;
+  --color-blue-default: #2196f3;
+  --color-blue-dark: #1976d2;
+  --color-blue-darker: #0d47a1;
+
+  --color-sky-lighter: #b3e5fc;
+  --color-sky-light: #4fc3f7;
+  --color-sky-default: #03a9f4;
+  --color-sky-dark: #0288d1;
+  --color-sky-darker: #01579b;
+
+  --color-cyan-lighter: #b2ebf2;
+  --color-cyan-light: #4dd0e1;
+  --color-cyan-default: #00bcd4;
+  --color-cyan-dark: #0097a7;
+  --color-cyan-darker: #006064;
+
+  --color-teal-lighter: #b2dfdb;
+  --color-teal-light: #4db6ac;
+  --color-teal-default: #009688;
+  --color-teal-dark: #00796b;
+  --color-teal-darker: #004d40;
+
+  --color-green-lighter: #c8e6c9;
+  --color-green-light: #81c784;
+  --color-green-default: #4caf50;
+  --color-green-dark: #388e3c;
+  --color-green-darker: #1b5e20;
+
+  --color-lime-lighter: #dcedc8;
+  --color-lime-light: #aed581;
+  --color-lime-default: #8bc34a;
+  --color-lime-dark: #689f38;
+  --color-lime-darker: #33691e;
+
+  --color-grass-lighter: #f0f4c3;
+  --color-grass-light: #dce775;
+  --color-grass-default: #cddc39;
+  --color-grass-dark: #afb42b;
+  --color-grass-darker: #827717;
+
+  --color-yellow-lighter: #fff9c4;
+  --color-yellow-light: #fff176;
+  --color-yellow-default: #ffeb3b;
+  --color-yellow-dark: #fbce2c;
+  --color-yellow-darker: #e8bf29;
+
+  --color-amber-lighter: #ffecb3;
+  --color-amber-light: #ffd54f;
+  --color-amber-default: #ffc107;
+  --color-amber-dark: #ffa000;
+  --color-amber-darker: #ff6f00;
+
+  --color-orange-lighter: #ffe0b2;
+  --color-orange-light: #ffb74d;
+  --color-orange-default: #ff9800;
+  --color-orange-dark: #f57c00;
+  --color-orange-darker: #e65100;
+
+  --color-coral-lighter: #ffccbc;
+  --color-coral-light: #ff8a65;
+  --color-coral-default: #ff5722;
+  --color-coral-dark: #e64a19;
+  --color-coral-darker: #bf360c;
+
+  --color-brown-lighter: #d7ccc8;
+  --color-brown-light: #a1887f;
+  --color-brown-default: #795548;
+  --color-brown-dark: #5d4037;
+  --color-brown-darker: #3e2723;
+
+  --color-gray-lighter: #f5f5f5;
+  --color-gray-light: #e0e0e0;
+  --color-gray-default: #9e9e9e;
+  --color-gray-dark: #575756;
+  --color-gray-darker: #212121;
+
+  --color-glaucous-lighter: #d0e1e8;
+  --color-glaucous-light: #87aec1;
+  --color-glaucous-default: #57879f;
+  --color-glaucous-dark: #3a6477;
+  --color-glaucous-darker: #254758;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-red-lighter: #ef9a9a;
+    --color-red-light: #f05750;
+    --color-red-default: #e53935;
+    --color-red-dark: #c62828;
+    --color-red-darker: #a51717;
+
+    --color-pink-lighter: #f48fb1;
+    --color-pink-light: #ec407a;
+    --color-pink-default: #d81b60;
+    --color-pink-dark: #ad1457;
+    --color-pink-darker: #840a4b;
+
+    --color-magenta-lighter: #f9a1cc;
+    --color-magenta-light: #f94fa2;
+    --color-magenta-default: #ff3195;
+    --color-magenta-dark: #d01f75;
+    --color-magenta-darker: #9c1657;
+
+    --color-purple-lighter: #ce93d8;
+    --color-purple-light: #ab47bc;
+    --color-purple-default: #8e24aa;
+    --color-purple-dark: #6a1b9a;
+    --color-purple-darker: #3e0d79;
+
+    --color-violet-lighter: #b39ddb;
+    --color-violet-light: #7e57c2;
+    --color-violet-default: #5e35b1;
+    --color-violet-dark: #4527a0;
+    --color-violet-darker: #29167f;
+
+    --color-indigo-lighter: #9fa8da;
+    --color-indigo-light: #5c6bc0;
+    --color-indigo-default: #3949ab;
+    --color-indigo-dark: #283593;
+    --color-indigo-darker: #151e73;
+
+    --color-blue-lighter: #90caf9;
+    --color-blue-light: #42a5f5;
+    --color-blue-default: #1e88e5;
+    --color-blue-dark: #1565c0;
+    --color-blue-darker: #0a3c8a;
+
+    --color-sky-lighter: #81d4fa;
+    --color-sky-light: #29b6f6;
+    --color-sky-default: #039be5;
+    --color-sky-dark: #0277bd;
+    --color-sky-darker: #015190;
+
+    --color-cyan-lighter: #80deea;
+    --color-cyan-light: #26c6da;
+    --color-cyan-default: #00acc1;
+    --color-cyan-dark: #00838f;
+    --color-cyan-darker: #00595d;
+
+    --color-teal-lighter: #80cbc4;
+    --color-teal-light: #26a69a;
+    --color-teal-default: #00897b;
+    --color-teal-dark: #00695c;
+    --color-teal-darker: #015245;
+
+    --color-green-lighter: #a5d6a7;
+    --color-green-light: #66bb6a;
+    --color-green-default: #43a047;
+    --color-green-dark: #2e7d32;
+    --color-green-darker: #206125;
+
+    --color-lime-lighter: #c5e1a5;
+    --color-lime-light: #9ccc65;
+    --color-lime-default: #7cb342;
+    --color-lime-dark: #558b2f;
+    --color-lime-darker: #2b5a19;
+
+    --color-grass-lighter: #e6ee9c;
+    --color-grass-light: #d4e157;
+    --color-grass-default: #c0ca33;
+    --color-grass-dark: #9e9d24;
+    --color-grass-darker: #776d13;
+
+    --color-yellow-lighter: #fff59d;
+    --color-yellow-light: #ffee58;
+    --color-yellow-default: #fdd835;
+    --color-yellow-dark: #f5c827;
+    --color-yellow-darker: #e0b415;
+
+    --color-amber-lighter: #ffe082;
+    --color-amber-light: #ffcf3d;
+    --color-amber-default: #ffb03b;
+    --color-amber-dark: #ff8f00;
+    --color-amber-darker: #de6202;
+
+    --color-orange-lighter: #ffcc80;
+    --color-orange-light: #ffa726;
+    --color-orange-default: #fb8c00;
+    --color-orange-dark: #ef6c00;
+    --color-orange-darker: #d84d01;
+
+    --color-coral-lighter: #ffab91;
+    --color-coral-light: #ff7043;
+    --color-coral-default: #f4511e;
+    --color-coral-dark: #d84315;
+    --color-coral-darker: #b5320a;
+
+    --color-brown-lighter: #bcaaa4;
+    --color-brown-light: #8d6e63;
+    --color-brown-default: #6d4c41;
+    --color-brown-dark: #4e342e;
+    --color-brown-darker: #33201c;
+
+    --color-gray-lighter: #eeeeee;
+    --color-gray-light: #adadad;
+    --color-gray-default: #757575;
+    --color-gray-dark: #424242;
+    --color-gray-darker: #212020;
+
+    --color-glaucous-lighter: #9fc2d0;
+    --color-glaucous-light: #6e8d9c;
+    --color-glaucous-default: #446c80;
+    --color-glaucous-dark: #2a576b;
+    --color-glaucous-darker: #224150;
+  }
+}
