@@ -14,11 +14,15 @@ reuse it.
   brand colours, the deprecated brand colours, absolute white/black, and
   the **contrast greyscale** (the `gray` hue already covers neutral
   greys).
-- **Dark mode**: hues **dim slightly when the OS is in dark mode**
-  (`prefers-color-scheme: dark`). The contrast greyscale is *not*
-  included, so there is no light/dark inversion to worry about — our UI
-  is colour-driven and the user picks the background, so inverting greys
-  would be wrong anyway.
+- **Dark mode**: implemented the lime-elements way — the colours are
+  **CSS custom properties** defined in a stylesheet, with a
+  `@media (prefers-color-scheme: dark)` block that redefines every
+  variable to its dimmer dark shade. Anything that renders a colour uses
+  `var(--color-<id>)`, so the whole app flips between light and dark
+  shades **for free, with no JS**, the instant the OS theme changes. The
+  contrast greyscale is *not* included, so there is no light/dark
+  inversion to worry about — our UI is colour-driven and the user picks
+  the background, so inverting greys would be wrong anyway.
 - **Reference by name**: a swatch id is `"<hue>-<tone>"`, e.g.
   `"blue-default"`. Never by index.
 - **No back-compat**: the old 12 presets and the legacy integer-index
@@ -37,12 +41,38 @@ reuse it.
 
 ## Architecture
 
-### `src/ui/palette.ts` (new) — palette data, single source of truth
+### `src/palette.css` (new) — colour variables, single source of truth
 
-Plain JS data copied from lime's `color-palette-extended.css`. Each
-swatch carries both its light- and dark-mode hex so the existing
-`isLightColour(hex)` luminance logic keeps working with no
-`getComputedStyle`.
+A hand-written stylesheet holding all 100 hue variables, transcribed
+from lime's `color-palette-extended.css` (hues only — brand, deprecated
+brand, white/black, contrast greyscale, and the shadow/button tokens are
+excluded). Light values on `:root`; a `@media (prefers-color-scheme:
+dark)` block redefines every variable to its dark shade:
+
+```css
+:root {
+  --color-red-lighter: #ffcdd2;
+  /* …100 light values… */
+  --color-glaucous-darker: #254758;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-red-lighter: #ef9a9a;
+    /* …100 dark values… */
+    --color-glaucous-darker: #224150;
+  }
+}
+```
+
+Variable naming: `--color-<hue>-<tone>` (matches lime). Anything that
+shows a palette colour references `var(--color-<hue>-<tone>)`, so the OS
+dark-mode flip is handled entirely by CSS. Imported once from `main.ts`.
+
+### `src/ui/palette.ts` (new) — swatch metadata
+
+No colour values live here (CSS owns them). It enumerates the swatches
+and exposes the OS-change hook used to refresh the luminance-derived
+chrome scheme.
 
 ```ts
 export const PALETTE_HUES = [
@@ -58,28 +88,25 @@ export const PALETTE_TONES = [
 export interface PaletteSwatch {
     id: string;        // "<hue>-<tone>", e.g. "blue-default"
     label: string;     // "blue default"
-    light: string;     // "#2196f3"
-    dark: string;      // "#1e88e5"
+    value: string;     // "var(--color-blue-default)"
 }
 
 export const PALETTE_SWATCHES: readonly PaletteSwatch[]; // 100 entries
+
+// Subscribe to OS colour-scheme changes (to refresh the chrome scheme).
+export function onColorSchemeChange(cb: () => void): () => void;
 ```
 
-Helpers:
-
-- `prefersDarkScheme(): boolean` — wraps
-  `matchMedia('(prefers-color-scheme: dark)').matches`.
-- `activeHex(swatch): string` — returns `dark` or `light` per OS mode.
-- `onColorSchemeChange(cb): () => void` — registers a `matchMedia`
-  listener, returns an unsubscribe.
-
-The light/dark hex pairs are transcribed from the two blocks of lime's
-CSS (`:root` and `@media (prefers-color-scheme: dark)`), hues only.
+`PALETTE_SWATCHES` is built in tone-major order (rows = tones, columns =
+hues) so a 20-column grid mirrors the limel-color-picker layout.
 
 ### `src/ui/background-colour.ts` (rewrite presets + persistence)
 
-- `BACKGROUND_COLOUR_PRESETS` is derived from `PALETTE_SWATCHES`
-  (id/label/colour where colour is resolved per OS mode at apply time).
+- `BACKGROUND_COLOUR_PRESETS` is derived from `PALETTE_SWATCHES`, with
+  `colour` set to the swatch's `var(--color-<id>)` reference. Because the
+  preset stores a *variable reference*, not a resolved hex, every swatch
+  and the applied background flip with the OS theme automatically — and
+  there is no stale-value problem.
 - Persistence switches from `createIdPreferenceStore` (with its
   `legacyOrder`) to `createStringPreference({ key, allowed, defaultValue })`:
   - `key`: `puzzle-background-colour` (unchanged).
@@ -89,19 +116,31 @@ CSS (`:root` and `@media (prefers-color-scheme: dark)`), hues only.
     and the old string ids like `midnight`) is rejected → default.
 - `getColourPreset(id)` looks up the swatch (falls back to default).
 - `applyBackgroundColour(id)`:
-  - resolve `activeHex` for the swatch under the current OS mode,
-  - set `--puzzle-bg-colour` + `document.body.style.backgroundColor`,
-  - set `document.documentElement.dataset.uiScheme` from
-    `isLightColour(hex)` (logic unchanged).
-- `isLightColour(hex)` is unchanged.
+  - set `--puzzle-bg-colour` and `document.body.style.backgroundColor`
+    to the preset's `var(--color-<id>)` reference (CSS resolves it),
+  - read the **resolved** colour via
+    `getComputedStyle(document.body).backgroundColor` and set
+    `document.documentElement.dataset.uiScheme` to `'light'`/`'dark'`
+    from its luminance.
+- `isLightColour(colour)` parses an `rgb()/rgba()` string (from
+  `getComputedStyle`) or a hex string, then applies the existing
+  luminance > 0.4 test. The luminance maths is unchanged; only the input
+  parsing is added.
+
+Why `getComputedStyle` rather than a JS hex table: CSS owns the values
+(single source of truth) and the resolved colour already reflects the
+current OS theme, so the chrome scheme is computed from exactly what is
+rendered.
 
 ### `src/main.ts` — OS-theme reactivity
 
-On startup, after the initial `applyBackgroundColour`, register
-`onColorSchemeChange(() => applyBackgroundColour(currentId))` so the
-background re-resolves (and chrome scheme recomputes) when the OS flips
-between light and dark. `currentId` is updated in the picker's
-`onSelect`.
+- Import `src/palette.css` so the variables are defined.
+- On startup, after the initial `applyBackgroundColour`, register
+  `onColorSchemeChange(() => applyBackgroundColour(currentId))`. The
+  background **colour** itself flips for free via CSS; this listener
+  exists only to recompute the luminance-derived `data-ui-scheme` chrome
+  (which CSS cannot do). `currentId` is updated in the picker's
+  `onSelect`.
 
 ### `src/ui/swatch-picker.ts` (new) — reusable picker (sets up #392)
 
@@ -127,12 +166,12 @@ swatches `role="option"`), and the popover wiring via
 
 ### `src/ui/background-colour-picker.ts` — thin adapter
 
-`createBackgroundColourPicker(options)` builds the palette swatch list
-(resolving `colour` via `activeHex`) and delegates to
-`createSwatchPicker` with the 🎨 button, `ariaLabel: 'Background colour'`,
-and the persistence wiring in `onSelect`. Re-resolves swatch colours on
-OS-theme change while open is not required (popover is transient); the
-applied background does react via the `main.ts` listener.
+`createBackgroundColourPicker(options)` passes `BACKGROUND_COLOUR_PRESETS`
+(whose `colour` is a `var(--color-<id>)` reference) to `createSwatchPicker`
+with the 🎨 button, `ariaLabel: 'Background colour'`, and the persistence
+wiring in `onSelect`. No OS-theme handling is needed in the picker —
+because swatch colours are variable references, they flip with the theme
+via CSS automatically.
 
 ### `src/style.css` — grid layout (mirrors limel-color-picker)
 
@@ -153,13 +192,21 @@ Replace `.bg-colour-panel` / `.bg-colour-swatch` rules with a reusable
 ## Testing (TDD)
 
 - `palette.test.ts`: exactly 100 swatches; ids match `<hue>-<tone>`;
-  labels are `"<hue> <tone>"`; every swatch has non-empty `light` and
-  `dark` hex; `activeHex` follows the mocked `matchMedia`.
+  labels are `"<hue> <tone>"`; every swatch's `value` is
+  `var(--color-<id>)`; tone-major ordering; `onColorSchemeChange`
+  subscribes/unsubscribes to the mocked `matchMedia` `change` event.
+- `palette.css`: covered structurally by `palette.test.ts` reading the
+  file and asserting it defines a `--color-<id>` variable for every
+  swatch in both the `:root` and the `@media (prefers-color-scheme: dark)`
+  block (guards against a missing/extra variable).
 - `background-colour.test.ts`: default id resolves to a swatch; an
   unknown id, an old numeric index (`"3"`), and an old string id
-  (`"midnight"`) all fall back to the default; `applyBackgroundColour`
-  sets the custom property and `data-ui-scheme`; `isLightColour`
-  unchanged.
+  (`"midnight"`) all fall back to the default; `BACKGROUND_COLOUR_PRESETS`
+  has 100 entries whose `colour` is a `var(--color-…)` reference;
+  `applyBackgroundColour` sets `--puzzle-bg-colour` to the variable
+  reference and sets `data-ui-scheme` from the resolved colour
+  (`getComputedStyle` stubbed); `isLightColour` handles both `rgb()` and
+  hex inputs.
 - `swatch-picker.test.ts`: renders one swatch per entry; marks the
   selected one (`aria-selected`, `--selected` class); clicking a swatch
   calls `onSelect(id)` and dismisses; cleanup removes the button.
