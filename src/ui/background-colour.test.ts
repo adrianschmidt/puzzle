@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import {
     BACKGROUND_COLOUR_PRESETS,
     DEFAULT_COLOUR_ID,
@@ -16,85 +16,76 @@ import {
 } from './background-colour.js';
 
 describe('BACKGROUND_COLOUR_PRESETS', () => {
-    it('has at least 3 presets', () => {
-        expect(BACKGROUND_COLOUR_PRESETS.length).toBeGreaterThanOrEqual(3);
+    it('exposes the full palette (100 presets)', () => {
+        expect(BACKGROUND_COLOUR_PRESETS.length).toBe(100);
     });
 
-    it('each preset has id, label, and colour', () => {
-        for (const preset of BACKGROUND_COLOUR_PRESETS) {
-            expect(preset.id).toBeTruthy();
-            expect(preset.label).toBeTruthy();
-            expect(preset.colour).toBeTruthy();
+    it('each preset colour is a var(--color-…) reference', () => {
+        for (const p of BACKGROUND_COLOUR_PRESETS) {
+            expect(p.colour).toMatch(/^var\(--color-[a-z]+-[a-z]+\)$/);
         }
     });
 
-    it('first preset is Midnight (id "midnight", the original default)', () => {
-        expect(BACKGROUND_COLOUR_PRESETS[0].label).toBe('Midnight');
-        expect(BACKGROUND_COLOUR_PRESETS[0].id).toBe('midnight');
-        expect(DEFAULT_COLOUR_ID).toBe('midnight');
+    it('default id resolves to a preset', () => {
+        expect(
+            BACKGROUND_COLOUR_PRESETS.some((p) => p.id === DEFAULT_COLOUR_ID),
+        ).toBe(true);
     });
 });
 
 describe('getColourPreset', () => {
-    it('returns the preset matching an id', () => {
-        expect(getColourPreset('midnight').label).toBe('Midnight');
-        expect(getColourPreset('charcoal').label).toBe('Charcoal');
+    it('returns the matching preset', () => {
+        const preset = getColourPreset('blue-default');
+        expect(preset.id).toBe('blue-default');
+        expect(preset.colour).toBe('var(--color-blue-default)');
     });
 
-    it('returns the default preset for an unknown id', () => {
-        expect(getColourPreset('not-a-colour').label).toBe('Midnight');
+    it('falls back to the default for an unknown id', () => {
+        expect(getColourPreset('nope').id).toBe(DEFAULT_COLOUR_ID);
     });
 });
 
-describe('saveColourPreference / loadColourPreference', () => {
-    beforeEach(() => {
-        localStorage.clear();
-    });
-
-    it('saves and loads an id', () => {
-        saveColourPreference('slate');
-        expect(loadColourPreference()).toBe('slate');
-    });
+describe('loadColourPreference', () => {
+    beforeEach(() => localStorage.clear());
 
     it('returns the default when nothing is saved', () => {
         expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
     });
 
-    it('returns the default for an unknown saved value', () => {
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, 'garbage');
+    it('round-trips a valid id', () => {
+        saveColourPreference('green-dark');
+        expect(loadColourPreference()).toBe('green-dark');
+    });
+
+    it('falls back to default for a legacy numeric index', () => {
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, '3');
         expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
     });
 
-    it('migrates legacy integer indices to ids', () => {
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, '1');
-        expect(loadColourPreference()).toBe('charcoal');
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, '5');
-        expect(loadColourPreference()).toBe('green-felt');
-    });
-
-    it('returns the default for out-of-range legacy values', () => {
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, '99');
-        expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, '-1');
+    it('falls back to default for an old string id', () => {
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, 'midnight');
         expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
     });
 });
 
 describe('isLightColour', () => {
-    it('identifies white as light', () => {
+    it('classifies rgb() strings (from getComputedStyle)', () => {
+        expect(isLightColour('rgb(245, 245, 245)')).toBe(true);
+        expect(isLightColour('rgb(26, 35, 126)')).toBe(false);
+    });
+
+    it('classifies hex strings', () => {
         expect(isLightColour('#ffffff')).toBe(true);
+        expect(isLightColour('#000000')).toBe(false);
     });
 
-    it('identifies pastel blush as light', () => {
-        expect(isLightColour('#f5e0e0')).toBe(true);
+    it('treats an unparseable colour as dark', () => {
+        expect(isLightColour('')).toBe(false);
     });
 
-    it('identifies midnight as dark', () => {
-        expect(isLightColour('#1a1a2e')).toBe(false);
-    });
-
-    it('identifies hot pink as dark', () => {
-        expect(isLightColour('#ff1493')).toBe(false);
+    it('classifies space-separated rgb() (CSS Color L4)', () => {
+        expect(isLightColour('rgb(245 245 245)')).toBe(true);
+        expect(isLightColour('rgb(26 35 126)')).toBe(false);
     });
 });
 
@@ -104,40 +95,36 @@ describe('applyBackgroundColour', () => {
         document.body.style.backgroundColor = '';
         delete document.documentElement.dataset.uiScheme;
     });
+    afterEach(() => vi.restoreAllMocks());
 
-    it('sets the CSS custom property on the document root', () => {
-        applyBackgroundColour('midnight');
-        const value =
-            document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY);
-        expect(value).toBe('#1a1a2e');
+    it('sets the custom property to the variable reference', () => {
+        applyBackgroundColour('blue-default');
+        expect(
+            document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY),
+        ).toBe('var(--color-blue-default)');
+        expect(document.documentElement.dataset.uiScheme).toBe('dark');
     });
 
-    it('sets the body background-color', () => {
-        applyBackgroundColour('midnight');
-        expect(document.body.style.backgroundColor).toBeTruthy();
-    });
-
-    it('applies a different colour for a different id', () => {
-        applyBackgroundColour('slate');
-        const value =
-            document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY);
-        expect(value).toBe('#4a5568');
-    });
-
-    it('falls back to default for an unknown id', () => {
-        applyBackgroundColour('not-a-colour');
-        const value =
-            document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY);
-        expect(value).toBe('#1a1a2e');
-    });
-
-    it('sets data-ui-scheme="light" for a light pastel preset', () => {
-        applyBackgroundColour('blush');
+    it('sets a light ui-scheme when the resolved colour is light', () => {
+        vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+            backgroundColor: 'rgb(245, 245, 245)',
+        } as CSSStyleDeclaration);
+        applyBackgroundColour('gray-lighter');
         expect(document.documentElement.dataset.uiScheme).toBe('light');
     });
 
-    it('sets data-ui-scheme="dark" for midnight', () => {
-        applyBackgroundColour('midnight');
+    it('sets a dark ui-scheme when the resolved colour is dark', () => {
+        vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+            backgroundColor: 'rgb(26, 35, 126)',
+        } as CSSStyleDeclaration);
+        applyBackgroundColour('indigo-darker');
         expect(document.documentElement.dataset.uiScheme).toBe('dark');
+    });
+
+    it('falls back to the default preset for an unknown id', () => {
+        applyBackgroundColour('not-a-colour');
+        expect(
+            document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY),
+        ).toBe(`var(--color-${DEFAULT_COLOUR_ID})`);
     });
 });
