@@ -88,6 +88,7 @@ export {
     applyBackgroundColour,
 } from './background-colour.js';
 export type { BackgroundColourPreset } from './background-colour.js';
+export { onColorSchemeChange } from './palette.js';
 
 export {
     PIECE_OUTLINE_PRESETS,
