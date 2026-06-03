@@ -1,3 +1,4 @@
+import './palette.css';
 import './style.css';
 import { diagnostics } from './diagnostics.js';
 import type { GameState, GridSize } from './model/types.js';
@@ -28,6 +29,7 @@ import {
     loadColourPreference,
     saveColourPreference,
     applyBackgroundColour,
+    onColorSchemeChange,
     installPieceOutlineFilter,
     loadPieceOutlinePreference,
     applyPieceOutline,
@@ -1196,13 +1198,18 @@ installPieceOutlineFilter();
 applyPieceOutline(loadPieceOutlinePreference());
 
 // Set up the Background Colour picker
-const initialColourId = loadColourPreference();
-applyBackgroundColour(initialColourId);
+let currentColourId = loadColourPreference();
+applyBackgroundColour(currentColourId);
+
+// The background colour flips with the OS theme via CSS; re-apply only
+// to recompute the luminance-derived UI-chrome scheme on the flip.
+onColorSchemeChange(() => applyBackgroundColour(currentColourId));
 
 createBackgroundColourPicker({
     container: app,
-    selectedId: initialColourId,
+    selectedId: currentColourId,
     onSelect: (id) => {
+        currentColourId = id;
         saveColourPreference(id);
         applyBackgroundColour(id);
     },
