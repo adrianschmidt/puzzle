@@ -14,7 +14,7 @@ export const PALETTE_HUES = [
 ] as const;
 
 export const PALETTE_TONES = [
-    'lighter', 'light', 'default', 'dark', 'darker',
+    'lighter', 'light', 'default', 'dark', 'darker', 'darker-2', 'darker-3',
 ] as const;
 
 export type PaletteHue = (typeof PALETTE_HUES)[number];

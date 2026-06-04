@@ -16,13 +16,13 @@ import {
 } from './background-colour.js';
 
 describe('BACKGROUND_COLOUR_PRESETS', () => {
-    it('exposes the full palette (100 presets)', () => {
-        expect(BACKGROUND_COLOUR_PRESETS.length).toBe(100);
+    it('exposes the full palette (140 presets)', () => {
+        expect(BACKGROUND_COLOUR_PRESETS.length).toBe(140);
     });
 
     it('each preset colour is a var(--color-…) reference', () => {
         for (const p of BACKGROUND_COLOUR_PRESETS) {
-            expect(p.colour).toMatch(/^var\(--color-[a-z]+-[a-z]+\)$/);
+            expect(p.colour).toMatch(/^var\(--color-[a-z]+-[a-z0-9-]+\)$/);
         }
     });
 
