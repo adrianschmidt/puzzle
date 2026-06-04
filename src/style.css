@@ -21,6 +21,14 @@
   --ui-muted-link: rgba(255, 255, 255, 0.65);
   --ui-muted-link-hover: rgba(255, 255, 255, 0.9);
 
+  /* Accent + frosted surfaces, drawn from the extended palette (violet
+     family) so the chrome coheres with the colour set. The accent is used
+     at varying alpha via color-mix() at each call site. */
+  --ui-accent: var(--color-violet-light);
+  --ui-surface: rgba(30, 27, 52, 0.95);
+  --ui-toast-bg: rgba(28, 25, 44, 0.78);
+  --ui-backdrop: rgba(12, 10, 24, 0.72);
+
   font-family: system-ui, -apple-system, sans-serif;
   color: #e0e0e0;
   background-color: var(--puzzle-bg-colour);
@@ -203,13 +211,13 @@ html, body {
 }
 
 .select-tool-button--active {
-  border-color: rgba(100, 160, 255, 0.7);
-  background: rgba(100, 160, 255, 0.15);
+  border-color: color-mix(in srgb, var(--ui-accent) 70%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 15%, transparent);
 }
 
 .select-tool-button--active:hover {
-  border-color: rgba(100, 160, 255, 0.9);
-  background: rgba(100, 160, 255, 0.22);
+  border-color: color-mix(in srgb, var(--ui-accent) 90%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
 }
 
 /*
@@ -402,18 +410,18 @@ html, body {
 /* Selected group highlight — must be clearly visible on any background */
 [data-group-id].selected {
   filter: var(--piece-edge-filter, opacity(1))
-          drop-shadow(0 0 6px rgba(60, 130, 255, 0.9))
-          drop-shadow(0 0 14px rgba(60, 130, 255, 0.7))
-          drop-shadow(0 0 24px rgba(60, 130, 255, 0.4));
+          drop-shadow(0 0 6px color-mix(in srgb, var(--ui-accent) 90%, transparent))
+          drop-shadow(0 0 14px color-mix(in srgb, var(--ui-accent) 70%, transparent))
+          drop-shadow(0 0 24px color-mix(in srgb, var(--ui-accent) 40%, transparent));
 }
 
 /* Selected + dragging: keep the glow while lifted */
 [data-group-id].selected.dragging {
   filter: var(--piece-edge-filter, opacity(1))
           drop-shadow(0 0 12px rgba(0, 0, 0, 0.45))
-          drop-shadow(0 0 6px rgba(60, 130, 255, 0.9))
-          drop-shadow(0 0 14px rgba(60, 130, 255, 0.7))
-          drop-shadow(0 0 24px rgba(60, 130, 255, 0.4));
+          drop-shadow(0 0 6px color-mix(in srgb, var(--ui-accent) 90%, transparent))
+          drop-shadow(0 0 14px color-mix(in srgb, var(--ui-accent) 70%, transparent))
+          drop-shadow(0 0 24px color-mix(in srgb, var(--ui-accent) 40%, transparent));
 }
 
 /* Lifted shadow when a group is being dragged — symmetric, no rotation tell */
@@ -494,7 +502,7 @@ html, body {
 
 /* Completion celebration — puzzle glows briefly */
 .completion-glow [data-group-id] {
-  filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.6))
+  filter: drop-shadow(0 0 20px color-mix(in srgb, var(--color-amber-default) 60%, transparent))
           drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
   transition: filter 1s ease-out;
 }
@@ -565,7 +573,7 @@ html, body {
 }
 
 .size-picker-dialog {
-  background: rgba(30, 30, 50, 0.95);
+  background: var(--ui-surface);
   border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
   padding: 24px;
@@ -619,13 +627,13 @@ html, body {
 }
 
 .size-picker-option--selected {
-  border-color: rgba(100, 160, 255, 0.6);
-  background: rgba(100, 160, 255, 0.1);
+  border-color: color-mix(in srgb, var(--ui-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 10%, transparent);
 }
 
 .size-picker-option--selected:hover {
-  border-color: rgba(100, 160, 255, 0.8);
-  background: rgba(100, 160, 255, 0.15);
+  border-color: color-mix(in srgb, var(--ui-accent) 80%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 15%, transparent);
 }
 
 .size-picker-count {
@@ -700,13 +708,13 @@ html, body {
 }
 
 .cut-style-option--selected {
-  border-color: rgba(100, 160, 255, 0.6);
-  background: rgba(100, 160, 255, 0.1);
+  border-color: color-mix(in srgb, var(--ui-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 10%, transparent);
 }
 
 .cut-style-option--selected:hover {
-  border-color: rgba(100, 160, 255, 0.8);
-  background: rgba(100, 160, 255, 0.15);
+  border-color: color-mix(in srgb, var(--ui-accent) 80%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 15%, transparent);
 }
 
 .cut-style-label {
@@ -763,7 +771,7 @@ html, body {
 
 .dialog-row-input {
   flex: 1;
-  accent-color: #7c6faa;
+  accent-color: var(--ui-accent);
   cursor: pointer;
 }
 
@@ -776,7 +784,7 @@ html, body {
 .form-checkbox {
   width: 18px;
   height: 18px;
-  accent-color: #7c6faa;
+  accent-color: var(--ui-accent);
   cursor: pointer;
 }
 
@@ -816,7 +824,7 @@ html, body {
 
 .segmented-control .segmented-option input[type="radio"] {
   margin: 0;
-  accent-color: #7c6faa;
+  accent-color: var(--ui-accent);
 }
 
 /* Info modal solve button (debug) */
@@ -882,7 +890,7 @@ html, body {
   gap: 4px;
   width: min(440px, calc(100vw - 16px));
   padding: 8px;
-  background: rgba(30, 30, 50, 0.95);
+  background: var(--ui-surface);
   border: 1px solid var(--ui-border-subtle);
   border-radius: 10px;
   backdrop-filter: blur(12px);
@@ -912,12 +920,12 @@ html, body {
 
 .swatch--selected {
   border-radius: 50%;
-  border-color: rgba(100, 160, 255, 0.9);
-  box-shadow: 0 0 0 2px rgba(100, 160, 255, 0.4);
+  border-color: color-mix(in srgb, var(--ui-accent) 90%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 40%, transparent);
 }
 
 .swatch--selected:hover {
-  border-color: rgba(100, 160, 255, 1);
+  border-color: var(--ui-accent);
 }
 
 /* Info button */
@@ -967,7 +975,7 @@ html, body {
 }
 
 .info-modal {
-  background: rgba(30, 30, 50, 0.95);
+  background: var(--ui-surface);
   border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
   max-width: 480px;
@@ -1095,13 +1103,13 @@ details.info-section[open] > .info-section-summary {
 }
 
 .info-section a {
-  color: rgba(100, 160, 255, 0.9);
+  color: color-mix(in srgb, var(--ui-accent) 90%, transparent);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
 .info-section a:hover {
-  color: rgba(100, 160, 255, 1);
+  color: var(--ui-accent);
   text-decoration: underline;
 }
 
@@ -1193,13 +1201,13 @@ details.info-section[open] > .info-section-summary {
 }
 
 .preset-option.selected {
-  border-color: rgba(100, 160, 255, 0.6);
-  background: rgba(100, 160, 255, 0.1);
+  border-color: color-mix(in srgb, var(--ui-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 10%, transparent);
 }
 
 .preset-option.selected:hover {
-  border-color: rgba(100, 160, 255, 0.8);
-  background: rgba(100, 160, 255, 0.15);
+  border-color: color-mix(in srgb, var(--ui-accent) 80%, transparent);
+  background: color-mix(in srgb, var(--ui-accent) 15%, transparent);
 }
 
 .preset-option-label {
@@ -1264,7 +1272,7 @@ details.info-section[open] > .info-section-summary {
   left: 50%;
   transform: translateX(-50%);
   padding: 12px 20px;
-  background: rgba(30, 30, 30, 0.75);
+  background: var(--ui-toast-bg);
   color: #fff;
   backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1294,7 +1302,7 @@ details.info-section[open] > .info-section-summary {
 }
 
 .corrupt-save-dialog {
-  background: rgba(30, 30, 50, 0.95);
+  background: var(--ui-surface);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 24px;
@@ -1349,28 +1357,28 @@ details.info-section[open] > .info-section-summary {
 }
 
 .corrupt-save-btn--primary {
-  background: rgba(80, 140, 255, 0.22);
-  border-color: rgba(80, 140, 255, 0.45);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, transparent);
   color: #fff;
 }
 
 .corrupt-save-btn--primary:hover {
-  background: rgba(80, 140, 255, 0.32);
-  border-color: rgba(80, 140, 255, 0.6);
+  background: color-mix(in srgb, var(--ui-accent) 32%, transparent);
+  border-color: color-mix(in srgb, var(--ui-accent) 60%, transparent);
 }
 
 .share-section .share-primary-btn {
   margin-top: 12px;
   padding: 10px 18px;
-  background: rgba(80, 140, 255, 0.22);
-  border: 1px solid rgba(80, 140, 255, 0.45);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 45%, transparent);
   color: #fff;
   border-radius: 10px;
   font-size: 14px;
   cursor: pointer;
 }
 .share-section .share-primary-btn:hover {
-  background: rgba(80, 140, 255, 0.32);
+  background: color-mix(in srgb, var(--ui-accent) 32%, transparent);
 }
 .share-section .share-url-preview {
   display: block;
@@ -1411,7 +1419,7 @@ details.info-section[open] > .info-section-summary {
   align-items: center;
   justify-content: center;
   gap: 18px;
-  background: rgba(10, 10, 20, 0.72);
+  background: var(--ui-backdrop);
   backdrop-filter: blur(4px);
   color: #eee;
   font-size: 15px;
