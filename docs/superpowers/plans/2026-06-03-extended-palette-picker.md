@@ -10,6 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-03-extended-palette-picker-design.md`
 
+> **Follow-up (2026-06-04):** after the initial 5-tone build landed, each
+> column was extended with two extrapolated darker rows (`darker-2`,
+> `darker-3`) — see the spec's "Extra darker rows" section. The tasks
+> below describe the original 5-tone palette (100 swatches); the shipped
+> palette is 7 tones (140 swatches). `PALETTE_TONES`, `palette.css` (both
+> blocks), and the `100`→`140` count assertions in `palette.test.ts` /
+> `background-colour.test.ts` were updated accordingly.
+
 **Commands:**
 - Single test file: `npx vitest run src/ui/<file>.test.ts`
 - All tests: `npm test`

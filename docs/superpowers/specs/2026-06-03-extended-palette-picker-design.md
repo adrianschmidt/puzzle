@@ -10,10 +10,13 @@ reuse it.
 
 ## Decisions (from brainstorming)
 
-- **Palette**: all 20 hues × 5 tones = **100 colours**. Exclude the Lime
-  brand colours, the deprecated brand colours, absolute white/black, and
-  the **contrast greyscale** (the `gray` hue already covers neutral
-  greys).
+- **Palette**: all 20 hues × 7 tones = **140 colours**. The five
+  lime-elements tones (lighter, light, default, dark, darker) plus two
+  extrapolated rows (`darker-2`, `darker-3`) so each column continues
+  darkening to a deep near-black — see "Extra darker rows" below. Exclude
+  the Lime brand colours, the deprecated brand colours, absolute
+  white/black, and the **contrast greyscale** (the `gray` hue already
+  covers neutral greys).
 - **Dark mode**: implemented the lime-elements way — the colours are
   **CSS custom properties** defined in a stylesheet, with a
   `@media (prefers-color-scheme: dark)` block that redefines every
@@ -82,7 +85,7 @@ export const PALETTE_HUES = [
 ] as const;
 
 export const PALETTE_TONES = [
-    'lighter', 'light', 'default', 'dark', 'darker',
+    'lighter', 'light', 'default', 'dark', 'darker', 'darker-2', 'darker-3',
 ] as const;
 
 export interface PaletteSwatch {
@@ -189,9 +192,22 @@ Replace `.bg-colour-panel` / `.bg-colour-swatch` rules with a reusable
   the existing selected ring.
 - Keep `.bg-colour-button` styles (or rename to a shared `.swatch-picker-button`).
 
+## Extra darker rows (`darker-2`, `darker-3`)
+
+The five lime tones don't go dark enough — the darkest (`darker`) is only
+mid-dark for many hues. Each column gets two extrapolated rows that
+continue its darkening. They are computed once (offline) in **OKLCH**:
+take the column's `darker` tone, step its lightness down by the column's
+own `dark → darker` step (clamped to a sensible perceptual range so no
+column stalls like yellow or collapses like gray), fade chroma in
+proportion to lightness, and hold the hue. Values are written as static
+hex in `palette.css` (both the light and dark blocks), same as the other
+tones — there is no runtime colour maths. Tone names are `darker-2` /
+`darker-3` (not `darkest`, to leave room and keep an ordinal scheme).
+
 ## Testing (TDD)
 
-- `palette.test.ts`: exactly 100 swatches; ids match `<hue>-<tone>`;
+- `palette.test.ts`: exactly 140 swatches; ids match `<hue>-<tone>`;
   labels are `"<hue> <tone>"`; every swatch's `value` is
   `var(--color-<id>)`; tone-major ordering; `onColorSchemeChange`
   subscribes/unsubscribes to the mocked `matchMedia` `change` event.
@@ -202,7 +218,7 @@ Replace `.bg-colour-panel` / `.bg-colour-swatch` rules with a reusable
 - `background-colour.test.ts`: default id resolves to a swatch; an
   unknown id, an old numeric index (`"3"`), and an old string id
   (`"midnight"`) all fall back to the default; `BACKGROUND_COLOUR_PRESETS`
-  has 100 entries whose `colour` is a `var(--color-…)` reference;
+  has 140 entries whose `colour` is a `var(--color-…)` reference;
   `applyBackgroundColour` sets `--puzzle-bg-colour` to the variable
   reference and sets `data-ui-scheme` from the resolved colour
   (`getComputedStyle` stubbed); `isLightColour` handles both `rgb()` and

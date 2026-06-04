@@ -12,10 +12,10 @@ import {
 } from './palette.js';
 
 describe('PALETTE_SWATCHES', () => {
-    it('contains one entry per hue × tone (100)', () => {
+    it('contains one entry per hue × tone (140)', () => {
         expect(PALETTE_HUES.length).toBe(20);
-        expect(PALETTE_TONES.length).toBe(5);
-        expect(PALETTE_SWATCHES.length).toBe(100);
+        expect(PALETTE_TONES.length).toBe(7);
+        expect(PALETTE_SWATCHES.length).toBe(140);
     });
 
     it('uses "<hue>-<tone>" ids, "<hue> <tone>" labels, var() values', () => {
