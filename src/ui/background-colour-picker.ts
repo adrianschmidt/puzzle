@@ -31,6 +31,7 @@ export function createBackgroundColourPicker(
             className: 'bg-colour-button',
         },
         ariaLabel: 'Background colour',
+        panelClassName: 'bg-colour-panel',
         swatches: BACKGROUND_COLOUR_PRESETS,
         selectedId: options.selectedId,
         onSelect: options.onSelect,

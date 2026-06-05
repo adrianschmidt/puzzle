@@ -36,6 +36,8 @@ describe('createBackgroundColourPicker', () => {
         (container.querySelector('button.bg-colour-button') as HTMLButtonElement).click();
         const swatches = container.querySelectorAll('.swatch-grid .swatch');
         expect(swatches.length).toBe(BACKGROUND_COLOUR_PRESETS.length);
+        // The adapter supplies its own panel-positioning class.
+        expect(container.querySelector('.swatch-grid.bg-colour-panel')).toBeTruthy();
 
         (container.querySelector('[data-swatch-id="blue-default"]') as HTMLButtonElement).click();
         expect(onSelect).toHaveBeenCalledWith('blue-default');

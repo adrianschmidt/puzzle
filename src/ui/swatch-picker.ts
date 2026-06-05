@@ -10,6 +10,11 @@
 
 import { attachDismissablePopover } from './dismissable-overlay.js';
 
+/**
+ * A swatch to render. All fields must be caller-trusted: `colour` is
+ * written to `style.backgroundColor` and `label` to `aria-label`/`title`,
+ * so callers must not pass untrusted/user-supplied strings.
+ */
 export interface SwatchEntry {
     /** Stable id reported to `onSelect`. */
     id: string;
@@ -22,10 +27,18 @@ export interface SwatchEntry {
 export interface SwatchPickerOptions {
     /** The container to append the button to. */
     container: HTMLElement;
-    /** Trigger-button presentation. `className` carries positioning. */
+    /** Trigger-button presentation. `className` positions the button. */
     button: { icon: string; title: string; className: string };
     /** Accessible label for the grid (listbox). */
     ariaLabel: string;
+    /**
+     * Extra class on the grid panel, added alongside `swatch-grid`. The
+     * base `.swatch-grid` rule carries only generic appearance — each
+     * instance supplies its own positioning via this class, so multiple
+     * pickers (e.g. the background and outline pickers) can anchor
+     * independently instead of stacking at the same coordinates.
+     */
+    panelClassName?: string;
     /** Swatches to render. */
     swatches: readonly SwatchEntry[];
     /** Currently selected swatch id. */
@@ -66,10 +79,12 @@ export function createSwatchGrid(
     selectedId: string,
     onSelect: (id: string) => void,
     onDismiss: () => void,
-    opts: { ariaLabel: string; columnCount?: number },
+    opts: { ariaLabel: string; columnCount?: number; panelClassName?: string },
 ): HTMLDivElement {
     const grid = document.createElement('div');
-    grid.className = 'swatch-grid';
+    grid.className = opts.panelClassName
+        ? `swatch-grid ${opts.panelClassName}`
+        : 'swatch-grid';
     grid.setAttribute('role', 'listbox');
     grid.setAttribute('aria-label', opts.ariaLabel);
     grid.style.setProperty(
@@ -95,7 +110,8 @@ export function createSwatchGrid(
  * cleanup function that removes the picker from the DOM.
  */
 export function createSwatchPicker(options: SwatchPickerOptions): () => void {
-    const { container, swatches, onSelect, ariaLabel, columnCount } = options;
+    const { container, swatches, onSelect, ariaLabel, columnCount, panelClassName } =
+        options;
     let currentId = options.selectedId;
 
     const button = document.createElement('button');
@@ -130,7 +146,7 @@ export function createSwatchPicker(options: SwatchPickerOptions): () => void {
                 onSelect(id);
             },
             dismissPanel,
-            { ariaLabel, columnCount },
+            { ariaLabel, columnCount, panelClassName },
         );
 
         button.after(grid);
