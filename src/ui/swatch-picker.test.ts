@@ -56,6 +56,22 @@ describe('createSwatchGrid', () => {
         expect(onSelect).toHaveBeenCalledWith('c');
         expect(onDismiss).toHaveBeenCalledOnce();
     });
+
+    it('always carries the base swatch-grid class', () => {
+        const grid = createSwatchGrid(SWATCHES, 'a', vi.fn(), vi.fn(), {
+            ariaLabel: 'Test',
+        });
+        expect(grid.classList.contains('swatch-grid')).toBe(true);
+    });
+
+    it('adds the per-instance panel class for independent positioning', () => {
+        const grid = createSwatchGrid(SWATCHES, 'a', vi.fn(), vi.fn(), {
+            ariaLabel: 'Test',
+            panelClassName: 'outline-colour-panel',
+        });
+        expect(grid.classList.contains('swatch-grid')).toBe(true);
+        expect(grid.classList.contains('outline-colour-panel')).toBe(true);
+    });
 });
 
 describe('createSwatchPicker', () => {
