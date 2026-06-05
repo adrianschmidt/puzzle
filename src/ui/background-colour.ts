@@ -9,8 +9,10 @@
  * unrecognized saved value falls back to the default.
  */
 
+import { diagnostics } from '../diagnostics.js';
 import { createStringPreference } from './preference-store.js';
 import { PALETTE_SWATCHES, type PaletteSwatch } from './palette.js';
+import type { SwatchEntry } from './swatch-picker.js';
 
 export interface BackgroundColourPreset {
     /** Stable string identifier used in localStorage. */
@@ -46,9 +48,13 @@ function toPreset(swatch: PaletteSwatch): BackgroundColourPreset {
     return { id: swatch.id, label: swatch.label, colour: swatch.value };
 }
 
-/** Available background colour presets (the full palette). */
+/**
+ * Available background colour presets (the full palette). `satisfies`
+ * documents that a preset is a valid `SwatchEntry`, so it can be passed
+ * straight to the swatch picker without adaptation.
+ */
 export const BACKGROUND_COLOUR_PRESETS: readonly BackgroundColourPreset[] =
-    PALETTE_SWATCHES.map(toPreset);
+    PALETTE_SWATCHES.map(toPreset) satisfies readonly SwatchEntry[];
 
 const ALLOWED_IDS = PALETTE_SWATCHES.map((s) => s.id);
 
@@ -117,7 +123,19 @@ export function applyBackgroundColour(id: string): void {
     document.documentElement.style.setProperty(CSS_CUSTOM_PROPERTY, preset.colour);
     document.body.style.backgroundColor = preset.colour;
 
+    // `preset.colour` is a `var(--color-…)` reference, so reading it back
+    // resolves to a concrete rgb() only once `palette.css` has loaded
+    // (hence main.ts imports it before the app boots). If the variable is
+    // missing/unresolved, `resolved` is empty → `isLightColour('')` is
+    // false → the chrome silently defaults to dark; warn so a load-order
+    // or naming regression is noticed rather than failing invisibly.
     const resolved = getComputedStyle(document.body).backgroundColor;
+    if (!resolved) {
+        diagnostics.warn(
+            `applyBackgroundColour: could not resolve "${preset.colour}" ` +
+                `(is palette.css loaded?); defaulting UI chrome to dark`,
+        );
+    }
     document.documentElement.dataset.uiScheme = isLightColour(resolved)
         ? 'light'
         : 'dark';
