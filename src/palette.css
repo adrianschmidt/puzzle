@@ -168,6 +168,11 @@
   --color-glaucous-darker-3: #06131a;
 }
 
+/* A few of the very-darkest tones are intentionally identical to their
+   light-block values below, so they don't dim further in dark mode:
+   `gray-darker-2`/`gray-darker-3` (near-black convergence) and
+   `magenta-darker` (faithful to upstream lime, which defines it the same
+   in both schemes). Not port mistakes. */
 @media (prefers-color-scheme: dark) {
   :root {
     --color-red-lighter: #ef9a9a;

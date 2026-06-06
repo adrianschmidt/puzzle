@@ -87,6 +87,13 @@ describe('loadColourPreference', () => {
         expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
     });
 
+    it('ignores Object.prototype keys (returns a real string id)', () => {
+        for (const key of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+            localStorage.setItem(COLOUR_PREFERENCE_KEY, key);
+            expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
+        }
+    });
+
     it('falls back to default for an out-of-range legacy index', () => {
         localStorage.setItem(COLOUR_PREFERENCE_KEY, '99');
         expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
