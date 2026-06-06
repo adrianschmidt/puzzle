@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { diagnostics } from '../diagnostics.js';
 import {
     BACKGROUND_COLOUR_PRESETS,
     DEFAULT_COLOUR_ID,
@@ -98,10 +99,28 @@ describe('applyBackgroundColour', () => {
     afterEach(() => vi.restoreAllMocks());
 
     it('sets the custom property to the variable reference', () => {
+        // Stub a resolvable colour so the chrome path doesn't spuriously
+        // warn (jsdom can't resolve var() on its own).
+        vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+            backgroundColor: 'rgb(33, 150, 243)',
+        } as CSSStyleDeclaration);
+        const warn = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
         applyBackgroundColour('blue-default');
         expect(
             document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY),
         ).toBe('var(--color-blue-default)');
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('warns and defaults to dark chrome when the colour cannot be resolved', () => {
+        // Mirrors a missing/unloaded palette.css: getComputedStyle returns
+        // an empty (unparseable) background-color.
+        vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+            backgroundColor: '',
+        } as CSSStyleDeclaration);
+        const warn = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
+        applyBackgroundColour('blue-default');
+        expect(warn).toHaveBeenCalledOnce();
         expect(document.documentElement.dataset.uiScheme).toBe('dark');
     });
 

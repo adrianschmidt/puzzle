@@ -14,14 +14,12 @@ import { createStringPreference } from './preference-store.js';
 import { PALETTE_SWATCHES, type PaletteSwatch } from './palette.js';
 import type { SwatchEntry } from './swatch-picker.js';
 
-export interface BackgroundColourPreset {
-    /** Stable string identifier used in localStorage. */
-    id: string;
-    /** Display label, e.g. "blue default". */
-    label: string;
-    /** CSS color value — a `var(--color-<id>)` reference. */
-    colour: string;
-}
+/**
+ * A background preset is just a palette swatch (`{ id, label, colour }`,
+ * where `colour` is a `var(--color-<id>)` reference). Aliased so the
+ * public name stays meaningful while there's a single shape.
+ */
+export type BackgroundColourPreset = PaletteSwatch;
 
 /** Default preset id — a fixed dark hue (closest to the old "midnight"). */
 export const DEFAULT_COLOUR_ID = 'indigo-darker';
@@ -44,17 +42,13 @@ if (defaultSwatchOrUndef === undefined) {
 }
 const defaultSwatch: PaletteSwatch = defaultSwatchOrUndef;
 
-function toPreset(swatch: PaletteSwatch): BackgroundColourPreset {
-    return { id: swatch.id, label: swatch.label, colour: swatch.value };
-}
-
 /**
  * Available background colour presets (the full palette). `satisfies`
- * documents that a preset is a valid `SwatchEntry`, so it can be passed
- * straight to the swatch picker without adaptation.
+ * documents that a preset is a valid `SwatchEntry`, so it feeds the
+ * swatch picker directly.
  */
 export const BACKGROUND_COLOUR_PRESETS: readonly BackgroundColourPreset[] =
-    PALETTE_SWATCHES.map(toPreset) satisfies readonly SwatchEntry[];
+    PALETTE_SWATCHES satisfies readonly SwatchEntry[];
 
 const ALLOWED_IDS = PALETTE_SWATCHES.map((s) => s.id);
 
@@ -69,7 +63,7 @@ export const loadColourPreference = store.load;
 
 /** Get the preset for an id, or the default preset for an unknown id. */
 export function getColourPreset(id: string): BackgroundColourPreset {
-    return toPreset(swatchById.get(id) ?? defaultSwatch);
+    return swatchById.get(id) ?? defaultSwatch;
 }
 
 /**
@@ -125,15 +119,16 @@ export function applyBackgroundColour(id: string): void {
 
     // `preset.colour` is a `var(--color-…)` reference, so reading it back
     // resolves to a concrete rgb() only once `palette.css` has loaded
-    // (hence main.ts imports it before the app boots). If the variable is
-    // missing/unresolved, `resolved` is empty → `isLightColour('')` is
-    // false → the chrome silently defaults to dark; warn so a load-order
-    // or naming regression is noticed rather than failing invisibly.
+    // (hence main.ts imports it before the app boots). If it's empty or
+    // otherwise unparseable, `isLightColour` returns false → the chrome
+    // silently defaults to dark; warn so a load-order or naming regression
+    // is noticed rather than failing invisibly.
     const resolved = getComputedStyle(document.body).backgroundColor;
-    if (!resolved) {
+    if (parseRgb(resolved) === null) {
         diagnostics.warn(
-            `applyBackgroundColour: could not resolve "${preset.colour}" ` +
-                `(is palette.css loaded?); defaulting UI chrome to dark`,
+            `applyBackgroundColour: could not parse resolved background ` +
+                `"${resolved}" for "${preset.colour}" (is palette.css ` +
+                `loaded?); defaulting UI chrome to dark`,
         );
     }
     document.documentElement.dataset.uiScheme = isLightColour(resolved)

@@ -22,7 +22,7 @@ describe('PALETTE_SWATCHES', () => {
         const blue = PALETTE_SWATCHES.find((s) => s.id === 'blue-default');
         expect(blue).toBeDefined();
         expect(blue?.label).toBe('blue default');
-        expect(blue?.value).toBe('var(--color-blue-default)');
+        expect(blue?.colour).toBe('var(--color-blue-default)');
     });
 
     it('has unique ids', () => {
@@ -43,7 +43,7 @@ describe('palette.css', () => {
 
     it('defines every swatch variable in :root (light)', () => {
         for (const s of PALETTE_SWATCHES) {
-            const name = s.value.slice('var('.length, -1); // --color-<id>
+            const name = s.colour.slice('var('.length, -1); // --color-<id>
             expect(lightBlock).toContain(`${name}:`);
         }
     });
@@ -51,7 +51,7 @@ describe('palette.css', () => {
     it('redefines every swatch variable in the dark-mode block', () => {
         expect(paletteCss).toContain('prefers-color-scheme: dark');
         for (const s of PALETTE_SWATCHES) {
-            const name = s.value.slice('var('.length, -1);
+            const name = s.colour.slice('var('.length, -1);
             expect(darkBlock).toContain(`${name}:`);
         }
     });
