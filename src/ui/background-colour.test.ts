@@ -58,13 +58,37 @@ describe('loadColourPreference', () => {
         expect(loadColourPreference()).toBe('green-dark');
     });
 
-    it('falls back to default for a legacy numeric index', () => {
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, '3');
+    it('migrates an old string id to its nearest new swatch', () => {
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, 'midnight');
+        expect(loadColourPreference()).toBe('indigo-darker');
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, 'hot-pink');
+        expect(loadColourPreference()).toBe('magenta-default');
+    });
+
+    it('migrates a legacy integer index to its nearest new swatch', () => {
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, '3'); // old "light"
+        expect(loadColourPreference()).toBe('gray-light');
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, '4'); // old "wood"
+        expect(loadColourPreference()).toBe('brown-dark');
+    });
+
+    it('every migration target is a real palette swatch', () => {
+        // Drive each legacy key through load and confirm it resolves to a
+        // swatch that round-trips (guards against a typo'd target id).
+        for (const legacy of ['midnight', 'slate', 'sky', 'lavender', '0', '11']) {
+            localStorage.setItem(COLOUR_PREFERENCE_KEY, legacy);
+            const id = loadColourPreference();
+            expect(getColourPreset(id).id).toBe(id);
+        }
+    });
+
+    it('falls back to default for an unrecognised value', () => {
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, 'totally-unknown');
         expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
     });
 
-    it('falls back to default for an old string id', () => {
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, 'midnight');
+    it('falls back to default for an out-of-range legacy index', () => {
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, '99');
         expect(loadColourPreference()).toBe(DEFAULT_COLOUR_ID);
     });
 });

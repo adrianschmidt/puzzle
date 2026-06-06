@@ -59,7 +59,72 @@ const store = createStringPreference({
 });
 
 export const saveColourPreference = store.save;
-export const loadColourPreference = store.load;
+
+/**
+ * Migration for preferences saved before the palette switch. Each of the
+ * old 12 preset ids maps to its nearest equivalent in the new palette, so
+ * a returning user keeps a similar background instead of being reset to
+ * the default. Curated for hue character rather than blind nearest:
+ * neutral greys map to greys, tinted pastels stay in their hue family.
+ */
+const LEGACY_NEAREST: Record<string, string> = {
+    midnight: 'indigo-darker',
+    charcoal: 'gray-darker',
+    slate: 'glaucous-dark',
+    light: 'gray-light',
+    wood: 'brown-dark',
+    'green-felt': 'green-darker',
+    'hot-pink': 'magenta-default',
+    blush: 'red-lighter',
+    peach: 'orange-lighter',
+    sage: 'green-lighter',
+    sky: 'blue-lighter',
+    lavender: 'violet-lighter',
+};
+
+/**
+ * Pre-id storage order: an even-older preference was a bare integer index
+ * into this list, so `'3'` resolves to the same target as `'light'`.
+ */
+const LEGACY_ORDER = [
+    'midnight', 'charcoal', 'slate', 'light', 'wood', 'green-felt',
+    'hot-pink', 'blush', 'peach', 'sage', 'sky', 'lavender',
+] as const;
+
+/** Both old string ids and old integer indices → nearest new swatch id. */
+const LEGACY_COLOUR_MAP: Record<string, string> = {
+    ...LEGACY_NEAREST,
+    ...Object.fromEntries(
+        LEGACY_ORDER.map((id, i) => [String(i), LEGACY_NEAREST[id]]),
+    ),
+};
+
+// Fail fast in development if a migration target drifts off the palette.
+for (const target of Object.values(LEGACY_NEAREST)) {
+    if (!swatchById.has(target)) {
+        throw new Error(
+            `Legacy migration target '${target}' is not a palette swatch id`,
+        );
+    }
+}
+
+/**
+ * Load the saved background id. A current id loads as-is; a recognised
+ * legacy value (old preset id or integer index) migrates to its nearest
+ * new swatch; anything else falls back to the default.
+ */
+export function loadColourPreference(): string {
+    let raw: string | null;
+    try {
+        raw = localStorage.getItem(COLOUR_PREFERENCE_KEY);
+    } catch {
+        return DEFAULT_COLOUR_ID;
+    }
+    if (raw !== null && raw in LEGACY_COLOUR_MAP) {
+        return LEGACY_COLOUR_MAP[raw];
+    }
+    return store.load();
+}
 
 /** Get the preset for an id, or the default preset for an unknown id. */
 export function getColourPreset(id: string): BackgroundColourPreset {
@@ -91,6 +156,11 @@ function parseRgb(colour: string): [number, number, number] | null {
     return null;
 }
 
+/** Relative luminance > 0.4, from an already-parsed [r, g, b] (0–255). */
+function luminanceIsLight([r, g, b]: [number, number, number]): boolean {
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.4;
+}
+
 /**
  * Determine whether a color is perceptually light (relative luminance >
  * 0.4). Accepts an `rgb()/rgba()` string or a hex string; an unparseable
@@ -98,12 +168,7 @@ function parseRgb(colour: string): [number, number, number] | null {
  */
 export function isLightColour(colour: string): boolean {
     const parsed = parseRgb(colour);
-    if (parsed === null) {
-        return false;
-    }
-    const [r, g, b] = parsed.map((v) => v / 255);
-    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    return luminance > 0.4;
+    return parsed !== null && luminanceIsLight(parsed);
 }
 
 /**
@@ -123,15 +188,14 @@ export function applyBackgroundColour(id: string): void {
     // otherwise unparseable, `isLightColour` returns false → the chrome
     // silently defaults to dark; warn so a load-order or naming regression
     // is noticed rather than failing invisibly.
-    const resolved = getComputedStyle(document.body).backgroundColor;
-    if (parseRgb(resolved) === null) {
+    const resolved = parseRgb(getComputedStyle(document.body).backgroundColor);
+    if (resolved === null) {
         diagnostics.warn(
-            `applyBackgroundColour: could not parse resolved background ` +
-                `"${resolved}" for "${preset.colour}" (is palette.css ` +
-                `loaded?); defaulting UI chrome to dark`,
+            `applyBackgroundColour: could not parse the resolved background ` +
+                `for "${preset.colour}" (is palette.css loaded?); ` +
+                `defaulting UI chrome to dark`,
         );
     }
-    document.documentElement.dataset.uiScheme = isLightColour(resolved)
-        ? 'light'
-        : 'dark';
+    document.documentElement.dataset.uiScheme =
+        resolved !== null && luminanceIsLight(resolved) ? 'light' : 'dark';
 }

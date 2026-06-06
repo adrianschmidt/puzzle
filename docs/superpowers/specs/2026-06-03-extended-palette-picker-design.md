@@ -28,11 +28,16 @@ reuse it.
   the background, so inverting greys would be wrong anyway.
 - **Reference by name**: a swatch id is `"<hue>-<tone>"`, e.g.
   `"blue-default"`. Never by index.
-- **No back-compat**: the old 12 presets and the legacy integer-index
-  migration are thrown out. A saved value that is no longer a valid id
-  falls back to the default. (Userbase is effectively one person;
-  backwards compatibility for the selected background is not worth the
-  tech debt.)
+- **Migrate old preferences to the nearest new swatch**: a saved value
+  from before the palette switch — one of the old 12 preset ids, or an
+  even-older bare integer index into them — maps to its nearest
+  equivalent in the new palette (curated for hue character: greys→greys,
+  tinted pastels stay in their hue family), so a returning user keeps a
+  similar background. Anything unrecognised still falls back to the
+  default. (This satisfies #391's "existing saved preferences still
+  resolve to a sensible color" criterion. The earlier plan to drop
+  migration assumed index-based storage; name-keyed swatches make a
+  ~12-line nearest map cheap, so it's worth doing.)
 - **Default**: a fixed dark hue — `indigo-darker` (`#1a237e`), closest to
   the old "midnight" navy.
 - **Layout**: a popover like limel-color-picker — 20 columns (one per
@@ -113,10 +118,13 @@ hues) so a 20-column grid mirrors the limel-color-picker layout.
 - Persistence switches from `createIdPreferenceStore` (with its
   `legacyOrder`) to `createStringPreference({ key, allowed, defaultValue })`:
   - `key`: `puzzle-background-colour` (unchanged).
-  - `allowed`: the 100 palette ids.
+  - `allowed`: the 140 palette ids.
   - `defaultValue`: `DEFAULT_COLOUR_ID = 'indigo-darker'`.
-  - A saved value outside `allowed` (including the old `0..11` indices
-    and the old string ids like `midnight`) is rejected → default.
+- `loadColourPreference()` wraps the store with a legacy migration: a
+  recognised old preset id or integer index resolves to its nearest new
+  swatch via a small `LEGACY_COLOUR_MAP` (a module-load guard asserts
+  every target is a real swatch); a current id loads as-is; anything else
+  falls back to the default.
 - `getColourPreset(id)` looks up the swatch (falls back to default).
 - `applyBackgroundColour(id)`:
   - set `--puzzle-bg-colour` and `document.body.style.backgroundColor`
@@ -215,14 +223,15 @@ tones — there is no runtime colour maths. Tone names are `darker-2` /
   file and asserting it defines a `--color-<id>` variable for every
   swatch in both the `:root` and the `@media (prefers-color-scheme: dark)`
   block (guards against a missing/extra variable).
-- `background-colour.test.ts`: default id resolves to a swatch; an
-  unknown id, an old numeric index (`"3"`), and an old string id
-  (`"midnight"`) all fall back to the default; `BACKGROUND_COLOUR_PRESETS`
-  has 140 entries whose `colour` is a `var(--color-…)` reference;
-  `applyBackgroundColour` sets `--puzzle-bg-colour` to the variable
-  reference and sets `data-ui-scheme` from the resolved colour
-  (`getComputedStyle` stubbed); `isLightColour` handles both `rgb()` and
-  hex inputs.
+- `background-colour.test.ts`: default id resolves to a swatch; an old
+  string id (`"midnight"`) and an old integer index (`"3"`) migrate to
+  their nearest new swatch, every migration target round-trips to a real
+  swatch, and an unrecognised value / out-of-range index falls back to
+  the default; `BACKGROUND_COLOUR_PRESETS` has 140 entries whose `colour`
+  is a `var(--color-…)` reference; `applyBackgroundColour` sets
+  `--puzzle-bg-colour` to the variable reference and sets `data-ui-scheme`
+  from the resolved colour (`getComputedStyle` stubbed), warning when it
+  can't resolve; `isLightColour` handles both `rgb()` and hex inputs.
 - `swatch-picker.test.ts`: renders one swatch per entry; marks the
   selected one (`aria-selected`, `--selected` class); clicking a swatch
   calls `onSelect(id)` and dismisses; cleanup removes the button.
