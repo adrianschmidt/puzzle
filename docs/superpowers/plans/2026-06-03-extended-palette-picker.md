@@ -17,6 +17,12 @@
 > palette is 7 tones (140 swatches). `PALETTE_TONES`, `palette.css` (both
 > blocks), and the `100`→`140` count assertions in `palette.test.ts` /
 > `background-colour.test.ts` were updated accordingly.
+>
+> **Follow-up (2026-06-06):** old-preference migration was re-added —
+> `loadColourPreference` maps a pre-switch saved value (old preset id or
+> integer index) to its nearest new swatch via `LEGACY_COLOUR_MAP`. So
+> Task 2's embedded "there is no migration" comment is historical; the
+> shipped module migrates. See the spec's persistence section.
 
 **Commands:**
 - Single test file: `npx vitest run src/ui/<file>.test.ts`

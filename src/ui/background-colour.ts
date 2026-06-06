@@ -4,9 +4,10 @@
  * Presets are the full extended palette (see `palette.ts` / `palette.css`).
  * Each preset's `colour` is a `var(--color-<id>)` reference, so the chosen
  * background and every swatch flip between light/dark shades with the OS
- * theme automatically. The chosen preset is saved by its stable string id;
- * there is no migration from the old index-based or named presets — an
- * unrecognized saved value falls back to the default.
+ * theme automatically. The chosen preset is saved by its stable string id.
+ * Preferences saved before the palette switch (an old preset id or an
+ * even-older bare integer index) migrate to their nearest new swatch via
+ * `LEGACY_COLOUR_MAP`; anything unrecognised falls back to the default.
  */
 
 import { diagnostics } from '../diagnostics.js';
@@ -99,8 +100,10 @@ const LEGACY_COLOUR_MAP: Record<string, string> = {
     ),
 };
 
-// Fail fast in development if a migration target drifts off the palette.
-for (const target of Object.values(LEGACY_NEAREST)) {
+// Fail fast in development if any migration target drifts off the palette.
+// Iterate the assembled map (not just LEGACY_NEAREST) so an integer index
+// pointing at a missing target surfaces as `undefined` here too.
+for (const target of Object.values(LEGACY_COLOUR_MAP)) {
     if (!swatchById.has(target)) {
         throw new Error(
             `Legacy migration target '${target}' is not a palette swatch id`,
@@ -120,7 +123,7 @@ export function loadColourPreference(): string {
     } catch {
         return DEFAULT_COLOUR_ID;
     }
-    if (raw !== null && raw in LEGACY_COLOUR_MAP) {
+    if (raw !== null && Object.hasOwn(LEGACY_COLOUR_MAP, raw)) {
         return LEGACY_COLOUR_MAP[raw];
     }
     return store.load();
