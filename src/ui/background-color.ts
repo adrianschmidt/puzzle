@@ -2,7 +2,7 @@
  * Background color presets and persistence.
  *
  * Presets are the full extended palette (see `palette.ts` / `palette.css`).
- * Each preset's `colour` is a `var(--color-<id>)` reference, so the chosen
+ * Each preset's `color` is a `var(--color-<id>)` reference, so the chosen
  * background and every swatch flip between light/dark shades with the OS
  * theme automatically. The chosen preset is saved by its stable string id.
  * Preferences saved before the palette switch (an old preset id or an
@@ -16,8 +16,8 @@ import { PALETTE_SWATCHES, type PaletteSwatch } from './palette.js';
 import type { SwatchEntry } from './swatch-picker.js';
 
 /**
- * A background preset is just a palette swatch (`{ id, label, colour }`,
- * where `colour` is a `var(--color-<id>)` reference). Aliased so the
+ * A background preset is just a palette swatch (`{ id, label, color }`,
+ * where `color` is a `var(--color-<id>)` reference). Aliased so the
  * public name stays meaningful while there's a single shape.
  */
 export type BackgroundColorPreset = PaletteSwatch;
@@ -216,16 +216,16 @@ export function isLightColor(color: string): boolean {
 export function applyBackgroundColor(id: string): void {
     const preset = getColorPreset(id);
     // Drives the visible background — style.css applies it on :root.
-    document.documentElement.style.setProperty(CSS_CUSTOM_PROPERTY, preset.colour);
+    document.documentElement.style.setProperty(CSS_CUSTOM_PROPERTY, preset.color);
     // NOT redundant with the line above: this is the read-back target for the
     // chrome decision below. getComputedStyle(document.body) resolves this
     // assignment's var() to a concrete rgb(); without it body stays
     // transparent → rgba(0, 0, 0, 0) → chrome silently stuck on dark for every
     // color (and rgba(0,0,0,0) parses fine, so the warn below wouldn't even
     // fire). Don't "simplify" this away.
-    document.body.style.backgroundColor = preset.colour;
+    document.body.style.backgroundColor = preset.color;
 
-    // `preset.colour` is a `var(--color-…)` reference, so reading it back
+    // `preset.color` is a `var(--color-…)` reference, so reading it back
     // resolves to a concrete rgb() only once `palette.css` has loaded
     // (hence main.ts imports it before the app boots). If it's empty or
     // otherwise unparseable, `isLightColor` returns false → the chrome
@@ -235,7 +235,7 @@ export function applyBackgroundColor(id: string): void {
     if (resolved === null) {
         diagnostics.warn(
             `applyBackgroundColor: could not parse the resolved background ` +
-                `for "${preset.colour}" (is palette.css loaded?); ` +
+                `for "${preset.color}" (is palette.css loaded?); ` +
                 `defaulting UI chrome to dark`,
         );
     }
