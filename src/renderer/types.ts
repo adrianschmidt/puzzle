@@ -5,7 +5,7 @@
  * whether to use DOM/SVG, Canvas, WebGL, etc.
  */
 
-import type { GameState } from '../model/types.js';
+import type { GameState, Point } from '../model/types.js';
 
 /**
  * Renderer interface.
@@ -67,6 +67,15 @@ export interface Renderer {
      * classify pointer events without per-piece listeners.
      */
     pieceIdFromTarget(target: EventTarget | null): number | null;
+
+    /**
+     * Recover the id of the piece rendered at a screen-space point, or null
+     * when no piece is there. Lets the interaction layer probe for pieces
+     * near a pointer without reaching into the DOM itself — keeping
+     * hit-testing behind the renderer abstraction. Implementations that
+     * cannot hit-test by point may return null.
+     */
+    pieceIdAtPoint(point: Point): number | null;
 
     /** Clean up all DOM/resources created by this renderer. */
     destroy(): void;

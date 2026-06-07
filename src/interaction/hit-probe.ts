@@ -19,6 +19,14 @@
  * the piece — never a bounding box that could grab the wrong neighbor.
  */
 
+import type { Point } from '../model/types.js';
+
+/** A screen-space sample offset from the press point. */
+interface ProbeOffset {
+    dx: number;
+    dy: number;
+}
+
 /** Radius of the near-miss grab tolerance, in screen pixels. */
 export const HIT_PROBE_RADIUS_PX = 8;
 
@@ -28,16 +36,8 @@ const PROBE_DIRECTIONS = 12;
 /** Rings sampled, as fractions of the radius, nearest first. */
 const PROBE_RING_FRACTIONS = [0.5, 1];
 
-/**
- * Screen-space offsets to sample around a background press, ordered
- * nearest-ring-first so the closest piece is found before a farther one.
- *
- * Pure (no DOM) so the sampling pattern can be unit-tested directly.
- */
-export function hitProbeOffsets(
-    radius = HIT_PROBE_RADIUS_PX,
-): Array<{ dx: number; dy: number }> {
-    const offsets: Array<{ dx: number; dy: number }> = [];
+function computeOffsets(radius: number): ProbeOffset[] {
+    const offsets: ProbeOffset[] = [];
     for (const fraction of PROBE_RING_FRACTIONS) {
         const r = radius * fraction;
         for (let i = 0; i < PROBE_DIRECTIONS; i++) {
@@ -48,16 +48,34 @@ export function hitProbeOffsets(
     return offsets;
 }
 
+// The app only ever probes at the default radius, so precompute that set
+// once rather than redoing the trig and allocations on every press. The
+// `radius` parameter exists mainly for testing.
+const DEFAULT_OFFSETS = computeOffsets(HIT_PROBE_RADIUS_PX);
+
 /**
- * Return the id of the nearest piece whose exact outline lies within
- * `radius` screen pixels of `point`, or null if none is close enough.
+ * Screen-space offsets to sample around a background press, ordered
+ * nearest-ring-first so a nearer piece is preferred over a farther one.
+ *
+ * Pure (no DOM) so the sampling pattern can be unit-tested directly.
+ */
+export function hitProbeOffsets(radius = HIT_PROBE_RADIUS_PX): ProbeOffset[] {
+    return radius === HIT_PROBE_RADIUS_PX ? DEFAULT_OFFSETS : computeOffsets(radius);
+}
+
+/**
+ * Return the id of a piece whose exact outline lies within `radius` screen
+ * pixels of `point`, preferring the nearer sampling ring, or null if none is
+ * close enough. (Within a ring the first sampled direction wins, so among
+ * equidistant pieces the choice is by angle, not strictly nearest — the gap
+ * is at most the ring spacing.)
  *
  * `pieceIdAt` maps a screen point to the piece under it (null for
  * background); it is injected so this is testable without a real layout.
  */
 export function probeNearbyPieceId(
-    point: { x: number; y: number },
-    pieceIdAt: (p: { x: number; y: number }) => number | null,
+    point: Point,
+    pieceIdAt: (p: Point) => number | null,
     radius = HIT_PROBE_RADIUS_PX,
 ): number | null {
     for (const { dx, dy } of hitProbeOffsets(radius)) {

@@ -80,6 +80,9 @@ function createFakeRenderer(): Renderer {
         setGroupSelected: vi.fn(),
         pieceIdFromTarget: vi.fn((t: EventTarget | null) =>
             (t as { _pieceId?: number } | null)?._pieceId ?? null),
+        // Defaults to "no piece nearby"; tests of the near-miss probe
+        // override this to report a piece for probed points.
+        pieceIdAtPoint: vi.fn(() => null),
         destroy: vi.fn(),
     };
 }
@@ -195,6 +198,70 @@ describe('setupInteraction', () => {
         container.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 }));
         expect(renderer.setGroupDragging).toHaveBeenCalledWith(7, false);
         expect(onDrop).toHaveBeenCalledWith(7);
+    });
+
+    it('a near-miss background press grabs a nearby piece via the probe', () => {
+        const container = createFakeContainer();
+        const renderer = createFakeRenderer();
+        const onDrop = vi.fn();
+        // Group 7 / piece 3 is just off the press point; the direct target is
+        // background, but the probe finds piece 3 nearby.
+        renderer.pieceIdAtPoint = vi.fn(() => 3);
+        const state = makeState([makeGroup(7, [3])]);
+
+        setupInteraction({
+            container: container as unknown as HTMLElement,
+            renderer,
+            viewportTransform: new ViewportTransform(),
+            getState: () => state,
+            onStateChanged: vi.fn(),
+            onDrop,
+            onViewportChanged: vi.fn(),
+            panViewport: vi.fn(),
+        });
+
+        // Direct hit is background (target === container), so the probe runs.
+        const bgTarget = container as unknown as EventTarget;
+        container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+        container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 })); // promote
+
+        // It became a piece drag (not a background pan).
+        expect(renderer.pieceIdAtPoint).toHaveBeenCalled();
+        expect(renderer.setGroupDragging).toHaveBeenCalledWith(7, true);
+
+        container.fire('pointerup', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 }));
+        expect(onDrop).toHaveBeenCalledWith(7);
+    });
+
+    it('a background press with no nearby piece pans instead of grabbing', () => {
+        const container = createFakeContainer();
+        const renderer = createFakeRenderer(); // pieceIdAtPoint defaults to null
+        const onDrop = vi.fn();
+        const onViewportChanged = vi.fn();
+        const state = makeState([makeGroup(7, [3])]);
+
+        setupInteraction({
+            container: container as unknown as HTMLElement,
+            renderer,
+            viewportTransform: new ViewportTransform(),
+            getState: () => state,
+            onStateChanged: vi.fn(),
+            onDrop,
+            onViewportChanged,
+            panViewport: vi.fn(),
+        });
+
+        const bgTarget = container as unknown as EventTarget;
+        container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+        container.fire('pointermove', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 130, clientY: 100 })); // promote pan
+        container.fire('pointermove', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 150, clientY: 100 })); // pan move
+
+        // The probe ran and found nothing, so this stayed a background pan:
+        // no piece grabbed, and the viewport changed.
+        expect(renderer.pieceIdAtPoint).toHaveBeenCalled();
+        expect(renderer.setGroupDragging).not.toHaveBeenCalled();
+        expect(onViewportChanged).toHaveBeenCalled();
+        expect(onDrop).not.toHaveBeenCalled();
     });
 
     it('a pointercancel during drag clears dragging visual without calling onDrop', () => {

@@ -104,15 +104,6 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         onStateChanged();
     }
 
-    // Maps a screen point to the piece directly under it (null for
-    // background), used by the near-miss probe below. Guarded for
-    // environments without layout-based hit testing (e.g. jsdom), where the
-    // probe simply degrades to the plain piece-vs-background classification.
-    const pieceIdAt = (p: Point): number | null => {
-        if (typeof document.elementFromPoint !== 'function') return null;
-        return renderer.pieceIdFromTarget(document.elementFromPoint(p.x, p.y));
-    };
-
     const classifyTarget: ClassifyTarget = (target, point) => {
         const pieceId = renderer.pieceIdFromTarget(target);
         if (pieceId !== null) return { kind: 'piece', pieceId };
@@ -123,9 +114,10 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
 
         // Direct hit was background — widen the grab to a nearby piece so
         // small/slim pieces stay grabbable when zoomed out (screen-constant
-        // tolerance; see hit-probe.ts). Only on events that carry a point.
+        // tolerance; see hit-probe.ts). The renderer owns the point→piece
+        // hit-test. Only on events that carry a point.
         if (point) {
-            const nearby = probeNearbyPieceId(point, pieceIdAt);
+            const nearby = probeNearbyPieceId(point, (p) => renderer.pieceIdAtPoint(p));
             if (nearby !== null) return { kind: 'piece', pieceId: nearby };
         }
 
