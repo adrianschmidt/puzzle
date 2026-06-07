@@ -10,7 +10,7 @@
  */
 
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
-import { buildGroupIndexes, normaliseDegrees } from '../model/helpers.js';
+import { buildGroupIndexes, normalizeDegrees } from '../model/helpers.js';
 
 export function computeMergedOffsets(
     pieces: Piece[],
@@ -113,10 +113,10 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
     reconstructed.forEach((offsets, idx) => {
         const wireValue = progress.mr?.[idx] ?? 0;
         // Wire format is quarter-turn integer (v: 1); convert to degrees.
-        // For free mode the wire value is already in degrees — normalise
+        // For free mode the wire value is already in degrees — normalize
         // into [0, 360) to mirror the encoder side and clamp any
         // out-of-range values from a hand-crafted link.
-        const rotation = isFree ? normaliseDegrees(wireValue) : wireValue * 90;
+        const rotation = isFree ? normalizeDegrees(wireValue) : wireValue * 90;
         const group: PieceGroup = {
             id: idCursor++,
             pieces: offsets,
@@ -137,9 +137,9 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
             const pid = progress.sr[i];
             const wireValue = progress.sr[i + 1] ?? 0;
             // Wire format is quarter-turn integer (v: 1); convert to degrees.
-            // Free-mode wire values get normalised to [0, 360) to mirror
+            // Free-mode wire values get normalized to [0, 360) to mirror
             // the encoder.
-            const rot = isFree ? normaliseDegrees(wireValue) : wireValue * 90;
+            const rot = isFree ? normalizeDegrees(wireValue) : wireValue * 90;
             const g = state.pieceToGroup.get(pid);
             if (g && g.pieces.size === 1) g.rotation = rot;
         }

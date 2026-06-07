@@ -88,7 +88,7 @@ export interface GroupBoundsOptions {
  * per-piece lookup inside the loop is O(1).
  *
  * Returns Infinity-valued bounds when the group has no findable pieces;
- * sugar wrappers normalise that to zero-sized.
+ * sugar wrappers normalize that to zero-sized.
  */
 export function getGroupBounds(
     group: PieceGroup,

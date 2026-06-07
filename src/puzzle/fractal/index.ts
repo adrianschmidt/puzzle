@@ -55,7 +55,7 @@ const TILES_PER_PIECE = 4.9;
  *   - `cols / rows` for borderless puzzles
  *   - `(cols-1) / (rows-1)` for framed puzzles (the trimmed rectangle)
  *
- * The search minimises a weighted sum of aspect error and piece-count
+ * The search minimizes a weighted sum of aspect error and piece-count
  * error; aspect is weighted 10× since even small ovalness is perceptible
  * while piece-count drift of ±20% is not.
  *

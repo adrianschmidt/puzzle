@@ -6,7 +6,7 @@ import {
     getWorldPosition,
     localToWorld,
     moveGroup,
-    normaliseDegrees,
+    normalizeDegrees,
     rotatePoint,
     signedAngularDelta,
 } from './helpers.js';
@@ -240,7 +240,7 @@ describe('rotatePoint (degrees)', () => {
         expect(r.y).toBeCloseTo(0.7314, 3);
     });
 
-    it('handles negative and >360° inputs (no normalisation needed at this layer)', () => {
+    it('handles negative and >360° inputs (no normalization needed at this layer)', () => {
         const p = { x: 1, y: 0 };
         // -90° == +270°
         const a = rotatePoint(p, -90);
@@ -341,20 +341,20 @@ describe('getWorldPosition', () => {
     });
 });
 
-describe('normaliseDegrees', () => {
+describe('normalizeDegrees', () => {
     it('returns values in [0, 360) for any input', () => {
-        expect(normaliseDegrees(0)).toBe(0);
-        expect(normaliseDegrees(90)).toBe(90);
-        expect(normaliseDegrees(360)).toBe(0);
-        expect(normaliseDegrees(720)).toBe(0);
-        expect(normaliseDegrees(-90)).toBe(270);
-        expect(normaliseDegrees(-450)).toBe(270);
+        expect(normalizeDegrees(0)).toBe(0);
+        expect(normalizeDegrees(90)).toBe(90);
+        expect(normalizeDegrees(360)).toBe(0);
+        expect(normalizeDegrees(720)).toBe(0);
+        expect(normalizeDegrees(-90)).toBe(270);
+        expect(normalizeDegrees(-450)).toBe(270);
     });
 
     it('preserves fractional values', () => {
-        expect(normaliseDegrees(47.3)).toBeCloseTo(47.3);
-        expect(normaliseDegrees(360.5)).toBeCloseTo(0.5);
-        expect(normaliseDegrees(-0.5)).toBeCloseTo(359.5);
+        expect(normalizeDegrees(47.3)).toBeCloseTo(47.3);
+        expect(normalizeDegrees(360.5)).toBeCloseTo(0.5);
+        expect(normalizeDegrees(-0.5)).toBeCloseTo(359.5);
     });
 });
 
@@ -383,7 +383,7 @@ describe('signedAngularDelta', () => {
         expect(signedAngularDelta(180, 0)).toBe(180);
     });
 
-    it('handles unnormalised inputs', () => {
+    it('handles unnormalized inputs', () => {
         expect(signedAngularDelta(720, 0)).toBe(0);
         expect(signedAngularDelta(-90, 0)).toBe(-90);
     });

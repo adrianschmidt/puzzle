@@ -88,7 +88,7 @@ export interface PieceGroup {
     /** The group's position in world (table) coordinates. */
     position: Point;
     /**
-     * Rotation in float degrees, normalised to `[0, 360)`.
+     * Rotation in float degrees, normalized to `[0, 360)`.
      *
      * Quarter-turn-mode puzzles store one of `{0, 90, 180, 270}`; free-mode
      * puzzles store any float in the range. Applied to the group's local

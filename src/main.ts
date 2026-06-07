@@ -385,7 +385,7 @@ function zoomToFitCompletedPuzzle(
 
             groupTransitionCleanup = () => {
                 // Settle into the normal representation: origin back at 0,0 and
-                // rotation normalised to 0. Visually identical to the spin's
+                // rotation normalized to 0. Visually identical to the spin's
                 // final frame (targetRotation ≡ 0 mod 360), so no jump.
                 groupEl.style.transition = '';
                 renderer.renderState(gameState);

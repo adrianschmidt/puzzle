@@ -174,8 +174,8 @@ export function moveGroup(
  *
  * Used for converting between a group's un-rotated local space and its
  * rotated world projection. Accepts any float (positive, negative, or out
- * of `[0, 360)` range) — callers that need a normalised group rotation
- * should pass values through `normaliseDegrees` themselves.
+ * of `[0, 360)` range) — callers that need a normalized group rotation
+ * should pass values through `normalizeDegrees` themselves.
  */
 export function rotatePoint(point: Point, degrees: number): Point {
     const rad = (degrees * Math.PI) / 180;
@@ -188,12 +188,12 @@ export function rotatePoint(point: Point, degrees: number): Point {
 }
 
 /**
- * Normalise an unbounded degrees value into the range [0, 360).
+ * Normalize an unbounded degrees value into the range [0, 360).
  *
  * Accepts negative or large positive inputs and returns a non-negative
  * value strictly less than 360. Preserves fractional precision.
  */
-export function normaliseDegrees(deg: number): number {
+export function normalizeDegrees(deg: number): number {
     return ((deg % 360) + 360) % 360;
 }
 

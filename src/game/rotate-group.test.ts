@@ -23,7 +23,7 @@ function makeSquarePiece(id: number): Piece {
 }
 
 describe('rotateGroup', () => {
-    it('rotates by +90° and normalises into [0, 360)', () => {
+    it('rotates by +90° and normalizes into [0, 360)', () => {
         const piece = makeSquarePiece(0);
         const group: PieceGroup = {
             id: 0,

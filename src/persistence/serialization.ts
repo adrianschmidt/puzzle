@@ -552,7 +552,7 @@ function deserializeGroup(group: SerializedPieceGroup): PieceGroup {
         id: group.id,
         pieces: new Map(group.pieces),
         position: group.position,
-        rotation: normaliseStoredRotation(group.rotation),
+        rotation: normalizeStoredRotation(group.rotation),
     };
 }
 
@@ -563,7 +563,7 @@ function deserializeGroup(group: SerializedPieceGroup): PieceGroup {
  * degrees for v ≥ 9 saves). The caller is responsible for converting
  * quarter-turn-era values to degrees by multiplying by 90.
  */
-function normaliseStoredRotation(value: unknown): number {
+function normalizeStoredRotation(value: unknown): number {
     if (typeof value === 'number' && Number.isFinite(value)) {
         return value;
     }
