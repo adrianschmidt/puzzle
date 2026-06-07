@@ -80,14 +80,14 @@ export {
 export type { CorruptSaveDialogOptions } from './corrupt-save-dialog.js';
 
 export {
-    BACKGROUND_COLOUR_PRESETS,
-    DEFAULT_COLOUR_ID,
-    getColourPreset,
-    saveColourPreference,
-    loadColourPreference,
-    applyBackgroundColour,
-} from './background-colour.js';
-export type { BackgroundColourPreset } from './background-colour.js';
+    BACKGROUND_COLOR_PRESETS,
+    DEFAULT_COLOR_ID,
+    getColorPreset,
+    saveColorPreference,
+    loadColorPreference,
+    applyBackgroundColor,
+} from './background-color.js';
+export type { BackgroundColorPreset } from './background-color.js';
 export { onColorSchemeChange } from './palette.js';
 
 export {
@@ -102,8 +102,8 @@ export type { PieceOutlinePreset } from './piece-outline.js';
 
 export { installPieceOutlineFilter } from './piece-outline-filter.js';
 
-export { createBackgroundColourPicker } from './background-colour-picker.js';
-export type { BackgroundColourPickerOptions } from './background-colour-picker.js';
+export { createBackgroundColorPicker } from './background-color-picker.js';
+export type { BackgroundColorPickerOptions } from './background-color-picker.js';
 
 export {
     createSwatchPicker,

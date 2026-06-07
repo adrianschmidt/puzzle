@@ -1,7 +1,7 @@
 :root {
-  /* First-paint fallback before JS applies the saved/default colour.
+  /* First-paint fallback before JS applies the saved/default color.
      Matches the default preset (indigo-darker) so there's no flash. */
-  --puzzle-bg-colour: #1a237e;
+  --puzzle-bg-color: #1a237e;
   --piece-opacity: 1;
 
   /* UI chrome colours — dark scheme (default) */
@@ -33,7 +33,7 @@
 
   font-family: system-ui, -apple-system, sans-serif;
   color: #e0e0e0;
-  background-color: var(--puzzle-bg-colour);
+  background-color: var(--puzzle-bg-color);
 }
 
 /* Light background override — switch UI chrome to dark-on-light */
@@ -847,8 +847,8 @@ html, body {
   background: var(--ui-overlay-hover);
 }
 
-/* Background colour picker button */
-.bg-colour-button {
+/* Background color picker button */
+.bg-color-button {
   position: absolute;
   top: 132px;
   right: 12px;
@@ -872,18 +872,18 @@ html, body {
   -webkit-user-select: none;
 }
 
-.bg-colour-button:hover {
+.bg-color-button:hover {
   background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
-.bg-colour-button:active {
+.bg-color-button:active {
   background: var(--ui-control-scrim-active);
 }
 
 /* Reusable swatch-grid popover (background picker, outline picker …).
    Generic appearance only — each instance supplies its own positioning
-   via an extra class (see `.bg-colour-panel`), so multiple pickers can
+   via an extra class (see `.bg-color-panel`), so multiple pickers can
    anchor independently rather than stacking at the same coordinates. */
 .swatch-grid {
   display: grid;
@@ -900,7 +900,7 @@ html, body {
 }
 
 /* Background-picker popover position (anchored under its toolbar button). */
-.bg-colour-panel {
+.bg-color-panel {
   position: absolute;
   top: 132px;
   right: 8px;
@@ -1244,8 +1244,8 @@ details.info-section[open] > .info-section-summary {
   .centre-view-button { top: 40px; right: 8px; }
   .gather-pieces-button { top: 72px; right: 8px; }
 
-  .bg-colour-button { top: 96px; right: 8px; }
-  .bg-colour-panel { top: 96px; right: 8px; }
+  .bg-color-button { top: 96px; right: 8px; }
+  .bg-color-panel { top: 96px; right: 8px; }
 
   .info-button { 
     top: 120px; 

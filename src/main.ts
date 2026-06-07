@@ -26,14 +26,14 @@ import {
     createNewGameButton,
     createCentreViewButton,
     createGatherPiecesButton,
-    loadColourPreference,
-    saveColourPreference,
-    applyBackgroundColour,
+    loadColorPreference,
+    saveColorPreference,
+    applyBackgroundColor,
     onColorSchemeChange,
     installPieceOutlineFilter,
     loadPieceOutlinePreference,
     applyPieceOutline,
-    createBackgroundColourPicker,
+    createBackgroundColorPicker,
     createInfoButton,
     createInfoModal,
     createSelectToolButton,
@@ -1197,21 +1197,21 @@ function updateRotationUiVisibility(): void {
 installPieceOutlineFilter();
 applyPieceOutline(loadPieceOutlinePreference());
 
-// Set up the Background Colour picker
-let currentColourId = loadColourPreference();
-applyBackgroundColour(currentColourId);
+// Set up the Background Color picker
+let currentColorId = loadColorPreference();
+applyBackgroundColor(currentColorId);
 
-// The background colour flips with the OS theme via CSS; re-apply only
+// The background color flips with the OS theme via CSS; re-apply only
 // to recompute the luminance-derived UI-chrome scheme on the flip.
-onColorSchemeChange(() => applyBackgroundColour(currentColourId));
+onColorSchemeChange(() => applyBackgroundColor(currentColorId));
 
-createBackgroundColourPicker({
+createBackgroundColorPicker({
     container: app,
-    selectedId: currentColourId,
+    selectedId: currentColorId,
     onSelect: (id) => {
-        currentColourId = id;
-        saveColourPreference(id);
-        applyBackgroundColour(id);
+        currentColorId = id;
+        saveColorPreference(id);
+        applyBackgroundColor(id);
     },
 });
 
