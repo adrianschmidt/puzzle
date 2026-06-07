@@ -25,8 +25,8 @@ export interface PaletteSwatch {
     id: string;
     /** Human label, "<hue> <tone>", e.g. "blue default". */
     label: string;
-    /** CSS colour: a reference to the palette variable, "var(--color-<id>)". */
-    colour: string;
+    /** CSS color: a reference to the palette variable, "var(--color-<id>)". */
+    color: string;
 }
 
 /**
@@ -34,7 +34,7 @@ export interface PaletteSwatch {
  * first, then "light", etc. With a 20-column grid this lays out as rows
  * = tones, columns = hues (mirrors the limel-color-picker layout).
  *
- * The `{ id, label, colour }` shape matches the swatch picker's
+ * The `{ id, label, color }` shape matches the swatch picker's
  * `SwatchEntry`, so these can feed `createSwatchPicker` directly.
  */
 export const PALETTE_SWATCHES: readonly PaletteSwatch[] = PALETTE_TONES.flatMap(
@@ -42,7 +42,7 @@ export const PALETTE_SWATCHES: readonly PaletteSwatch[] = PALETTE_TONES.flatMap(
         PALETTE_HUES.map((hue) => ({
             id: `${hue}-${tone}`,
             label: `${hue} ${tone}`,
-            colour: `var(--color-${hue}-${tone})`,
+            color: `var(--color-${hue}-${tone})`,
         })),
 );
 

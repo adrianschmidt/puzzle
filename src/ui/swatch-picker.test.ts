@@ -11,13 +11,13 @@ import {
 } from './swatch-picker.js';
 
 const SWATCHES: SwatchEntry[] = [
-    { id: 'a', label: 'Alpha', colour: '#ff0000' },
-    { id: 'b', label: 'Beta', colour: '#00ff00' },
-    { id: 'c', label: 'Gamma', colour: '#0000ff' },
+    { id: 'a', label: 'Alpha', color: '#ff0000' },
+    { id: 'b', label: 'Beta', color: '#00ff00' },
+    { id: 'c', label: 'Gamma', color: '#0000ff' },
 ];
 
 describe('createSwatch', () => {
-    it('creates a labelled button carrying the id and colour', () => {
+    it('creates a labelled button carrying the id and color', () => {
         const swatch = createSwatch(SWATCHES[0], false);
         expect(swatch.tagName).toBe('BUTTON');
         expect(swatch.dataset.swatchId).toBe('a');
@@ -67,10 +67,10 @@ describe('createSwatchGrid', () => {
     it('adds the per-instance panel class for independent positioning', () => {
         const grid = createSwatchGrid(SWATCHES, 'a', vi.fn(), vi.fn(), {
             ariaLabel: 'Test',
-            panelClassName: 'outline-colour-panel',
+            panelClassName: 'outline-color-panel',
         });
         expect(grid.classList.contains('swatch-grid')).toBe(true);
-        expect(grid.classList.contains('outline-colour-panel')).toBe(true);
+        expect(grid.classList.contains('outline-color-panel')).toBe(true);
     });
 });
 
@@ -90,7 +90,7 @@ describe('createSwatchPicker', () => {
         const onSelect = vi.fn();
         const cleanup = createSwatchPicker({
             container,
-            button: { icon: '🎨', title: 'Colour', className: 'bg-colour-button' },
+            button: { icon: '🎨', title: 'Colour', className: 'bg-color-button' },
             ariaLabel: 'Colour',
             swatches: SWATCHES,
             selectedId: 'a',
@@ -98,7 +98,7 @@ describe('createSwatchPicker', () => {
             columnCount: 3,
         });
         const button = container.querySelector(
-            'button.bg-colour-button',
+            'button.bg-color-button',
         ) as HTMLButtonElement;
         return { button, cleanup, onSelect };
     }
@@ -133,7 +133,7 @@ describe('createSwatchPicker', () => {
         button.click();
         expect(container.querySelector('.swatch-grid')).toBeTruthy();
         cleanup();
-        expect(container.querySelector('button.bg-colour-button')).toBeNull();
+        expect(container.querySelector('button.bg-color-button')).toBeNull();
         expect(container.querySelector('.swatch-grid')).toBeNull();
     });
 });

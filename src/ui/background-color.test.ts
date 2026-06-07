@@ -23,7 +23,7 @@ describe('BACKGROUND_COLOR_PRESETS', () => {
 
     it('each preset color is a var(--color-…) reference', () => {
         for (const p of BACKGROUND_COLOR_PRESETS) {
-            expect(p.colour).toMatch(/^var\(--color-[a-z]+-[a-z0-9-]+\)$/);
+            expect(p.color).toMatch(/^var\(--color-[a-z]+-[a-z0-9-]+\)$/);
         }
     });
 
@@ -38,7 +38,7 @@ describe('getColorPreset', () => {
     it('returns the matching preset', () => {
         const preset = getColorPreset('blue-default');
         expect(preset.id).toBe('blue-default');
-        expect(preset.colour).toBe('var(--color-blue-default)');
+        expect(preset.color).toBe('var(--color-blue-default)');
     });
 
     it('falls back to the default for an unknown id', () => {

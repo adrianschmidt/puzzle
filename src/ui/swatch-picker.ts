@@ -1,17 +1,17 @@
 /**
  * Reusable swatch-grid picker: a button that opens a dismissable popover
- * containing a grid of colour swatches. Selecting a swatch fires
+ * containing a grid of color swatches. Selecting a swatch fires
  * `onSelect(id)` and closes the popover.
  *
- * The component is colour-source agnostic — callers pass swatches as
- * data — so it can back both the background-colour picker and the
- * piece-outline colour picker (#392).
+ * The component is color-source agnostic — callers pass swatches as
+ * data — so it can back both the background-color picker and the
+ * piece-outline color picker (#392).
  */
 
 import { attachDismissablePopover } from './dismissable-overlay.js';
 
 /**
- * A swatch to render. All fields must be caller-trusted: `colour` is
+ * A swatch to render. All fields must be caller-trusted: `color` is
  * written to `style.backgroundColor` and `label` to `aria-label`/`title`,
  * so callers must not pass untrusted/user-supplied strings.
  */
@@ -20,8 +20,8 @@ export interface SwatchEntry {
     id: string;
     /** Accessible label / tooltip. */
     label: string;
-    /** CSS colour value shown in the swatch. */
-    colour: string;
+    /** CSS color value shown in the swatch. */
+    color: string;
 }
 
 export interface SwatchPickerOptions {
@@ -59,7 +59,7 @@ export function createSwatch(
     const swatch = document.createElement('button');
     swatch.className = 'swatch';
     swatch.type = 'button';
-    swatch.style.backgroundColor = entry.colour;
+    swatch.style.backgroundColor = entry.color;
     swatch.setAttribute('role', 'option');
     swatch.setAttribute('aria-label', entry.label);
     swatch.setAttribute('aria-selected', String(isSelected));
