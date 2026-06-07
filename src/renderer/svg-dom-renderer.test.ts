@@ -548,6 +548,37 @@ describe('SvgDomRenderer', () => {
         });
     });
 
+    describe('pieceIdAtPoint', () => {
+        it('returns null when layout hit-testing is unavailable (e.g. jsdom)', () => {
+            renderer.init(container);
+            renderer.renderState(make2x2State());
+
+            // jsdom does not implement elementFromPoint; the guard returns null.
+            expect(typeof document.elementFromPoint).not.toBe('function');
+            expect(renderer.pieceIdAtPoint({ x: 10, y: 10 })).toBeNull();
+        });
+
+        it('maps a screen point to the piece rendered there', () => {
+            renderer.init(container);
+            renderer.renderState(make2x2State());
+
+            const hitArea = container.querySelector(
+                'svg[data-piece-id="1"] [data-hit-area="true"]',
+            ) as SVGPathElement;
+
+            const doc = document as unknown as {
+                elementFromPoint?: (x: number, y: number) => Element | null;
+            };
+            const original = doc.elementFromPoint;
+            doc.elementFromPoint = () => hitArea;
+            try {
+                expect(renderer.pieceIdAtPoint({ x: 5, y: 5 })).toBe(1);
+            } finally {
+                doc.elementFromPoint = original;
+            }
+        });
+    });
+
     describe('destroy', () => {
         it('removes the table element', () => {
             renderer.init(container);

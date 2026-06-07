@@ -36,7 +36,7 @@ const PROBE_DIRECTIONS = 12;
 /** Rings sampled, as fractions of the radius, nearest first. */
 const PROBE_RING_FRACTIONS = [0.5, 1];
 
-function computeOffsets(radius: number): ProbeOffset[] {
+function computeOffsets(radius: number): readonly ProbeOffset[] {
     const offsets: ProbeOffset[] = [];
     for (const fraction of PROBE_RING_FRACTIONS) {
         const r = radius * fraction;
@@ -45,7 +45,10 @@ function computeOffsets(radius: number): ProbeOffset[] {
             offsets.push({ dx: r * Math.cos(angle), dy: r * Math.sin(angle) });
         }
     }
-    return offsets;
+    // Frozen because the default set is shared across every press (see
+    // DEFAULT_OFFSETS) — callers iterate, never mutate, and freezing makes
+    // an accidental mutation throw rather than corrupt later probes.
+    return Object.freeze(offsets);
 }
 
 // The app only ever probes at the default radius, so precompute that set
@@ -59,7 +62,7 @@ const DEFAULT_OFFSETS = computeOffsets(HIT_PROBE_RADIUS_PX);
  *
  * Pure (no DOM) so the sampling pattern can be unit-tested directly.
  */
-export function hitProbeOffsets(radius = HIT_PROBE_RADIUS_PX): ProbeOffset[] {
+export function hitProbeOffsets(radius = HIT_PROBE_RADIUS_PX): readonly ProbeOffset[] {
     return radius === HIT_PROBE_RADIUS_PX ? DEFAULT_OFFSETS : computeOffsets(radius);
 }
 
