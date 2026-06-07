@@ -66,7 +66,7 @@ export const saveColourPreference = store.save;
  * old 12 preset ids maps to its nearest equivalent in the new palette, so
  * a returning user keeps a similar background instead of being reset to
  * the default. Curated for hue character rather than blind nearest:
- * neutral greys map to greys, tinted pastels stay in their hue family.
+ * neutral grays map to grays, tinted pastels stay in their hue family.
  */
 const LEGACY_NEAREST: Record<string, string> = {
     midnight: 'indigo-darker',

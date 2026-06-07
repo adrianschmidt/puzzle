@@ -58,28 +58,37 @@ describe('loadColourPreference', () => {
         expect(loadColourPreference()).toBe('green-dark');
     });
 
-    it('migrates an old string id to its nearest new swatch', () => {
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, 'midnight');
-        expect(loadColourPreference()).toBe('indigo-darker');
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, 'hot-pink');
-        expect(loadColourPreference()).toBe('magenta-default');
-    });
-
-    it('migrates a legacy integer index to its nearest new swatch', () => {
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, '3'); // old "light"
-        expect(loadColourPreference()).toBe('gray-light');
-        localStorage.setItem(COLOUR_PREFERENCE_KEY, '4'); // old "wood"
-        expect(loadColourPreference()).toBe('brown-dark');
-    });
-
-    it('every migration target is a real palette swatch', () => {
-        // Drive each legacy key through load and confirm it resolves to a
-        // swatch that round-trips (guards against a typo'd target id).
-        for (const legacy of ['midnight', 'slate', 'sky', 'lavender', '0', '11']) {
+    it('migrates each old string id to its specific nearest swatch', () => {
+        // Asserts the exact target for all 12 old presets, so a typo in any
+        // one is caught (not just "resolves to some real swatch", which the
+        // default fallback would also satisfy).
+        const expected: Record<string, string> = {
+            midnight: 'indigo-darker',
+            charcoal: 'gray-darker',
+            slate: 'glaucous-dark',
+            light: 'gray-light',
+            wood: 'brown-dark',
+            'green-felt': 'green-darker',
+            'hot-pink': 'magenta-default',
+            blush: 'red-lighter',
+            peach: 'orange-lighter',
+            sage: 'green-lighter',
+            sky: 'blue-lighter',
+            lavender: 'violet-lighter',
+        };
+        for (const [legacy, target] of Object.entries(expected)) {
             localStorage.setItem(COLOUR_PREFERENCE_KEY, legacy);
-            const id = loadColourPreference();
-            expect(getColourPreset(id).id).toBe(id);
+            expect(loadColourPreference()).toBe(target);
         }
+    });
+
+    it('migrates a legacy integer index to the same target as its id', () => {
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, '0'); // midnight
+        expect(loadColourPreference()).toBe('indigo-darker');
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, '3'); // light
+        expect(loadColourPreference()).toBe('gray-light');
+        localStorage.setItem(COLOUR_PREFERENCE_KEY, '11'); // lavender
+        expect(loadColourPreference()).toBe('violet-lighter');
     });
 
     it('falls back to default for an unrecognised value', () => {
