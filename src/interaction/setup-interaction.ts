@@ -16,6 +16,7 @@ import type { ViewportTransform } from './viewport-transform.js';
 import { AutoPanController } from './auto-pan.js';
 import { PointerRouter } from './pointer-router.js';
 import type { ClassifyTarget } from './pointer-router.js';
+import { probeNearbyPieceId } from './hit-probe.js';
 import type { SelectionManager } from './selection-manager.js';
 import type { RotationFocus } from './rotation-focus.js';
 import { loadOffsetDragPreference } from '../ui/index.js';
@@ -103,14 +104,32 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         onStateChanged();
     }
 
-    const classifyTarget: ClassifyTarget = (target) => {
+    // Maps a screen point to the piece directly under it (null for
+    // background), used by the near-miss probe below. Guarded for
+    // environments without layout-based hit testing (e.g. jsdom), where the
+    // probe simply degrades to the plain piece-vs-background classification.
+    const pieceIdAt = (p: Point): number | null => {
+        if (typeof document.elementFromPoint !== 'function') return null;
+        return renderer.pieceIdFromTarget(document.elementFromPoint(p.x, p.y));
+    };
+
+    const classifyTarget: ClassifyTarget = (target, point) => {
         const pieceId = renderer.pieceIdFromTarget(target);
         if (pieceId !== null) return { kind: 'piece', pieceId };
-        if (target === container) return { kind: 'background' };
-        if (target instanceof HTMLElement && target.dataset.puzzleTable === 'true') {
-            return { kind: 'background' };
+
+        const isBackground = target === container ||
+            (target instanceof HTMLElement && target.dataset.puzzleTable === 'true');
+        if (!isBackground) return { kind: 'ignore' };
+
+        // Direct hit was background — widen the grab to a nearby piece so
+        // small/slim pieces stay grabbable when zoomed out (screen-constant
+        // tolerance; see hit-probe.ts). Only on events that carry a point.
+        if (point) {
+            const nearby = probeNearbyPieceId(point, pieceIdAt);
+            if (nearby !== null) return { kind: 'piece', pieceId: nearby };
         }
-        return { kind: 'ignore' };
+
+        return { kind: 'background' };
     };
 
     const router = new PointerRouter({
