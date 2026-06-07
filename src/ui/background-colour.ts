@@ -182,7 +182,14 @@ export function isLightColour(colour: string): boolean {
  */
 export function applyBackgroundColour(id: string): void {
     const preset = getColourPreset(id);
+    // Drives the visible background — style.css applies it on :root.
     document.documentElement.style.setProperty(CSS_CUSTOM_PROPERTY, preset.colour);
+    // NOT redundant with the line above: this is the read-back target for the
+    // chrome decision below. getComputedStyle(document.body) resolves this
+    // assignment's var() to a concrete rgb(); without it body stays
+    // transparent → rgba(0, 0, 0, 0) → chrome silently stuck on dark for every
+    // colour (and rgba(0,0,0,0) parses fine, so the warn below wouldn't even
+    // fire). Don't "simplify" this away.
     document.body.style.backgroundColor = preset.colour;
 
     // `preset.colour` is a `var(--color-…)` reference, so reading it back
