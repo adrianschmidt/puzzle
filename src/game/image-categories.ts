@@ -102,7 +102,7 @@ export const VIBRANT_PREFERENCE_KEY = 'puzzle-image-vibrant';
 
 /**
  * Keywords appended to the Unsplash query when the player wants
- * vibrant/colourful photos. Unsplash has no saturation/HDR filter,
+ * vibrant/colorful photos. Unsplash has no saturation/HDR filter,
  * so we bias the search via descriptive tags photographers use.
  */
 export const VIBRANT_QUERY_TERMS = 'vibrant colorful';

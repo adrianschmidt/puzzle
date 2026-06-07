@@ -530,8 +530,8 @@ describe('processDrop', () => {
 describe('mergeGroups with rotation snap', () => {
     it('snaps the moved group rotation to the target rotation before merging', () => {
         // Use a real piece with geometry so rotateGroup has a non-trivial bbox
-        // centre to pivot around. piece0 is a 100×100 square; when placed at
-        // offset (0,0) in a group, its bbox centre is (50,50) in local coords.
+        // center to pivot around. piece0 is a 100×100 square; when placed at
+        // offset (0,0) in a group, its bbox center is (50,50) in local coords.
         //
         // Setup:
         //   movedGroup:  rotation=92°, piece0 at offset (0,0)
@@ -539,7 +539,7 @@ describe('mergeGroups with rotation snap', () => {
         //   snapDelta: {0, 0}  (position already aligned after rotation snap)
         //
         // rotateGroup snaps movedGroup from 92° to 90° while keeping its
-        // visual bbox centre fixed in world space.  The position shift is:
+        // visual bbox center fixed in world space.  The position shift is:
         //   adj = rotatePoint({50,50}, 92°) − rotatePoint({50,50}, 90°)
         //
         // Without the rotation snap the world position of piece0 computed
@@ -567,9 +567,9 @@ describe('mergeGroups with rotation snap', () => {
         // equals movedGroup.position itself (rotatePoint({0,0}) = {0,0}).
         // After rotateGroup snap the position moves slightly; we capture it by
         // performing the same rotation math the implementation will use:
-        const bboxCentre = { x: 50, y: 50 }; // piece0 centre in local coords
-        const rotOld = rotatePoint(bboxCentre, 92);
-        const rotNew = rotatePoint(bboxCentre, 90);
+        const bboxCenter = { x: 50, y: 50 }; // piece0 center in local coords
+        const rotOld = rotatePoint(bboxCenter, 92);
+        const rotNew = rotatePoint(bboxCenter, 90);
         const expectedPositionAfterSnap = {
             x: movedGroup.position.x + rotOld.x - rotNew.x,
             y: movedGroup.position.y + rotOld.y - rotNew.y,
@@ -591,7 +591,7 @@ describe('mergeGroups with rotation snap', () => {
     });
 
     it('is a no-op for already-aligned rotations', () => {
-        // Both groups at rotation 90°; same behaviour as the existing tests.
+        // Both groups at rotation 90°; same behavior as the existing tests.
         const movedGroup: PieceGroup = {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),

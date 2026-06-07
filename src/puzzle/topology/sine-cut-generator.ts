@@ -37,7 +37,7 @@ export const sineCutGenerator: BaseCutGenerator = {
         // Fall back to sensible defaults when sub-fields are missing so that
         // `baseCutConfig: {}` (or no config) still produces the canonical
         // sine grid rather than collapsing to flat cuts via NaN comparisons.
-        // These defaults mirror the previous behaviour from generator.ts.
+        // These defaults mirror the previous behavior from generator.ts.
         const cfg = (config ?? {}) as Partial<SineCutConfig>;
         const cols = cfg.cols ?? 1;
         const rows = cfg.rows ?? 1;

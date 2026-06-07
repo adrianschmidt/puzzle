@@ -271,9 +271,9 @@ export class PointerRouter {
      *
      * Resolves any active single-pointer state before starting the pinch:
      * - candidates are silently discarded,
-     * - an active drag inside the grace window is cancelled,
+     * - an active drag inside the grace window is canceled,
      * - an active drag outside the grace window survives concurrently,
-     * - an active pan is always cancelled.
+     * - an active pan is always canceled.
      */
     private tryStartPinch(): boolean {
         if (this.pinch.kind !== 'inactive') return false;

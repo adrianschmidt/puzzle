@@ -44,8 +44,8 @@ describe('computeTabPlacement', () => {
         const longEdge = Curve.line({ x: 0, y: 0 }, { x: 200, y: 0 });
         const placement = computeTabPlacement(longEdge, DEFAULT_TAB_PLACEMENT, random);
         expect(placement).not.toBeNull();
-        expect(placement!.tCenter).toBeGreaterThanOrEqual(DEFAULT_TAB_PLACEMENT.centreRange[0]);
-        expect(placement!.tCenter).toBeLessThanOrEqual(DEFAULT_TAB_PLACEMENT.centreRange[1]);
+        expect(placement!.tCenter).toBeGreaterThanOrEqual(DEFAULT_TAB_PLACEMENT.centerRange[0]);
+        expect(placement!.tCenter).toBeLessThanOrEqual(DEFAULT_TAB_PLACEMENT.centerRange[1]);
         expect(typeof placement!.isTab).toBe('boolean');
     });
 });
@@ -115,7 +115,7 @@ describe('smoothedTabSplicer', () => {
         // chord-frame tangents — so the tab's first/last tangent is along
         // the local chord direction, not the parent's actual tangent.
         // This test pins the *difference*: were the smoothed splicer ever
-        // silently reduced to standard behaviour, this assertion would
+        // silently reduced to standard behavior, this assertion would
         // start passing where it should fail.
         const edge = curvedParent();
         const placement = { tCenter: 0.5, isTab: true };

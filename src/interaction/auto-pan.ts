@@ -90,7 +90,7 @@ export interface AutoPanCallbacks {
  * Usage:
  * - Call `start(groupId)` when a drag begins.
  * - Call `updatePointer(point)` on each pointer move.
- * - Call `stop()` when the drag ends or is cancelled.
+ * - Call `stop()` when the drag ends or is canceled.
  */
 export class AutoPanController {
     private callbacks: AutoPanCallbacks;
@@ -121,7 +121,7 @@ export class AutoPanController {
         }
     }
 
-    /** Stop auto-panning (call when drag ends or is cancelled). */
+    /** Stop auto-panning (call when drag ends or is canceled). */
     stop(): void {
         this.activeGroupId = null;
         this.currentPointer = null;

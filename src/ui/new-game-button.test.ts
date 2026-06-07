@@ -138,7 +138,7 @@ describe('createNewGameButton', () => {
         expect(onNewGame).toHaveBeenCalledOnce();
     });
 
-    it('should NOT call onNewGame when confirm is cancelled', () => {
+    it('should NOT call onNewGame when confirm is canceled', () => {
         confirmFn.mockReturnValue(false);
 
         createButton({

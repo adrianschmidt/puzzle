@@ -1,5 +1,5 @@
 /**
- * Gather Pieces button — brings all groups together to the centre
+ * Gather Pieces button — brings all groups together to the center
  * of the visible play area.
  *
  * When pieces are scattered widely (especially after zooming out),

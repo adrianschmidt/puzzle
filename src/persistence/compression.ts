@@ -2,7 +2,7 @@
  * localStorage compression helper.
  *
  * Wraps lz-string's UTF-16 codec and a marker prefix so the storage layer
- * can store a compressed payload and still recognise it on load. Compression
+ * can store a compressed payload and still recognize it on load. Compression
  * is used only as a fallback when an uncompressed write exceeds the quota
  * (see `writeWithOverflow` in storage.ts), so most saves never pass through here.
  */

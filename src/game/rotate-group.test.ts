@@ -62,7 +62,7 @@ describe('rotateGroup', () => {
         expect(group.rotation).toBeCloseTo(47);
     });
 
-    it('preserves the world-space bbox centre across a +90° rotation', () => {
+    it('preserves the world-space bbox center across a +90° rotation', () => {
         const piece = makeSquarePiece(0);
         const group: PieceGroup = {
             id: 0,
@@ -72,26 +72,26 @@ describe('rotateGroup', () => {
         };
 
         const bounds = getGroupLocalBounds(group, buildPiecesById([piece]));
-        const worldCentreBefore = {
+        const worldCenterBefore = {
             x: group.position.x + bounds.minX + bounds.width / 2,
             y: group.position.y + bounds.minY + bounds.height / 2,
         };
 
         rotateGroup(group, buildPiecesById([piece]), 90);
 
-        const localCentre = {
+        const localCenter = {
             x: bounds.minX + bounds.width / 2,
             y: bounds.minY + bounds.height / 2,
         };
         // 90° CW: (x,y) → (-y, x)
-        const rotated = { x: -localCentre.y, y: localCentre.x };
-        const worldCentreAfter = {
+        const rotated = { x: -localCenter.y, y: localCenter.x };
+        const worldCenterAfter = {
             x: group.position.x + rotated.x,
             y: group.position.y + rotated.y,
         };
 
-        expect(worldCentreAfter.x).toBeCloseTo(worldCentreBefore.x);
-        expect(worldCentreAfter.y).toBeCloseTo(worldCentreBefore.y);
+        expect(worldCenterAfter.x).toBeCloseTo(worldCenterBefore.x);
+        expect(worldCenterAfter.y).toBeCloseTo(worldCenterBefore.y);
     });
 
     it('is inverse-consistent: +90 then -90 returns to the starting state', () => {
@@ -129,7 +129,7 @@ describe('rotateGroup', () => {
         expect(group.position.y).toBeCloseTo(startPosition.y);
     });
 
-    it('handles multi-piece groups by pivoting around the combined bbox centre', () => {
+    it('handles multi-piece groups by pivoting around the combined bbox center', () => {
         const p0 = makeSquarePiece(0);
         const p1 = makeSquarePiece(1);
         const group: PieceGroup = {
@@ -143,24 +143,24 @@ describe('rotateGroup', () => {
         };
 
         const boundsBefore = getGroupLocalBounds(group, buildPiecesById([p0, p1]));
-        const worldCentreBefore = {
+        const worldCenterBefore = {
             x: group.position.x + boundsBefore.minX + boundsBefore.width / 2,
             y: group.position.y + boundsBefore.minY + boundsBefore.height / 2,
         };
 
         rotateGroup(group, buildPiecesById([p0, p1]), 90);
 
-        const localCentre = {
+        const localCenter = {
             x: boundsBefore.minX + boundsBefore.width / 2,
             y: boundsBefore.minY + boundsBefore.height / 2,
         };
-        const rotated = { x: -localCentre.y, y: localCentre.x };
-        const worldCentreAfter = {
+        const rotated = { x: -localCenter.y, y: localCenter.x };
+        const worldCenterAfter = {
             x: group.position.x + rotated.x,
             y: group.position.y + rotated.y,
         };
 
-        expect(worldCentreAfter.x).toBeCloseTo(worldCentreBefore.x);
-        expect(worldCentreAfter.y).toBeCloseTo(worldCentreBefore.y);
+        expect(worldCenterAfter.x).toBeCloseTo(worldCenterBefore.x);
+        expect(worldCenterAfter.y).toBeCloseTo(worldCenterBefore.y);
     });
 });

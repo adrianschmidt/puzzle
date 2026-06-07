@@ -73,10 +73,10 @@ export interface MergeCandidate {
  * can take the no-snap fast path.
  */
 interface RotationSnapContext {
-    /** Bbox centre in un-rotated local space — the rotation pivot. */
-    centreLocal: Point;
+    /** Bbox center in un-rotated local space — the rotation pivot. */
+    centerLocal: Point;
     /** World-space pivot, fixed during the snap. */
-    worldCentre: Point;
+    worldCenter: Point;
     /** Group rotation after applying the snap delta, normalised to [0, 360). */
     newRotation: number;
 }
@@ -88,20 +88,20 @@ function buildRotationSnapContext(
 ): RotationSnapContext | null {
     if (Math.abs(extraDeg) < SNAP_EPSILON_DEG) return null;
     const bounds = getGroupLocalBounds(group, piecesById);
-    const centreLocal = {
+    const centerLocal = {
         x: bounds.minX + bounds.width / 2,
         y: bounds.minY + bounds.height / 2,
     };
     return {
-        centreLocal,
-        worldCentre: localToWorld(centreLocal, group),
+        centerLocal,
+        worldCenter: localToWorld(centerLocal, group),
         newRotation: normaliseDegrees(group.rotation + extraDeg),
     };
 }
 
 /**
  * World position of a piece-local point AS IF the group had been rotated
- * by `extraDeg` around its bbox centre — the way `rotateGroup` performs a
+ * by `extraDeg` around its bbox center — the way `rotateGroup` performs a
  * rotation snap. For a null `snapCtx` (caller saw `extraDeg ≈ 0`) this
  * collapses to the existing `getWorldPosition` path, so quarter-turn-mode
  * merges are unaffected.
@@ -120,14 +120,14 @@ function getWorldPositionAfterRotationSnap(
     if (!offset) throw new Error(`Piece ${pieceId} not in group ${group.id}`);
     const localInGroup = { x: offset.x + pieceLocal.x, y: offset.y + pieceLocal.y };
 
-    const offsetFromCentre = {
-        x: localInGroup.x - snapCtx.centreLocal.x,
-        y: localInGroup.y - snapCtx.centreLocal.y,
+    const offsetFromCenter = {
+        x: localInGroup.x - snapCtx.centerLocal.x,
+        y: localInGroup.y - snapCtx.centerLocal.y,
     };
-    const rotated = rotatePoint(offsetFromCentre, snapCtx.newRotation);
+    const rotated = rotatePoint(offsetFromCenter, snapCtx.newRotation);
     return {
-        x: snapCtx.worldCentre.x + rotated.x,
-        y: snapCtx.worldCentre.y + rotated.y,
+        x: snapCtx.worldCenter.x + rotated.x,
+        y: snapCtx.worldCenter.y + rotated.y,
     };
 }
 
@@ -166,7 +166,7 @@ export function checkEdgeAlignment(
     // Exact equality is no longer required: in free-rotation mode the
     // tolerance window lets the player land near the correct orientation
     // and still trigger a merge. In quarter-turn mode the delta is always
-    // 0, so the tolerance is a no-op and behaviour is unchanged.
+    // 0, so the tolerance is a no-op and behavior is unchanged.
     const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
     if (Math.abs(rotDelta) > rotationTolerance) {
         return { aligned: false, snapDelta: { x: 0, y: 0 } };

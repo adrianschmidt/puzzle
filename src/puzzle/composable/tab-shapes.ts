@@ -57,7 +57,7 @@ function lerp(a: number, b: number, t: number): number {
  * and wide head, using 6 cubic Bézier segments.
  *
  * Inspired by Dillo's CodePen `twist0` function.
- * Randomizes: horizontal scale, vertical scale, centre position,
+ * Randomizes: horizontal scale, vertical scale, center position,
  * and neck-to-head width ratio.
  */
 export const classicTabTemplate: TabTemplate = {

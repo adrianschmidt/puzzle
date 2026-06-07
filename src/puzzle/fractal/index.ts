@@ -6,7 +6,7 @@
  *
  * The algorithm places tiles on a square grid and connects them
  * diagonally to form pieces. Each piece is bounded by quarter-circle
- * arcs around the tile centres, producing organic, dragon-curve-like
+ * arcs around the tile centers, producing organic, dragon-curve-like
  * shapes that interlock without traditional tabs/blanks.
  *
  * Public API:

@@ -199,17 +199,17 @@ export function getGroupLocalBounds(
 }
 
 /**
- * Centre of the assembled image rectangle in un-rotated local space.
+ * Center of the assembled image rectangle in un-rotated local space.
  *
  * Samples piece-body corner vertices only (no tab protrusions), so for a
  * completed puzzle — whose outer border is flat — this is the geometric
- * centre of the image. Use it as the pivot when spinning the finished
- * puzzle upright, so the rotation looks centred rather than offset by the
+ * center of the image. Use it as the pivot when spinning the finished
+ * puzzle upright, so the rotation looks centered rather than offset by the
  * asymmetric tabs that `getGroupLocalBounds` would include.
  *
  * Returns the local origin for a group with no findable pieces.
  */
-export function getGroupImageCentre(
+export function getGroupImageCenter(
     group: PieceGroup,
     piecesById: ReadonlyMap<number, Readonly<Piece>>,
 ): Point {

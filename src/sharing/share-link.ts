@@ -252,7 +252,7 @@ function isValidProgress(x: unknown): boolean {
  * {@link ComposableConfig} shape. `decodePayload` already translates legacy
  * share-link payloads (v1 `ha`/`hf`/`va`/`vf`/`dt` fields) to the current
  * `bg`/`bgc`/`tg`/`tgc` shape on the way in, so this is a 1:1 rename plus
- * the optional `mpa` propagation that keeps auto-grouping behaviour
+ * the optional `mpa` propagation that keeps auto-grouping behavior
  * consistent between sender and receiver.
  */
 export function shareCfToComposableConfig(

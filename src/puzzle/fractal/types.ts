@@ -23,7 +23,7 @@ export interface DiagonalConnection {
 }
 
 export interface ArcData {
-    /** Centre point of the arc's circle. */
+    /** Center point of the arc's circle. */
     cx: number;
     cy: number;
     /** Radius. */

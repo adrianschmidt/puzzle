@@ -547,7 +547,7 @@ function buildOpacitySetting(): HTMLElement {
     value.dataset.testid = 'piece-opacity-value';
     value.textContent = '1';
 
-    // Initialise from the current CSS custom property, if previously set.
+    // Initialize from the current CSS custom property, if previously set.
     const current = getComputedStyle(document.documentElement)
         .getPropertyValue('--piece-opacity')
         .trim();

@@ -16,7 +16,7 @@
  *
  * - `attachDismissablePopover` for popovers anchored to a toggle button.
  *   The caller builds and positions the panel; this helper attaches the
- *   dismissal behaviour: Escape and a capture-phase document
+ *   dismissal behavior: Escape and a capture-phase document
  *   `pointerdown` outside both the panel and the anchor element.
  *
  * `onDismiss` fires only for helper-owned dismissal paths, not when the
@@ -110,12 +110,12 @@ export function createDismissableOverlay(
 }
 
 export interface DismissablePopoverOptions {
-    /** The panel element to attach dismissal behaviour to. */
+    /** The panel element to attach dismissal behavior to. */
     panel: HTMLElement;
     /**
      * The toggle that opens the popover. Pointerdowns on this element (or
      * its descendants) are ignored, so the toggle's own click handler can
-     * own open/close behaviour.
+     * own open/close behavior.
      */
     anchor?: HTMLElement;
     /**

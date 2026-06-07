@@ -289,7 +289,7 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         // movedGroup.rotation = 5°, targetGroup.rotation = 0°.
         // rotDelta = signedAngularDelta(0, 5) = -5°, within tolerance.
         //
-        // After a -5° snap around the bbox centre (50,50 local for a 100×100
+        // After a -5° snap around the bbox center (50,50 local for a 100×100
         // piece at offset (0,0)), the snapped world endpoints of the moved
         // right-edge are at approximately (95.45, 4.17) and (95.45, 104.17).
         // Placing targetGroup (rotation=0) at (95.45, 4.17) achieves perfect
@@ -297,10 +297,10 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
         const piecesById = new Map([[0, piece0], [1, piece1]]);
 
-        // Derived: worldCentre of group0 = localToWorld({50,50}, rot=5°, pos=(0,0))
+        // Derived: worldCenter of group0 = localToWorld({50,50}, rot=5°, pos=(0,0))
         //  = rotatePoint({50,50},5°) = {45.45, 54.17}
         // Snapped movedStart (rightEdge.start={100,0}):
-        //  offsetFromCentre = {50,-50}, rotated by 0° = {50,-50}
+        //  offsetFromCenter = {50,-50}, rotated by 0° = {50,-50}
         //  world = {45.45+50, 54.17-50} = {95.45, 4.17}
         const group0: PieceGroup = {
             id: 0,
@@ -330,13 +330,13 @@ describe('checkEdgeAlignment with angular tolerance', () => {
     it('rejects a 15° delta with default tolerance but accepts with rotationTolerance=20', () => {
         // rotDelta = signedAngularDelta(0, 15) = -15°
         //
-        // worldCentre of group0 = rotatePoint({50,50}, 15°):
+        // worldCenter of group0 = rotatePoint({50,50}, 15°):
         //   cos(15°)≈0.9659, sin(15°)≈0.2588
         //   x = 50*0.9659 - 50*0.2588 ≈ 35.36
         //   y = 50*0.2588 + 50*0.9659 ≈ 61.24
         //
         // After -15° snap of group0 (newRotation=0°), movedEdge.start={100,0}:
-        //   offsetFromCentre = {50,-50}, rotated by 0° = {50,-50}
+        //   offsetFromCenter = {50,-50}, rotated by 0° = {50,-50}
         //   world = {35.36+50, 61.24-50} = {85.36, 11.24}
         //
         // targetEdge.end={0,0}, group1 at pos=(85.36,11.24), rot=0° → targetEnd=(85.36,11.24) ✓
@@ -377,7 +377,7 @@ describe('checkEdgeAlignment with angular tolerance', () => {
 
     it('accepts pairs whose rotations match exactly (quarter-turn parity)', () => {
         // Both at rotation=90°. rotDelta=0, so getWorldPositionAfterRotationSnap
-        // collapses to getWorldPosition — identical to pre-T4 behaviour.
+        // collapses to getWorldPosition — identical to pre-T4 behavior.
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
         const piecesById = new Map([[0, piece0], [1, piece1]]);
 
@@ -418,13 +418,13 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         // If both groups effectively end up at rotation=5° with adjacent positions,
         // use the existing rotation=5° adjacent layout.
         //
-        // worldCentre of group0 = localToWorld({50,50}, rot=355°, pos=(0,0))
+        // worldCenter of group0 = localToWorld({50,50}, rot=355°, pos=(0,0))
         //  cos(355°)≈0.9962, sin(355°)≈-0.0872
         //  rotatePoint({50,50},355°) = {50*0.9962-50*(-0.0872), 50*(-0.0872)+50*0.9962}
         //                            = {49.81+4.36, -4.36+49.81} = {54.17, 45.45}
         //
         // After snap (newRotation=5°):
-        //  movedEdge.start={100,0}: offsetFromCentre={50,-50}
+        //  movedEdge.start={100,0}: offsetFromCenter={50,-50}
         //  rotated by 5°: x=50*cos5-(-50)*sin5=49.81+4.36=54.17, y=50*sin5+(-50)*cos5=4.36-49.81=-45.45
         //  world = {54.17+54.17, 45.45-45.45} = {108.34, 0}
         //

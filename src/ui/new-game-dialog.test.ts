@@ -301,7 +301,7 @@ describe('createNewGameDialog', () => {
         );
     });
 
-    it('initialises the top-level checkbox from savedRotationEnabled', () => {
+    it('initializes the top-level checkbox from savedRotationEnabled', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
@@ -502,7 +502,7 @@ describe('free rotation sub-checkbox', () => {
         );
     });
 
-    it('initialises the sub-checkbox from savedFreeRotationEnabled', () => {
+    it('initializes the sub-checkbox from savedFreeRotationEnabled', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
