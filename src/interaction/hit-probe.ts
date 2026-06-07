@@ -1,0 +1,68 @@
+/**
+ * Screen-space "near miss" grab tolerance for piece pointerdowns.
+ *
+ * Piece hit-testing is geometric: the browser reports which piece's exact
+ * outline sits under the pointer. That makes small/slim pieces (notably
+ * Fractal) hard to grab when zoomed out — a few pixels off the outline lands
+ * on the background and pans instead of dragging.
+ *
+ * To compensate without distorting any piece geometry — and without the
+ * per-zoom SVG repaint that a zoom-scaled hit-area stroke caused — a
+ * pointerdown that lands on the background probes a ring of points around it.
+ * If a piece's exact outline is within {@link HIT_PROBE_RADIUS_PX} *screen*
+ * pixels, that piece is grabbed instead of starting a pan.
+ *
+ * Because the radius is in screen space, the tolerance is constant at every
+ * zoom: generous relative to a tiny zoomed-out piece, tight relative to a
+ * large zoomed-in one (so precise targeting is preserved). The probe reuses
+ * the existing exact-outline hit paths, so the catch area stays shaped like
+ * the piece — never a bounding box that could grab the wrong neighbor.
+ */
+
+/** Radius of the near-miss grab tolerance, in screen pixels. */
+export const HIT_PROBE_RADIUS_PX = 8;
+
+/** Directions sampled per ring. 12 ≈ one sample every 30°. */
+const PROBE_DIRECTIONS = 12;
+
+/** Rings sampled, as fractions of the radius, nearest first. */
+const PROBE_RING_FRACTIONS = [0.5, 1];
+
+/**
+ * Screen-space offsets to sample around a background press, ordered
+ * nearest-ring-first so the closest piece is found before a farther one.
+ *
+ * Pure (no DOM) so the sampling pattern can be unit-tested directly.
+ */
+export function hitProbeOffsets(
+    radius = HIT_PROBE_RADIUS_PX,
+): Array<{ dx: number; dy: number }> {
+    const offsets: Array<{ dx: number; dy: number }> = [];
+    for (const fraction of PROBE_RING_FRACTIONS) {
+        const r = radius * fraction;
+        for (let i = 0; i < PROBE_DIRECTIONS; i++) {
+            const angle = (i / PROBE_DIRECTIONS) * Math.PI * 2;
+            offsets.push({ dx: r * Math.cos(angle), dy: r * Math.sin(angle) });
+        }
+    }
+    return offsets;
+}
+
+/**
+ * Return the id of the nearest piece whose exact outline lies within
+ * `radius` screen pixels of `point`, or null if none is close enough.
+ *
+ * `pieceIdAt` maps a screen point to the piece under it (null for
+ * background); it is injected so this is testable without a real layout.
+ */
+export function probeNearbyPieceId(
+    point: { x: number; y: number },
+    pieceIdAt: (p: { x: number; y: number }) => number | null,
+    radius = HIT_PROBE_RADIUS_PX,
+): number | null {
+    for (const { dx, dy } of hitProbeOffsets(radius)) {
+        const id = pieceIdAt({ x: point.x + dx, y: point.y + dy });
+        if (id !== null) return id;
+    }
+    return null;
+}

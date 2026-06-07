@@ -24,19 +24,6 @@ import type { Renderer } from './types.js';
 const PIECE_PADDING = 30;
 
 /**
- * Width of the expanded hit-area stroke around each piece (in world-space
- * pixels). This creates a larger touch target so that near-misses on a
- * piece edge still register as hitting the piece rather than the
- * background. Because the value is in world space, the screen-space
- * expansion is proportionally larger when zoomed out — exactly when
- * pieces are hardest to tap.
- *
- * Only applies to piece-vs-background decisions. When another piece's
- * exact hit area is under the pointer, the expanded area defers.
- */
-const HIT_AREA_EXPANSION_PX = 8;
-
-/**
  * Write a group container's CSS transform.
  *
  * Single source of truth for the `translate(...) rotate(...)` string so
@@ -349,26 +336,11 @@ export class SvgDomRenderer implements Renderer {
         image.setAttribute('pointer-events', 'none');
         svg.appendChild(image);
 
-        // Expanded hit-area — a thick transparent stroke around the
-        // piece shape that catches near-misses.  Placed *before* the
-        // exact hit-area so the exact path is higher in z-order.
-        // Only fires when no other piece's exact hit-area is under the
-        // pointer (piece-vs-background bias, not piece-vs-piece).
-        const expandedHitArea = document.createElementNS(svgNS, 'path');
-        expandedHitArea.setAttribute('d', piece.shape);
-        expandedHitArea.setAttribute('fill', 'rgba(0,0,0,0)');
-        expandedHitArea.setAttribute('stroke', 'rgba(0,0,0,0)');
-        expandedHitArea.setAttribute(
-            'stroke-width',
-            String(HIT_AREA_EXPANSION_PX * 2),
-        );
-        expandedHitArea.setAttribute('pointer-events', 'stroke');
-        expandedHitArea.dataset.hitAreaExpanded = 'true';
-        svg.appendChild(expandedHitArea);
-
-        // Transparent hit-area matching the piece shape — ensures
-        // pointer events only fire inside the actual piece outline,
-        // not the rectangular SVG bounding box.
+        // Transparent hit-area matching the piece shape — ensures pointer
+        // events only fire inside the actual piece outline, not the
+        // rectangular SVG bounding box. Near-misses just outside the outline
+        // are rescued by the screen-space probe in the pointer layer (see
+        // interaction/hit-probe.ts), so no widened hit stroke is needed.
         const hitArea = document.createElementNS(svgNS, 'path');
         hitArea.setAttribute('d', piece.shape);
         hitArea.setAttribute('fill', 'rgba(0,0,0,0)');

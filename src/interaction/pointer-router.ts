@@ -10,7 +10,15 @@
  * full state machine and arbitration rules.
  */
 
-export type ClassifyTarget = (target: EventTarget | null) =>
+export type ClassifyTarget = (
+    target: EventTarget | null,
+    /**
+     * Screen coordinates of the event, when available (pointerdown). Lets the
+     * classifier widen a background hit into a nearby piece via a screen-space
+     * probe. Omitted for events where a probe makes no sense (e.g. wheel).
+     */
+    point?: { x: number; y: number },
+) =>
     | { kind: 'piece'; pieceId: number }
     | { kind: 'background' }
     | { kind: 'ignore' };
@@ -134,7 +142,7 @@ export class PointerRouter {
     // --- Pointer ---------------------------------------------------
 
     private onPointerDown(evt: PointerEvent): void {
-        const cls = this.classifyTarget(evt.target);
+        const cls = this.classifyTarget(evt.target, { x: evt.clientX, y: evt.clientY });
         if (cls.kind === 'ignore') return;
 
         this.tracked.set(evt.pointerId, {

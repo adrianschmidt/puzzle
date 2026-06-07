@@ -406,68 +406,6 @@ describe('SvgDomRenderer', () => {
         });
     });
 
-    describe('expanded hit area', () => {
-        it('creates an expanded hit-area path for each piece', () => {
-            renderer.init(container);
-            const state = make2x2State();
-            renderer.renderState(state);
-
-            for (const piece of state.pieces) {
-                const svg = container.querySelector(
-                    `svg[data-piece-id="${piece.id}"]`,
-                ) as SVGSVGElement;
-
-                const expandedHitArea = svg.querySelector(
-                    '[data-hit-area-expanded]',
-                ) as SVGPathElement;
-                expect(
-                    expandedHitArea,
-                    `Piece ${piece.id} should have an expanded hit area`,
-                ).not.toBeNull();
-
-                // Should use the same shape as the piece
-                expect(expandedHitArea.getAttribute('d')).toBe(piece.shape);
-
-                // Should have a transparent stroke for the expansion
-                expect(expandedHitArea.getAttribute('stroke')).toBe(
-                    'rgba(0,0,0,0)',
-                );
-                expect(
-                    Number(expandedHitArea.getAttribute('stroke-width')),
-                ).toBeGreaterThan(0);
-
-                // Should respond to stroke pointer events only
-                expect(expandedHitArea.getAttribute('pointer-events')).toBe(
-                    'stroke',
-                );
-            }
-        });
-
-        it('places expanded hit-area before exact hit-area in DOM order', () => {
-            renderer.init(container);
-            const state = make2x2State();
-            renderer.renderState(state);
-
-            const svg = container.querySelector(
-                'svg[data-piece-id="0"]',
-            ) as SVGSVGElement;
-
-            const expanded = svg.querySelector(
-                '[data-hit-area-expanded]',
-            ) as SVGPathElement;
-            const exact = svg.querySelector(
-                '[data-hit-area]',
-            ) as SVGPathElement;
-
-            // Expanded should come before exact in DOM siblings
-            const children = Array.from(svg.children);
-            const expandedIndex = children.indexOf(expanded);
-            const exactIndex = children.indexOf(exact);
-            expect(expandedIndex).toBeLessThan(exactIndex);
-        });
-
-    });
-
     describe('bringGroupToFront', () => {
         it('moves the group element to the end of its parent', () => {
             renderer.init(container);
@@ -592,15 +530,6 @@ describe('SvgDomRenderer', () => {
             const svg = container.querySelector('svg[data-piece-id="1"]') as SVGSVGElement;
             const hitArea = svg.querySelector('[data-hit-area="true"]') as SVGPathElement;
             expect(renderer.pieceIdFromTarget(hitArea)).toBe(1);
-        });
-
-        it('returns the piece id when target is an expanded-hit-area child', () => {
-            renderer.init(container);
-            renderer.renderState(make2x2State());
-
-            const svg = container.querySelector('svg[data-piece-id="2"]') as SVGSVGElement;
-            const expandedHitArea = svg.querySelector('[data-hit-area-expanded="true"]') as SVGPathElement;
-            expect(renderer.pieceIdFromTarget(expandedHitArea)).toBe(2);
         });
 
         it('returns null for an unrelated DOM node', () => {
