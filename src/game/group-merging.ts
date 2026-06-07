@@ -11,7 +11,7 @@ import type { GameState, PieceGroup, Point } from '../model/types.js';
 import {
     getGroup,
     moveGroup,
-    normaliseDegrees,
+    normalizeDegrees,
     removeGroup,
     rotatePoint,
     signedAngularDelta,
@@ -78,7 +78,7 @@ export function mergeGroups(
         x: movedGroup.position.x - targetGroup.position.x,
         y: movedGroup.position.y - targetGroup.position.y,
     };
-    const inverseDeg = normaliseDegrees(-targetGroup.rotation);
+    const inverseDeg = normalizeDegrees(-targetGroup.rotation);
     const localDelta = rotatePoint(rawDiff, inverseDeg);
 
     for (const [pieceId, offset] of movedGroup.pieces) {

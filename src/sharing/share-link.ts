@@ -7,7 +7,7 @@
  */
 
 import type { GameState } from '../model/types.js';
-import { normaliseDegrees } from '../model/helpers.js';
+import { normalizeDegrees } from '../model/helpers.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import {
     listBaseCutGeneratorIds,
@@ -236,7 +236,7 @@ function isValidProgress(x: unknown): boolean {
             const v = pr.sr[i];
             // Even indices are piece IDs (must be integers); odd indices
             // are rotation values (any finite number — applyProgress
-            // normalises them in free mode).
+            // normalizes them in free mode).
             if (i % 2 === 0) {
                 if (!Number.isInteger(v)) return false;
             } else {
@@ -377,13 +377,13 @@ function extractProgress(state: GameState): SharePayload['pr'] | null {
         // becomes effectively dense; keep the format for consistency with v: 1.
         // The explicit % 360 guards against float arithmetic leaving g.rotation
         // just outside [0, 360) — e.g. 359.6 → round → 360 → % 360 → 0.
-        pr.mr = merged.map((g) => normaliseDegrees(Math.round(g.rotation)));
+        pr.mr = merged.map((g) => normalizeDegrees(Math.round(g.rotation)));
         const sr: number[] = [];
         for (const g of state.groups) {
             if (g.pieces.size !== 1) continue;
             if (g.rotation === 0) continue;
             const [pieceId] = g.pieces.keys();
-            sr.push(pieceId, normaliseDegrees(Math.round(g.rotation)));
+            sr.push(pieceId, normalizeDegrees(Math.round(g.rotation)));
         }
         if (sr.length > 0) pr.sr = sr;
     }

@@ -64,7 +64,7 @@ export function createIndexedPreferenceStore<T>(opts: {
 
 /**
  * A store for a JSON-object preference: a typed value persisted as
- * serialised JSON. Missing, unreadable, or rejected-by-`parse` values
+ * serialized JSON. Missing, unreadable, or rejected-by-`parse` values
  * load as `undefined` (callers decide what to do with that — usually
  * fall back to a hard-coded default).
  */

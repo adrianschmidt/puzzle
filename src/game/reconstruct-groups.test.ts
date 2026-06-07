@@ -129,7 +129,7 @@ describe('applyProgress', () => {
         expect(soloFor(5).rotation).toBe(312);
     });
 
-    it('normalises out-of-range free-mode mr values into [0, 360)', () => {
+    it('normalizes out-of-range free-mode mr values into [0, 360)', () => {
         // The encoder always emits values in [0, 360), but a hand-edited
         // share link could plant negatives or values ≥ 360. Mirror the
         // encoder's clamp on read so they don't reach group.rotation.
@@ -140,7 +140,7 @@ describe('applyProgress', () => {
         expect(merged!.rotation).toBe(270);
     });
 
-    it('normalises out-of-range free-mode sr values into [0, 360)', () => {
+    it('normalizes out-of-range free-mode sr values into [0, 360)', () => {
         const state = fresh(123, 'free');
         for (const g of state.groups) g.rotation = 0;
 

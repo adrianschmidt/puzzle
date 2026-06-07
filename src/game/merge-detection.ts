@@ -12,7 +12,7 @@ import {
     getBorderEdges,
     getWorldPosition,
     localToWorld,
-    normaliseDegrees,
+    normalizeDegrees,
     rotatePoint,
     signedAngularDelta,
     tryGetGroup,
@@ -77,7 +77,7 @@ interface RotationSnapContext {
     centerLocal: Point;
     /** World-space pivot, fixed during the snap. */
     worldCenter: Point;
-    /** Group rotation after applying the snap delta, normalised to [0, 360). */
+    /** Group rotation after applying the snap delta, normalized to [0, 360). */
     newRotation: number;
 }
 
@@ -95,7 +95,7 @@ function buildRotationSnapContext(
     return {
         centerLocal,
         worldCenter: localToWorld(centerLocal, group),
-        newRotation: normaliseDegrees(group.rotation + extraDeg),
+        newRotation: normalizeDegrees(group.rotation + extraDeg),
     };
 }
 

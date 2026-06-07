@@ -86,7 +86,7 @@ export interface TopologyGeneratorConfig {
  * curve-intersection rounding) into starting groups so the player
  * never sees them as solo pieces. When `minPieceArea` is omitted,
  * `autoGroups` is empty — every piece becomes its own group via the
- * caller's normal one-group-per-piece initialisation.
+ * caller's normal one-group-per-piece initialization.
  */
 export interface TopologyPuzzle {
     pieces: Piece[];

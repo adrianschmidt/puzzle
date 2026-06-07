@@ -24,7 +24,7 @@ describe('traced template library', () => {
 
             it('has all landmark fractions non-negative', () => {
                 // All values are in chord-length units. Y and width can
-                // exceed 1 for tall or wide tabs (the chord normalises x
+                // exceed 1 for tall or wide tabs (the chord normalizes x
                 // to 1, not the shape's bounding box), so only check
                 // non-negativity here. center_x has its own bounds check.
                 const lm = template.landmarks;

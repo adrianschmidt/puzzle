@@ -1,7 +1,7 @@
 /**
  * Pivot-preserving group rotation by an arbitrary degrees delta.
  *
- * Rotation is stored on `PieceGroup.rotation` as float degrees, normalised
+ * Rotation is stored on `PieceGroup.rotation` as float degrees, normalized
  * to `[0, 360)`. Piece offsets stay in un-rotated local space; rotation is
  * applied at render time and via `getWorldPosition`. When we change a
  * group's rotation, we adjust its `position` so the group's visual bbox
@@ -9,7 +9,7 @@
  */
 
 import type { Piece, PieceGroup } from '../model/types.js';
-import { normaliseDegrees, rotatePoint } from '../model/helpers.js';
+import { normalizeDegrees, rotatePoint } from '../model/helpers.js';
 import { getGroupLocalBounds } from './group-bounds.js';
 
 /**
@@ -24,7 +24,7 @@ export function rotateGroup(
     deltaDegrees: number,
 ): PieceGroup {
     const oldRotation = group.rotation;
-    const newRotation = normaliseDegrees(oldRotation + deltaDegrees);
+    const newRotation = normalizeDegrees(oldRotation + deltaDegrees);
 
     const bounds = getGroupLocalBounds(group, piecesById);
     const centerLocal = {
