@@ -2,7 +2,7 @@
  * Shared dismissal scaffolding for overlay UIs.
  *
  * Modals (info modal, new-game dialog, completion screen) and popovers
- * (background-colour picker) all reimplement the same pattern: a div that
+ * (background-color picker) all reimplement the same pattern: a div that
  * dismisses on Escape / backdrop click / outside pointerdown, plus the
  * document-level listener cleanup. This file owns those mechanics so each
  * consumer only needs to think about its content.
