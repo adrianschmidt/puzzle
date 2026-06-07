@@ -104,6 +104,10 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         onStateChanged();
     }
 
+    // The renderer owns the point→piece hit-test; the probe samples around a
+    // press with it. Defined once rather than per pointerdown.
+    const probeHitTest = (p: Point): number | null => renderer.pieceIdAtPoint(p);
+
     const classifyTarget: ClassifyTarget = (target, point) => {
         const pieceId = renderer.pieceIdFromTarget(target);
         if (pieceId !== null) return { kind: 'piece', pieceId };
@@ -114,10 +118,9 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
 
         // Direct hit was background — widen the grab to a nearby piece so
         // small/slim pieces stay grabbable when zoomed out (screen-constant
-        // tolerance; see hit-probe.ts). The renderer owns the point→piece
-        // hit-test. Only on events that carry a point.
+        // tolerance; see hit-probe.ts). Only on events that carry a point.
         if (point) {
-            const nearby = probeNearbyPieceId(point, (p) => renderer.pieceIdAtPoint(p));
+            const nearby = probeNearbyPieceId(point, probeHitTest);
             if (nearby !== null) return { kind: 'piece', pieceId: nearby };
         }
 

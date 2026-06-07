@@ -205,8 +205,11 @@ describe('setupInteraction', () => {
         const renderer = createFakeRenderer();
         const onDrop = vi.fn();
         // Group 7 / piece 3 is just off the press point; the direct target is
-        // background, but the probe finds piece 3 nearby.
-        renderer.pieceIdAtPoint = vi.fn(() => 3);
+        // background, but the probe finds piece 3 at points near the press.
+        // Coordinate-sensitive so the test would fail if the wiring probed
+        // the wrong location (or dropped the point).
+        renderer.pieceIdAtPoint = vi.fn((p: { x: number; y: number }) =>
+            Math.hypot(p.x - 100, p.y - 100) <= 8 ? 3 : null);
         const state = makeState([makeGroup(7, [3])]);
 
         setupInteraction({
