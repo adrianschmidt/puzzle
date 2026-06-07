@@ -171,6 +171,37 @@ describe('applyBackgroundColour', () => {
         expect(document.documentElement.dataset.uiScheme).toBe('dark');
     });
 
+    it('derives the chrome from the colour written to document.body', () => {
+        // Regression guard for the read-back target. applyBackgroundColour
+        // writes the colour to document.body.style.backgroundColor *so it can
+        // read it back* via getComputedStyle(document.body) to pick the
+        // ui-scheme. That assignment looks redundant next to the
+        // --puzzle-bg-colour custom property (which drives the visible
+        // background), but dropping it leaves body transparent → the chrome
+        // would be silently stuck on 'dark' for every colour.
+        //
+        // Unlike the tests above, this mock resolves the var() off body's
+        // *actual* inline style — the way a real browser would — so it fails
+        // if the body assignment is ever removed (body would be '' → dark).
+        vi.spyOn(window, 'getComputedStyle').mockImplementation(
+            (el: Element) =>
+                ({
+                    backgroundColor:
+                        (el as HTMLElement).style.backgroundColor ===
+                        'var(--color-gray-lighter)'
+                            ? 'rgb(245, 245, 245)'
+                            : '',
+                }) as CSSStyleDeclaration,
+        );
+        const warn = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
+        applyBackgroundColour('gray-lighter');
+        expect(document.body.style.backgroundColor).toBe(
+            'var(--color-gray-lighter)',
+        );
+        expect(document.documentElement.dataset.uiScheme).toBe('light');
+        expect(warn).not.toHaveBeenCalled();
+    });
+
     it('falls back to the default preset for an unknown id', () => {
         applyBackgroundColour('not-a-colour');
         expect(
