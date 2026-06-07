@@ -221,7 +221,7 @@ describe('share-link: composable v2 cf shape', () => {
 describe('shareCfToComposableConfig', () => {
     it('round-trips a non-default minPieceArea end-to-end', () => {
         // Sender ships mpa=25; receiver must apply it, otherwise auto-grouping
-        // behaviour silently diverges (the default 4 absorbs only sub-pixel
+        // behavior silently diverges (the default 4 absorbs only sub-pixel
         // numerical noise, while 25 absorbs visible slivers).
         const state = buildState({
             cutStyle: 'composable',

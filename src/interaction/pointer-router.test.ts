@@ -594,7 +594,7 @@ describe('PointerRouter — pointercancel', () => {
         expect(h.container.releasePointerCapture).toHaveBeenCalledWith(1);
     });
 
-    it('emits onPinch.end when a pair member is cancelled', () => {
+    it('emits onPinch.end when a pair member is canceled', () => {
         const h = createHarness({ classifyTarget: piece() });
         h.fire('pointerdown', fakePointerEvent({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 }));
         h.fire('pointerdown', fakePointerEvent({ pointerId: 2, pointerType: 'touch', clientX: 100, clientY: 0 }));

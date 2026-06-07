@@ -133,7 +133,7 @@ export class Curve {
      * Construct a circular curve as four cubic Bézier segments using
      * the standard kappa = 4*(sqrt(2)-1)/3 approximation.
      *
-     * Starts at the rightmost point (centre + (radius, 0)) and goes CCW.
+     * Starts at the rightmost point (center + (radius, 0)) and goes CCW.
      */
     static circle(center: Point, radius: number): Curve {
         const k = 0.5522847498307933;  // 4*(sqrt(2)-1)/3

@@ -14,7 +14,7 @@ describe('computeAutoPanVelocity', () => {
     const W = 1000;
     const H = 800;
 
-    it('returns zero velocity when pointer is in the centre', () => {
+    it('returns zero velocity when pointer is in the center', () => {
         const v = computeAutoPanVelocity({ x: 500, y: 400 }, W, H);
         expect(v.x).toBe(0);
         expect(v.y).toBe(0);
@@ -175,7 +175,7 @@ describe('AutoPanController', () => {
 
         it('does not reschedule RAF when velocity is zero', () => {
             controller.start(42);
-            controller.updatePointer({ x: 500, y: 400 }); // centre — zero velocity
+            controller.updatePointer({ x: 500, y: 400 }); // center — zero velocity
             expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
 
             rafCallback!(16);
@@ -198,7 +198,7 @@ describe('AutoPanController', () => {
 
         it('restarts RAF when pointer re-enters an edge zone after a zero-velocity tick', () => {
             controller.start(42);
-            controller.updatePointer({ x: 500, y: 400 }); // centre
+            controller.updatePointer({ x: 500, y: 400 }); // center
             rafCallback!(16); // zero-velocity tick — does not reschedule
             expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
 

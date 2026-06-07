@@ -9,7 +9,7 @@ import {
     getGroupOffsetBounds,
     getGroupLocalBounds,
     getGroupVisualBounds,
-    getGroupImageCentre,
+    getGroupImageCenter,
 } from './group-bounds.js';
 import { buildPiecesById, makePiece, makeRectPiece } from '../test-helpers/fixtures.js';
 
@@ -253,25 +253,25 @@ describe('getGroupLocalBounds', () => {
     });
 });
 
-describe('getGroupImageCentre', () => {
-    it('returns the centre of a single piece-body rectangle', () => {
+describe('getGroupImageCenter', () => {
+    it('returns the center of a single piece-body rectangle', () => {
         const piece = makeSquarePiece(0);
         const group = makeGroup(0, 999, 999); // position is ignored (local space)
 
-        expect(getGroupImageCentre(group, buildPiecesById([piece]))).toEqual({
+        expect(getGroupImageCenter(group, buildPiecesById([piece]))).toEqual({
             x: 50,
             y: 50,
         });
     });
 
-    it('ignores protruding tab geometry (image-rectangle centre, not tab bbox)', () => {
-        // The tab bulges up to y=-30; a tab-inclusive bbox centre would be
-        // (50, 35). The image centre uses corner geometry only, so it stays
-        // at the body centre (50, 50).
+    it('ignores protruding tab geometry (image-rectangle center, not tab bbox)', () => {
+        // The tab bulges up to y=-30; a tab-inclusive bbox center would be
+        // (50, 35). The image center uses corner geometry only, so it stays
+        // at the body center (50, 50).
         const piece = makeTabbedPiece(0);
         const group = makeGroup(0, 0, 0);
 
-        expect(getGroupImageCentre(group, buildPiecesById([piece]))).toEqual({
+        expect(getGroupImageCenter(group, buildPiecesById([piece]))).toEqual({
             x: 50,
             y: 50,
         });
@@ -282,7 +282,7 @@ describe('getGroupImageCentre', () => {
         const group = makeGroup(0, 0, 0);
         group.rotation = 90;
 
-        expect(getGroupImageCentre(group, buildPiecesById([piece]))).toEqual({
+        expect(getGroupImageCenter(group, buildPiecesById([piece]))).toEqual({
             x: 50,
             y: 50,
         });
@@ -296,7 +296,7 @@ describe('getGroupImageCentre', () => {
             [1, { x: 100, y: 0 }],
         ]);
 
-        expect(getGroupImageCentre(group, buildPiecesById([piece0, piece1]))).toEqual({
+        expect(getGroupImageCenter(group, buildPiecesById([piece0, piece1]))).toEqual({
             x: 100,
             y: 50,
         });
@@ -310,7 +310,7 @@ describe('getGroupImageCentre', () => {
             rotation: 0,
         };
 
-        expect(getGroupImageCentre(group, buildPiecesById([]))).toEqual({ x: 0, y: 0 });
+        expect(getGroupImageCenter(group, buildPiecesById([]))).toEqual({ x: 0, y: 0 });
     });
 });
 

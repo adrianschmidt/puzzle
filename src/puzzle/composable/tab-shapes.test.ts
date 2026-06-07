@@ -12,7 +12,7 @@ describe('classicTabTemplate', () => {
 
         expect(path[0].y).toBe(0);
         expect(path[path.length - 1].y).toBe(0);
-        // Start and end are close to the centre (short flanges)
+        // Start and end are close to the center (short flanges)
         expect(path[0].x).toBeGreaterThan(0.2);
         expect(path[path.length - 1].x).toBeLessThan(0.8);
     });

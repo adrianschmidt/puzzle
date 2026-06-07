@@ -21,13 +21,13 @@ import type { TabSplicer } from './plugin-types.js';
 export interface TabPlacementConfig {
     /** Minimum edge arc length (in pixels) to receive a tab. */
     minEdgeLength: number;
-    /** Allowed range for tab centre position along the edge (0–1). */
-    centreRange: [number, number];
+    /** Allowed range for tab center position along the edge (0–1). */
+    centerRange: [number, number];
 }
 
 export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
     minEdgeLength: 20,
-    centreRange: [0.3, 0.7],
+    centerRange: [0.3, 0.7],
 };
 
 /**
@@ -99,7 +99,7 @@ export function prepareTabFromPath(
     const tabMinX = Math.min(...allXs);
     const tabMaxX = Math.max(...allXs);
 
-    // Full tab extent from centre (in edge-length fractions)
+    // Full tab extent from center (in edge-length fractions)
     const headOverhangLeft = templateMidX - tabMinX;
     const headOverhangRight = tabMaxX - templateMidX;
 
@@ -222,7 +222,7 @@ export function computeTabPlacement(
         return null;
     }
 
-    const tCenter = lerp(config.centreRange[0], config.centreRange[1], random());
+    const tCenter = lerp(config.centerRange[0], config.centerRange[1], random());
     const isTab = random() > 0.5;
 
     return { tCenter, isTab };
@@ -281,7 +281,7 @@ function transformTabToEdge(
     const px = -uy;
     const py = ux;
 
-    // The midpoint of the chord anchors the tab centre.
+    // The midpoint of the chord anchors the tab center.
     // Both x and y are edge-length fractions — scale both by edgeLength.
     // x is positioned along the chord direction relative to the chord
     // midpoint, y is perpendicular to it.
@@ -294,7 +294,7 @@ function transformTabToEdge(
     const midY = (pLeft.y + pRight.y) / 2;
 
     return path.map(p => {
-        // x offset from template centre, scaled by edge length
+        // x offset from template center, scaled by edge length
         const alongChord = (p.x - templateMidX) * edgeLength;
 
         // y is a fraction of edge length, scaled directly
@@ -402,7 +402,7 @@ export function spliceSmoothingChordFraction(thetaRadians: number): number {
 /**
  * Bring the tab to a C1 (smooth-direction) join with the parent at both
  * splices. On a near-straight parent the angle correction is tiny and we
- * just rotate the outermost control point (the original behaviour). On a
+ * just rotate the outermost control point (the original behavior). On a
  * highly-curved parent the correction is large, so we spread it: drop the
  * template anchors within a splice-angle-scaled zone of each splice and
  * bridge the gap with one cubic that leaves the splice along the parent's
@@ -428,7 +428,7 @@ function alignTangentsAtSplice(prepared: PreparedTab): PreparedTab {
     const rightRemoves = lastSurvR < segs.length - 1;
 
     if (!leftRemoves && !rightRemoves) {
-        // Small angles at both ends: preserve the original behaviour of
+        // Small angles at both ends: preserve the original behavior of
         // rotating just the outermost cp at each splice.
         return alignOutermostOnly(prepared, segs, beforeTangent, afterTangent);
     }
@@ -645,7 +645,7 @@ function rotateLastCp(seg: BezierSegment, tangent: Point): BezierSegment {
 }
 
 /**
- * Original behaviour: rotate only the tab's outermost control points onto
+ * Original behavior: rotate only the tab's outermost control points onto
  * the parent tangents. Used when no anchors fall in either smoothing zone.
  */
 function alignOutermostOnly(

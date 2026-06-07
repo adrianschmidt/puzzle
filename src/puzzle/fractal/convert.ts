@@ -35,7 +35,7 @@ interface RectBorder { xMin: number; yMin: number; xMax: number; yMax: number }
  * Build arcs for all pieces, then convert each piece's arc sequence
  * into Edge[] with proper mate relationships.
  *
- * Two arcs are "mates" when they share the same centre + quadrant
+ * Two arcs are "mates" when they share the same center + quadrant
  * but belong to different pieces (one has sign=0, the other sign=1).
  */
 export function convertToStandardPieces(
@@ -62,7 +62,7 @@ export function convertToStandardPieces(
     const isMateless = markMatelessArcs(arcIndex, arcKeys);
 
     // Non-borderless: fit the TRIMMED rectangle (shrunk by `rad` on each
-    // side, aligned with outer-row tile centres) to the image; mateless
+    // side, aligned with outer-row tile centers) to the image; mateless
     // arcs live in the outer `rad`-wide strip and get replaced below
     // with straight lines along the new border, giving pieces the "flat
     // edge, no bumps" look. Borderless: fit the FULL puzzle bounds

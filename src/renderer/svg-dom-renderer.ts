@@ -47,7 +47,7 @@ const HIT_AREA_EXPANSION_PX = 8;
  * written as the CSS `transform-origin`. It defaults to the group origin
  * `(0, 0)` — the renderer's convention, where rotation pivots about that
  * origin and `group.position` places it in world space. Pass a local point
- * (e.g. the puzzle centre) to pivot about somewhere else.
+ * (e.g. the puzzle center) to pivot about somewhere else.
  */
 export function applyGroupTransform(
     el: HTMLElement,

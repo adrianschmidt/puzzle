@@ -1,7 +1,7 @@
 /**
  * Inject the SVG `<filter id="piece-outline">` used by the Outline
  * mode of the Piece outline setting. The filter dilates the source
- * graphic by 1px, recolours that ring black, then composites the
+ * graphic by 1px, recolors that ring black, then composites the
  * original on top — producing a sharp 1px silhouette around the
  * group `<div>` it's applied to via `filter: url(#piece-outline)`.
  *
@@ -41,11 +41,11 @@ export function installPieceOutlineFilter(): void {
 
     const flood = document.createElementNS(SVG_NS, 'feFlood');
     flood.setAttribute('flood-color', 'black');
-    flood.setAttribute('result', 'colour');
+    flood.setAttribute('result', 'color');
     filter.appendChild(flood);
 
     const composite = document.createElementNS(SVG_NS, 'feComposite');
-    composite.setAttribute('in', 'colour');
+    composite.setAttribute('in', 'color');
     composite.setAttribute('in2', 'dilated');
     composite.setAttribute('operator', 'in');
     composite.setAttribute('result', 'outline');

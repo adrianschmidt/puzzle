@@ -1,11 +1,11 @@
 /**
  * Free-rotation drag handle — a single round button that floats below the
  * focused group's bbox. A drag that originates on this handle rotates the
- * focused group continuously, with the angle from the group's bbox-centre
+ * focused group continuously, with the angle from the group's bbox-center
  * to the pointer kept constant for the duration of the drag.
  *
  * A `pointerdown` on the button captures the pointer, records the pivot
- * (group bbox-centre in world space) and initial angle, then emits
+ * (group bbox-center in world space) and initial angle, then emits
  * `onRotate` with an additive delta on each `pointermove`. `pointerup`
  * fires `onCommit`; `pointercancel` or a second window `pointerdown`
  * cancels without committing.
@@ -41,7 +41,7 @@ export interface RotateHandleOptions {
     getViewportSize?: () => { width: number; height: number };
     /** Current rotation of the focused group, in degrees. */
     getGroupRotation: (groupId: number) => number | null;
-    /** World position of the focused group's bbox centre. */
+    /** World position of the focused group's bbox center. */
     getGroupPivotWorld: (groupId: number) => { x: number; y: number } | null;
     /** Convert a screen-space (clientX, clientY) point to world coordinates. */
     screenToWorld: (clientX: number, clientY: number) => { x: number; y: number };

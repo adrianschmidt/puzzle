@@ -130,7 +130,7 @@ export function createNewGame(
  * Create the starting `PieceGroup[]` for a new game.
  *
  * If `autoGroups` is omitted (or empty), each piece becomes its own
- * single-piece group — the legacy behaviour, used by classic and
+ * single-piece group — the legacy behavior, used by classic and
  * fractal cut styles.
  *
  * If `autoGroups` is provided (composable cut style with `minPieceArea`
@@ -177,7 +177,7 @@ export function createInitialGroups(
 
     // Resolve the partition. The generator either tells us how to glue
     // tiny pieces together, or we default to one-piece-per-group so
-    // existing styles (classic, fractal) keep their behaviour.
+    // existing styles (classic, fractal) keep their behavior.
     const partition: AutoGroup[] = autoGroups && autoGroups.length > 0
         ? autoGroups
         : pieces.map(p => ({ id: p.id, pieceIds: [p.id] }));

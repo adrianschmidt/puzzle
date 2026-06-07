@@ -61,7 +61,7 @@ export {
     getGroupOffsetBounds,
     getGroupLocalBounds,
     getGroupVisualBounds,
-    getGroupImageCentre,
+    getGroupImageCenter,
 } from './group-bounds.js';
 export type { BoundingRect, GroupBoundsOptions } from './group-bounds.js';
 

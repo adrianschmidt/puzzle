@@ -99,7 +99,7 @@ export const tracedTabTemplate: TabTemplate = {
         // is a multiplicative aspect adjustment around the photo's
         // natural apex-to-neck ratio — 1.0 keeps the photographed
         // proportions, > 1 stretches taller, < 1 squashes flatter. mid
-        // shifts the neck centre laterally inside [mid - scalex/2,
+        // shifts the neck center laterally inside [mid - scalex/2,
         // mid + scalex/2].
         const scalex    = lerp(0.14, 0.20, local());                     // local 3
         const scaley    = lerp(0.85, 1.15, local());                     // local 4

@@ -7,7 +7,7 @@
  *   - Tab/blank assignment per edge
  *   - Tab shape (Bézier control point variation)
  *   - Tab size (height and width)
- *   - Tab position along the edge (offset from centre)
+ *   - Tab position along the edge (offset from center)
  *   - Neck width
  *
  * The generator still outputs Piece[] conforming to the generic
@@ -263,7 +263,7 @@ function generateSharedEdgePath(
     // Fix #3: Widen size variation ranges
     const scalex = lerp(0.65, 1.0, random()); // horizontal scale of tab (was 0.8-1.0)
     const scaley = lerp(0.7, 1.1, random()); // vertical scale/height (was 0.9-1.0)
-    const mid = lerp(0.38, 0.62, random()); // centre position along edge (was 0.45-0.55)
+    const mid = lerp(0.38, 0.62, random()); // center position along edge (was 0.45-0.55)
 
     // Fix #1: Add neck thickness variation
     // neckRatio = ratio of neck width to head width (0.25 = thin classic look, 0.80 = thick)
@@ -276,13 +276,13 @@ function generateSharedEdgePath(
     });
 
     // Key points defining the classic mushroom tab shape
-    // Adjusted by scalex (horizontal), scaley (vertical), and mid (centre position)
+    // Adjusted by scalex (horizontal), scaley (vertical), and mid (center position)
     const halfWidth = 0.17 * scalex; // half-width of the tab section (head width)
 
     // 5 key points along the tab:
     // pa = neck entry (where edge curves into neck)
     // pb = head left (left side of mushroom head)
-    // pc = head top (top centre of mushroom)
+    // pc = head top (top center of mushroom)
     // pd = head right (right side of mushroom head)
     // pe = neck exit (where neck returns to edge)
 

@@ -1,6 +1,6 @@
 /**
  * Gather pieces — computes new positions for all groups to bring them
- * together near the centre of the visible play area.
+ * together near the center of the visible play area.
  *
  * Groups are arranged in a compact layout using row-based packing,
  * where each row's height adapts to its tallest group. Groups are
@@ -184,7 +184,7 @@ export function computeGatheredPositions(
     }
     totalHeight -= margin;
 
-    // Layout centred at origin (0,0) — the caller will handle viewport positioning
+    // Layout centered at origin (0,0) — the caller will handle viewport positioning
     const startX = -maxRowWidth / 2;
     const startY = -totalHeight / 2;
 
@@ -199,7 +199,7 @@ export function computeGatheredPositions(
         }
         rowWidth -= margin;
 
-        let x = -rowWidth / 2; // Centre each row
+        let x = -rowWidth / 2; // Center each row
 
         for (const layout of row.items) {
             const { group, bounds } = layout;

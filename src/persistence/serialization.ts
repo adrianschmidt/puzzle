@@ -471,7 +471,7 @@ function resolveFractalConfig(
  * - Otherwise, infer from the data: any non-zero group rotation implies the
  *   player was using quarter-turn mode, so preserve that. Fractal saves
  *   written before rotationMode existed also get quarter-turn so their
- *   behaviour matches what the player saw.
+ *   behavior matches what the player saw.
  * - Everything else defaults to 'none'.
  */
 function resolveRotationMode(

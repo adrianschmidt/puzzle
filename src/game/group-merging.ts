@@ -57,12 +57,12 @@ export function mergeGroups(
     snapDelta: Point,
 ): PieceGroup {
     // Snap the moved group's rotation to the target's first. The pivot is
-    // the moved group's bbox centre (rotateGroup's invariant) — the
+    // the moved group's bbox center (rotateGroup's invariant) — the
     // snapDelta returned by merge-detection was computed assuming this
     // snap would happen first.
     //
     // For quarter-turn merges the delta is always 0, so this is a no-op
-    // and behaviour is unchanged for classic/composable rotation modes.
+    // and behavior is unchanged for classic/composable rotation modes.
     const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
     if (Math.abs(rotDelta) > SNAP_EPSILON_DEG) {
         rotateGroup(movedGroup, state.piecesById, rotDelta);

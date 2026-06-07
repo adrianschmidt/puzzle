@@ -4,7 +4,7 @@
   --puzzle-bg-color: #1a237e;
   --piece-opacity: 1;
 
-  /* UI chrome colours — dark scheme (default) */
+  /* UI chrome colors — dark scheme (default) */
   --ui-fg: #e0e0e0;
   --ui-overlay-subtle: rgba(255, 255, 255, 0.05);
   --ui-overlay: rgba(255, 255, 255, 0.1);
@@ -24,7 +24,7 @@
   --ui-muted-link-hover: rgba(255, 255, 255, 0.9);
 
   /* Accent + frosted surfaces, drawn from the extended palette (violet
-     family) so the chrome coheres with the colour set. The accent is used
+     family) so the chrome coheres with the color set. The accent is used
      at varying alpha via color-mix() at each call site. */
   --ui-accent: var(--color-violet-light);
   --ui-surface: rgba(30, 27, 52, 0.95);

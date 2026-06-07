@@ -253,7 +253,7 @@ function buildImageSourceSection(args: {
     categoryRow.appendChild(categorySelect);
     section.appendChild(categoryRow);
 
-    // Vibrant-colours toggle — appends keywords like "vibrant colorful" to
+    // Vibrant-colors toggle — appends keywords like "vibrant colorful" to
     // the Unsplash query to bias results toward saturated photos.
     const vibrantRow = document.createElement('div');
     vibrantRow.className = 'dialog-row';

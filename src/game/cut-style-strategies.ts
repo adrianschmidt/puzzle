@@ -185,7 +185,7 @@ export function getCutStyleStrategy(cutStyle: CutStyle): CutStyleStrategy {
 
 /**
  * Return the largest rectangle of `gridAspect` that fits inside `imageSize`,
- * centred. Used so the tile grid scales uniformly (arcs stay circular) and
+ * centered. Used so the tile grid scales uniformly (arcs stay circular) and
  * the image is cropped to cover the puzzle rect.
  */
 function inscribeToGridAspect(imageSize: Size, gridAspect: number): Size {
