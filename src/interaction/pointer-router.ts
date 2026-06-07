@@ -10,6 +10,8 @@
  * full state machine and arbitration rules.
  */
 
+import type { Point } from '../model/types.js';
+
 export type ClassifyTarget = (
     target: EventTarget | null,
     /**
@@ -17,7 +19,7 @@ export type ClassifyTarget = (
      * classifier widen a background hit into a nearby piece via a screen-space
      * probe. Omitted for events where a probe makes no sense (e.g. wheel).
      */
-    point?: { x: number; y: number },
+    point?: Point,
 ) =>
     | { kind: 'piece'; pieceId: number }
     | { kind: 'background' }

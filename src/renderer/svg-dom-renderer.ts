@@ -203,6 +203,14 @@ export class SvgDomRenderer implements Renderer {
         return Number.isFinite(id) ? id : null;
     }
 
+    pieceIdAtPoint(point: Point): number | null {
+        // Guarded for environments without layout-based hit testing (e.g.
+        // jsdom), where point hit-testing isn't available and the near-miss
+        // probe simply finds nothing.
+        if (typeof document.elementFromPoint !== 'function') return null;
+        return this.pieceIdFromTarget(document.elementFromPoint(point.x, point.y));
+    }
+
     destroy(): void {
         if (this.tableEl) {
             this.tableEl.remove();
