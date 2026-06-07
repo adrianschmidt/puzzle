@@ -3,23 +3,23 @@
  */
 
 /**
- * Tests for the Centre View button DOM integration.
+ * Tests for the Center View button DOM integration.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createCentreViewButton } from './centre-view-button.js';
+import { createCenterViewButton } from './center-view-button.js';
 
-describe('createCentreViewButton', () => {
+describe('createCenterViewButton', () => {
     let container: HTMLElement;
-    let onCentreView: ReturnType<typeof vi.fn<() => void>>;
+    let onCenterView: ReturnType<typeof vi.fn<() => void>>;
 
     beforeEach(() => {
         container = document.createElement('div');
-        onCentreView = vi.fn<() => void>();
+        onCenterView = vi.fn<() => void>();
     });
 
     it('should add a button to the container', () => {
-        createCentreViewButton({ container, onCentreView });
+        createCenterViewButton({ container, onCenterView });
 
         const button = container.querySelector('button');
         expect(button).not.toBeNull();
@@ -27,34 +27,34 @@ describe('createCentreViewButton', () => {
     });
 
     it('should have the correct class name', () => {
-        createCentreViewButton({ container, onCentreView });
+        createCenterViewButton({ container, onCenterView });
 
         const button = container.querySelector('button');
-        expect(button!.className).toBe('centre-view-button');
+        expect(button!.className).toBe('center-view-button');
     });
 
-    it('should call onCentreView when clicked', () => {
-        createCentreViewButton({ container, onCentreView });
+    it('should call onCenterView when clicked', () => {
+        createCenterViewButton({ container, onCenterView });
 
         const button = container.querySelector('button')!;
         button.click();
 
-        expect(onCentreView).toHaveBeenCalledOnce();
+        expect(onCenterView).toHaveBeenCalledOnce();
     });
 
-    it('should call onCentreView on each click', () => {
-        createCentreViewButton({ container, onCentreView });
+    it('should call onCenterView on each click', () => {
+        createCenterViewButton({ container, onCenterView });
 
         const button = container.querySelector('button')!;
         button.click();
         button.click();
         button.click();
 
-        expect(onCentreView).toHaveBeenCalledTimes(3);
+        expect(onCenterView).toHaveBeenCalledTimes(3);
     });
 
     it('should remove button on cleanup', () => {
-        const cleanup = createCentreViewButton({ container, onCentreView });
+        const cleanup = createCenterViewButton({ container, onCenterView });
 
         expect(container.querySelector('button')).not.toBeNull();
 
@@ -64,7 +64,7 @@ describe('createCentreViewButton', () => {
     });
 
     it('should not respond to clicks after cleanup', () => {
-        const cleanup = createCentreViewButton({ container, onCentreView });
+        const cleanup = createCenterViewButton({ container, onCenterView });
 
         const button = container.querySelector('button')!;
         cleanup();
@@ -72,6 +72,6 @@ describe('createCentreViewButton', () => {
         // Button was removed, but simulate a click on the detached element
         button.click();
 
-        expect(onCentreView).not.toHaveBeenCalled();
+        expect(onCenterView).not.toHaveBeenCalled();
     });
 });

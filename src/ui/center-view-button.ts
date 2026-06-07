@@ -1,6 +1,6 @@
 /**
- * Centre View button — resets the viewport to the default
- * centred view (no pan, no zoom).
+ * Center View button — resets the viewport to the default
+ * centered view (no pan, no zoom).
  *
  * Useful after zooming/panning around to quickly get back
  * to a known orientation.
@@ -8,25 +8,25 @@
 
 import { createToolbarButton } from './toolbar-button.js';
 
-export interface CentreViewButtonOptions {
+export interface CenterViewButtonOptions {
     /** The container to append the button to. */
     container: HTMLElement;
     /** Called when the user clicks the button. */
-    onCentreView: () => void;
+    onCenterView: () => void;
 }
 
 /**
- * Create and attach the Centre View button.
+ * Create and attach the Center View button.
  *
  * Returns a cleanup function that removes the button from the DOM.
  */
-export function createCentreViewButton(
-    options: CentreViewButtonOptions,
+export function createCenterViewButton(
+    options: CenterViewButtonOptions,
 ): () => void {
     return createToolbarButton({
         container: options.container,
-        className: 'centre-view-button',
+        className: 'center-view-button',
         label: 'Centre View',
-        onClick: options.onCentreView,
+        onClick: options.onCenterView,
     });
 }

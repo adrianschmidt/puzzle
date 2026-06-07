@@ -115,7 +115,7 @@ html, body {
 }
 
 /* Centre View button */
-.centre-view-button {
+.center-view-button {
   position: absolute;
   top: 52px;
   right: 12px;
@@ -137,12 +137,12 @@ html, body {
   -webkit-user-select: none;
 }
 
-.centre-view-button:hover {
+.center-view-button:hover {
   background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
-.centre-view-button:active {
+.center-view-button:active {
   background: var(--ui-control-scrim-active);
 }
 
@@ -1234,14 +1234,14 @@ details.info-section[open] > .info-section-summary {
 /* Responsive: ensure buttons don't overlap on small screens */
 @media (max-height: 400px) {
   .new-game-button,
-  .centre-view-button,
+  .center-view-button,
   .gather-pieces-button {
     padding: 6px 10px;
     font-size: 0.75rem;
   }
 
   .new-game-button { top: 8px; right: 8px; }
-  .centre-view-button { top: 40px; right: 8px; }
+  .center-view-button { top: 40px; right: 8px; }
   .gather-pieces-button { top: 72px; right: 8px; }
 
   .bg-color-button { top: 96px; right: 8px; }
