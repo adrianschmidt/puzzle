@@ -24,7 +24,7 @@ import {
 } from './persistence/index.js';
 import {
     createNewGameButton,
-    createCentreViewButton,
+    createCenterViewButton,
     createGatherPiecesButton,
     loadColorPreference,
     saveColorPreference,
@@ -1074,10 +1074,10 @@ createNewGameButton({
     },
 });
 
-// Set up the Centre View button
-createCentreViewButton({
+// Set up the Center View button
+createCenterViewButton({
     container: app,
-    onCentreView: () => {
+    onCenterView: () => {
         viewportTransform.reset();
         applyViewportTransform();
     },
