@@ -127,7 +127,7 @@ function resolveStoredId(raw: string): string {
 }
 
 /**
- * Load the saved background id. A current id loads as-is; a recognised
+ * Load the saved background id. A current id loads as-is; a recognized
  * legacy value (old preset id or integer index) migrates to its nearest
  * new swatch; anything else falls back to the default.
  *
