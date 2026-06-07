@@ -114,7 +114,7 @@ html, body {
   background: var(--ui-control-scrim-active);
 }
 
-/* Centre View button */
+/* Center View button */
 .center-view-button {
   position: absolute;
   top: 52px;
