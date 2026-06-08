@@ -241,6 +241,55 @@ describe('saveNewPuzzle quota handling', () => {
         expect(loaded.state.pieces).toEqual(state.pieces);
         expect(loaded.selection).toEqual([1, 0]);
     });
+
+    it('leaves the previous puzzle loadable when the new geometry write fails', () => {
+        saveNewPuzzle(makeGameState({ seed: 1, imageUrl: 'good.jpg' }), [0]);
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const realSetItem = Storage.prototype.setItem;
+        // Geometry writes (STORAGE_KEY) fail; small progress writes still succeed.
+        const spy = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(function (this: Storage, key: string, value: string) {
+                if (key === STORAGE_KEY) {
+                    throw new DOMException('quota', 'QuotaExceededError');
+                }
+                realSetItem.call(this, key, value);
+            });
+
+        const result = saveNewPuzzle(makeGameState({ seed: 2, imageUrl: 'too-big.jpg' }), [1]);
+        spy.mockRestore();
+        warnSpy.mockRestore();
+
+        expect(result).toBe('failed');
+        // The previous pair is intact: load returns the previous puzzle, not a
+        // seed-mismatch.
+        const loaded = expectLoaded();
+        expect(loaded.state.imageUrl).toBe('good.jpg');
+        expect(loaded.state.seed).toBe(1);
+    });
+
+    it('does not leave an orphan progress key when the first puzzle is too large to save', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const realSetItem = Storage.prototype.setItem;
+        const spy = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(function (this: Storage, key: string, value: string) {
+                if (key === STORAGE_KEY) {
+                    throw new DOMException('quota', 'QuotaExceededError');
+                }
+                realSetItem.call(this, key, value);
+            });
+
+        const result = saveNewPuzzle(makeGameState({ seed: 1 }), [0]); // empty storage
+        spy.mockRestore();
+        warnSpy.mockRestore();
+
+        expect(result).toBe('failed');
+        expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+        expect(localStorage.getItem(PROGRESS_KEY)).toBeNull(); // no orphan progress
+        expect(loadSavedGame().status).toBe('empty');
+    });
 });
 
 describe('saveNewPuzzle / loadSavedGame selection', () => {
@@ -511,7 +560,7 @@ describe('saveProgress cross-tab guard (#404)', () => {
         spy.mockRestore();
     });
 
-    it('re-decodes after a cross-tab geometry change (cache invalidation)', () => {
+    it('skips after a cross-tab geometry change (cache invalidation)', () => {
         // Geometry replaced by a different puzzle between two progress saves: the
         // raw bytes change, so the guard re-reads the new seed and now skips.
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
