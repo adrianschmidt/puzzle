@@ -32,8 +32,14 @@ export const PROGRESS_KEY = 'puzzle-progress';
 /** Debounce interval for auto-save (milliseconds). */
 export const SAVE_DEBOUNCE_MS = 500;
 
-/** Outcome of a save call. */
-export type SaveResult = 'ok' | 'ok-compressed' | 'failed';
+/**
+ * Outcome of a save call.
+ *
+ * - `'ok'` / `'ok-compressed'` — written (compressed on quota overflow).
+ * - `'failed'`  — could not be written (quota even after compression).
+ * - `'skipped'` — intentionally not written; see {@link saveProgress}.
+ */
+export type SaveResult = 'ok' | 'ok-compressed' | 'failed' | 'skipped';
 
 /**
  * Raw, undecoded copy of the save blobs as they sat in localStorage.
@@ -99,13 +105,70 @@ function writeWithOverflow(key: string, json: string): SaveResult {
     }
 }
 
+// Cache of the stored geometry's seed, keyed on the verbatim raw geometry
+// string. A debounced progress save runs often; decoding the (potentially
+// multi-MB) geometry blob on every call just to read its seed would be
+// wasteful. Correctness comes from reading the real value on every call — we
+// only re-run decompress+parse when the raw bytes differ from the last decode.
+// A cross-tab geometry write (or a new puzzle in this tab) changes the bytes
+// and invalidates the cache lazily on the next read.
+let cachedGeometryRaw: string | null = null;
+let cachedGeometrySeed: number | undefined;
+
+/**
+ * Seed of the geometry currently in localStorage, or `undefined` if there is no
+ * geometry, it cannot be decoded, or it carries no seed. Never throws.
+ */
+function currentGeometrySeed(): number | undefined {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw === null) {
+        cachedGeometryRaw = null;
+        cachedGeometrySeed = undefined;
+        return undefined;
+    }
+    if (raw !== cachedGeometryRaw) {
+        cachedGeometryRaw = raw;
+        try {
+            const parsed = JSON.parse(decompressFromStorage(raw)) as { seed?: unknown };
+            cachedGeometrySeed = typeof parsed.seed === 'number' ? parsed.seed : undefined;
+        } catch {
+            // Unreadable geometry: don't block progress writes on it.
+            cachedGeometrySeed = undefined;
+        }
+    }
+    return cachedGeometrySeed;
+}
+
 /** Persist the static geometry + metadata blob. Written once per puzzle. */
 export function saveGeometry(state: GameState): SaveResult {
     return writeWithOverflow(STORAGE_KEY, JSON.stringify(serializeStatic(state)));
 }
 
-/** Persist the small mutable progress blob. Written on every debounced save. */
+/**
+ * Persist the small mutable progress blob. Written on every debounced save.
+ *
+ * Refuses to write (returns `'skipped'`) when the geometry currently in
+ * localStorage belongs to a *different* puzzle than `state` — e.g. another tab
+ * on the same origin started a new puzzle while this tab still holds the old
+ * one. Writing here would tear the geometry/progress pair into a seed-mismatch
+ * that the next load rejects as a false "corrupt save" (#404). The geometry key
+ * is the anchor; the tab that last wrote it owns the single save slot. Only a
+ * confirmed seed mismatch skips — absent / unreadable / seedless geometry writes
+ * as before.
+ */
 export function saveProgress(state: GameState, selection?: Iterable<number>): SaveResult {
+    const geometrySeed = currentGeometrySeed();
+    if (
+        geometrySeed !== undefined &&
+        state.seed !== undefined &&
+        geometrySeed !== state.seed
+    ) {
+        diagnostics.warn(
+            'Skipping progress save: stored geometry belongs to a different puzzle ' +
+                '(cross-tab takeover); not overwriting it.',
+        );
+        return 'skipped';
+    }
     return writeWithOverflow(PROGRESS_KEY, JSON.stringify(serializeProgress(state, selection)));
 }
 
