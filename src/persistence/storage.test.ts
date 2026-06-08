@@ -8,8 +8,23 @@
  * Uses jsdom's localStorage implementation via Vitest's jsdom environment.
  */
 
+// vi.mock is hoisted to the top by Vitest. Wrapping decompressFromStorage in a
+// vi.fn pass-through makes it spy-able even when called from within storage.ts,
+// which holds a direct binding to the function. The mock calls the real
+// implementation, so all other tests continue to work correctly.
+vi.mock('./compression.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('./compression.js')>();
+    return {
+        ...actual,
+        decompressFromStorage: vi.fn(actual.decompressFromStorage),
+    };
+});
+
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { GameState, PieceGroup } from '../model/types.js';
+import * as compression from './compression.js';
+import { COMPRESSED_MARKER } from './compression.js';
+import { STATE_VERSION, serializeProgress } from './serialization.js';
 import {
     saveGeometry,
     saveProgress,
@@ -21,8 +36,6 @@ import {
     STORAGE_KEY,
     PROGRESS_KEY,
 } from './storage.js';
-import { COMPRESSED_MARKER } from './compression.js';
-import { STATE_VERSION } from './serialization.js';
 import {
     makeRectPiece,
     makeGameState as makeBaseGameState,
@@ -339,7 +352,10 @@ describe('split storage', () => {
         const a = makeGameState({ seed: 1 });
         const b = makeGameState({ seed: 2 });
         saveGeometry(a);
-        saveProgress(b, []); // different seed
+        // saveProgress now refuses to write a seed-mismatched pair, so install the
+        // stale/cross-tab progress blob directly — the on-disk shape the load-time
+        // guard must still detect.
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(serializeProgress(b, [])));
         expect(loadSavedGame().status).toBe('unreadable');
         expect(warnSpy).toHaveBeenCalled(); // intentional discard leaves a trail
         warnSpy.mockRestore();
@@ -409,6 +425,105 @@ describe('split storage', () => {
     });
 });
 
+describe('saveProgress cross-tab guard (#404)', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        vi.clearAllMocks(); // reset the vi.mock'd decompressFromStorage call count
+    });
+
+    it('refuses to overwrite progress when the stored geometry is a different puzzle', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 1 }), [0]); // geometry=1, progress=1
+        const progressBefore = localStorage.getItem(PROGRESS_KEY);
+
+        const result = saveProgress(makeGameState({ seed: 2 }), [1]); // stale tab
+        warnSpy.mockRestore();
+
+        expect(result).toBe('skipped');
+        expect(localStorage.getItem(PROGRESS_KEY)).toBe(progressBefore); // untouched
+    });
+
+    it('logs why it skipped a mismatched progress write', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 1 }), [0]);
+        saveProgress(makeGameState({ seed: 2 }), [1]);
+
+        expect(warnSpy).toHaveBeenCalled();
+        warnSpy.mockRestore();
+    });
+
+    it('keeps the most-recent geometry owner so reload is not a seed-mismatch', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        // Tab A started puzzle 1; a stale background Tab B autosaves puzzle 2.
+        saveNewPuzzle(makeGameState({ seed: 1 }), [0]);
+        saveProgress(makeGameState({ seed: 2 }), [1]);
+        warnSpy.mockRestore();
+
+        const loaded = expectLoaded();
+        expect(loaded.state.seed).toBe(1); // still puzzle 1, pair intact
+    });
+
+    it('writes normally when the stored geometry is the same puzzle', () => {
+        saveNewPuzzle(makeGameState({ seed: 5 }), []);
+        const result = saveProgress(makeGameState({ seed: 5 }), [1]);
+
+        expect(result).not.toBe('skipped');
+        expect(expectLoaded().selection).toEqual([1]);
+    });
+
+    it('writes when no geometry is present (nothing to mismatch against)', () => {
+        const result = saveProgress(makeGameState({ seed: 7 }), [1]);
+        expect(result).not.toBe('skipped');
+        expect(localStorage.getItem(PROGRESS_KEY)).not.toBeNull();
+    });
+
+    it('writes when the stored geometry is unreadable (does not block on it)', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        localStorage.setItem(STORAGE_KEY, '{not valid json!!!');
+        const result = saveProgress(makeGameState({ seed: 7 }), [1]);
+        warnSpy.mockRestore();
+
+        expect(result).not.toBe('skipped');
+        expect(localStorage.getItem(PROGRESS_KEY)).not.toBeNull();
+    });
+
+    it('writes when either side has no seed (only a confirmed mismatch skips)', () => {
+        saveNewPuzzle(makeGameState({ seed: 5 }), []); // geometry has seed 5
+        const result = saveProgress(makeGameState(), [1]); // progress has no seed
+        expect(result).not.toBe('skipped');
+    });
+
+    it('does not re-decode the geometry on repeated same-puzzle saves (cache)', () => {
+        // saveGeometry does not read/decode, so the cache still holds whatever a
+        // previous test left. A unique seed guarantees the first read is a cache
+        // miss (one decode); subsequent reads of the unchanged bytes must not
+        // decode again.
+        saveGeometry(makeGameState({ seed: 424242 }));
+        const spy = vi.spyOn(compression, 'decompressFromStorage');
+
+        saveProgress(makeGameState({ seed: 424242 }), [1]); // miss → 1 decode
+        const afterFirst = spy.mock.calls.length;
+        saveProgress(makeGameState({ seed: 424242 }), [2]); // hit → 0
+        saveProgress(makeGameState({ seed: 424242 }), [3]); // hit → 0
+
+        expect(afterFirst).toBe(1); // also proves the spy intercepts storage.ts
+        expect(spy).toHaveBeenCalledTimes(1);
+        spy.mockRestore();
+    });
+
+    it('re-decodes after a cross-tab geometry change (cache invalidation)', () => {
+        // Geometry replaced by a different puzzle between two progress saves: the
+        // raw bytes change, so the guard re-reads the new seed and now skips.
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 1 }), []); // geometry=1
+        expect(saveProgress(makeGameState({ seed: 1 }), [1])).not.toBe('skipped');
+
+        saveGeometry(makeGameState({ seed: 2 })); // another tab takes over → geometry=2
+        expect(saveProgress(makeGameState({ seed: 1 }), [2])).toBe('skipped');
+        warnSpy.mockRestore();
+    });
+});
+
 describe('unreadable save carries the raw blobs for download', () => {
     let warnSpy: ReturnType<typeof vi.spyOn>;
 
@@ -449,7 +564,12 @@ describe('unreadable save carries the raw blobs for download', () => {
 
     it('attaches both raw blobs for a seed-mismatched pair (reason: seed-mismatch)', () => {
         saveGeometry(makeGameState({ seed: 1 }));
-        saveProgress(makeGameState({ seed: 2 }), []);
+        // Install the mismatched progress blob directly (saveProgress now guards
+        // against writing one); the load-time guard must still flag the pair.
+        localStorage.setItem(
+            PROGRESS_KEY,
+            JSON.stringify(serializeProgress(makeGameState({ seed: 2 }), [])),
+        );
         const staticRaw = localStorage.getItem(STORAGE_KEY);
         const progressRaw = localStorage.getItem(PROGRESS_KEY);
 
