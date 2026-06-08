@@ -178,8 +178,18 @@ export function saveProgress(state: GameState, selection?: Iterable<number>): Sa
  */
 export function saveNewPuzzle(state: GameState, selection?: Iterable<number>): SaveResult {
     const g = saveGeometry(state);
+    if (g === 'failed') {
+        // The new geometry was too large to persist even compressed; the previous
+        // puzzle's geometry is still at STORAGE_KEY. Don't write the new progress
+        // on top of it — that would be a seed-mismatch (#404). Leaving the
+        // previous pair untouched keeps it loadable; the new puzzle simply won't
+        // persist (the caller surfaces a "too large to save" toast). The
+        // saveProgress seed-guard likewise drops later autosaves of the new
+        // puzzle, so the previous pair stays consistent.
+        return 'failed';
+    }
     const p = saveProgress(state, selection);
-    if (g === 'failed' || p === 'failed') return 'failed';
+    if (p === 'failed') return 'failed';
     if (g === 'ok-compressed' || p === 'ok-compressed') return 'ok-compressed';
     return 'ok';
 }
