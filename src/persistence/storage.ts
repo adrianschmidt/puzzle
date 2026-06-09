@@ -309,11 +309,16 @@ export function clearSavedState(): void {
  * Also returns a `flush` method to save immediately and
  * a `cancel` method to discard the pending save.
  *
- * The optional `onSaveFailed` callback is invoked when a flushed save cannot
- * be persisted (quota exceeded even after compression), so the caller can
- * warn the user that their progress was not saved.
+ * Optional callbacks report a flushed save that did not persist:
+ * - `onSaveFailed` — the write could not be persisted (quota exceeded even after
+ *   compression), so the caller can warn the user their progress was not saved.
+ * - `onSaveSkipped` — the write was intentionally refused because the stored
+ *   geometry belongs to a different puzzle (a cross-tab takeover; see
+ *   {@link saveProgress}). Not a failure — the caller can record it for telemetry.
  */
-export function createDebouncedSave(onSaveFailed?: () => void): {
+export function createDebouncedSave(
+    { onSaveFailed, onSaveSkipped }: { onSaveFailed?: () => void; onSaveSkipped?: () => void } = {},
+): {
     save: (state: GameState, selection?: Iterable<number>) => void;
     flush: () => void;
     cancel: () => void;
@@ -331,6 +336,8 @@ export function createDebouncedSave(onSaveFailed?: () => void): {
             pendingSelection = null;
             if (result === 'failed') {
                 onSaveFailed?.();
+            } else if (result === 'skipped') {
+                onSaveSkipped?.();
             }
         }
     }

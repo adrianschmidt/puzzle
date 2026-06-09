@@ -776,7 +776,7 @@ describe('createDebouncedSave', () => {
                 throw new DOMException('quota', 'QuotaExceededError');
             });
 
-        const { save } = createDebouncedSave(onSaveFailed);
+        const { save } = createDebouncedSave({ onSaveFailed });
         save(makeGameState());
         vi.advanceTimersByTime(500);
 
@@ -787,11 +787,39 @@ describe('createDebouncedSave', () => {
 
     it('does not invoke onSaveFailed on a successful save', () => {
         const onSaveFailed = vi.fn();
-        const { save } = createDebouncedSave(onSaveFailed);
+        const { save } = createDebouncedSave({ onSaveFailed });
 
         save(makeGameState());
         vi.advanceTimersByTime(500);
 
         expect(onSaveFailed).not.toHaveBeenCalled();
+    });
+
+    it('invokes onSaveSkipped (not onSaveFailed) when a flushed save is skipped', () => {
+        const onSaveFailed = vi.fn();
+        const onSaveSkipped = vi.fn();
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        // Stored geometry belongs to a different puzzle than the one autosaved —
+        // a cross-tab takeover. saveProgress returns 'skipped'.
+        saveGeometry(makeGameState({ seed: 1 }));
+        const { save } = createDebouncedSave({ onSaveFailed, onSaveSkipped });
+
+        save(makeGameState({ seed: 2 }));
+        vi.advanceTimersByTime(500);
+        warnSpy.mockRestore();
+
+        expect(onSaveSkipped).toHaveBeenCalledOnce();
+        expect(onSaveFailed).not.toHaveBeenCalled();
+    });
+
+    it('does not invoke onSaveSkipped on a normal save', () => {
+        const onSaveSkipped = vi.fn();
+        saveGeometry(makeGameState({ seed: 5 }));
+        const { save } = createDebouncedSave({ onSaveSkipped });
+
+        save(makeGameState({ seed: 5 }));
+        vi.advanceTimersByTime(500);
+
+        expect(onSaveSkipped).not.toHaveBeenCalled();
     });
 });

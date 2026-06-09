@@ -132,7 +132,11 @@ to save" toast: `createDebouncedSave`'s flush only calls `onSaveFailed` on
 `'failed'`, so `'skipped'` is inert there. `saveNewPuzzle`'s result-combining
 treats `'skipped'` as non-failing (it cannot occur on that path anyway, since
 geometry for the same seed was just written). Skip events are logged via
-`diagnostics.warn`. Skip-frequency telemetry is deferred (out of scope).
+`diagnostics.warn`, and the debounced saver surfaces them through a new
+`onSaveSkipped` callback so `main.ts` can emit a `track('progress-save-skipped',
+{ cutStyle, pieceCount })` analytics event — letting an operator see how often
+the cross-tab race actually fires in production (the bug was found from a real
+production backup). Added in review follow-up.
 
 ## Route 2 — leave the previous puzzle loadable
 
@@ -172,8 +176,12 @@ When no previous save existed, both keys stay absent → next load is `empty`
 
 ## Out of scope
 
-- Option 3: `storage`-event cross-tab coordination / reload prompts.
-- Skip-frequency telemetry.
+- Option 3: `storage`-event cross-tab coordination / reload prompts. (Also the
+  perf optimization of avoiding the per-save geometry read via a `storage`-event
+  cache or a companion seed key — deferred; immaterial until composable ships,
+  and both alternatives trade away a correctness property.)
+- ~~Skip-frequency telemetry.~~ Added in review follow-up — see the
+  `'skipped'` section above.
 - Help text: no toolbar/gesture/setting changes; this is a correctness fix with
   no visible feature (the only observable change is *fewer* false corrupt-save
   dialogs), so no `info-modal.ts` update is required.
