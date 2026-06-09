@@ -183,6 +183,19 @@ export interface SaveUnreadableData {
 }
 
 /**
+ * Data attached to `progress-save-skipped` — a debounced progress autosave was
+ * refused because the geometry in localStorage belongs to a different puzzle
+ * than the one being saved (a cross-tab takeover; see `saveProgress`). Lets an
+ * operator see how often the cross-tab save race actually fires in the wild —
+ * the race that previously produced a torn save and a false "corrupt" dialog.
+ * `cutStyle`/`pieceCount` describe the puzzle whose progress was dropped.
+ */
+export interface ProgressSaveSkippedData {
+    cutStyle: string;
+    pieceCount: number;
+}
+
+/**
  * Data attached to `save-recovery` — emitted once when the player closes the
  * unreadable-save dialog. `downloaded` records whether they took a copy of the
  * raw data before starting over, so an operator can tell whether the recovery
@@ -234,6 +247,7 @@ export function track(name: 'save-failed', data: SaveFailedData): void;
 export function track(name: 'save-compressed', data: SaveCompressedData): void;
 export function track(name: 'save-unreadable', data: SaveUnreadableData): void;
 export function track(name: 'save-recovery', data: SaveRecoveryData): void;
+export function track(name: 'progress-save-skipped', data: ProgressSaveSkippedData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);

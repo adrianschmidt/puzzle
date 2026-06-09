@@ -636,7 +636,17 @@ function persistNewPuzzle(): void {
     }
 }
 
-const debouncedSave = createDebouncedSave(() => notifySaveFailed('progress'));
+const debouncedSave = createDebouncedSave({
+    onSaveFailed: () => notifySaveFailed('progress'),
+    // A cross-tab takeover refused this autosave (another tab started a new
+    // puzzle on the same origin). Not a failure to warn the user about, but
+    // worth measuring — this is the race that used to produce a torn save.
+    onSaveSkipped: () =>
+        track('progress-save-skipped', {
+            cutStyle: gameState.cutStyle ?? 'classic',
+            pieceCount: gameState.pieces.length,
+        }),
+});
 
 // Persist any pending debounced save before the page goes away, so a change
 // made within the 500ms debounce window (e.g. a just-tapped selection) is not
