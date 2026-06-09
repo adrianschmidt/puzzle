@@ -178,8 +178,9 @@ When no previous save existed, both keys stay absent → next load is `empty`
 
 - Option 3: `storage`-event cross-tab coordination / reload prompts. (Also the
   perf optimization of avoiding the per-save geometry read via a `storage`-event
-  cache or a companion seed key — deferred; immaterial until composable ships,
-  and both alternatives trade away a correctness property.)
+  cache or a companion seed key — **declined**, not merely deferred: every cheap
+  alternative trades away a correctness property, and the race-free synchronous
+  read's cost is immaterial. We keep the synchronous read.)
 - ~~Skip-frequency telemetry.~~ Added in review follow-up — see the
   `'skipped'` section above.
 - Help text: no toolbar/gesture/setting changes; this is a correctness fix with
