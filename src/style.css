@@ -441,6 +441,16 @@ html, body {
   0%   { filter: var(--piece-edge-filter, opacity(1)) brightness(1.2); }
   100% { filter: var(--piece-edge-filter, opacity(1)) brightness(1); }
 }
+
+/* Marquee (drag-box) selection overlay — screen-space, non-interactive */
+.marquee-box {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  border: 1px solid var(--ui-accent);
+  background: color-mix(in srgb, var(--ui-accent) 20%, transparent);
+}
+
 /* Win detection overlay */
 .completion-overlay {
   position: absolute;
