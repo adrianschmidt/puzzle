@@ -348,6 +348,13 @@ function buildPieceOutlineSetting(): HTMLElement {
     colorLabel.textContent = 'Outline colour';
     colorRow.appendChild(colorLabel);
 
+    // The picker's cleanup function is intentionally discarded: the modal
+    // tears down its whole subtree on dismiss (overlay.remove()), which
+    // takes the button and swatch panel with it. The popover's only
+    // out-of-subtree resource is its document-level dismiss listeners, and
+    // every modal-close path (✕, backdrop, Escape) trips the popover's own
+    // outside-pointerdown / Escape handler first, removing them. Mirrors the
+    // background-color picker, which likewise discards its cleanup.
     createPieceOutlineColorPicker({
         container: colorRow,
         selectedId: loadPieceOutlineColorPreference(),
