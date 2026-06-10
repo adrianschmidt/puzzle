@@ -1,9 +1,11 @@
 /**
  * Inject the SVG `<filter id="piece-outline">` used by the Outline
  * mode of the Piece outline setting. The filter dilates the source
- * graphic by 1px, recolors that ring black, then composites the
- * original on top — producing a sharp 1px silhouette around the
- * group `<div>` it's applied to via `filter: url(#piece-outline)`.
+ * graphic by 1px, recolors that ring with the outline color (the
+ * `--piece-outline-color` custom property, defaulting to near-black),
+ * then composites the original on top — producing a sharp 1px
+ * silhouette around the group `<div>` it's applied to via
+ * `filter: url(#piece-outline)`.
  *
  * The filter is hosted in a zero-sized, aria-hidden `<svg>` so it
  * occupies no layout space and is excluded from a11y trees.
@@ -40,7 +42,14 @@ export function installPieceOutlineFilter(): void {
     filter.appendChild(morph);
 
     const flood = document.createElementNS(SVG_NS, 'feFlood');
-    flood.setAttribute('flood-color', 'black');
+    // Read the outline color from a CSS custom property so the picker can
+    // recolor the outline live (a presentation attribute can't hold a
+    // var()). The `#080808` fallback (= gray-darker-3) keeps the outline
+    // black if the property is never set.
+    flood.style.setProperty(
+        'flood-color',
+        'var(--piece-outline-color, #080808)',
+    );
     flood.setAttribute('result', 'color');
     filter.appendChild(flood);
 
