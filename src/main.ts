@@ -33,6 +33,8 @@ import {
     installPieceOutlineFilter,
     loadPieceOutlinePreference,
     applyPieceOutline,
+    loadPieceOutlineColorPreference,
+    applyPieceOutlineColor,
     createBackgroundColorPicker,
     createInfoButton,
     createInfoModal,
@@ -1203,9 +1205,12 @@ function updateRotationUiVisibility(): void {
 }
 
 // Install the SVG filter used by the "Outline" piece-outline mode and
-// apply the saved preference.
+// apply the saved style + color preferences. The color itself flips
+// with the OS theme via CSS, so (unlike the background) no re-apply on
+// theme change is needed.
 installPieceOutlineFilter();
 applyPieceOutline(loadPieceOutlinePreference());
+applyPieceOutlineColor(loadPieceOutlineColorPreference());
 
 // Set up the Background Color picker
 let currentColorId = loadColorPreference();
