@@ -22,6 +22,10 @@ import {
     saveOffsetDragPreference,
 } from './offset-drag.js';
 import {
+    loadMarqueeContainPreference,
+    saveMarqueeContainPreference,
+} from './marquee-contain.js';
+import {
     PIECE_OUTLINE_PRESETS,
     loadPieceOutlinePreference,
     savePieceOutlinePreference,
@@ -138,7 +142,7 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(buttons, [
         '⬚ ',
         ['strong', 'Multi-select'],
-        ' (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all. Your selection is remembered if you reload, and cleared when you deselect all or start a new game.',
+        ' (top-left) — When active, tap pieces to add/remove them from a selection, or drag a box on empty space to select every group it touches; drag any selected piece to move the whole selection together. On a computer you can also hold Shift and drag a box to start selecting without turning the tool on first. Tap ✕ (bottom) to deselect all. Your selection is remembered if you reload, and cleared when you deselect all or start a new game.',
     ]);
     appendInlineLi(buttons, [
         '↺ ↻ ',
@@ -222,6 +226,7 @@ function buildSettingsSection(args: {
     section.appendChild(buildToleranceSetting(args.onToleranceChanged));
     section.appendChild(buildPieceOutlineSetting());
     section.appendChild(buildOffsetDragSetting());
+    section.appendChild(buildMarqueeContainSetting());
 
     return section;
 }
@@ -401,6 +406,40 @@ function buildOffsetDragSetting(): HTMLElement {
     desc.className = 'info-setting-description';
     desc.textContent =
         "Shift single pieces upward when dragging, so your finger doesn't block the view.";
+    setting.appendChild(desc);
+
+    return setting;
+}
+
+function buildMarqueeContainSetting(): HTMLElement {
+    const setting = document.createElement('div');
+    setting.className = 'info-setting';
+
+    const toggleLabel = document.createElement('label');
+    toggleLabel.className = 'info-setting-toggle';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'form-checkbox';
+    checkbox.dataset.testid = 'marquee-contain-toggle';
+    checkbox.checked = loadMarqueeContainPreference();
+    checkbox.addEventListener('change', () => {
+        saveMarqueeContainPreference(checkbox.checked);
+    });
+
+    const text = document.createElement('span');
+    text.className = 'info-setting-label';
+    text.textContent = 'Enclose to select';
+
+    toggleLabel.appendChild(checkbox);
+    toggleLabel.appendChild(text);
+    setting.appendChild(toggleLabel);
+
+    const desc = document.createElement('p');
+    desc.className = 'info-setting-description';
+    desc.textContent =
+        'When dragging a selection box, select only pieces fully inside the ' +
+        'box instead of every piece the box touches.';
     setting.appendChild(desc);
 
     return setting;
