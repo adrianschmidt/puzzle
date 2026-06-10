@@ -42,6 +42,7 @@ interface FakeContainer {
     setPointerCapture: ReturnType<typeof vi.fn>;
     hasPointerCapture: ReturnType<typeof vi.fn>;
     releasePointerCapture: ReturnType<typeof vi.fn>;
+    appendChild: ReturnType<typeof vi.fn>;
     fire(type: string, event: PointerEvent | WheelEvent): void;
 }
 
@@ -61,6 +62,7 @@ function createFakeContainer(): FakeContainer {
         setPointerCapture: vi.fn((id: number) => { captured.add(id); }),
         hasPointerCapture: vi.fn((id: number) => captured.has(id)),
         releasePointerCapture: vi.fn((id: number) => { captured.delete(id); }),
+        appendChild: vi.fn(),
         fire(type, event) {
             for (const cb of listeners[type] ?? []) cb(event);
         },
@@ -94,6 +96,7 @@ function fakePointerEvent(
         pointerId: number;
         pointerType: string;
         target: EventTarget | null;
+        shiftKey: boolean;
     }> = {},
 ): PointerEvent {
     return {
@@ -102,6 +105,7 @@ function fakePointerEvent(
         pointerId: overrides.pointerId ?? 1,
         pointerType: overrides.pointerType ?? 'mouse',
         target: overrides.target ?? null,
+        shiftKey: overrides.shiftKey ?? false,
         preventDefault: vi.fn(),
     } as unknown as PointerEvent;
 }
@@ -548,5 +552,70 @@ describe('setupInteraction', () => {
             // OFFSET_DRAG_SCREEN_PX = 50, shifted upward (negative Y).
             expect(group7.position.y).toBe(-50);
         });
+    });
+});
+
+describe('setupInteraction — marquee routing', () => {
+    function dragBackground(
+        container: ReturnType<typeof createFakeContainer>,
+        opts: { shiftKey?: boolean } = {},
+    ): void {
+        // Background pointerdown, then a move past the 8px tap threshold to
+        // promote the background-candidate into a drag (pan or marquee), then up.
+        const target = container as unknown as EventTarget;
+        container.fire('pointerdown', fakePointerEvent({
+            pointerId: 1, clientX: 0, clientY: 0, target, ...opts,
+        }));
+        container.fire('pointermove', fakePointerEvent({
+            pointerId: 1, clientX: 40, clientY: 40, target, ...opts,
+        }));
+        container.fire('pointerup', fakePointerEvent({
+            pointerId: 1, clientX: 40, clientY: 40, target, ...opts,
+        }));
+    }
+
+    function setup(container: ReturnType<typeof createFakeContainer>, selectionManager: SelectionManager) {
+        setupInteraction({
+            container: container as unknown as HTMLElement,
+            renderer: createFakeRenderer(),
+            viewportTransform: new ViewportTransform(),
+            getState: () => makeGameState(),
+            onStateChanged: vi.fn(),
+            onDrop: vi.fn(),
+            onViewportChanged: vi.fn(),
+            selectionManager,
+        });
+    }
+
+    it('draws a marquee (appends an overlay) when the tool is active', () => {
+        const container = createFakeContainer();
+        const selectionManager = new SelectionManager();
+        selectionManager.toolActive = true;
+        setup(container, selectionManager);
+
+        dragBackground(container);
+
+        expect(container.appendChild).toHaveBeenCalled();
+    });
+
+    it('pans (no overlay) when the tool is inactive and no Shift', () => {
+        const container = createFakeContainer();
+        const selectionManager = new SelectionManager();
+        setup(container, selectionManager);
+
+        dragBackground(container);
+
+        expect(container.appendChild).not.toHaveBeenCalled();
+    });
+
+    it('Shift+drag with the tool off draws a marquee and activates the tool', () => {
+        const container = createFakeContainer();
+        const selectionManager = new SelectionManager();
+        setup(container, selectionManager);
+
+        dragBackground(container, { shiftKey: true });
+
+        expect(selectionManager.toolActive).toBe(true);
+        expect(container.appendChild).toHaveBeenCalled();
     });
 });
