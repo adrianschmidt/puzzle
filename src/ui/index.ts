@@ -102,6 +102,19 @@ export type { PieceOutlinePreset } from './piece-outline.js';
 
 export { installPieceOutlineFilter } from './piece-outline-filter.js';
 
+export {
+    PIECE_OUTLINE_COLOR_PRESETS,
+    DEFAULT_PIECE_OUTLINE_COLOR_ID,
+    getPieceOutlineColorPreset,
+    savePieceOutlineColorPreference,
+    loadPieceOutlineColorPreference,
+    applyPieceOutlineColor,
+} from './piece-outline-color.js';
+export type { PieceOutlineColorPreset } from './piece-outline-color.js';
+
+export { createPieceOutlineColorPicker } from './piece-outline-color-picker.js';
+export type { PieceOutlineColorPickerOptions } from './piece-outline-color-picker.js';
+
 export { createBackgroundColorPicker } from './background-color-picker.js';
 export type { BackgroundColorPickerOptions } from './background-color-picker.js';
 
