@@ -19,7 +19,9 @@ import type { ClassifyTarget } from './pointer-router.js';
 import { probeNearbyPieceId } from './hit-probe.js';
 import type { SelectionManager } from './selection-manager.js';
 import type { RotationFocus } from './rotation-focus.js';
-import { loadOffsetDragPreference } from '../ui/index.js';
+import { MarqueeController, groupScreenRect } from './marquee-controller.js';
+import type { ScreenRect } from './marquee-controller.js';
+import { loadOffsetDragPreference, loadMarqueeContainPreference } from '../ui/index.js';
 
 export interface InteractionSetupOptions {
     container: HTMLElement;
@@ -93,6 +95,32 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         undefined,
         screenDeltaToWorld,
     );
+
+    const marquee = selectionManager
+        ? new MarqueeController({
+            container,
+            selectionManager,
+            isContainMode: () => loadMarqueeContainPreference(),
+            getGroupScreenRects: () => {
+                const state = getState();
+                const rects: Array<{ id: number; rect: ScreenRect }> = [];
+                for (const group of state.groups) {
+                    const rect = groupScreenRect(
+                        group,
+                        state.piecesById,
+                        (p) => viewportTransform.worldToScreen(p),
+                    );
+                    if (rect) rects.push({ id: group.id, rect });
+                }
+                return rects;
+            },
+            onSelectionCommitted: onStateChanged,
+        })
+        : null;
+
+    // Whether the in-progress background drag is a viewport pan or a marquee.
+    // Decided once at drag start and held until the gesture resolves.
+    let backgroundMode: 'pan' | 'marquee' = 'pan';
 
     function applyOffsetDragIfSinglePiece(groupId: number): void {
         const group = tryGetGroup(getState(), groupId);
@@ -176,11 +204,35 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         onBackgroundPan: {
             start: (evt) => {
                 rotationFocus?.clearFocus();
-                viewportController.handlePanStart(evt);
+                const wantMarquee =
+                    !!marquee && !!selectionManager &&
+                    (selectionManager.toolActive || evt.shiftKey);
+                if (wantMarquee) {
+                    backgroundMode = 'marquee';
+                    // Shift+drag with the tool off enters multi-select so the
+                    // resulting selection is live (moves together, deselect
+                    // button appears).
+                    if (evt.shiftKey && !selectionManager.toolActive) {
+                        selectionManager.toolActive = true;
+                    }
+                    marquee.start(evt);
+                } else {
+                    backgroundMode = 'pan';
+                    viewportController.handlePanStart(evt);
+                }
             },
-            move: (evt) => viewportController.handlePanMove(evt),
-            end: () => viewportController.handlePanEnd(),
-            cancel: () => viewportController.handlePanEnd(),
+            move: (evt) => {
+                if (backgroundMode === 'marquee') marquee?.move(evt);
+                else viewportController.handlePanMove(evt);
+            },
+            end: (evt) => {
+                if (backgroundMode === 'marquee') marquee?.end(evt);
+                else viewportController.handlePanEnd();
+            },
+            cancel: () => {
+                if (backgroundMode === 'marquee') marquee?.cancel();
+                else viewportController.handlePanEnd();
+            },
         },
 
         onPinch: {
