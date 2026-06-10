@@ -27,6 +27,12 @@ import {
     savePieceOutlinePreference,
     applyPieceOutline,
 } from './piece-outline.js';
+import {
+    loadPieceOutlineColorPreference,
+    savePieceOutlineColorPreference,
+    applyPieceOutlineColor,
+} from './piece-outline-color.js';
+import { createPieceOutlineColorPicker } from './piece-outline-color-picker.js';
 import { attachShareSection } from './share-section.js';
 
 export interface InfoModalOptions {
@@ -287,7 +293,9 @@ function buildPieceOutlineSetting(): HTMLElement {
 
     const desc = document.createElement('p');
     desc.className = 'info-setting-description';
-    desc.textContent = 'The visual edge drawn around each piece group.';
+    desc.textContent =
+        'The visual edge drawn around each piece group. With "Outline" ' +
+        'selected, pick its colour below.';
     setting.appendChild(desc);
 
     const container = document.createElement('div');
@@ -321,12 +329,40 @@ function buildPieceOutlineSetting(): HTMLElement {
                 .querySelectorAll('.preset-option')
                 .forEach((btn) => btn.classList.remove('selected'));
             button.classList.add('selected');
+            updateColorRowVisibility(preset.id);
         });
 
         container.appendChild(button);
     }
 
     setting.appendChild(container);
+
+    // Outline-color picker — only meaningful for the "Outline" style, so
+    // it's revealed/hidden as the active edge style changes.
+    const colorRow = document.createElement('div');
+    colorRow.className = 'outline-color-row';
+    colorRow.dataset.testid = 'piece-outline-color-row';
+
+    const colorLabel = document.createElement('span');
+    colorLabel.className = 'info-setting-label';
+    colorLabel.textContent = 'Outline colour';
+    colorRow.appendChild(colorLabel);
+
+    createPieceOutlineColorPicker({
+        container: colorRow,
+        selectedId: loadPieceOutlineColorPreference(),
+        onSelect: (colorId) => {
+            savePieceOutlineColorPreference(colorId);
+            applyPieceOutlineColor(colorId);
+        },
+    });
+
+    function updateColorRowVisibility(styleId: string): void {
+        colorRow.hidden = styleId !== 'outline';
+    }
+    updateColorRowVisibility(currentId);
+
+    setting.appendChild(colorRow);
     return setting;
 }
 

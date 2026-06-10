@@ -262,6 +262,7 @@ describe('createInfoModal — Piece outline setting', () => {
         document.body.appendChild(container);
         localStorage.clear();
         document.documentElement.style.removeProperty('--piece-edge-filter');
+        document.documentElement.style.removeProperty('--piece-outline-color');
     });
 
     afterEach(() => {
@@ -320,5 +321,67 @@ describe('createInfoModal — Piece outline setting', () => {
 
         expect(noneBtn.classList.contains('selected')).toBe(true);
         expect(outlineBtn.classList.contains('selected')).toBe(false);
+    });
+
+    it('hides the outline-colour row by default (Shadow active)', () => {
+        createInfoModal({ container });
+        const row = document.querySelector(
+            '[data-testid="piece-outline-color-row"]',
+        ) as HTMLElement;
+        expect(row).toBeTruthy();
+        expect(row.hidden).toBe(true);
+    });
+
+    it('reveals the colour row when Outline is selected, hides it for None', () => {
+        createInfoModal({ container });
+        const row = document.querySelector(
+            '[data-testid="piece-outline-color-row"]',
+        ) as HTMLElement;
+        const outlineBtn = document.querySelector(
+            '[data-testid="piece-outline-outline"]',
+        ) as HTMLButtonElement;
+        const noneBtn = document.querySelector(
+            '[data-testid="piece-outline-none"]',
+        ) as HTMLButtonElement;
+
+        outlineBtn.click();
+        expect(row.hidden).toBe(false);
+
+        noneBtn.click();
+        expect(row.hidden).toBe(true);
+    });
+
+    it('shows the colour row on open when Outline is the saved style', () => {
+        localStorage.setItem('puzzle-piece-outline', 'outline');
+        createInfoModal({ container });
+        const row = document.querySelector(
+            '[data-testid="piece-outline-color-row"]',
+        ) as HTMLElement;
+        expect(row.hidden).toBe(false);
+    });
+
+    it('selecting a swatch persists the colour and sets the CSS variable', () => {
+        localStorage.setItem('puzzle-piece-outline', 'outline');
+        createInfoModal({ container });
+
+        (
+            document.querySelector(
+                'button.outline-color-button',
+            ) as HTMLButtonElement
+        ).click();
+        (
+            document.querySelector(
+                '[data-swatch-id="blue-default"]',
+            ) as HTMLButtonElement
+        ).click();
+
+        expect(localStorage.getItem('puzzle-piece-outline-color')).toBe(
+            'blue-default',
+        );
+        expect(
+            document.documentElement.style.getPropertyValue(
+                '--piece-outline-color',
+            ),
+        ).toBe('var(--color-blue-default)');
     });
 });
