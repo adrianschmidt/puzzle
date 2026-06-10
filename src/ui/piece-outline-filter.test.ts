@@ -57,3 +57,22 @@ describe('installPieceOutlineFilter', () => {
         expect(svg?.getAttribute('aria-hidden')).toBe('true');
     });
 });
+
+describe('installPieceOutlineFilter — configurable flood colour', () => {
+    beforeEach(() => {
+        document.body.replaceChildren();
+    });
+
+    it('drives feFlood flood-color from the --piece-outline-color variable', () => {
+        installPieceOutlineFilter();
+        const flood = document.querySelector(
+            'filter#piece-outline feFlood',
+        ) as SVGElement;
+        // No hardcoded colour attribute any more.
+        expect(flood.getAttribute('flood-color')).toBeNull();
+        // Reads the CSS variable, with a near-black fallback.
+        expect(flood.style.getPropertyValue('flood-color')).toBe(
+            'var(--piece-outline-color, #080808)',
+        );
+    });
+});
