@@ -166,6 +166,12 @@ export {
 } from './offset-drag.js';
 
 export {
+    loadMarqueeContainPreference,
+    saveMarqueeContainPreference,
+    MARQUEE_CONTAIN_KEY,
+} from './marquee-contain.js';
+
+export {
     ROTATION_ENABLED_PREFERENCE_KEY,
     loadRotationEnabledPreference,
     saveRotationEnabledPreference,
