@@ -204,6 +204,9 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         onBackgroundPan: {
             start: (evt) => {
                 rotationFocus?.clearFocus();
+                // `start` fires from the move that crosses the drag threshold,
+                // so `evt.shiftKey` reflects Shift state at that moment — a
+                // press-then-hold-Shift still arms the marquee, which is fine.
                 const wantMarquee =
                     !!marquee && !!selectionManager &&
                     (selectionManager.toolActive || evt.shiftKey);
