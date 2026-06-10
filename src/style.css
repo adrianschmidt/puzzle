@@ -937,6 +937,50 @@ html, body {
   border-color: var(--ui-accent);
 }
 
+/* Piece-outline color picker — lives inline inside the info modal's
+   Piece-outline setting (unlike the toolbar background button, so it is
+   NOT absolutely positioned). The trigger button previews the current
+   outline color as its own background; the popover anchors to the row. */
+.outline-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: relative; /* anchor for the absolutely-positioned popover */
+  margin-top: 8px;
+}
+
+.outline-color-row[hidden] {
+  display: none;
+}
+
+.outline-color-button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--piece-outline-color, #080808);
+  transition: border-color 0.15s ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.outline-color-button:hover {
+  border-color: var(--ui-border-hover);
+}
+
+/* Outline-picker popover, anchored under its button within the row. */
+.outline-color-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  z-index: 10000;
+}
+
 /* Info button */
 .info-button {
   position: absolute;
