@@ -384,4 +384,22 @@ describe('createInfoModal — Piece outline setting', () => {
             ),
         ).toBe('var(--color-blue-default)');
     });
+
+    it('toggles the marquee-contain preference from the settings checkbox', () => {
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        createInfoModal({ container });
+
+        const checkbox = container.querySelector<HTMLInputElement>(
+            '[data-testid="marquee-contain-toggle"]',
+        );
+        expect(checkbox).not.toBeNull();
+        expect(checkbox!.checked).toBe(false); // intersect default
+
+        checkbox!.checked = true;
+        checkbox!.dispatchEvent(new Event('change'));
+
+        expect(localStorage.getItem('puzzle-marquee-contain')).toBe('true');
+    });
 });
