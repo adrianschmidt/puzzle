@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     MarqueeController,
     groupScreenRect,
@@ -38,6 +38,10 @@ describe('MarqueeController', () => {
     beforeEach(() => {
         container = document.createElement('div');
         document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        container.remove();
     });
 
     it('creates an overlay on start and removes it on end', () => {
@@ -135,6 +139,16 @@ describe('MarqueeController', () => {
 
         expect(selection.hasSelection).toBe(false);
         expect(committed).not.toHaveBeenCalled();
+    });
+
+    it('start is idempotent — a second start replaces the first overlay', () => {
+        const selection = new SelectionManager();
+        const c = makeController({ rects: [], selection, committed: vi.fn(), container });
+
+        c.start(evt(0, 0));
+        c.start(evt(5, 5));
+
+        expect(container.querySelectorAll('.marquee-box').length).toBe(1);
     });
 });
 

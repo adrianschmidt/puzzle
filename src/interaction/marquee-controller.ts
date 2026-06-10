@@ -52,6 +52,7 @@ export class MarqueeController {
     }
 
     start(evt: PointerEvent): void {
+        this.removeOverlay();
         this.startX = evt.clientX;
         this.startY = evt.clientY;
 
