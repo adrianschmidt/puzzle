@@ -209,13 +209,14 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                 // press-then-hold-Shift still arms the marquee, which is fine.
                 const wantMarquee =
                     !!marquee && !!selectionManager &&
-                    (selectionManager.toolActive || evt.shiftKey);
+                    (selectionManager.marqueeActive || evt.shiftKey);
                 if (wantMarquee) {
                     backgroundMode = 'marquee';
-                    // Shift+drag with the tool off enters multi-select so the
-                    // resulting selection is live (moves together, deselect
-                    // button appears).
-                    if (evt.shiftKey && !selectionManager.toolActive) {
+                    // A marquee builds a multi-select selection, so the tool
+                    // must be on. `marqueeActive` already implies it; the Shift
+                    // shortcut may not, so enable it here (Shift+drag leaves
+                    // multi-select on afterward, but does not arm the marquee).
+                    if (!selectionManager.toolActive) {
                         selectionManager.toolActive = true;
                     }
                     marquee.start(evt);

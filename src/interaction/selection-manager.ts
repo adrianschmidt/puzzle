@@ -20,6 +20,10 @@ export class SelectionManager {
     /** Whether the multi-select tool is currently active. */
     private _toolActive = false;
 
+    /** Whether the marquee (drag-box) gesture is currently armed. */
+    private _marqueeActive = false;
+    private marqueeActiveListeners: ToolActiveChangeCallback[] = [];
+
     get toolActive(): boolean {
         return this._toolActive;
     }
@@ -29,6 +33,10 @@ export class SelectionManager {
         this._toolActive = active;
         if (!active) {
             this.clearAll();
+            // Invariant: the marquee can only be armed while the multi-select
+            // tool is on (a marquee builds a multi-select selection). Turning
+            // the tool off therefore disarms the marquee too.
+            this.setMarqueeActive(false);
         }
         for (const listener of this.toolActiveListeners) {
             listener(active);
@@ -48,6 +56,46 @@ export class SelectionManager {
             const idx = this.toolActiveListeners.indexOf(callback);
             if (idx >= 0) this.toolActiveListeners.splice(idx, 1);
         };
+    }
+
+    /** Whether the marquee gesture is currently armed. */
+    get marqueeActive(): boolean {
+        return this._marqueeActive;
+    }
+
+    /**
+     * Toggle the marquee gesture on/off. Returns the new state.
+     *
+     * Enabling the marquee also enables the multi-select tool — a marquee
+     * can only build a selection while the tool is on (the invariant
+     * "marquee implies tool"). Disabling the marquee leaves the current
+     * selection intact; only the gesture is turned off.
+     */
+    toggleMarquee(): boolean {
+        if (this._marqueeActive) {
+            this.setMarqueeActive(false);
+        } else {
+            this.toolActive = true; // invariant: marquee implies tool
+            this.setMarqueeActive(true);
+        }
+        return this._marqueeActive;
+    }
+
+    /** Register a listener for marquee-active changes. */
+    onMarqueeActiveChange(callback: ToolActiveChangeCallback): () => void {
+        this.marqueeActiveListeners.push(callback);
+        return () => {
+            const idx = this.marqueeActiveListeners.indexOf(callback);
+            if (idx >= 0) this.marqueeActiveListeners.splice(idx, 1);
+        };
+    }
+
+    private setMarqueeActive(active: boolean): void {
+        if (this._marqueeActive === active) return;
+        this._marqueeActive = active;
+        for (const listener of this.marqueeActiveListeners) {
+            listener(active);
+        }
     }
 
     /** The set of currently selected group IDs. */
