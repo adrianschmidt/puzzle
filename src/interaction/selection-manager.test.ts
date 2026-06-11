@@ -188,6 +188,95 @@ describe('SelectionManager', () => {
         });
     });
 
+    describe('marquee toggle', () => {
+        it('defaults to inactive', () => {
+            const mgr = new SelectionManager();
+            expect(mgr.marqueeActive).toBe(false);
+        });
+
+        it('enabling marquee also enables the multi-select tool (invariant)', () => {
+            const mgr = new SelectionManager();
+            const toolListener = vi.fn();
+            const marqueeListener = vi.fn();
+            mgr.onToolActiveChange(toolListener);
+            mgr.onMarqueeActiveChange(marqueeListener);
+
+            const result = mgr.toggleMarquee();
+
+            expect(result).toBe(true);
+            expect(mgr.marqueeActive).toBe(true);
+            expect(mgr.toolActive).toBe(true);
+            expect(toolListener).toHaveBeenCalledWith(true);
+            expect(marqueeListener).toHaveBeenCalledWith(true);
+        });
+
+        it('enabling marquee when the tool is already on does not re-fire the tool listener', () => {
+            const mgr = new SelectionManager();
+            mgr.toolActive = true;
+            const toolListener = vi.fn();
+            const marqueeListener = vi.fn();
+            mgr.onToolActiveChange(toolListener);
+            mgr.onMarqueeActiveChange(marqueeListener);
+
+            mgr.toggleMarquee();
+
+            expect(mgr.toolActive).toBe(true);
+            expect(mgr.marqueeActive).toBe(true);
+            expect(toolListener).not.toHaveBeenCalled();
+            expect(marqueeListener).toHaveBeenCalledWith(true);
+        });
+
+        it('disabling marquee leaves the tool on and the selection intact', () => {
+            const mgr = new SelectionManager();
+            mgr.toggleMarquee(); // both on
+            mgr.select(1);
+            mgr.select(2);
+            const toolListener = vi.fn();
+            const changeListener = vi.fn();
+            const marqueeListener = vi.fn();
+            mgr.onToolActiveChange(toolListener);
+            mgr.onChange(changeListener);
+            mgr.onMarqueeActiveChange(marqueeListener);
+
+            const result = mgr.toggleMarquee();
+
+            expect(result).toBe(false);
+            expect(mgr.marqueeActive).toBe(false);
+            expect(mgr.toolActive).toBe(true);
+            expect(mgr.isSelected(1)).toBe(true);
+            expect(mgr.isSelected(2)).toBe(true);
+            expect(toolListener).not.toHaveBeenCalled();
+            expect(changeListener).not.toHaveBeenCalled();
+            expect(marqueeListener).toHaveBeenCalledWith(false);
+        });
+
+        it('turning the tool off forces marquee off (invariant)', () => {
+            const mgr = new SelectionManager();
+            mgr.toggleMarquee(); // both on
+            const marqueeListener = vi.fn();
+            mgr.onMarqueeActiveChange(marqueeListener);
+
+            mgr.toolActive = false;
+
+            expect(mgr.toolActive).toBe(false);
+            expect(mgr.marqueeActive).toBe(false);
+            expect(marqueeListener).toHaveBeenCalledWith(false);
+        });
+
+        it('onMarqueeActiveChange unsubscribe stops the listener from being called', () => {
+            const mgr = new SelectionManager();
+            const listener = vi.fn();
+            const unsubscribe = mgr.onMarqueeActiveChange(listener);
+
+            mgr.toggleMarquee();
+            expect(listener).toHaveBeenCalledTimes(1);
+
+            unsubscribe();
+            mgr.toggleMarquee();
+            expect(listener).toHaveBeenCalledTimes(1);
+        });
+    });
+
     describe('handleMerge', () => {
         it('rebinds selection from old to new group ID and fires once', () => {
             const mgr = new SelectionManager();

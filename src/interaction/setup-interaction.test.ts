@@ -587,10 +587,10 @@ describe('setupInteraction — marquee routing', () => {
         });
     }
 
-    it('draws a marquee (appends an overlay) when the tool is active', () => {
+    it('draws a marquee (appends an overlay) when the marquee is active', () => {
         const container = createFakeContainer();
         const selectionManager = new SelectionManager();
-        selectionManager.toolActive = true;
+        selectionManager.toggleMarquee(); // arms marquee (and the tool)
         setup(container, selectionManager);
 
         dragBackground(container);
@@ -598,7 +598,18 @@ describe('setupInteraction — marquee routing', () => {
         expect(container.appendChild).toHaveBeenCalled();
     });
 
-    it('pans (no overlay) when the tool is inactive and no Shift', () => {
+    it('pans (no overlay) when multi-select is on but the marquee is off', () => {
+        const container = createFakeContainer();
+        const selectionManager = new SelectionManager();
+        selectionManager.toolActive = true; // tool on, marquee off
+        setup(container, selectionManager);
+
+        dragBackground(container);
+
+        expect(container.appendChild).not.toHaveBeenCalled();
+    });
+
+    it('pans (no overlay) when both are off and no Shift', () => {
         const container = createFakeContainer();
         const selectionManager = new SelectionManager();
         setup(container, selectionManager);
@@ -608,7 +619,7 @@ describe('setupInteraction — marquee routing', () => {
         expect(container.appendChild).not.toHaveBeenCalled();
     });
 
-    it('Shift+drag with the tool off draws a marquee and activates the tool', () => {
+    it('Shift+drag draws a marquee and enables multi-select without arming the marquee', () => {
         const container = createFakeContainer();
         const selectionManager = new SelectionManager();
         setup(container, selectionManager);
@@ -616,6 +627,7 @@ describe('setupInteraction — marquee routing', () => {
         dragBackground(container, { shiftKey: true });
 
         expect(selectionManager.toolActive).toBe(true);
+        expect(selectionManager.marqueeActive).toBe(false);
         expect(container.appendChild).toHaveBeenCalled();
     });
 });
