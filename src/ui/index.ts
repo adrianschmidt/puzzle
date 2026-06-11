@@ -45,6 +45,9 @@ export type { GatherPiecesButtonOptions } from './gather-pieces-button.js';
 export { createSelectToolButton } from './select-tool-button.js';
 export type { SelectToolButtonOptions } from './select-tool-button.js';
 
+export { createMarqueeToolButton } from './marquee-tool-button.js';
+export type { MarqueeToolButtonOptions } from './marquee-tool-button.js';
+
 export { createDeselectButton } from './deselect-button.js';
 export type { DeselectButtonOptions } from './deselect-button.js';
 
