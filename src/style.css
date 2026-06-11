@@ -179,7 +179,8 @@ html, body {
 }
 
 /* Multi-select tool button (top-left) */
-.select-tool-button {
+.select-tool-button,
+.marquee-tool-button {
   position: absolute;
   top: 12px;
   left: 12px;
@@ -203,23 +204,32 @@ html, body {
   -webkit-user-select: none;
 }
 
-.select-tool-button:hover {
+.select-tool-button:hover,
+.marquee-tool-button:hover {
   background: var(--ui-control-scrim-hover);
   border-color: var(--ui-border-hover);
 }
 
-.select-tool-button:active {
+.select-tool-button:active,
+.marquee-tool-button:active {
   background: var(--ui-control-scrim-active);
 }
 
-.select-tool-button--active {
+.select-tool-button--active,
+.marquee-tool-button--active {
   border-color: color-mix(in srgb, var(--ui-accent) 70%, transparent);
   background: color-mix(in srgb, var(--ui-accent) 15%, transparent);
 }
 
-.select-tool-button--active:hover {
+.select-tool-button--active:hover,
+.marquee-tool-button--active:hover {
   border-color: color-mix(in srgb, var(--ui-accent) 90%, transparent);
   background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+}
+
+/* The marquee button sits directly below the multi-select button. */
+.marquee-tool-button {
+  top: 64px;
 }
 
 /*
@@ -1312,6 +1322,13 @@ details.info-section[open] > .info-section-summary {
 
   .select-tool-button {
     top: 8px;
+    left: 8px;
+    width: 34px;
+    height: 34px;
+  }
+
+  .marquee-tool-button {
+    top: 50px;
     left: 8px;
     width: 34px;
     height: 34px;

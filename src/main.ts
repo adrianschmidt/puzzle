@@ -39,6 +39,7 @@ import {
     createInfoButton,
     createInfoModal,
     createSelectToolButton,
+    createMarqueeToolButton,
     createDeselectButton,
     createRotateButtons,
     createRotateHandle,
@@ -1107,6 +1108,12 @@ createGatherPiecesButton({
 
 // Set up the multi-select tool button (top-left)
 createSelectToolButton({
+    container: app,
+    selectionManager,
+});
+
+// Set up the marquee tool button, directly below the multi-select button
+createMarqueeToolButton({
     container: app,
     selectionManager,
 });

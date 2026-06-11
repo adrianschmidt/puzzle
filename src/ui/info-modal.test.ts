@@ -242,6 +242,13 @@ describe('createInfoModal — How to Play section', () => {
         expect(howToPlaySection().textContent?.toLowerCase()).not.toContain('composable');
     });
 
+    it('documents the Marquee button and its drag-a-box gesture', () => {
+        createInfoModal({ container });
+        const text = howToPlaySection().textContent ?? '';
+        expect(text).toContain('Marquee');
+        expect(text).toContain('drag a box');
+    });
+
     it('mentions Wavy alongside Free rotation', () => {
         createInfoModal({ container });
         const text = howToPlaySection().textContent ?? '';

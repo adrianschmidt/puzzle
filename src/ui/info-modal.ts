@@ -142,7 +142,14 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(buttons, [
         '⬚ ',
         ['strong', 'Multi-select'],
-        ' (top-left) — When active, tap pieces to add/remove them from a selection, or drag a box on empty space to select every group it touches; drag any selected piece to move the whole selection together. On a computer you can also hold Shift and drag a box to start selecting without turning the tool on first. Tap ✕ (bottom) to deselect all. Your selection is remembered if you reload, and cleared when you deselect all or start a new game.',
+        ' (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all. Your selection is remembered if you reload, and cleared when you deselect all or start a new game.',
+    ]);
+    appendInlineLi(buttons, [
+        '▭ ',
+        ['strong', 'Marquee'],
+        ' (below Multi-select) — Turns on multi-select and lets you drag a box on empty space to select every group it covers (turn on ',
+        ['strong', 'Enclose to select'],
+        ' in Settings to require a group be fully inside the box). Turning the marquee off leaves your selection untouched. On a computer you can also hold Shift and drag a box without switching the button on.',
     ]);
     appendInlineLi(buttons, [
         '↺ ↻ ',
