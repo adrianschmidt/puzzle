@@ -210,6 +210,21 @@ describe('serializeState', () => {
 
         expect(restored.fractalConfig).toEqual({ borderless: true });
     });
+
+    it('round-trips composableConfig.borderless', () => {
+        const state = makeGameState({
+            cutStyle: 'composable',
+            composableConfig: {
+                baseCutGenerator: 'sine',
+                baseCutConfig: { ha: 0.2, hf: 1, va: 0.3, vf: 2 },
+                tabGenerator: 'classic',
+                tabConfig: {},
+                borderless: true,
+            },
+        });
+        const serialized = serializeState(state);
+        expect(serialized.composableConfig?.borderless).toBe(true);
+    });
 });
 
 describe('deserializeState', () => {
