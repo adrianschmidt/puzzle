@@ -669,3 +669,58 @@ describe('createNewGameDialog — free rotation sub-checkbox', () => {
         expect(getFreeRotationRow().style.display).toBe('none');
     });
 });
+
+describe('createNewGameDialog — composable borderless toggle', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        container.remove();
+    });
+
+    it('includes composableConfig.borderless in the selection when checked', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'composable',
+            composableSupportsBorderless: true,
+            onSelect,
+        });
+
+        const checkbox = container.querySelector<HTMLInputElement>(
+            '[data-testid="composable-borderless-toggle"]',
+        );
+        expect(checkbox).not.toBeNull();
+        checkbox!.checked = true;
+        checkbox!.dispatchEvent(new Event('change'));
+
+        // Trigger a size selection to fire onSelect (match how other tests do it).
+        container
+            .querySelectorAll<HTMLButtonElement>('.size-picker-option')[0]
+            .click();
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({
+                composableConfig: expect.objectContaining({ borderless: true }),
+            }),
+        );
+    });
+
+    it('omits the borderless checkbox when the generator does not support it', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'composable',
+            composableSupportsBorderless: false,
+            onSelect: vi.fn(),
+        });
+        expect(
+            container.querySelector('[data-testid="composable-borderless-toggle"]'),
+        ).toBeNull();
+    });
+});
