@@ -22,6 +22,7 @@ export interface ComposableSliderConfig {
     verticalAmplitude: number;
     verticalFrequency: number;
     tabGenerator: 'classic' | 'traced' | 'none';
+    borderless: boolean;
 }
 
 /** Fractal generator config passed through from the dialog. */
@@ -65,6 +66,8 @@ export interface NewGameDialogOptions {
     savedRotationEnabled?: boolean;
     /** Previously saved free-rotation-enabled preference (defaults to false). */
     savedFreeRotationEnabled?: boolean;
+    /** Whether the composable base cut generator supports borderless mode. */
+    composableSupportsBorderless?: boolean;
     /** Previously saved image source preference. */
     savedImageSource?: string;
     /** Previously saved image category preference. */
@@ -289,13 +292,14 @@ function buildImageSourceSection(args: {
 
 function buildComposableSlidersSection(args: {
     saved?: ComposableSliderConfig;
+    showBorderless?: boolean;
     onTabGeneratorChange?: (value: ComposableSliderConfig['tabGenerator']) => void;
 }): ComposableSection {
     const section = document.createElement('div');
     section.className = 'composable-sliders';
 
     interface SliderDef {
-        id: keyof Omit<ComposableSliderConfig, 'tabGenerator'>;
+        id: keyof Omit<ComposableSliderConfig, 'tabGenerator' | 'borderless'>;
         label: string;
         min: number;
         max: number;
@@ -361,6 +365,11 @@ function buildComposableSlidersSection(args: {
         args.onTabGeneratorChange,
     );
 
+    const borderlessCheckbox = args.showBorderless
+        ? appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false)
+        : null;
+    if (borderlessCheckbox) borderlessCheckbox.dataset.testid = 'composable-borderless-toggle';
+
     return {
         element: section,
         getValues: () => ({
@@ -369,6 +378,7 @@ function buildComposableSlidersSection(args: {
             verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
             verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
             tabGenerator: tabGeneratorRow.getValue(),
+            borderless: borderlessCheckbox?.checked ?? false,
         }),
         setVisible: (visible) => {
             section.style.display = visible ? 'block' : 'none';
@@ -519,6 +529,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     const fractalSection = buildFractalOptionsSection({ saved: options.savedFractalConfig });
     const composableSection = buildComposableSlidersSection({
         saved: options.savedComposableConfig,
+        showBorderless: options.composableSupportsBorderless ?? false,
         onTabGeneratorChange: (value) => {
             if (value === 'traced') options.onPreloadTracedTabs?.();
         },

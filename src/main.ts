@@ -108,6 +108,7 @@ import {
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
 import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
+import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 
@@ -173,6 +174,7 @@ function sliderConfigToGeneratorConfig(slider: {
     verticalAmplitude: number;
     verticalFrequency: number;
     tabGenerator: 'classic' | 'traced' | 'none';
+    borderless?: boolean;
 }): import('./puzzle/composable-generator.js').ComposableConfig {
     return {
         baseCutGenerator: 'sine',
@@ -184,6 +186,7 @@ function sliderConfigToGeneratorConfig(slider: {
         },
         tabGenerator: slider.tabGenerator,
         tabConfig: {},
+        borderless: slider.borderless,
     };
 }
 
@@ -1032,6 +1035,8 @@ createNewGameButton({
             savedFractalConfig: savedFractalConfig,
             savedRotationEnabled: savedRotationEnabled,
             savedFreeRotationEnabled: savedFreeRotationEnabled,
+            composableSupportsBorderless:
+                getBaseCutGenerator('sine').supportsBorderless ?? false,
             savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
             savedVibrant: savedVibrant,
