@@ -243,7 +243,7 @@ describe('generateTopologyPuzzle borderless', () => {
         expect(pieces.length).toBe(9);
     });
 
-    it('borderless 9x1 oversizes both axes (5x3 → strip → 9) not just one', () => {
+    it('borderless 9x1 oversizes both axes (11x3 → strip → 9) not just one', () => {
         // Guards against oversizing only one dimension: 9x1 → (11x3)=33 →
         // strip ring → 9x1 = 9. A one-axis bug would give a different count.
         const { pieces } = generateTopologyPuzzle(9, 1, FRAME, rng, {
