@@ -37,6 +37,13 @@ export function createMarqueeToolButton(
 
     // True while Shift is held — a transient hint that the Shift+drag
     // shortcut will marquee, shown even when the toggle is off.
+    //
+    // This is a purely cosmetic observation of the Shift key, deliberately
+    // independent of the authoritative gesture read (`evt.shiftKey` in
+    // setupInteraction's onBackgroundPan.start). The two can momentarily
+    // disagree — e.g. a `blur` clears this hint while a captured drag still
+    // sees `evt.shiftKey` — which is harmless: the gesture decides what
+    // actually happens, this only lights the button.
     let shiftHint = false;
 
     function updateVisuals(): void {

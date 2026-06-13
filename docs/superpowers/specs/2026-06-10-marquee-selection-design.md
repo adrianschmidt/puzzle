@@ -40,6 +40,16 @@ start, either:
 Otherwise the drag pans the viewport exactly as today. The decision is made
 once at `start` and held for the whole gesture.
 
+> **As shipped:** the gate is `selectionManager.marqueeActive || evt.shiftKey`,
+> **not** `toolActive`. A dedicated marquee toggle was added rather than
+> overloading the multi-select tool, so multi-select can be on while a
+> one-finger background drag still pans — the opposite of the "while the tool
+> is on … does not pan" trade-off described below. The marquee only takes over
+> a background drag when its own toggle is armed or Shift is held. The
+> tool-activation side effect still applies: arming the marquee (or the
+> Shift+drag shortcut) turns the multi-select tool on so the resulting
+> selection is live.
+
 When a Shift-triggered marquee starts while the tool is **off**, starting the
 marquee also **activates the tool** (`selectionManager.toolActive = true`).
 This keeps the resulting selection live — without it the highlighted groups

@@ -207,6 +207,9 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                 // `start` fires from the move that crosses the drag threshold,
                 // so `evt.shiftKey` reflects Shift state at that moment — a
                 // press-then-hold-Shift still arms the marquee, which is fine.
+                // This is the authoritative Shift read; the marquee button's
+                // cosmetic `shiftHint` observes the key separately and may
+                // briefly disagree without affecting the gesture.
                 const wantMarquee =
                     !!marquee && !!selectionManager &&
                     (selectionManager.marqueeActive || evt.shiftKey);

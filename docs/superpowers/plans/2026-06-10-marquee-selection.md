@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **As shipped:** the gesture gate is `selectionManager.marqueeActive || evt.shiftKey`, **not** `toolActive`. A dedicated marquee toggle was added rather than overloading the multi-select tool, so multi-select can be on while a one-finger background drag still pans. The code samples below that read `selectionManager.toolActive` for the gate predate that decision; arming the marquee (or Shift+drag) still turns the tool on as a side effect. See the design doc's "As shipped" note for the rationale.
+
 **Goal:** Add a marquee (drag-a-box) gesture that rubber-band-selects every piece group inside the box, gated behind the multi-select tool (or desktop Shift+drag), with an info-modal setting for intersect-vs-contained semantics.
 
 **Architecture:** A new `MarqueeController` owns the transient overlay and turns a screen-space box into an additive selection. `PointerRouter` is untouched — `setupInteraction` branches its existing `onBackgroundPan.{start,move,end,cancel}` hooks between the viewport pan and the marquee based on tool/Shift state at gesture start. Hit semantics come from a new boolean preference mirroring `offset-drag`.
