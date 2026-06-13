@@ -913,6 +913,74 @@ describe('share-link tg = "traced"', () => {
     });
 });
 
+describe('share-link: composable borderless (bl)', () => {
+    it('round-trips composable config with borderless: true', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'composable', s: 1, r: 'none',
+            cf: { bg: 'sine', bgc: { ha: 0.2, hf: 1, va: 0.3, vf: 2 }, tg: 'classic', tgc: {}, bl: true },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('shareCfToComposableConfig maps bl: true to borderless: true', () => {
+        const cf: NonNullable<SharePayload['cf']> = {
+            bg: 'sine',
+            bgc: { ha: 0.2, hf: 1, va: 0.3, vf: 2 },
+            tg: 'classic',
+            tgc: {},
+            bl: true,
+        };
+        expect(shareCfToComposableConfig(cf).borderless).toBe(true);
+    });
+
+    it('shareCfToComposableConfig omits borderless when bl is absent', () => {
+        const cf: NonNullable<SharePayload['cf']> = {
+            bg: 'sine',
+            bgc: {},
+            tg: 'classic',
+            tgc: {},
+        };
+        expect(shareCfToComposableConfig(cf).borderless).toBeUndefined();
+    });
+
+    it('gameStateToPayload encodes composableConfig.borderless as cf.bl', () => {
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {
+                baseCutGenerator: 'sine',
+                baseCutConfig: { ha: 0.2, hf: 1, va: 0.3, vf: 2 },
+                tabGenerator: 'classic',
+                tabConfig: {},
+                borderless: true,
+            },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.cf?.bl).toBe(true);
+    });
+
+    it('gameStateToPayload omits cf.bl when borderless is not set', () => {
+        const state = buildState({
+            cutStyle: 'composable',
+            composableConfig: {
+                baseCutGenerator: 'sine',
+                baseCutConfig: {},
+                tabGenerator: 'classic',
+                tabConfig: {},
+            },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.cf?.bl).toBeUndefined();
+    });
+
+    it('isValidComposableCf rejects cf.bl that is not a boolean', () => {
+        const bad = {
+            v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'composable', s: 0, r: 'none',
+            cf: { bg: 'sine', bgc: {}, tg: 'classic', tgc: {}, bl: 'yes' },
+        };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+});
+
 describe('share-link codec — wavy', () => {
     it('round-trips a wavy payload with no cf', () => {
         const payload: SharePayload = {
