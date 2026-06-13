@@ -20,6 +20,7 @@ describe('saveComposableConfigPreference / loadComposableConfigPreference', () =
         verticalAmplitude: 0.1,
         verticalFrequency: 5.0,
         tabGenerator: 'none' as const,
+        borderless: false,
     };
 
     it('returns undefined when nothing is saved', () => {
@@ -92,5 +93,27 @@ describe('saveComposableConfigPreference / loadComposableConfigPreference', () =
             }),
         );
         expect(loadComposableConfigPreference()?.tabGenerator).toBe('classic');
+    });
+});
+
+describe('composable borderless preference', () => {
+    beforeEach(() => localStorage.clear());
+
+    it('round-trips borderless: true', () => {
+        saveComposableConfigPreference({
+            horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
+            verticalAmplitude: 0.15, verticalFrequency: 1.5,
+            tabGenerator: 'classic', borderless: true,
+        });
+        expect(loadComposableConfigPreference()?.borderless).toBe(true);
+    });
+
+    it('defaults borderless to false when the saved config omits it', () => {
+        saveComposableConfigPreference({
+            horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
+            verticalAmplitude: 0.15, verticalFrequency: 1.5,
+            tabGenerator: 'classic',
+        } as never);
+        expect(loadComposableConfigPreference()?.borderless).toBe(false);
     });
 });
