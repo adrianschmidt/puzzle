@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { generateTopologyPuzzle } from './generator.js';
 import type { TopologyGeneratorConfig } from './generator.js';
+import { registerBaseCutGenerator } from './generator-registry.js';
+import type { BaseCutGenerator } from './plugin-types.js';
+import { Curve } from './curve.js';
 
 function seededRandom(seed: number): () => number {
     let s = seed;
@@ -218,5 +221,59 @@ describe('generateTopologyPuzzle', () => {
             expect(piece.shape).toBeTruthy();
             expect(piece.shape.startsWith('M')).toBe(true);
         }
+    });
+});
+
+const FRAME = { width: 400, height: 400 };
+const rng = () => 0.5;
+
+describe('generateTopologyPuzzle borderless', () => {
+    it('bordered 3x3 → 9 pieces', () => {
+        const { pieces } = generateTopologyPuzzle(3, 3, FRAME, rng, {
+            baseCutConfig: { ha: 0, hf: 0, va: 0, vf: 0 }, tabGeneratorId: 'none', minPieceArea: 0,
+        });
+        expect(pieces.length).toBe(9);
+    });
+
+    it('borderless 3x3 → still 9 pieces (oversized to 5x5, ring stripped)', () => {
+        const { pieces } = generateTopologyPuzzle(3, 3, FRAME, rng, {
+            baseCutConfig: { ha: 0, hf: 0, va: 0, vf: 0 }, tabGeneratorId: 'none', minPieceArea: 0,
+            borderless: true,
+        });
+        expect(pieces.length).toBe(9);
+    });
+
+    it('borderless 9x1 oversizes both axes (5x3 → strip → 9) not just one', () => {
+        // Guards against oversizing only one dimension: 9x1 → (11x3)=33 →
+        // strip ring → 9x1 = 9. A one-axis bug would give a different count.
+        const { pieces } = generateTopologyPuzzle(9, 1, FRAME, rng, {
+            baseCutConfig: { ha: 0, hf: 0, va: 0, vf: 0 }, tabGeneratorId: 'none', minPieceArea: 0,
+            borderless: true,
+        });
+        expect(pieces.length).toBe(9);
+    });
+
+    it('ignores borderless for a base cut generator without the capability', () => {
+        // Register a grid-less fake generator that emits a fixed 2x2 grid and
+        // does NOT advertise supportsBorderless. Borderless must be a no-op.
+        const fake: BaseCutGenerator = {
+            id: 'fake-grid-2x2-no-borderless',
+            // no supportsBorderless
+            generate: () => [
+                Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
+                Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
+                Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
+                Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
+                Curve.line({ x: 0, y: 200 }, { x: 400, y: 200 }),
+                Curve.line({ x: 200, y: 0 }, { x: 200, y: 400 }),
+            ],
+        };
+        registerBaseCutGenerator(fake);
+        const { pieces } = generateTopologyPuzzle(2, 2, FRAME, rng, {
+            baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0,
+            borderless: true,
+        });
+        // 4 pieces, ring NOT stripped (generator doesn't support borderless).
+        expect(pieces.length).toBe(4);
     });
 });

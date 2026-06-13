@@ -52,6 +52,11 @@ export interface ComposableConfig {
      */
     minPieceArea?: number;
     /**
+     * Borderless mode — see {@link TopologyGeneratorConfig.borderless}.
+     * Honoured only by base cut generators that support it (sine).
+     */
+    borderless?: boolean;
+    /**
      * Optional dev-time tab-debug session. Plumbed straight through
      * to {@link TopologyGeneratorConfig.tabDebug}; see that doc for
      * details. Production callers leave this undefined.
@@ -90,5 +95,6 @@ export function generateComposablePuzzle(
         tabConfig: config?.tabConfig,
         minPieceArea: config?.minPieceArea ?? DEFAULT_MIN_PIECE_AREA,
         tabDebug: config?.tabDebug,
+        borderless: config?.borderless,
     });
 }

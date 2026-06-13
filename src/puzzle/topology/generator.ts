@@ -24,6 +24,7 @@ import type { TabDebugSession, TabDebugReport } from './tab-debug.js';
 import { autoGroupSmallPieces } from './auto-group.js';
 import type { AutoGroup } from './auto-group.js';
 import { getBaseCutGenerator, getTabGenerator } from './generator-registry.js';
+import { stripBorderRing } from './strip-border-ring.js';
 import { diagnostics } from '../../diagnostics.js';
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,13 @@ export interface TopologyGeneratorConfig {
      * callers in tests typically leave this unset.
      */
     minPieceArea?: number;
+    /**
+     * Borderless mode. When true AND the resolved base cut generator
+     * advertises `supportsBorderless`, the base cut config is told to
+     * oversize its grid and the outer ring of pieces is stripped (see
+     * strip-border-ring.ts). Ignored when the generator doesn't support it.
+     */
+    borderless?: boolean;
     /**
      * Optional dev-time debug session. When provided, the session
      * captures every tab candidate the generator produces plus, for
@@ -123,9 +131,14 @@ export function generateTopologyPuzzle(
     // 1. Generate the cuts. The sine grid needs cols/rows; other
     //    generators that ignore them aren't harmed by their presence.
     const baseCutGenerator = getBaseCutGenerator(baseCutId);
+    // Borderless applies only when the resolved generator advertises support
+    // (it must know how to oversize its grid). Otherwise the flag is ignored.
+    const applyBorderless =
+        config?.borderless === true && baseCutGenerator.supportsBorderless === true;
     const baseCutCfg = {
         cols, rows,
         ...(config?.baseCutConfig ?? {}),
+        borderless: applyBorderless,
     };
     const curves = baseCutGenerator.generate(imageSize, random, baseCutCfg);
 
@@ -204,11 +217,18 @@ export function generateTopologyPuzzle(
     // 6. Compose final pieces. Tabs (when enabled) are already baked
     //    into the edge geometry by `applyTabs`, so disable the
     //    composition layer's own tab logic and pass no template.
-    const pieces = composePuzzle(pieceDefs, null, random, { disableTabs: true });
+    const composed = composePuzzle(pieceDefs, null, random, { disableTabs: true });
+
+    // Borderless: strip the outer ring AFTER composition. composePuzzle draws
+    // no randomness in this path (disableTabs: true), so post-strip placement
+    // can't perturb the seeded stream.
+    const { pieces, autoGroups: finalAutoGroups } = applyBorderless
+        ? stripBorderRing(composed, autoGroups)
+        : { pieces: composed, autoGroups };
 
     const tabDebugReport = config?.tabDebug?.finish(graph);
 
-    return { pieces, autoGroups, tabDebugReport };
+    return { pieces, autoGroups: finalAutoGroups, tabDebugReport };
 }
 
 // ---------------------------------------------------------------------------
