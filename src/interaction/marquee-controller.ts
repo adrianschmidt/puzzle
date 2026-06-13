@@ -46,11 +46,6 @@ export class MarqueeController {
         this.opts = opts;
     }
 
-    /** Whether a marquee gesture is currently in progress. */
-    get active(): boolean {
-        return this.overlay !== null;
-    }
-
     start(evt: PointerEvent): void {
         this.removeOverlay();
         this.startX = evt.clientX;
@@ -81,16 +76,16 @@ export class MarqueeController {
         this.removeOverlay();
 
         const contain = this.opts.isContainMode();
-        let changed = false;
+        const matched: number[] = [];
         for (const { id, rect } of this.opts.getGroupScreenRects()) {
             const hit = contain
                 ? rectContains(marquee, rect)
                 : rectsIntersect(marquee, rect);
-            if (hit && !this.opts.selectionManager.isSelected(id)) {
-                this.opts.selectionManager.select(id);
-                changed = true;
-            }
+            if (hit) matched.push(id);
         }
+        // Batch the additions so the selection's `onChange` (which re-applies
+        // visuals across every group) fires once, not once per matched group.
+        const changed = this.opts.selectionManager.selectMany(matched);
         if (changed) this.opts.onSelectionCommitted();
     }
 
@@ -125,6 +120,10 @@ export function groupScreenRect(
     worldToScreen: (p: Point) => Point,
 ): ScreenRect | null {
     const vb = getGroupVisualBounds(group, piecesById);
+    // `getGroupVisualBounds` returns its `{minX:0, minY:0, width:0, height:0}`
+    // sentinel when a group has no findable geometry. A real group always has
+    // a footprint, so a zero-by-zero box can only be that sentinel; skip it
+    // rather than project a degenerate point.
     if (vb.width === 0 && vb.height === 0) return null;
 
     const tl = worldToScreen({
