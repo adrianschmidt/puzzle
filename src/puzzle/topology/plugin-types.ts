@@ -29,6 +29,14 @@ export interface BaseCutGenerator {
     /** Stable id for share-link encoding. */
     readonly id: string;
     /**
+     * Whether this generator supports borderless mode — i.e. it knows how
+     * to oversize its grid by one piece on each side so the framework can
+     * strip the outer ring (see strip-border-ring.ts). Grid-based
+     * generators (sine) set this; generators without a grid concept (Venn)
+     * leave it falsy, and a borderless request is then ignored.
+     */
+    readonly supportsBorderless?: boolean;
+    /**
      * Generate the cuts.
      * @param frame - puzzle pixel dimensions
      * @param random - seeded PRNG (call counts must be deterministic

@@ -47,6 +47,12 @@ describe('sineCutGenerator', () => {
     });
 });
 
+describe('sineCutGenerator capability', () => {
+    it('advertises borderless support', () => {
+        expect(sineCutGenerator.supportsBorderless).toBe(true);
+    });
+});
+
 function makeSeededRandom(seed: number): () => number {
     let s = seed | 0;
     return () => {
