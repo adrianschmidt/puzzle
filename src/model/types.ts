@@ -182,6 +182,8 @@ export interface GameState {
         tabGenerator?: string;
         tabConfig?: Record<string, unknown>;
         minPieceArea?: number;
+        /** Borderless mode (strip the outer ring of pieces). */
+        borderless?: boolean;
     };
     /**
      * Fractal-cut config (only set when cutStyle === 'fractal').

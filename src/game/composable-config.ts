@@ -42,6 +42,7 @@ export interface ComposableSliderPreference {
     verticalAmplitude: number;
     verticalFrequency: number;
     tabGenerator: ComposableTabGenerator;
+    borderless: boolean;
 }
 
 function parseComposableConfig(
@@ -77,6 +78,7 @@ function parseComposableConfig(
         verticalAmplitude: Number(config.verticalAmplitude),
         verticalFrequency: Number(config.verticalFrequency),
         tabGenerator,
+        borderless: config.borderless === true,
     };
 }
 
