@@ -44,6 +44,8 @@ export interface SharePayload {
         tgc: Record<string, unknown>;
         /** Optional minPieceArea override; receiver uses this when present. */
         mpa?: number;
+        /** Borderless mode; strips the outer ring of pieces when true. */
+        bl?: boolean;
     };
     /** Fractal-cut config. */
     ff?: { bl: boolean };
@@ -199,6 +201,7 @@ function isValidComposableCf(cf: unknown): boolean {
     if (!isKnownTabId(c.tg)) return false;
     if (typeof c.tgc !== 'object' || c.tgc === null) return false;
     if (c.mpa !== undefined && typeof c.mpa !== 'number') return false;
+    if (c.bl !== undefined && typeof c.bl !== 'boolean') return false;
     return true;
 }
 
@@ -265,6 +268,7 @@ export function shareCfToComposableConfig(
         tabConfig: cf.tgc,
     };
     if (cf.mpa !== undefined) config.minPieceArea = cf.mpa;
+    if (cf.bl !== undefined) config.borderless = cf.bl;
     return config;
 }
 
@@ -326,6 +330,7 @@ export function gameStateToPayload(
         if (c.minPieceArea !== undefined) {
             cf.mpa = c.minPieceArea;
         }
+        if (c.borderless !== undefined) cf.bl = c.borderless;
         payload.cf = cf;
     }
 
