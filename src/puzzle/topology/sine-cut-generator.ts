@@ -32,6 +32,7 @@ export interface SineCutConfig {
 
 export const sineCutGenerator: BaseCutGenerator = {
     id: 'sine',
+    supportsBorderless: true,
 
     generate(frame: Size, random: () => number, config: unknown): Curve[] {
         // Fall back to sensible defaults when sub-fields are missing so that
