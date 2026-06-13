@@ -11,6 +11,7 @@
 
 export type SelectionChangeCallback = (selectedGroupIds: ReadonlySet<number>) => void;
 export type ToolActiveChangeCallback = (toolActive: boolean) => void;
+export type MarqueeActiveChangeCallback = (marqueeActive: boolean) => void;
 
 export class SelectionManager {
     private selected = new Set<number>();
@@ -22,7 +23,7 @@ export class SelectionManager {
 
     /** Whether the marquee (drag-box) gesture is currently armed. */
     private _marqueeActive = false;
-    private marqueeActiveListeners: ToolActiveChangeCallback[] = [];
+    private marqueeActiveListeners: MarqueeActiveChangeCallback[] = [];
 
     get toolActive(): boolean {
         return this._toolActive;
@@ -82,7 +83,7 @@ export class SelectionManager {
     }
 
     /** Register a listener for marquee-active changes. */
-    onMarqueeActiveChange(callback: ToolActiveChangeCallback): () => void {
+    onMarqueeActiveChange(callback: MarqueeActiveChangeCallback): () => void {
         this.marqueeActiveListeners.push(callback);
         return () => {
             const idx = this.marqueeActiveListeners.indexOf(callback);
@@ -127,6 +128,25 @@ export class SelectionManager {
             this.selected.add(groupId);
             this.notify();
         }
+    }
+
+    /**
+     * Select many groups at once, firing `onChange` a single time for the
+     * whole batch (only if at least one ID was newly added). Returns true if
+     * the selection grew. Used by the marquee, which can add many groups in
+     * one gesture — selecting them one-by-one would fan out the listener (and
+     * its all-groups visual re-apply) once per match.
+     */
+    selectMany(groupIds: Iterable<number>): boolean {
+        let changed = false;
+        for (const id of groupIds) {
+            if (!this.selected.has(id)) {
+                this.selected.add(id);
+                changed = true;
+            }
+        }
+        if (changed) this.notify();
+        return changed;
     }
 
     /** Deselect a group (no-op if not selected). */

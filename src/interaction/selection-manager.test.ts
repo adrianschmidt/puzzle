@@ -88,6 +88,69 @@ describe('SelectionManager', () => {
         });
     });
 
+    describe('selectMany', () => {
+        it('adds every new ID and fires onChange exactly once', () => {
+            const mgr = new SelectionManager();
+            const listener = vi.fn();
+            mgr.onChange(listener);
+
+            const added = mgr.selectMany([1, 2, 3]);
+
+            expect(added).toBe(true);
+            expect([...mgr.selectedGroupIds].sort()).toEqual([1, 2, 3]);
+            expect(listener).toHaveBeenCalledTimes(1);
+        });
+
+        it('is additive — keeps prior selection', () => {
+            const mgr = new SelectionManager();
+            mgr.select(9);
+            const listener = vi.fn();
+            mgr.onChange(listener);
+
+            mgr.selectMany([1, 2]);
+
+            expect([...mgr.selectedGroupIds].sort()).toEqual([1, 2, 9]);
+            expect(listener).toHaveBeenCalledTimes(1);
+        });
+
+        it('ignores already-selected IDs and still fires once for the new ones', () => {
+            const mgr = new SelectionManager();
+            mgr.select(1);
+            const listener = vi.fn();
+            mgr.onChange(listener);
+
+            const added = mgr.selectMany([1, 2]);
+
+            expect(added).toBe(true);
+            expect([...mgr.selectedGroupIds].sort()).toEqual([1, 2]);
+            expect(listener).toHaveBeenCalledTimes(1);
+        });
+
+        it('is a no-op (no listener fired, returns false) when nothing is new', () => {
+            const mgr = new SelectionManager();
+            mgr.select(1);
+            mgr.select(2);
+            const listener = vi.fn();
+            mgr.onChange(listener);
+
+            const added = mgr.selectMany([1, 2]);
+
+            expect(added).toBe(false);
+            expect(listener).not.toHaveBeenCalled();
+        });
+
+        it('is a no-op for an empty list', () => {
+            const mgr = new SelectionManager();
+            const listener = vi.fn();
+            mgr.onChange(listener);
+
+            const added = mgr.selectMany([]);
+
+            expect(added).toBe(false);
+            expect(listener).not.toHaveBeenCalled();
+        });
+    });
+
     describe('clearAll', () => {
         it('clears the selection and fires onChange when something is selected', () => {
             const mgr = new SelectionManager();
