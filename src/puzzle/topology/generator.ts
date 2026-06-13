@@ -226,6 +226,14 @@ export function generateTopologyPuzzle(
         ? stripBorderRing(composed, autoGroups)
         : { pieces: composed, autoGroups };
 
+    if (applyBorderless) {
+        diagnostics.log(
+            'borderless-strip',
+            `Stripped outer ring: ${composed.length - pieces.length} removed, ${pieces.length} survivors`,
+            { before: composed.length, removed: composed.length - pieces.length, after: pieces.length },
+        );
+    }
+
     const tabDebugReport = config?.tabDebug?.finish(graph);
 
     return { pieces, autoGroups: finalAutoGroups, tabDebugReport };

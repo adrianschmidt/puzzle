@@ -34,6 +34,14 @@ export interface BaseCutGenerator {
      * strip the outer ring (see strip-border-ring.ts). Grid-based
      * generators (sine) set this; generators without a grid concept (Venn)
      * leave it falsy, and a borderless request is then ignored.
+     *
+     * Contract: the strip pass (strip-border-ring.ts) identifies the ring
+     * to remove as "every piece with a border edge", which equals the
+     * 1-deep outer ring ONLY for a hole-free, convex rectangular grid. A
+     * generator that opts in MUST produce such a layout when oversized; one
+     * with holes or concavities would have interior border edges and would
+     * be mis-stripped. The sine grid satisfies this; that is why it is the
+     * only generator advertising support today.
      */
     readonly supportsBorderless?: boolean;
     /**

@@ -196,6 +196,7 @@ function buildFractalOptionsSection(args: {
     section.className = 'fractal-options';
 
     const borderlessCheckbox = appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false);
+    borderlessCheckbox.dataset.testid = 'fractal-borderless-toggle';
 
     return {
         element: section,

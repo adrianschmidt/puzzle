@@ -28,6 +28,15 @@ export interface SineCutConfig {
     va: number;
     /** Vertical cut frequency in waves over the puzzle height. */
     vf: number;
+    /**
+     * Borderless mode flag. NOT part of the share-link `bgc` shape — it
+     * rides on the share link as `cf.bl` and is injected into the base-cut
+     * config by the topology generator (see generator.ts). It lives here so
+     * the generator's config type records the field it actually reads; when
+     * true, the grid is oversized by one piece on each side for the strip
+     * pass. Optional/defaults to false so a plain `bgc` config is unaffected.
+     */
+    borderless?: boolean;
 }
 
 export const sineCutGenerator: BaseCutGenerator = {
@@ -39,7 +48,7 @@ export const sineCutGenerator: BaseCutGenerator = {
         // `baseCutConfig: {}` (or no config) still produces the canonical
         // sine grid rather than collapsing to flat cuts via NaN comparisons.
         // These defaults mirror the previous behavior from generator.ts.
-        const cfg = (config ?? {}) as Partial<SineCutConfig> & { borderless?: boolean };
+        const cfg = (config ?? {}) as Partial<SineCutConfig>;
         // Borderless: oversize the grid by one piece on each side (+2 cols,
         // +2 rows) across the SAME frame. The framework then strips the outer
         // ring (strip-border-ring.ts), leaving the requested cols×rows pieces
