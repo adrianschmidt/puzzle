@@ -39,9 +39,15 @@ export const sineCutGenerator: BaseCutGenerator = {
         // `baseCutConfig: {}` (or no config) still produces the canonical
         // sine grid rather than collapsing to flat cuts via NaN comparisons.
         // These defaults mirror the previous behavior from generator.ts.
-        const cfg = (config ?? {}) as Partial<SineCutConfig>;
-        const cols = cfg.cols ?? 1;
-        const rows = cfg.rows ?? 1;
+        const cfg = (config ?? {}) as Partial<SineCutConfig> & { borderless?: boolean };
+        // Borderless: oversize the grid by one piece on each side (+2 cols,
+        // +2 rows) across the SAME frame. The framework then strips the outer
+        // ring (strip-border-ring.ts), leaving the requested cols×rows pieces
+        // with a tab on every side. Only applies when borderless is true, so
+        // the bordered PRNG/cut sequence is unchanged.
+        const extra = cfg.borderless === true ? 2 : 0;
+        const cols = (cfg.cols ?? 1) + extra;
+        const rows = (cfg.rows ?? 1) + extra;
         const ha = cfg.ha ?? 0.15;
         const hf = cfg.hf ?? 1.5;
         const va = cfg.va ?? 0.15;
