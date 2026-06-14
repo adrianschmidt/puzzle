@@ -73,6 +73,7 @@ function buildReproParams(state: GameState): Record<string, unknown> {
     if (state.rotationMode) params.rotationMode = state.rotationMode;
     if (state.composableConfig) params.composableConfig = state.composableConfig;
     if (state.fractalConfig) params.fractalConfig = state.fractalConfig;
+    if (state.wavyConfig) params.wavyConfig = state.wavyConfig;
     return params;
 }
 
@@ -209,6 +210,10 @@ function buildCutStylesSection(): HTMLElement {
         ' — Smooth sinewave edges with classic jigsaw tabs — a more dramatic take on Classic. Options:',
     ]);
     const wavySub = document.createElement('ul');
+    appendInlineLi(wavySub, [
+        ['strong', 'Borderless'],
+        ' — Removes the flat frame so every piece has a wavy tab or blank on all four sides (a harder puzzle). Pick it in the New Game dialog when Wavy is selected.',
+    ]);
     appendInlineLi(wavySub, [
         ['strong', 'Free rotation'],
         ' (when rotation is also enabled) — Pieces rotate continuously to any angle instead of snapping to the four 90° orientations. Use the round drag handle below the focused piece.',

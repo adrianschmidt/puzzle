@@ -90,6 +90,26 @@ describe('createInfoModal', () => {
         expect(parsed.seed).toBe(12345);
     });
 
+    it('includes wavyConfig in the repro block for a wavy-borderless puzzle', () => {
+        createInfoModal({
+            container,
+            getState: () =>
+                makeState({
+                    cutStyle: 'wavy',
+                    fractalConfig: undefined,
+                    wavyConfig: { borderless: true },
+                }),
+        });
+
+        const repro = container.querySelector<HTMLElement>(
+            '[data-testid="repro-params"]',
+        );
+        expect(repro).not.toBeNull();
+
+        const parsed = JSON.parse(repro!.textContent ?? '{}');
+        expect(parsed.wavyConfig).toEqual({ borderless: true });
+    });
+
     it('toggles show-debug-pieces on <html> when the debug-pieces checkbox changes', () => {
         createInfoModal({ container });
 
@@ -212,6 +232,17 @@ describe('createInfoModal — Cut Styles section', () => {
         const freeRotIdx = html.indexOf('Free rotation');
         expect(wavyIdx).toBeGreaterThan(-1);
         expect(freeRotIdx).toBeGreaterThan(wavyIdx);
+    });
+
+    it('mentions Borderless in the Wavy cut-style help', () => {
+        createInfoModal({ container });
+        // Find the Wavy <li> specifically — Fractal already has a Borderless
+        // sub-bullet, so we scope to avoid a false positive from that bullet.
+        const section = cutStylesSection();
+        const lis = section.querySelectorAll<HTMLLIElement>('ul > li');
+        const wavyLi = [...lis].find((li) => li.textContent?.includes('Wavy'));
+        expect(wavyLi).toBeDefined();
+        expect(wavyLi!.textContent).toContain('Borderless');
     });
 });
 

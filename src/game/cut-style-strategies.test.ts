@@ -63,5 +63,51 @@ describe('createNewGame with cutStyle "wavy"', () => {
         expect(state.cutStyle).toBe('wavy');
         expect(state.composableConfig).toBeUndefined();
         expect(state.fractalConfig).toBeUndefined();
+        expect(state.wavyConfig).toBeUndefined();
+    });
+});
+
+describe('wavy borderless', () => {
+    const imageUrl = 'test.png';
+    const imageSize = { width: 800, height: 600 };
+    const viewport = { width: 1000, height: 800 };
+
+    it('writes wavyConfig back onto state when borderless is set', () => {
+        const state = createNewGame(imageUrl, imageSize, viewport, { cols: 4, rows: 3 }, {
+            cutStyle: 'wavy',
+            wavyConfig: { borderless: true },
+            seed: 123,
+        });
+        expect(state.wavyConfig).toEqual({ borderless: true });
+        expect(state.composableConfig).toBeUndefined();
+        expect(state.fractalConfig).toBeUndefined();
+    });
+
+    it('leaves wavyConfig undefined when none is provided', () => {
+        const state = createNewGame(imageUrl, imageSize, viewport, { cols: 4, rows: 3 }, {
+            cutStyle: 'wavy',
+            seed: 123,
+        });
+        expect(state.wavyConfig).toBeUndefined();
+    });
+
+    it('borderless wavy nets to the requested piece count (oversize + strip)', () => {
+        const bordered = createNewGame(imageUrl, imageSize, viewport, { cols: 4, rows: 3 }, {
+            cutStyle: 'wavy', seed: 123,
+        });
+        const borderless = createNewGame(imageUrl, imageSize, viewport, { cols: 4, rows: 3 }, {
+            cutStyle: 'wavy', wavyConfig: { borderless: true }, seed: 123,
+        });
+        // Wavy may auto-group sub-pixel slivers, so compare piece counts:
+        // borderless oversizes to 6x5 then strips the ring back to ~4x3.
+        expect(bordered.pieces.length).toBe(12);
+        expect(borderless.pieces.length).toBe(12);
+
+        // Borderless strips the flat frame, so the set of piece silhouettes
+        // differs from bordered for the same seed — proves oversize+strip
+        // actually ran rather than borderless being silently ignored.
+        const borderedShapes = bordered.pieces.map((p) => p.shape).sort();
+        const borderlessShapes = borderless.pieces.map((p) => p.shape).sort();
+        expect(borderlessShapes).not.toEqual(borderedShapes);
     });
 });

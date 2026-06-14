@@ -724,3 +724,52 @@ describe('createNewGameDialog — composable borderless toggle', () => {
         ).toBeNull();
     });
 });
+
+describe('createNewGameDialog — wavy borderless toggle', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        container.remove();
+    });
+
+    it('shows a Borderless toggle for wavy and feeds it into the selection', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedSizeId: '24',
+            selectedCutStyleId: 'wavy',
+            onSelect,
+        });
+
+        const toggle = container.querySelector<HTMLInputElement>('[data-testid="wavy-borderless-toggle"]');
+        expect(toggle).not.toBeNull();
+        toggle!.checked = true;
+        toggle!.dispatchEvent(new Event('change'));
+
+        // Trigger selection the same way the existing dialog tests do (size click).
+        container.querySelectorAll<HTMLElement>('.size-picker-option')[0].click();
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ wavyConfig: { borderless: true } }),
+        );
+    });
+
+    it('does not emit wavyConfig when the cut style is not wavy', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedSizeId: '24',
+            selectedCutStyleId: 'classic',
+            onSelect,
+        });
+        container.querySelectorAll<HTMLElement>('.size-picker-option')[0].click();
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ wavyConfig: undefined }),
+        );
+    });
+});
