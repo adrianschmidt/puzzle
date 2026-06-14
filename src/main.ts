@@ -595,8 +595,8 @@ function zoomToFitCompletedPuzzle(
         config,
         overrides?.imageSource ?? loadImageSourcePreference(),
         loadImageCategoryPreference(),
-        undefined,
-        undefined,
+        undefined, // fractalConfig
+        undefined, // wavyConfig
         loadVibrantPreference(),
         rotation !== 'none',
         rotation === 'free',
