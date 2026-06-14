@@ -73,6 +73,7 @@ function buildReproParams(state: GameState): Record<string, unknown> {
     if (state.rotationMode) params.rotationMode = state.rotationMode;
     if (state.composableConfig) params.composableConfig = state.composableConfig;
     if (state.fractalConfig) params.fractalConfig = state.fractalConfig;
+    if (state.wavyConfig) params.wavyConfig = state.wavyConfig;
     return params;
 }
 
