@@ -59,6 +59,7 @@ import {
     loadFreeRotationEnabledPreference,
     saveFreeRotationEnabledPreference,
     type FractalDialogConfig,
+    type WavyDialogConfig,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
 import { rotateGroup } from './game/rotate-group.js';
@@ -89,6 +90,10 @@ import {
     loadFractalConfigPreference,
     saveFractalConfigPreference,
 } from './game/fractal-config.js';
+import {
+    loadWavyConfigPreference,
+    saveWavyConfigPreference,
+} from './game/wavy-config.js';
 import {
     loadImageSourcePreference,
     saveImageSourcePreference,
@@ -591,6 +596,7 @@ function zoomToFitCompletedPuzzle(
         overrides?.imageSource ?? loadImageSourcePreference(),
         loadImageCategoryPreference(),
         undefined,
+        undefined,
         loadVibrantPreference(),
         rotation !== 'none',
         rotation === 'free',
@@ -884,6 +890,7 @@ async function startNewGame(
     imageSource?: string,
     imageCategory?: string,
     fractalConfig?: FractalDialogConfig,
+    wavyConfig?: WavyDialogConfig,
     vibrant: boolean = false,
     rotationEnabled: boolean = false,
     freeRotation: boolean = false,
@@ -970,6 +977,9 @@ async function startNewGame(
         const generatorFractalConfig = fractalConfig
             ? { borderless: fractalConfig.borderless }
             : undefined;
+        const generatorWavyConfig = wavyConfig
+            ? { borderless: wavyConfig.borderless }
+            : undefined;
 
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
@@ -978,6 +988,7 @@ async function startNewGame(
             cutStyle,
             composableConfig,
             fractalConfig: generatorFractalConfig,
+            wavyConfig: generatorWavyConfig,
             rotationMode,
             seed,
         });
@@ -1033,6 +1044,7 @@ createNewGameButton({
             selectedCutStyleId: preferredCutStyleId,
             savedComposableConfig: savedComposableConfig,
             savedFractalConfig: savedFractalConfig,
+            savedWavyConfig: loadWavyConfigPreference(),
             savedRotationEnabled: savedRotationEnabled,
             savedFreeRotationEnabled: savedFreeRotationEnabled,
             composableSupportsBorderless:
@@ -1049,7 +1061,7 @@ createNewGameButton({
                 // surfacing as an unhandled-rejection warning.
                 preloadTracedTabGenerator().catch(() => {});
             },
-            onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
+            onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
                 saveSizePreference(sizeId);
                 saveCutStylePreference(cutStyleId);
                 if (composableConfig) {
@@ -1057,6 +1069,9 @@ createNewGameButton({
                 }
                 if (fractalConfig) {
                     saveFractalConfigPreference(fractalConfig);
+                }
+                if (wavyConfig) {
+                    saveWavyConfigPreference(wavyConfig);
                 }
                 saveRotationEnabledPreference(rotationEnabled);
                 saveFreeRotationEnabledPreference(freeRotation);
@@ -1075,6 +1090,7 @@ createNewGameButton({
                     imageSource,
                     imageCategory,
                     fractalConfig,
+                    wavyConfig,
                     vibrant,
                     rotationEnabled,
                     freeRotation,
@@ -1298,6 +1314,7 @@ async function loadSharedPuzzle(
             seed: payload.s,
             rotationMode: payload.r,
             fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
+            wavyConfig: payload.wf ? { borderless: payload.wf.bl } : undefined,
             composableConfig: payload.cf
                 ? shareCfToComposableConfig(payload.cf)
                 : undefined,
@@ -1427,6 +1444,7 @@ void (async () => {
         const preferredCutStyle = loadCutStylePreference() as CutStyle;
         const preferredComposable = loadComposableConfigPreference();
         const preferredFractalConfig = loadFractalConfigPreference();
+        const preferredWavyConfig = loadWavyConfigPreference();
         const preferredRotationEnabled = loadRotationEnabledPreference();
         const preferredFreeRotationEnabled = loadFreeRotationEnabledPreference();
         await startNewGame(
@@ -1438,6 +1456,7 @@ void (async () => {
             loadImageSourcePreference(),
             loadImageCategoryPreference(),
             preferredFractalConfig,
+            preferredWavyConfig,
             loadVibrantPreference(),
             preferredRotationEnabled,
             preferredFreeRotationEnabled,
