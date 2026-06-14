@@ -981,6 +981,32 @@ describe('share-link: composable borderless (bl)', () => {
     });
 });
 
+describe('share-link: wavy borderless (wf)', () => {
+    it('round-trips a wavy borderless payload (wf)', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'wavy', s: 7, r: 'none',
+            wf: { bl: true },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('gameStateToPayload emits wf for a borderless wavy state', () => {
+        const state = makeGameState({
+            cutStyle: 'wavy',
+            seed: 7,
+            wavyConfig: { borderless: true },
+        });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.wf).toEqual({ bl: true });
+    });
+
+    it('gameStateToPayload omits wf for a non-wavy state', () => {
+        const state = makeGameState({ cutStyle: 'classic', seed: 7 });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(payload.wf).toBeUndefined();
+    });
+});
+
 describe('share-link codec — wavy', () => {
     it('round-trips a wavy payload with no cf', () => {
         const payload: SharePayload = {
