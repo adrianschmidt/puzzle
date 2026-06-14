@@ -41,6 +41,7 @@ import type { CutStyle } from './cut-styles.js';
 export interface StrategyContext {
     fractalConfig?: FractalConfig;
     composableConfig?: ComposableConfig;
+    wavyConfig?: { borderless?: boolean };
     /**
      * Optional dev-time tab-debug session. When provided, strategies
      * whose pipeline supports it (composable, wavy) thread it through
@@ -90,7 +91,7 @@ export interface CutStyleStrategy {
      * Where the generator's config should be stored on `GameState`. Omit
      * for styles that don't take a config (e.g. classic).
      */
-    configKey?: 'fractalConfig' | 'composableConfig';
+    configKey?: 'fractalConfig' | 'composableConfig' | 'wavyConfig';
 }
 
 const classicStrategy: CutStyleStrategy = {
@@ -149,6 +150,12 @@ const wavyStrategy: CutStyleStrategy = {
     scaleGrid: (grid) => grid,
     inscribePuzzleSize: (imageSize) => imageSize,
     generatePieces: (grid, puzzleSize, seed, ctx) => {
+        // avgPieceArea is intentionally computed from the requested grid.
+        // In borderless mode the generator oversizes the grid internally
+        // (extra cols/rows that get stripped), so real pieces are a bit
+        // smaller than this average. That only makes minPieceArea (= /4) a
+        // looser sub-sliver threshold, so it never causes false
+        // auto-grouping; the bordered path uses the same formula.
         const avgPieceArea =
             (puzzleSize.width * puzzleSize.height) /
             (grid.cols * grid.rows);
@@ -165,10 +172,11 @@ const wavyStrategy: CutStyleStrategy = {
             tabGenerator: 'classic',
             tabConfig: {},
             minPieceArea: avgPieceArea / 4,
+            borderless: ctx.wavyConfig?.borderless ?? false,
             tabDebug: ctx.tabDebug,
         });
     },
-    // configKey omitted — Wavy is fully reproducible from seed + gridSize.
+    configKey: 'wavyConfig',
 };
 
 const STRATEGIES: Record<CutStyle, CutStyleStrategy> = {
