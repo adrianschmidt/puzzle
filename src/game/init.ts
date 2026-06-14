@@ -52,6 +52,8 @@ export interface InitOptions {
     composableConfig?: ComposableConfig;
     /** Configuration for the fractal generator (only used when cutStyle is 'fractal'). */
     fractalConfig?: FractalConfig;
+    /** Configuration for the wavy generator (only used when cutStyle is 'wavy'). */
+    wavyConfig?: { borderless?: boolean };
     /**
      * Rotation mode for this puzzle. Defaults to `'none'`.
      *
@@ -87,6 +89,7 @@ export function createNewGame(
     const ctx = {
         fractalConfig: options.fractalConfig,
         composableConfig: options.composableConfig,
+        wavyConfig: options.wavyConfig,
         tabDebug,
     };
 
@@ -123,6 +126,7 @@ export function createNewGame(
         rotationMode,
         composableConfig: strategy.configKey === 'composableConfig' ? options.composableConfig : undefined,
         fractalConfig: strategy.configKey === 'fractalConfig' ? options.fractalConfig : undefined,
+        wavyConfig: strategy.configKey === 'wavyConfig' ? options.wavyConfig : undefined,
     };
 }
 
