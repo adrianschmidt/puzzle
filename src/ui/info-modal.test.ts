@@ -213,6 +213,17 @@ describe('createInfoModal — Cut Styles section', () => {
         expect(wavyIdx).toBeGreaterThan(-1);
         expect(freeRotIdx).toBeGreaterThan(wavyIdx);
     });
+
+    it('mentions Borderless in the Wavy cut-style help', () => {
+        createInfoModal({ container });
+        // Find the Wavy <li> specifically — Fractal already has a Borderless
+        // sub-bullet, so we scope to avoid a false positive from that bullet.
+        const section = cutStylesSection();
+        const lis = section.querySelectorAll<HTMLLIElement>('ul > li');
+        const wavyLi = [...lis].find((li) => li.textContent?.includes('Wavy'));
+        expect(wavyLi).toBeDefined();
+        expect(wavyLi!.textContent).toContain('Borderless');
+    });
 });
 
 describe('createInfoModal — How to Play section', () => {
