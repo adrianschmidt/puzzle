@@ -90,6 +90,26 @@ describe('createInfoModal', () => {
         expect(parsed.seed).toBe(12345);
     });
 
+    it('includes wavyConfig in the repro block for a wavy-borderless puzzle', () => {
+        createInfoModal({
+            container,
+            getState: () =>
+                makeState({
+                    cutStyle: 'wavy',
+                    fractalConfig: undefined,
+                    wavyConfig: { borderless: true },
+                }),
+        });
+
+        const repro = container.querySelector<HTMLElement>(
+            '[data-testid="repro-params"]',
+        );
+        expect(repro).not.toBeNull();
+
+        const parsed = JSON.parse(repro!.textContent ?? '{}');
+        expect(parsed.wavyConfig).toEqual({ borderless: true });
+    });
+
     it('toggles show-debug-pieces on <html> when the debug-pieces checkbox changes', () => {
         createInfoModal({ container });
 
