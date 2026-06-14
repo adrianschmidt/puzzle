@@ -49,6 +49,8 @@ export interface SharePayload {
     };
     /** Fractal-cut config. */
     ff?: { bl: boolean };
+    /** Wavy-cut config. */
+    wf?: { bl: boolean };
     /** Optional progress snapshot. */
     pr?: {
         m: number[][];
@@ -336,6 +338,10 @@ export function gameStateToPayload(
 
     if (cutStyle === 'fractal' && state.fractalConfig) {
         payload.ff = { bl: state.fractalConfig.borderless ?? false };
+    }
+
+    if (cutStyle === 'wavy' && state.wavyConfig) {
+        payload.wf = { bl: state.wavyConfig.borderless ?? false };
     }
 
     if (options.includeProgress) {
