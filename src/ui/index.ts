@@ -74,6 +74,7 @@ export type {
     NewGameDialogOptions,
     NewGameSelection,
     FractalDialogConfig,
+    WavyDialogConfig,
 } from './new-game-dialog.js';
 
 export {
