@@ -225,6 +225,15 @@ describe('serializeState', () => {
         const serialized = serializeState(state);
         expect(serialized.composableConfig?.borderless).toBe(true);
     });
+
+    it('round-trips wavyConfig.borderless through serializeState/deserializeState', () => {
+        const state = makeGameState({
+            cutStyle: 'wavy',
+            wavyConfig: { borderless: true },
+        });
+        const restored = deserializeState(serializeState(state));
+        expect(restored.wavyConfig).toEqual({ borderless: true });
+    });
 });
 
 describe('deserializeState', () => {
