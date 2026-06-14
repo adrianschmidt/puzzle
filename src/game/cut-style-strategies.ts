@@ -153,9 +153,10 @@ const wavyStrategy: CutStyleStrategy = {
         // avgPieceArea is intentionally computed from the requested grid.
         // In borderless mode the generator oversizes the grid internally
         // (extra cols/rows that get stripped), so real pieces are a bit
-        // smaller than this average. That only makes minPieceArea (= /4) a
-        // looser sub-sliver threshold, so it never causes false
-        // auto-grouping; the bordered path uses the same formula.
+        // smaller than this average. The fixed minPieceArea (= /4) stays
+        // well below legitimate piece area in both modes, so it only ever
+        // catches sub-pixel slivers and never causes false auto-grouping;
+        // the bordered path uses the same formula.
         const avgPieceArea =
             (puzzleSize.width * puzzleSize.height) /
             (grid.cols * grid.rows);
