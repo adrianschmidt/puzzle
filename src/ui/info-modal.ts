@@ -210,6 +210,10 @@ function buildCutStylesSection(): HTMLElement {
     ]);
     const wavySub = document.createElement('ul');
     appendInlineLi(wavySub, [
+        ['strong', 'Borderless'],
+        ' — Removes the flat frame so every piece has a wavy tab or blank on all four sides (a harder puzzle). Pick it in the New Game dialog when Wavy is selected.',
+    ]);
+    appendInlineLi(wavySub, [
         ['strong', 'Free rotation'],
         ' (when rotation is also enabled) — Pieces rotate continuously to any angle instead of snapping to the four 90° orientations. Use the round drag handle below the focused piece.',
     ]);
