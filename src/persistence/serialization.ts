@@ -84,6 +84,10 @@ export interface SerializedGameState {
      */
     fractalConfig?: GameState['fractalConfig'];
     /**
+     * Wavy-cut config (only set when cutStyle === 'wavy').
+     */
+    wavyConfig?: GameState['wavyConfig'];
+    /**
      * v7 legacy field: opaque generator config. Migrated to the typed
      * `composableConfig` / `fractalConfig` fields based on `cutStyle` on
      * deserialization. v7 saves are still produced in the wild, so keep
@@ -118,6 +122,7 @@ export interface SerializedStaticState {
     rotationMode?: 'none' | 'quarter-turn' | 'free';
     composableConfig?: GameState['composableConfig'];
     fractalConfig?: GameState['fractalConfig'];
+    wavyConfig?: GameState['wavyConfig'];
     /** Present only on legacy v7 blobs read through the static path. */
     generatorConfig?: Record<string, unknown>;
 }
@@ -194,6 +199,10 @@ export function serializeState(
         serialized.fractalConfig = state.fractalConfig;
     }
 
+    if (state.wavyConfig) {
+        serialized.wavyConfig = state.wavyConfig;
+    }
+
     return serialized;
 }
 
@@ -212,6 +221,7 @@ export function serializeStatic(state: GameState): SerializedStaticState {
     if (state.rotationMode) s.rotationMode = state.rotationMode;
     if (state.composableConfig) s.composableConfig = state.composableConfig;
     if (state.fractalConfig) s.fractalConfig = state.fractalConfig;
+    if (state.wavyConfig) s.wavyConfig = state.wavyConfig;
     return s;
 }
 
@@ -303,6 +313,10 @@ export function deserializeState(data: SerializedGameState): GameState {
         state.fractalConfig = fractalConfig;
     }
 
+    if (data.wavyConfig) {
+        state.wavyConfig = data.wavyConfig;
+    }
+
     return state;
 }
 
@@ -362,6 +376,7 @@ export function recombine(
     if (composableConfig) state.composableConfig = composableConfig;
     const fractalConfig = resolveFractalConfig(staticData);
     if (fractalConfig) state.fractalConfig = fractalConfig;
+    if (staticData.wavyConfig) state.wavyConfig = staticData.wavyConfig;
     return state;
 }
 
