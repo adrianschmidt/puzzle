@@ -30,6 +30,11 @@ export interface FractalDialogConfig {
     borderless: boolean;
 }
 
+/** Wavy generator config passed through from the dialog. */
+export interface WavyDialogConfig {
+    borderless: boolean;
+}
+
 /** Everything the player chose in the new-game dialog. */
 export interface NewGameSelection {
     sizeId: string;
@@ -38,6 +43,8 @@ export interface NewGameSelection {
     composableConfig?: ComposableSliderConfig;
     /** Present only when the chosen cut style is fractal. */
     fractalConfig?: FractalDialogConfig;
+    /** Present only when the chosen cut style is wavy. */
+    wavyConfig?: WavyDialogConfig;
     /** Whether the player ticked the top-level "Enable rotation" checkbox. */
     rotationEnabled: boolean;
     /**
@@ -62,6 +69,8 @@ export interface NewGameDialogOptions {
     savedComposableConfig?: ComposableSliderConfig;
     /** Previously saved fractal config (used to pre-populate controls). */
     savedFractalConfig?: FractalDialogConfig;
+    /** Previously saved wavy config (used to pre-populate the borderless toggle). */
+    savedWavyConfig?: WavyDialogConfig;
     /** Previously saved rotation-enabled preference (defaults to false). */
     savedRotationEnabled?: boolean;
     /** Previously saved free-rotation-enabled preference (defaults to false). */
@@ -111,6 +120,12 @@ interface SizeSection {
 interface FractalSection {
     element: HTMLElement;
     getValues(): FractalDialogConfig;
+    setVisible(visible: boolean): void;
+}
+
+interface WavySection {
+    element: HTMLElement;
+    getValues(): WavyDialogConfig;
     setVisible(visible: boolean): void;
 }
 
@@ -197,6 +212,26 @@ function buildFractalOptionsSection(args: {
 
     const borderlessCheckbox = appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false);
     borderlessCheckbox.dataset.testid = 'fractal-borderless-toggle';
+
+    return {
+        element: section,
+        getValues: () => ({
+            borderless: borderlessCheckbox.checked,
+        }),
+        setVisible: (visible) => {
+            section.style.display = visible ? 'block' : 'none';
+        },
+    };
+}
+
+function buildWavyOptionsSection(args: {
+    saved?: WavyDialogConfig;
+}): WavySection {
+    const section = document.createElement('div');
+    section.className = 'wavy-options';
+
+    const borderlessCheckbox = appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false);
+    borderlessCheckbox.dataset.testid = 'wavy-borderless-toggle';
 
     return {
         element: section,
@@ -528,6 +563,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     dialog.appendChild(sizeSubtitle);
 
     const fractalSection = buildFractalOptionsSection({ saved: options.savedFractalConfig });
+    const wavySection = buildWavyOptionsSection({ saved: options.savedWavyConfig });
     const composableSection = buildComposableSlidersSection({
         saved: options.savedComposableConfig,
         showBorderless: options.composableSupportsBorderless ?? false,
@@ -585,6 +621,9 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
                 fractalConfig: currentCutStyleId === 'fractal'
                     ? fractalSection.getValues()
                     : undefined,
+                wavyConfig: currentCutStyleId === 'wavy'
+                    ? wavySection.getValues()
+                    : undefined,
                 rotationEnabled: rotationCheckbox.checked,
                 freeRotation:
                     rotationCheckbox.checked &&
@@ -602,6 +641,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             currentCutStyleId = id;
             sizeSection.updateLabels();
             fractalSection.setVisible(id === 'fractal');
+            wavySection.setVisible(id === 'wavy');
             composableSection.setVisible(id === 'composable');
             updateFreeRotationVisibility();
             if (id === 'composable' && composableSection.getSelectedTabGenerator() === 'traced') {
@@ -611,6 +651,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     });
 
     fractalSection.setVisible(currentCutStyleId === 'fractal');
+    wavySection.setVisible(currentCutStyleId === 'wavy');
     composableSection.setVisible(currentCutStyleId === 'composable');
 
     // Cover the "open with Composable + traced already saved" path so the
@@ -623,6 +664,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     dialog.appendChild(rotationRow);
     dialog.appendChild(freeRotationRow);
     dialog.appendChild(fractalSection.element);
+    dialog.appendChild(wavySection.element);
     dialog.appendChild(imageSourceSection.element);
     dialog.appendChild(sizeSection.element);
     dialog.appendChild(composableSection.element);
