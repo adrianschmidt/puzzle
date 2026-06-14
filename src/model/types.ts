@@ -194,4 +194,13 @@ export interface GameState {
     fractalConfig?: {
         borderless?: boolean;
     };
+    /**
+     * Wavy-cut config (only set when cutStyle === 'wavy').
+     *
+     * Needed to reproduce the puzzle from its seed and surfaced in the
+     * Debug panel. Mirrors {@link GameState.fractalConfig}.
+     */
+    wavyConfig?: {
+        borderless?: boolean;
+    };
 }
