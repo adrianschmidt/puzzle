@@ -102,5 +102,12 @@ describe('wavy borderless', () => {
         // borderless oversizes to 6x5 then strips the ring back to ~4x3.
         expect(bordered.pieces.length).toBe(12);
         expect(borderless.pieces.length).toBe(12);
+
+        // Borderless strips the flat frame, so the set of piece silhouettes
+        // differs from bordered for the same seed — proves oversize+strip
+        // actually ran rather than borderless being silently ignored.
+        const borderedShapes = bordered.pieces.map((p) => p.shape).sort();
+        const borderlessShapes = borderless.pieces.map((p) => p.shape).sort();
+        expect(borderlessShapes).not.toEqual(borderedShapes);
     });
 });
