@@ -150,6 +150,12 @@ const wavyStrategy: CutStyleStrategy = {
     scaleGrid: (grid) => grid,
     inscribePuzzleSize: (imageSize) => imageSize,
     generatePieces: (grid, puzzleSize, seed, ctx) => {
+        // avgPieceArea is intentionally computed from the requested grid.
+        // In borderless mode the generator oversizes the grid internally
+        // (extra cols/rows that get stripped), so real pieces are a bit
+        // smaller than this average. That only makes minPieceArea (= /4) a
+        // looser sub-sliver threshold, so it never causes false
+        // auto-grouping; the bordered path uses the same formula.
         const avgPieceArea =
             (puzzleSize.width * puzzleSize.height) /
             (grid.cols * grid.rows);
