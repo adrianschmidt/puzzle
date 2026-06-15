@@ -27,6 +27,10 @@ Writes:
 - `src/puzzle/composable/traces/tab-12-blue-cat.json`
 - `src/puzzle/composable/traces/tab-12-blue-cat-review.png`
 
+If the trace fails with `could not find anchors on both image edges`, the
+photo's background likely thresholded into stray foreground blobs — add
+`--clean-noise` to keep only the largest silhouette component before Potrace.
+
 ## Photo conventions
 
 - Cropped so the neck endpoints fall on the left and right image edges.
