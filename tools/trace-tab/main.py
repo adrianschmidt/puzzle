@@ -46,7 +46,8 @@ import matplotlib.pyplot as plt
 # Output: SVG with cubic Beziers.
 # ---------------------------------------------------------------------------
 
-def run_potrace(png_path, svg_out, work_dir, alphamax=1.0, opttolerance=0.2):
+def run_potrace(png_path, svg_out, work_dir, alphamax=1.0, opttolerance=0.2,
+                clean_noise=False):
     bmp_path = Path(work_dir) / (png_path.stem + ".bmp")
     img = cv2.imread(str(png_path), cv2.IMREAD_GRAYSCALE)
     # Despeckle: median blur kills salt-and-pepper, morphological open/close
@@ -63,6 +64,12 @@ def run_potrace(png_path, svg_out, work_dir, alphamax=1.0, opttolerance=0.2):
     polarity = _detect_polarity(img_bin)
     if polarity == "white_on_black":
         img_bin = cv2.bitwise_not(img_bin)
+    # Optionally drop background-noise blobs that Otsu mistakenly thresholded
+    # as foreground, keeping only the largest silhouette component. Off by
+    # default so existing photos re-trace bit-identically; turn on when a
+    # noisy mask makes the trace fail (see #370 and the README).
+    if clean_noise:
+        img_bin = _keep_largest_silhouette(img_bin)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     img_bin = cv2.morphologyEx(img_bin, cv2.MORPH_OPEN, kernel)
     img_bin = cv2.morphologyEx(img_bin, cv2.MORPH_CLOSE, kernel)
@@ -94,6 +101,43 @@ def _detect_polarity(img):
     ])
     border_mean = float(border.mean())
     return "black_on_white" if border_mean > 127 else "white_on_black"
+
+
+def _keep_largest_silhouette(img_bin):
+    """
+    Drop background-noise components: keep only the largest foreground
+    (silhouette) connected component, blanking everything else.
+
+    `img_bin` is potrace-oriented — the silhouette is dark (0) on a white
+    (255) background — so the silhouette is the *inverted* mask's
+    foreground. Returns a mask in the same orientation. If there is no
+    foreground at all, the input is returned unchanged.
+
+    Otsu occasionally thresholds stray bright/dark patches in the photo
+    background as extra foreground blobs; Potrace then traces them too,
+    which can derail `find_edge_anchors`. See issue #370.
+
+    Caveat: this keeps the single largest component by area, assuming the
+    silhouette is that component. If the silhouette were ever split into
+    two large blobs (e.g. by a glare strip), the smaller real fragment
+    would be discarded along with the noise.
+    """
+    fg = cv2.bitwise_not(img_bin)  # silhouette -> 255 so it's the CC foreground
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(fg, connectivity=8)
+    if n <= 1:
+        print("clean-noise: no foreground found")
+        return img_bin  # no foreground component to keep
+    # Report what the opted-in cleanup saw (n - 1 excludes the background
+    # label). Only reached behind --clean-noise, so this is silent by default.
+    # Distinguish "dropped real noise" from "nothing to drop" so a single
+    # foreground component doesn't read like filtering happened.
+    print(f"clean-noise: kept 1 of {n - 1} foreground components, "
+          f"dropped {n - 2}")
+    # Label 0 is the background; pick the largest of the real components.
+    biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+    # Kept silhouette -> dark (0), everything else -> white (255), in one
+    # pass (no separate mask + bitwise_not allocation).
+    return np.where(labels == biggest, 0, 255).astype(np.uint8)
 
 
 # ---------------------------------------------------------------------------
@@ -753,7 +797,8 @@ def _denormalize_segs(normalized_segs, neck_left, neck_right):
 
 def trace_photo(photo_path: Path,
                 alphamax: float = 0.5,
-                refit_tol_chord_frac: float = 0.01) -> TraceResult:
+                refit_tol_chord_frac: float = 0.01,
+                clean_noise: bool = False) -> TraceResult:
     """
     Trace a single cropped tab photo into the normalized neck-frame
     cubic-Bezier representation plus landmark metadata.
@@ -772,7 +817,8 @@ def trace_photo(photo_path: Path,
     with tempfile.TemporaryDirectory(prefix="trace-tab-") as tmp:
         work_dir = Path(tmp)
         svg_out = work_dir / (photo_path.stem + ".trace.svg")
-        run_potrace(photo_path, svg_out, work_dir, alphamax=alphamax)
+        run_potrace(photo_path, svg_out, work_dir, alphamax=alphamax,
+                    clean_noise=clean_noise)
         subpaths = parse_potrace_svg(svg_out)
     if not subpaths:
         raise RuntimeError("no contours from potrace")
@@ -934,6 +980,11 @@ def main() -> int:
                         help="Potrace alphamax (corner threshold).")
     parser.add_argument("--refit-tol", type=float, default=0.01,
                         help="Schneider refit tolerance as fraction of chord length.")
+    parser.add_argument("--clean-noise", action="store_true",
+                        help="Keep only the largest foreground component after "
+                             "Otsu, dropping background-noise blobs before "
+                             "Potrace. Try this if the trace fails with "
+                             "'could not find anchors on both image edges'.")
     args = parser.parse_args()
 
     out_dir = Path(args.out)
@@ -943,6 +994,7 @@ def main() -> int:
         photo_path=Path(args.photo),
         alphamax=args.alphamax,
         refit_tol_chord_frac=args.refit_tol,
+        clean_noise=args.clean_noise,
     )
 
     today = datetime.date.today().isoformat()
