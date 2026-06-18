@@ -75,6 +75,54 @@ describe('share-link codec — grid-size clamp (crafted-link DoS guard)', () => 
     });
 });
 
+describe('share-link codec — image-size clamp (crafted-link DoS guard)', () => {
+    it('clamps an absurd crafted image size to the max dimension', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [1e9, 1e9], g: [4, 3],
+            c: 'classic', s: 1, r: 'none',
+        };
+        expect(decodePayload(encodePayload(payload))?.is).toEqual([8192, 8192]);
+    });
+
+    it('floors fractional dims and raises non-positive dims to >= 1', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [1080.9, 0], g: [4, 3],
+            c: 'classic', s: 1, r: 'none',
+        };
+        expect(decodePayload(encodePayload(payload))?.is).toEqual([1080, 1]);
+    });
+
+    it('raises a negative dim to >= 1', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [-500, 400], g: [4, 3],
+            c: 'classic', s: 1, r: 'none',
+        };
+        expect(decodePayload(encodePayload(payload))?.is).toEqual([1, 400]);
+    });
+
+    it('leaves a legitimate within-bounds image size untouched', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [1080, 720], g: [4, 3],
+            c: 'classic', s: 1, r: 'none',
+        };
+        expect(decodePayload(encodePayload(payload))?.is).toEqual([1080, 720]);
+    });
+
+    it('rejects a payload whose image dim is non-finite', () => {
+        // A non-finite number can't survive the share link's JSON round-trip:
+        // JSON.stringify(Infinity/NaN) emits `null`, which `isTuple2Number`
+        // rejects, so `decodePayload` returns null before the clamp runs. This
+        // pins that contract — the canvas never sees a non-finite `is`, and the
+        // clamp's own `!Number.isFinite` guard is defense-in-depth for callers
+        // that bypass the codec, not a reachable share-link path.
+        const bad = {
+            v: 1, i: 'blank', is: [Infinity, 100], g: [4, 3],
+            c: 'classic', s: 1, r: 'none',
+        };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+});
+
 describe('share-link codec — optional fields', () => {
     it('round-trips attribution', () => {
         const payload: SharePayload = {

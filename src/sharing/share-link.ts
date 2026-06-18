@@ -95,10 +95,25 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
  */
 const MAX_GRID_DIM = 64;
 
+/**
+ * Upper bound on a decoded image dimension (pixels). The app delivers
+ * images at 1080px wide (height scaled by aspect ratio), so this cap
+ * sits several times above any real image while bounding the canvas
+ * allocation a crafted `is:[1e9, 1e9]` link would otherwise attempt — a
+ * multi-gigapixel buffer that hangs the tab. 8192 is also a common
+ * browser canvas-dimension ceiling, so legitimate sizes stay well under.
+ */
+const MAX_IMAGE_DIM = 8192;
+
+/** Clamp a decoded dimension to a positive integer within `[1, max]`. */
+function clampDim(n: number, max: number): number {
+    if (!Number.isFinite(n)) return 1;
+    return Math.max(1, Math.min(max, Math.floor(n)));
+}
+
 /** Clamp a decoded grid dimension to a positive integer within bounds. */
 function clampGridDim(n: number): number {
-    if (!Number.isFinite(n)) return 1;
-    return Math.max(1, Math.min(MAX_GRID_DIM, Math.floor(n)));
+    return clampDim(n, MAX_GRID_DIM);
 }
 
 export function decodePayload(encoded: string): SharePayload | null {
@@ -110,6 +125,14 @@ export function decodePayload(encoded: string): SharePayload | null {
         // Bound the grid before it reaches the generators (O(E²) crossing
         // check). Normal grids (<= MAX_GRID_DIM) pass through unchanged.
         translated.g = [clampGridDim(translated.g[0]), clampGridDim(translated.g[1])];
+        // Bound the image size before it reaches the canvas allocation in
+        // main.ts (`canvas.width/height`). Legitimate sizes (<= MAX_IMAGE_DIM)
+        // pass through unchanged; a crafted `is:[1e9, 1e9]` is capped. Note that
+        // a *fractional* `is` is not necessarily adversarial: fractal/wavy links
+        // inscribe the image to the grid aspect (cut-style-strategies.ts), so a
+        // dimension like 607.5 is a normal product of that path. The floor here
+        // only snaps it sub-pixel, which is cosmetically irrelevant downstream.
+        translated.is = [clampDim(translated.is[0], MAX_IMAGE_DIM), clampDim(translated.is[1], MAX_IMAGE_DIM)];
         return translated;
     } catch {
         return null;
