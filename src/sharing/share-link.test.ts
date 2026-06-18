@@ -123,6 +123,134 @@ describe('share-link codec — image-size clamp (crafted-link DoS guard)', () =>
     });
 });
 
+describe('share-link codec — sine-frequency/amplitude clamp (crafted-link DoS guard)', () => {
+    it('clamps absurd crafted hf/vf to the max frequency', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 1, r: 'none',
+            cf: {
+                bg: 'sine',
+                bgc: { ha: 0.2, hf: 1e9, va: 0.2, vf: 1e9 },
+                tg: 'classic',
+                tgc: {},
+            },
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.cf?.bgc.hf).toBe(100);
+        expect(decoded?.cf?.bgc.vf).toBe(100);
+        // In-range amplitudes pass through untouched.
+        expect(decoded?.cf?.bgc.ha).toBe(0.2);
+        expect(decoded?.cf?.bgc.va).toBe(0.2);
+    });
+
+    it('clamps absurd crafted ha/va to the max amplitude', () => {
+        // A huge amplitude inflates each sine segment's bbox enough to defeat
+        // the Curve.intersect bbox pre-filter, re-inflating the O(segments²)
+        // intersection cost the frequency cap otherwise contains.
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 1, r: 'none',
+            cf: {
+                bg: 'sine',
+                bgc: { ha: 1e9, hf: 8, va: 1e9, vf: 6 },
+                tg: 'classic',
+                tgc: {},
+            },
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.cf?.bgc.ha).toBe(0.5);
+        expect(decoded?.cf?.bgc.va).toBe(0.5);
+        // In-range frequencies pass through untouched.
+        expect(decoded?.cf?.bgc.hf).toBe(8);
+        expect(decoded?.cf?.bgc.vf).toBe(6);
+    });
+
+    it('leaves the wavy cut style’s ha/va = 0.5 (the UI ceiling) untouched', () => {
+        // The wavy cut style (cut-style-strategies.ts) uses ha = va = 0.5, the
+        // exact UI cap, so the clamp must pass it through unchanged.
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 1, r: 'none',
+            cf: {
+                bg: 'sine',
+                bgc: { ha: 0.5, hf: 2, va: 0.5, vf: 1.5 },
+                tg: 'classic',
+                tgc: {},
+            },
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.cf?.bgc.ha).toBe(0.5);
+        expect(decoded?.cf?.bgc.va).toBe(0.5);
+    });
+
+    it('leaves within-bounds hf/vf untouched', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 1, r: 'none',
+            cf: {
+                bg: 'sine',
+                bgc: { ha: 0.2, hf: 8, va: 0.2, vf: 6 },
+                tg: 'classic',
+                tgc: {},
+            },
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.cf?.bgc.hf).toBe(8);
+        expect(decoded?.cf?.bgc.vf).toBe(6);
+    });
+
+    it('clamps a legacy share link whose huge hf/vf translate onto the sine generator', () => {
+        // Legacy { ha, hf, va, vf } payloads are rewritten to bg: 'sine' on
+        // decode, so the clamp (which runs after translation) must cover them.
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 1, r: 'none',
+            cf: { ha: 0.2, hf: 1e9, va: 0.2, vf: 1e9, dt: false },
+        }));
+        expect(decoded?.cf?.bg).toBe('sine');
+        expect(decoded?.cf?.bgc.hf).toBe(100);
+        expect(decoded?.cf?.bgc.vf).toBe(100);
+    });
+
+    it('leaves a non-sine base-cut generator config untouched', () => {
+        // Only the sine generator reads hf/vf as a frequency; other generators
+        // own their opaque bgc, so the clamp must not reach into it.
+        const payload: SharePayload = {
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 1, r: 'none',
+            cf: {
+                bg: 'venn',
+                bgc: { sets: 2, separation: 1e9 },
+                tg: 'none',
+                tgc: {},
+            },
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.cf?.bgc).toEqual({ sets: 2, separation: 1e9 });
+    });
+
+    it('does not raise a non-finite crafted hf/ha into a huge number', () => {
+        // JSON.stringify turns Infinity/NaN into null, so a crafted non-finite
+        // hf/ha decodes to null (typeof !== 'number'); the clamp skips it and the
+        // generator falls back to its own default. The DoS-relevant property is
+        // simply that no billion-scale value survives.
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [600, 400], g: [4, 3],
+            c: 'composable', s: 1, r: 'none',
+            cf: {
+                bg: 'sine',
+                bgc: { ha: Infinity, hf: Infinity, va: 0.2, vf: 6 },
+                tg: 'classic',
+                tgc: {},
+            },
+        }));
+        expect(decoded?.cf?.bgc.hf).toBeNull();
+        expect(decoded?.cf?.bgc.ha).toBeNull();
+        expect(decoded?.cf?.bgc.vf).toBe(6);
+        expect(decoded?.cf?.bgc.va).toBe(0.2);
+    });
+});
+
 describe('share-link codec — optional fields', () => {
     it('round-trips attribution', () => {
         const payload: SharePayload = {
