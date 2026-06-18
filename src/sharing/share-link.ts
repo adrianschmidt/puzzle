@@ -105,6 +105,41 @@ const MAX_GRID_DIM = 64;
  */
 const MAX_IMAGE_DIM = 8192;
 
+/**
+ * Upper bound on a decoded sine base-cut frequency (`hf`/`vf`). The
+ * new-game dialog caps frequency at 10, so this sits an order of
+ * magnitude above any UI-reachable value (mirroring how
+ * {@link MAX_GRID_DIM} keeps headroom over the UI grid cap) and alters no
+ * real or dev-console puzzle.
+ *
+ * It bounds `generateSineCurve`'s segment allocation against a crafted
+ * `cf.bgc.hf = 1e9` link. Per-curve segments grow linearly with
+ * frequency (sine-cut-generator.ts: `ceil(frequency * segmentsPerWave)`,
+ * `segmentsPerWave = 4`), and those segments feed an O(segments²)
+ * curve-intersection path, so the worst case is quadratic in this cap.
+ * If `segmentsPerWave` ever grows, re-evaluate the bound.
+ */
+const MAX_SINE_FREQUENCY = 100;
+
+/**
+ * Upper bound on a decoded sine base-cut amplitude (`ha`/`va`). The
+ * new-game dialog caps amplitude at 0.5 (and the wavy cut style uses
+ * exactly 0.5), so this clamps to the documented UI ceiling and alters no
+ * real puzzle.
+ *
+ * Amplitude doesn't change the segment *count*, but it scales each
+ * segment's perpendicular displacement, and thus its bounding box. The
+ * O(segments²) intersection path (curve.ts: `Curve.intersect`) prunes
+ * non-overlapping segment pairs via a bbox pre-filter (`bboxOverlap`); a
+ * crafted huge amplitude inflates every segment's bbox enough to defeat
+ * that pruning, re-inflating the intersection cost that the frequency cap
+ * otherwise contains. Clamping amplitude to its legitimate range closes
+ * that residual vector. Negative/zero amplitudes are safe (the generator
+ * gates on `> 0` and falls back to a flat line), so only the upper bound
+ * needs enforcing.
+ */
+const MAX_SINE_AMPLITUDE = 0.5;
+
 /** Clamp a decoded dimension to a positive integer within `[1, max]`. */
 function clampDim(n: number, max: number): number {
     if (!Number.isFinite(n)) return 1;
@@ -114,6 +149,27 @@ function clampDim(n: number, max: number): number {
 /** Clamp a decoded grid dimension to a positive integer within bounds. */
 function clampGridDim(n: number): number {
     return clampDim(n, MAX_GRID_DIM);
+}
+
+/**
+ * Cap the sine base-cut frequencies (`hf`/`vf`) and amplitudes (`ha`/`va`)
+ * on a decoded composable `bgc` to {@link MAX_SINE_FREQUENCY} /
+ * {@link MAX_SINE_AMPLITUDE}. Only the `sine` generator reads these as
+ * segment-driving / bbox-inflating knobs, so the clamp is gated on
+ * `bg === 'sine'` and leaves every other generator's opaque config
+ * untouched. A non-numeric value (e.g. a non-finite field that the JSON
+ * round-trip turned into `null`) is skipped; the generator then falls back
+ * to its own default. Mutates `bgc` in place.
+ */
+function clampSineConfig(cf: NonNullable<SharePayload['cf']>): void {
+    if (cf.bg !== 'sine') return;
+    const caps = { hf: MAX_SINE_FREQUENCY, vf: MAX_SINE_FREQUENCY, ha: MAX_SINE_AMPLITUDE, va: MAX_SINE_AMPLITUDE } as const;
+    for (const key of ['hf', 'vf', 'ha', 'va'] as const) {
+        const v = cf.bgc[key];
+        if (typeof v === 'number') {
+            cf.bgc[key] = Math.min(caps[key], v);
+        }
+    }
 }
 
 export function decodePayload(encoded: string): SharePayload | null {
@@ -133,6 +189,13 @@ export function decodePayload(encoded: string): SharePayload | null {
         // dimension like 607.5 is a normal product of that path. The floor here
         // only snaps it sub-pixel, which is cosmetically irrelevant downstream.
         translated.is = [clampDim(translated.is[0], MAX_IMAGE_DIM), clampDim(translated.is[1], MAX_IMAGE_DIM)];
+        // Bound the sine base-cut frequency and amplitude before they reach
+        // generateSineCurve; see MAX_SINE_FREQUENCY / MAX_SINE_AMPLITUDE for the
+        // DoS rationale. Legacy payloads were already rewritten to bg: 'sine'
+        // above, so this covers them too.
+        if (translated.c === 'composable' && translated.cf) {
+            clampSineConfig(translated.cf);
+        }
         return translated;
     } catch {
         return null;
