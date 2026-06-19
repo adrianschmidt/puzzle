@@ -616,6 +616,16 @@ function applyViewportTransform(): void {
     renderer.setViewportTransform(state.scale, state.offset.x, state.offset.y);
 }
 
+/**
+ * React to a viewport (zoom/pan) change: re-apply the transform to the
+ * renderer and persist the new view via the debounced auto-save, so the
+ * player's zoom level and pan offset survive a reload (#420).
+ */
+function onViewportChanged(): void {
+    applyViewportTransform();
+    autoSave();
+}
+
 // Surface a save failure (quota exceeded even after compression). Every failure
 // emits telemetry so the regression is observable; the user-facing toast is
 // rate-limited so a fast debounced save loop can't spam it — and a suppressed
@@ -638,7 +648,11 @@ function notifySaveFailed(op: 'progress' | 'new-puzzle'): void {
  * into the compression regime (near-quota — one growth step from total failure).
  */
 function persistNewPuzzle(): void {
-    const result = saveNewPuzzle(gameState, selectionManager.selectedGroupIds);
+    const result = saveNewPuzzle(
+        gameState,
+        selectionManager.selectedGroupIds,
+        viewportTransform.getState(),
+    );
     if (result === 'failed') {
         notifySaveFailed('new-puzzle');
     } else if (result === 'ok-compressed') {
@@ -703,7 +717,7 @@ function getFocusedGroupScreenBounds(
  * current multi-select selection so it survives a reload.
  */
 function autoSave(): void {
-    debouncedSave.save(gameState, selectionManager.selectedGroupIds);
+    debouncedSave.save(gameState, selectionManager.selectedGroupIds, viewportTransform.getState());
 }
 
 /**
@@ -835,7 +849,7 @@ function initGame(state: GameState): void {
                 reorderGroupsAfterDrop(droppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
             }
         },
-        onViewportChanged: applyViewportTransform,
+        onViewportChanged,
         screenDeltaToWorld: (delta) => viewportTransform.screenDeltaToWorld(delta),
         panViewport: (screenDelta) => {
             viewportTransform.pan(screenDelta);
@@ -1418,6 +1432,12 @@ void (async () => {
         if (saved.status === 'ok') {
             initGame(saved.state);
             restorePersistedSelection(saved.selection);
+            if (saved.viewport) {
+                // Restore the zoom/pan the player last had (#420). Absent on
+                // pre-feature saves — those keep the default view, as before.
+                viewportTransform.setState(saved.viewport);
+                applyViewportTransform();
+            }
             return;
         }
         if (saved.status === 'unreadable') {
