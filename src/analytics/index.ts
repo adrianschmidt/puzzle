@@ -9,4 +9,8 @@ export type {
     TracedChunkLoadedData,
     TracedChunkLoadFailedData,
     UnhandledErrorData,
+    PwaUpdateDetectedData,
+    PwaUpdateAppliedData,
+    PwaUpdateFallbackReloadData,
+    PwaUpdateApplyFailedData,
 } from './umami.js';

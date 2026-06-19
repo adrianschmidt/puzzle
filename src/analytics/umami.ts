@@ -206,6 +206,53 @@ export interface SaveRecoveryData {
 }
 
 /**
+ * Data attached to `pwa-update-detected` — a freshly-built service worker is
+ * waiting and the persistent "update ready" indicator was shown. This is the
+ * funnel denominator: every applied/fallback/failed event below should trace
+ * back to one of these. The gap between detected and applied is the
+ * stuck-indicator field signal.
+ */
+export type PwaUpdateDetectedData = Record<string, never>;
+
+/**
+ * Data attached to `pwa-update-applied` — a deferred service-worker update was
+ * applied (the page committed to reloading into the new version).
+ *
+ * `trigger` records what caused the apply, so an operator can see the split
+ * between the two safe-moment paths: `focus-regain` (auto-applied when the app
+ * became visible again with an update pending) and `manual` (the user tapped
+ * the persistent indicator). This is the numerator against
+ * `pwa-update-detected` — the gap between the two is the stuck-indicator
+ * signal (detected but never applied).
+ *
+ * The pwa update-controller derives its `UpdateApplyTrigger` union from this
+ * payload, so the set of triggers has a single source of truth here.
+ */
+export interface PwaUpdateAppliedData {
+    trigger: 'focus-regain' | 'manual';
+}
+
+/**
+ * Data attached to `pwa-update-fallback-reload` — the service-worker-driven
+ * reload did not navigate the page away in time, so the fallback hard reload
+ * fired (the #404 shared-origin case, where the new worker was already
+ * activated by another tab so skip-waiting is a no-op and no `controlling`
+ * event arrives). Tells an operator whether this fallback path is actually
+ * load-bearing in the field.
+ */
+export type PwaUpdateFallbackReloadData = Record<string, never>;
+
+/**
+ * Data attached to `pwa-update-apply-failed` — `updateSW(true)` rejected while
+ * trying to activate the waiting worker. The scheduled fallback reload still
+ * covers recovery; this event makes a consistently-failing apply path visible
+ * instead of silent. `reason` is the sanitized rejection message.
+ */
+export interface PwaUpdateApplyFailedData {
+    reason: string;
+}
+
+/**
  * Inject the Umami tracking script if a website ID is configured.
  *
  * Call exactly once, early in app startup, before any rendering.
@@ -248,6 +295,10 @@ export function track(name: 'save-compressed', data: SaveCompressedData): void;
 export function track(name: 'save-unreadable', data: SaveUnreadableData): void;
 export function track(name: 'save-recovery', data: SaveRecoveryData): void;
 export function track(name: 'progress-save-skipped', data: ProgressSaveSkippedData): void;
+export function track(name: 'pwa-update-detected', data: PwaUpdateDetectedData): void;
+export function track(name: 'pwa-update-applied', data: PwaUpdateAppliedData): void;
+export function track(name: 'pwa-update-fallback-reload', data: PwaUpdateFallbackReloadData): void;
+export function track(name: 'pwa-update-apply-failed', data: PwaUpdateApplyFailedData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);
