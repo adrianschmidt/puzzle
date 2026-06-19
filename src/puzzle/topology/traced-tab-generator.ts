@@ -17,6 +17,7 @@
 import type { Curve } from './curve.js';
 import { createTracedTabTemplate } from '../composable/tab-shapes-traced.js';
 import { getTracedTemplates } from '../composable/traces/index.js';
+import { normalizeTraceSetVersion } from '../composable/traces/trace-set-version.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
 import { scaleBezierPath } from '../composable/bezier-path.js';
 import type { BezierPath } from '../composable/bezier-path.js';
@@ -54,7 +55,7 @@ function templateForVersion(version: number): TabTemplate {
  */
 function readTraceSetVersion(config: unknown): number {
     const v = (config as { traceSetVersion?: unknown } | null | undefined)?.traceSetVersion;
-    return typeof v === 'number' && Number.isFinite(v) && v >= 1 ? Math.floor(v) : 1;
+    return normalizeTraceSetVersion(v) ?? 1;
 }
 
 /**
