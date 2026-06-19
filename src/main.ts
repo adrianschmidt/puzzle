@@ -116,6 +116,7 @@ import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.j
 import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
+import { initPwaUpdates } from './pwa/register.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -670,6 +671,12 @@ window.addEventListener('pagehide', () => debouncedSave.flush());
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') debouncedSave.flush();
 });
+
+// Keep the installed PWA current: detect new versions while open and on
+// reopen, and apply them at a safe moment (focus regain or a manual tap).
+// `debouncedSave.flush` runs first so progress within the debounce window
+// survives the reload.
+initPwaUpdates(() => debouncedSave.flush());
 
 /**
  * Project the visual bounds of the given group from world space into
