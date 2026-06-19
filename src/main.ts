@@ -112,6 +112,7 @@ import {
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
 import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
+import { CURRENT_TRACE_SET_VERSION } from './puzzle/composable/traces/trace-set-version.js';
 import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
@@ -927,7 +928,7 @@ async function startNewGame(
         // resolves instantly. The await is the safety net for paths that
         // didn't go through the dialog (e.g. the __newComposableGame
         // console hook).
-        if (composableConfig?.tabGenerator === 'traced') {
+        if (composableConfig?.tabGenerator === 'traced' || cutStyle === 'wavy') {
             await preloadTracedTabGenerator();
         }
 
@@ -997,8 +998,15 @@ async function startNewGame(
         const generatorFractalConfig = fractalConfig
             ? { borderless: fractalConfig.borderless }
             : undefined;
-        const generatorWavyConfig = wavyConfig
-            ? { borderless: wavyConfig.borderless }
+        // Every new Wavy game uses traced tabs at the current trace-set
+        // version. Older saves/links carry their own (or no) version and are
+        // reproduced verbatim elsewhere; this path only ever creates fresh
+        // puzzles, so stamping the current version is always correct.
+        const generatorWavyConfig = cutStyle === 'wavy'
+            ? {
+                borderless: wavyConfig?.borderless ?? false,
+                traceSetVersion: CURRENT_TRACE_SET_VERSION,
+            }
             : undefined;
 
         // Let the overlay paint before the synchronous piece-generation burst.
@@ -1031,6 +1039,9 @@ async function startNewGame(
             pieceCount: state.pieces.length,
             imageSource: classifyImageSource(state.imageUrl),
         };
+        if (generatorWavyConfig) {
+            data.traceSetVersion = generatorWavyConfig.traceSetVersion;
+        }
         if (data.imageSource === 'unsplash') {
             data.imageCategory = imageCategory ?? 'any';
             data.vibrant = vibrant;
@@ -1294,7 +1305,8 @@ async function loadSharedPuzzle(
         // A share link with `cf.tg: "traced"` needs the lazy chunk before
         // generation runs. The await is short on warm caches and fits
         // inside the loading overlay the user already sees.
-        if (payload.cf?.tg === 'traced') {
+        if (payload.cf?.tg === 'traced'
+            || (payload.c === 'wavy' && payload.wf?.tv !== undefined)) {
             await preloadTracedTabGenerator();
         }
 
@@ -1325,7 +1337,9 @@ async function loadSharedPuzzle(
             seed: payload.s,
             rotationMode: payload.r,
             fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
-            wavyConfig: payload.wf ? { borderless: payload.wf.bl } : undefined,
+            wavyConfig: payload.wf
+                ? { borderless: payload.wf.bl, traceSetVersion: payload.wf.tv }
+                : undefined,
             composableConfig: payload.cf
                 ? shareCfToComposableConfig(payload.cf)
                 : undefined,
@@ -1362,6 +1376,11 @@ async function loadSharedPuzzle(
             includesProgress: payload.pr !== undefined,
             recipientHadSavedState,
         };
+        // Present only for a traced-tab Wavy link; a legacy (classic-tab) Wavy
+        // link carries no wf.tv, matching the fresh path's stamping condition.
+        if (payload.wf?.tv !== undefined) {
+            data.traceSetVersion = payload.wf.tv;
+        }
         currentGameAnalytics = data;
         track('new-game-started', currentGameAnalytics);
     } finally {
