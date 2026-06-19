@@ -235,6 +235,24 @@ describe('serializeState', () => {
         const restored = deserializeState(serializeState(state));
         expect(restored.wavyConfig).toEqual({ borderless: true });
     });
+
+    it('round-trips wavyConfig.traceSetVersion through serializeState/deserializeState', () => {
+        const state = makeGameState({
+            cutStyle: 'wavy',
+            wavyConfig: { borderless: false, traceSetVersion: 1 },
+        });
+        const restored = deserializeState(serializeState(state));
+        expect(restored.wavyConfig).toEqual({ borderless: false, traceSetVersion: 1 });
+    });
+
+    it('round-trips wavyConfig.traceSetVersion through serializeStatic/recombine', () => {
+        const state = makeGameState({
+            cutStyle: 'wavy',
+            wavyConfig: { borderless: false, traceSetVersion: 1 },
+        });
+        const restored = recombine(serializeStatic(state), serializeProgress(state));
+        expect(restored.wavyConfig).toEqual({ borderless: false, traceSetVersion: 1 });
+    });
 });
 
 describe('deserializeState', () => {
