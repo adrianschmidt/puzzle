@@ -77,3 +77,28 @@ describe('tracedTabGenerator.generateVariants', () => {
         }
     });
 });
+
+describe('tracedTabGenerator trace-set version', () => {
+    it('version 1 reproduces the same tab as an un-versioned config', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const a = tracedTabGenerator.generate(edge, createSeededRandom(55), {});
+        const b = tracedTabGenerator.generate(edge, createSeededRandom(55), { traceSetVersion: 1 });
+        expect(a).not.toBeNull();
+        expect(b!.segments).toEqual(a!.segments);
+    });
+
+    it('an unknown version falls back to v1 output', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const v1 = tracedTabGenerator.generate(edge, createSeededRandom(77), { traceSetVersion: 1 });
+        const future = tracedTabGenerator.generate(edge, createSeededRandom(77), { traceSetVersion: 999 });
+        expect(future!.segments).toEqual(v1!.segments);
+    });
+
+    it('still consumes exactly 3 outer PRNG calls with a version set', () => {
+        let calls = 0;
+        const counting = (): number => { calls++; return 0.5; };
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        tracedTabGenerator.generate(edge, counting, { traceSetVersion: 1 });
+        expect(calls).toBe(3);
+    });
+});
