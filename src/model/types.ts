@@ -202,5 +202,12 @@ export interface GameState {
      */
     wavyConfig?: {
         borderless?: boolean;
+        /**
+         * Trace-set version for the hand-traced tab shapes. Present on puzzles
+         * generated with traced tabs (every new Wavy game); absent on legacy
+         * Wavy puzzles, which reproduce with classic tabs. See
+         * project_share_link_prng_contract.
+         */
+        traceSetVersion?: number;
     };
 }

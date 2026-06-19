@@ -53,7 +53,7 @@ export interface InitOptions {
     /** Configuration for the fractal generator (only used when cutStyle is 'fractal'). */
     fractalConfig?: FractalConfig;
     /** Configuration for the wavy generator (only used when cutStyle is 'wavy'). */
-    wavyConfig?: { borderless?: boolean };
+    wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
     /**
      * Rotation mode for this puzzle. Defaults to `'none'`.
      *

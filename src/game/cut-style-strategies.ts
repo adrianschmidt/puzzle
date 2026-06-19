@@ -41,7 +41,7 @@ import type { CutStyle } from './cut-styles.js';
 export interface StrategyContext {
     fractalConfig?: FractalConfig;
     composableConfig?: ComposableConfig;
-    wavyConfig?: { borderless?: boolean };
+    wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
     /**
      * Optional dev-time tab-debug session. When provided, strategies
      * whose pipeline supports it (composable, wavy) thread it through
@@ -160,6 +160,8 @@ const wavyStrategy: CutStyleStrategy = {
         const avgPieceArea =
             (puzzleSize.width * puzzleSize.height) /
             (grid.cols * grid.rows);
+        const traceSetVersion = ctx.wavyConfig?.traceSetVersion;
+        const traced = traceSetVersion !== undefined;
         return generateComposablePuzzle(grid.cols, grid.rows, puzzleSize, seed, {
             baseCutGenerator: 'sine',
             baseCutConfig: {
@@ -170,8 +172,8 @@ const wavyStrategy: CutStyleStrategy = {
                 va: 0.5,
                 vf: grid.rows / 2,
             },
-            tabGenerator: 'classic',
-            tabConfig: {},
+            tabGenerator: traced ? 'traced' : 'classic',
+            tabConfig: traced ? { traceSetVersion } : {},
             minPieceArea: avgPieceArea / 4,
             borderless: ctx.wavyConfig?.borderless ?? false,
             tabDebug: ctx.tabDebug,
