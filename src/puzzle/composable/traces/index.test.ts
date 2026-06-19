@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { TRACED_TEMPLATES, assertTracedTemplate } from './index.js';
+import { describe, it, expect, vi } from 'vitest';
+import { TRACED_TEMPLATES, assertTracedTemplate, getTracedTemplates } from './index.js';
+import { CURRENT_TRACE_SET_VERSION } from './trace-set-version.js';
+import { diagnostics } from '../../../diagnostics.js';
 
 describe('traced template library', () => {
     it('contains at least one trace', () => {
@@ -89,5 +91,40 @@ describe('assertTracedTemplate', () => {
         const { neck: _neck, ...rest } = ok.landmarks as unknown as Record<string, unknown>;
         const bad = { ...ok, landmarks: rest };
         expect(() => assertTracedTemplate(bad, 'x')).toThrow(/neck/);
+    });
+});
+
+describe('trace-set versioning', () => {
+    it('CURRENT_TRACE_SET_VERSION is a positive integer', () => {
+        expect(Number.isInteger(CURRENT_TRACE_SET_VERSION)).toBe(true);
+        expect(CURRENT_TRACE_SET_VERSION).toBeGreaterThanOrEqual(1);
+    });
+
+    it('version 1 resolves to the original ordered library', () => {
+        expect(getTracedTemplates(1)).toEqual(TRACED_TEMPLATES);
+    });
+
+    it('falls back to v1 for an unknown version', () => {
+        expect(getTracedTemplates(999)).toEqual(TRACED_TEMPLATES);
+    });
+
+    it('warns on the unknown-version fallback (breadcrumb for a regressed clamp)', () => {
+        const warn = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
+        try {
+            getTracedTemplates(999);
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('999'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('does not warn for a known version', () => {
+        const warn = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
+        try {
+            getTracedTemplates(1);
+            expect(warn).not.toHaveBeenCalled();
+        } finally {
+            warn.mockRestore();
+        }
     });
 });
