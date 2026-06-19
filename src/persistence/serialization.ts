@@ -18,6 +18,7 @@ import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { getImageDimensions } from '../model/derive.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
+import type { ViewportState } from '../interaction/viewport-transform.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
 export const STATE_VERSION = 11;
@@ -135,7 +136,38 @@ export interface SerializedProgress {
     groups: SerializedPieceGroup[];
     selection?: number[];
     completed: boolean;
+    /**
+     * The player's last viewport (zoom + pan). Like {@link SerializedGameState.selection},
+     * this is deliberately additive and optional — it is NOT gated behind a
+     * STATE_VERSION bump. The state it represents lives outside GameState (in
+     * ViewportTransform). Older builds ignore the unknown key; newer builds
+     * restore it when present. Omitted when the caller passes no viewport.
+     */
+    viewport?: SerializedViewport;
 }
+
+/** JSON-safe viewport (zoom + pan) snapshot. */
+export interface SerializedViewport {
+    scale: number;
+    offset: Point;
+}
+
+/**
+ * Pin {@link SerializedViewport} to the runtime {@link ViewportState} it
+ * mirrors. The save/restore wiring (main.ts) assigns one to the other purely
+ * by structural compatibility — there is no explicit conversion. These
+ * `declare` signatures make that contract load-bearing: if a field is ever
+ * added to one interface but not the other, the assignment would silently drop
+ * the field at save or restore time, but this fails to compile first. They emit
+ * no runtime code.
+ *
+ * The reference to {@link ViewportState} is a type-only import, so persistence
+ * keeps no runtime dependency on the interaction layer.
+ */
+declare function __assertViewportContract(
+    toDisk: ViewportState extends SerializedViewport ? true : never,
+    fromDisk: SerializedViewport extends ViewportState ? true : never,
+): void;
 
 /**
  * Convert a GameState to a JSON-safe object in the full single-blob (v≤10)
@@ -225,10 +257,11 @@ export function serializeStatic(state: GameState): SerializedStaticState {
     return s;
 }
 
-/** Serialize only the mutable progress (groups, selection, completed). */
+/** Serialize only the mutable progress (groups, selection, completed, viewport). */
 export function serializeProgress(
     state: GameState,
     selection?: Iterable<number>,
+    viewport?: SerializedViewport,
 ): SerializedProgress {
     const p: SerializedProgress = {
         version: STATE_VERSION,
@@ -240,6 +273,7 @@ export function serializeProgress(
         const ids = [...selection];
         if (ids.length > 0) p.selection = ids;
     }
+    if (viewport !== undefined) p.viewport = viewport;
     return p;
 }
 
@@ -551,6 +585,32 @@ export function readSelection(data: SerializedGameState | SerializedProgress): n
     return data.selection.filter(
         (id): id is number => typeof id === 'number' && Number.isFinite(id),
     );
+}
+
+/**
+ * Extract a sanitized viewport from a serialized progress blob.
+ *
+ * Tolerates missing/garbage data (older saves, hand-edited storage): a missing
+ * field, a non-object viewport, a non-finite `scale`, or an `offset` without
+ * finite `x`/`y` all yield `undefined`. Never throws.
+ */
+export function readViewport(data: SerializedProgress): SerializedViewport | undefined {
+    const vp = data.viewport as unknown;
+    if (typeof vp !== 'object' || vp === null) {
+        return undefined;
+    }
+    const { scale, offset } = vp as { scale?: unknown; offset?: unknown };
+    if (typeof scale !== 'number' || !Number.isFinite(scale)) {
+        return undefined;
+    }
+    if (typeof offset !== 'object' || offset === null) {
+        return undefined;
+    }
+    const { x, y } = offset as { x?: unknown; y?: unknown };
+    if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {
+        return undefined;
+    }
+    return { scale, offset: { x, y } };
 }
 
 function serializeGroup(group: PieceGroup): SerializedPieceGroup {
