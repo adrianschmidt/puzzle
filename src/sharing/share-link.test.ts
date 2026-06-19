@@ -11,6 +11,7 @@ import {
 } from './share-link.js';
 import type { GameState } from '../model/types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
+import { CURRENT_TRACE_SET_VERSION } from '../puzzle/composable/traces/trace-set-version.js';
 import { composePuzzle } from '../puzzle/composable/compose.js';
 import { generateTopologyPuzzle } from '../puzzle/topology/generator.js';
 import { classicTabTemplate } from '../puzzle/composable/tab-shapes.js';
@@ -1216,5 +1217,59 @@ describe('share-link codec — wavy', () => {
         const payload = gameStateToPayload(state, { includeProgress: false });
         expect(payload.cf).toBeUndefined();
         expect(payload.c).toBe('wavy');
+    });
+});
+
+describe('share-link wavy traceSetVersion (wf.tv)', () => {
+    function wavyState(traceSetVersion?: number): GameState {
+        return buildState({
+            cutStyle: 'wavy',
+            wavyConfig: traceSetVersion === undefined
+                ? { borderless: false }
+                : { borderless: false, traceSetVersion },
+        });
+    }
+
+    it('encodes wf.tv when the wavy config carries a trace-set version', () => {
+        const payload = gameStateToPayload(wavyState(1), { includeProgress: false });
+        expect(payload.wf).toEqual({ bl: false, tv: 1 });
+    });
+
+    it('omits wf.tv for a legacy wavy puzzle (classic tabs)', () => {
+        const payload = gameStateToPayload(wavyState(undefined), { includeProgress: false });
+        expect(payload.wf).toEqual({ bl: false });
+        expect(payload.wf!.tv).toBeUndefined();
+    });
+
+    it('round-trips wf.tv through encode/decode', () => {
+        const payload = gameStateToPayload(wavyState(1), { includeProgress: false });
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded!.wf).toEqual({ bl: false, tv: 1 });
+    });
+
+    it('leaves a legacy wavy link (no tv) without a version', () => {
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'wavy', s: 1, r: 'none',
+            wf: { bl: false },
+        }));
+        expect(decoded!.wf!.tv).toBeUndefined();
+    });
+
+    it('clamps a future tv down to the newest known version', () => {
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'wavy', s: 1, r: 'none',
+            wf: { bl: false, tv: 999 },
+        }));
+        expect(decoded!.wf!.tv).toBe(CURRENT_TRACE_SET_VERSION);
+    });
+
+    it('drops a non-positive or non-number tv (reproduces as classic)', () => {
+        for (const bad of [0, -3, 'x', null] as unknown[]) {
+            const decoded = decodePayload(encodeRaw({
+                v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'wavy', s: 1, r: 'none',
+                wf: { bl: false, tv: bad },
+            }));
+            expect(decoded!.wf!.tv).toBeUndefined();
+        }
     });
 });
