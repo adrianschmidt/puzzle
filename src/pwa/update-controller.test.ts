@@ -1,9 +1,25 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Intercept the analytics `track` call made inside update-controller. A plain
+// vi.spyOn would not catch a call made through the module's own import binding
+// under Vite, so mock the module and keep the rest of its real exports.
+// `vi.hoisted` is needed because the `vi.mock` factory is hoisted above the
+// normal top-level statements.
+const { track } = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('../analytics/index.js', async (importActual) => {
+    const actual = await importActual<typeof import('../analytics/index.js')>();
+    return { ...actual, track };
+});
+
 import {
     createUpdateController,
     setupUpdateChecks,
     type UpdateController,
 } from './update-controller.js';
+
+beforeEach(() => {
+    track.mockClear();
+});
 
 describe('createUpdateController', () => {
     it('is not pending before any refresh is needed', () => {
@@ -42,6 +58,35 @@ describe('createUpdateController', () => {
         expect(flush).not.toHaveBeenCalled();
     });
 
+    it('applies a reload requested before updateSW is set, once it is set', () => {
+        const flush = vi.fn();
+        const updateSW = vi.fn().mockResolvedValue(undefined);
+        const controller = createUpdateController({ flush, showIndicator: vi.fn() });
+        // Tap arrives before registerSW has resolved the handle.
+        controller.reloadNow();
+        expect(flush).not.toHaveBeenCalled();
+        // Handle becomes available — the buffered reload fires.
+        controller.setUpdateSW(updateSW);
+        expect(flush).toHaveBeenCalledOnce();
+        expect(updateSW).toHaveBeenCalledWith(true);
+    });
+
+    it('does not re-fire a buffered reload on a later setUpdateSW call', () => {
+        const updateSW = vi.fn().mockResolvedValue(undefined);
+        const controller = createUpdateController({ flush: vi.fn(), showIndicator: vi.fn() });
+        controller.reloadNow();
+        controller.setUpdateSW(updateSW);
+        controller.setUpdateSW(updateSW);
+        expect(updateSW).toHaveBeenCalledOnce();
+    });
+
+    it('setUpdateSW does not reload when no reload was requested', () => {
+        const updateSW = vi.fn().mockResolvedValue(undefined);
+        const controller = createUpdateController({ flush: vi.fn(), showIndicator: vi.fn() });
+        controller.setUpdateSW(updateSW);
+        expect(updateSW).not.toHaveBeenCalled();
+    });
+
     it('requestReloadIfPending reloads only when pending', () => {
         const updateSW = vi.fn().mockResolvedValue(undefined);
         const controller = createUpdateController({ flush: vi.fn(), showIndicator: vi.fn() });
@@ -68,6 +113,119 @@ describe('createUpdateController', () => {
         controller.onNeedRefresh();
         captured!();
         expect(updateSW).toHaveBeenCalledWith(true);
+    });
+
+    it('reloadNow schedules a fallback reload via the injected scheduler', () => {
+        const flush = vi.fn();
+        const reload = vi.fn();
+        const scheduleFallback = vi.fn();
+        const controller = createUpdateController({
+            flush,
+            showIndicator: vi.fn(),
+            reload,
+            scheduleFallback,
+        });
+        controller.setUpdateSW(vi.fn().mockResolvedValue(undefined));
+        controller.reloadNow();
+        expect(scheduleFallback).toHaveBeenCalledOnce();
+        expect(scheduleFallback).toHaveBeenCalledWith(expect.any(Function), 3000);
+        // Invoke the captured handler to confirm it calls reload.
+        const handler = scheduleFallback.mock.calls[0][0] as () => void;
+        handler();
+        expect(reload).toHaveBeenCalledOnce();
+    });
+
+    it('reloadNow is idempotent (second call is a no-op)', () => {
+        const flush = vi.fn();
+        const updateSW = vi.fn().mockResolvedValue(undefined);
+        const reload = vi.fn();
+        const scheduleFallback = vi.fn();
+        const controller = createUpdateController({
+            flush,
+            showIndicator: vi.fn(),
+            reload,
+            scheduleFallback,
+        });
+        controller.setUpdateSW(updateSW);
+        controller.reloadNow();
+        controller.reloadNow();
+        expect(flush).toHaveBeenCalledOnce();
+        expect(updateSW).toHaveBeenCalledOnce();
+        expect(scheduleFallback).toHaveBeenCalledOnce();
+    });
+
+    it('requestReloadIfPending after a reload has started does nothing more', () => {
+        const flush = vi.fn();
+        const updateSW = vi.fn().mockResolvedValue(undefined);
+        const reload = vi.fn();
+        const scheduleFallback = vi.fn();
+        const controller = createUpdateController({
+            flush,
+            showIndicator: vi.fn(),
+            reload,
+            scheduleFallback,
+        });
+        controller.setUpdateSW(updateSW);
+        controller.onNeedRefresh();
+        controller.reloadNow();
+        controller.requestReloadIfPending();
+        expect(updateSW).toHaveBeenCalledOnce();
+    });
+});
+
+describe('createUpdateController analytics', () => {
+    it('tracks pwa-update-detected when a refresh is needed', () => {
+        const controller = createUpdateController({ flush: vi.fn(), showIndicator: vi.fn() });
+        controller.onNeedRefresh();
+        expect(track).toHaveBeenCalledWith('pwa-update-detected', {});
+    });
+
+    it('tracks pwa-update-applied with the manual trigger on a tap', () => {
+        const controller = createUpdateController({ flush: vi.fn(), showIndicator: vi.fn() });
+        controller.setUpdateSW(vi.fn().mockResolvedValue(undefined));
+        controller.reloadNow();
+        expect(track).toHaveBeenCalledWith('pwa-update-applied', { trigger: 'manual' });
+    });
+
+    it('tracks pwa-update-applied with the focus-regain trigger', () => {
+        const controller = createUpdateController({ flush: vi.fn(), showIndicator: vi.fn() });
+        controller.setUpdateSW(vi.fn().mockResolvedValue(undefined));
+        controller.onNeedRefresh();
+        controller.requestReloadIfPending();
+        expect(track).toHaveBeenCalledWith('pwa-update-applied', { trigger: 'focus-regain' });
+    });
+
+    it('tracks pwa-update-fallback-reload when the fallback timer fires', () => {
+        const reload = vi.fn();
+        const scheduleFallback = vi.fn();
+        const controller = createUpdateController({
+            flush: vi.fn(),
+            showIndicator: vi.fn(),
+            reload,
+            scheduleFallback,
+        });
+        controller.setUpdateSW(vi.fn().mockResolvedValue(undefined));
+        controller.reloadNow();
+        // Fallback hasn't fired yet.
+        expect(track).not.toHaveBeenCalledWith('pwa-update-fallback-reload', {});
+        // Fire the scheduled handler.
+        (scheduleFallback.mock.calls[0][0] as () => void)();
+        expect(track).toHaveBeenCalledWith('pwa-update-fallback-reload', {});
+        expect(reload).toHaveBeenCalledOnce();
+    });
+
+    it('tracks pwa-update-apply-failed when updateSW(true) rejects', async () => {
+        const controller = createUpdateController({
+            flush: vi.fn(),
+            showIndicator: vi.fn(),
+            scheduleFallback: vi.fn(),
+        });
+        controller.setUpdateSW(vi.fn().mockRejectedValue(new Error('boom')));
+        controller.reloadNow();
+        // Let the rejection microtask settle.
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(track).toHaveBeenCalledWith('pwa-update-apply-failed', { reason: 'boom' });
     });
 });
 
@@ -98,6 +256,27 @@ describe('setupUpdateChecks', () => {
         expect(registration.update).not.toHaveBeenCalled();
         intervalFn!();
         expect(registration.update).toHaveBeenCalledOnce();
+    });
+
+    it('the interval poll checks for updates but never requests a reload', () => {
+        const registration = { update: vi.fn() };
+        const controller = fakeController();
+        let intervalFn: (() => void) | null = null;
+        setupUpdateChecks(registration, controller, {
+            pollIntervalMs: 1000,
+            setInterval: (fn) => {
+                intervalFn = fn;
+                return 0;
+            },
+            addVisibilityListener: () => {},
+            isVisible: () => true,
+        });
+        intervalFn!();
+        // Only the visibility path may apply a pending update; the interval
+        // poll must merely detect, so an update mid-puzzle is never applied
+        // until a safe moment (focus regain or a manual tap).
+        expect(controller.requestReloadIfPending).not.toHaveBeenCalled();
+        expect(controller.reloadNow).not.toHaveBeenCalled();
     });
 
     it('on visible: checks for an update and requests reload-if-pending', () => {
