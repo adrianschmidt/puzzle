@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tracedTabTemplate } from './tab-shapes-traced.js';
+import { tracedTabTemplate, createTracedTabTemplate } from './tab-shapes-traced.js';
 import { TRACED_TEMPLATES } from './traces/index.js';
 import { createSeededRandom } from '../seeded-random.js';
 
@@ -57,5 +57,24 @@ describe('tracedTabTemplate', () => {
         // x range — i.e. start.x < end.x with non-zero width.
         const path = tracedTabTemplate.generate(createSeededRandom(7));
         expect(path[path.length - 1].x).toBeGreaterThan(path[0].x);
+    });
+});
+
+describe('createTracedTabTemplate', () => {
+    it('advances the outer PRNG by exactly one call', () => {
+        let calls = 0;
+        const counting = (): number => { calls++; return 0.5; };
+        createTracedTabTemplate(TRACED_TEMPLATES).generate(counting);
+        expect(calls).toBe(1);
+    });
+
+    it('selects only from the provided template list', () => {
+        // Single-element lists force idx 0, so the only difference between
+        // the two outputs is the source template geometry.
+        const onlyFirst = createTracedTabTemplate([TRACED_TEMPLATES[0]]);
+        const onlySecond = createTracedTabTemplate([TRACED_TEMPLATES[1]]);
+        const a = onlyFirst.generate(createSeededRandom(123));
+        const b = onlySecond.generate(createSeededRandom(123));
+        expect(a).not.toEqual(b);
     });
 });
