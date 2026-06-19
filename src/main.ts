@@ -1135,6 +1135,9 @@ createCenterViewButton({
     onCenterView: () => {
         viewportTransform.reset();
         applyViewportTransform();
+        // Persist the reset view so a reload reopens centered, matching the
+        // Gather button and the "reopens to the same view you left" promise (#420).
+        autoSave();
     },
 });
 
