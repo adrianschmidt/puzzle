@@ -943,7 +943,7 @@ describe('viewport persistence', () => {
             serializeProgress(makeGameState(), [], { scale: NaN, offset: { x: 0, y: 0 } }),
         );
         const parsed = JSON.parse(onDisk) as ReturnType<typeof serializeProgress>;
-        // Sanity: NaN serialized to null inside the offset-less scale field.
+        // Sanity: NaN serialized to null in the stored scale field.
         expect(readViewport(parsed)).toBeUndefined();
     });
 
