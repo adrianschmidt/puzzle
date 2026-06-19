@@ -24,7 +24,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { GameState, PieceGroup } from '../model/types.js';
 import * as compression from './compression.js';
 import { COMPRESSED_MARKER } from './compression.js';
-import { STATE_VERSION, serializeProgress } from './serialization.js';
+import { STATE_VERSION, serializeProgress, type SerializedViewport } from './serialization.js';
 import {
     saveGeometry,
     saveProgress,
@@ -45,6 +45,12 @@ import {
 function loadedSelection(): number[] {
     const outcome = loadSavedGame();
     return outcome.status === 'ok' ? outcome.selection : [];
+}
+
+/** The persisted viewport, or undefined when none is saved. */
+function loadedViewport(): SerializedViewport | undefined {
+    const outcome = loadSavedGame();
+    return outcome.status === 'ok' ? outcome.viewport : undefined;
 }
 
 /** Assert the save loaded successfully and return its `ok` payload. */
@@ -821,5 +827,71 @@ describe('createDebouncedSave', () => {
         vi.advanceTimersByTime(500);
 
         expect(onSaveSkipped).not.toHaveBeenCalled();
+    });
+});
+
+describe('viewport persistence through storage', () => {
+    beforeEach(() => localStorage.clear());
+
+    const VP = { scale: 2, offset: { x: 10, y: 20 } };
+
+    it('saveNewPuzzle round-trips a viewport through loadSavedGame', () => {
+        saveNewPuzzle(makeGameState({ seed: 5 }), [], VP);
+        expect(loadedViewport()).toEqual(VP);
+    });
+
+    it('returns undefined when no viewport was saved', () => {
+        saveNewPuzzle(makeGameState({ seed: 5 }), []);
+        expect(loadedViewport()).toBeUndefined();
+    });
+
+    it('saveProgress persists the viewport on top of existing geometry', () => {
+        const state = makeGameState({ seed: 5 });
+        saveNewPuzzle(state, []);
+        saveProgress(state, [], VP);
+        expect(loadedViewport()).toEqual(VP);
+    });
+
+    it('createDebouncedSave forwards the viewport captured at save time', () => {
+        vi.useFakeTimers();
+        try {
+            const state = makeGameState({ seed: 5 });
+            saveGeometry(state);
+            const { save } = createDebouncedSave();
+            save(state, [], VP);
+            vi.advanceTimersByTime(500);
+            expect(loadedViewport()).toEqual(VP);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('still loads (default view) but warns when a present viewport is malformed', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const state = makeGameState({ seed: 5 });
+        saveGeometry(state);
+        // A viewport field is present but corrupt (non-finite scale). The save
+        // must still load — falling back to the default view — but the silent
+        // zoom loss should leave a diagnostics trail, unlike the absent-viewport
+        // pre-feature case.
+        const progress = serializeProgress(state, [], {
+            scale: Number.NaN,
+            offset: { x: 0, y: 0 },
+        });
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+
+        const outcome = loadSavedGame();
+        expect(outcome.status).toBe('ok');
+        expect(loadedViewport()).toBeUndefined();
+        expect(warnSpy).toHaveBeenCalled();
+        warnSpy.mockRestore();
+    });
+
+    it('does not warn when no viewport is present (pre-feature save)', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 5 }), []);
+        expect(loadedViewport()).toBeUndefined();
+        expect(warnSpy).not.toHaveBeenCalled();
+        warnSpy.mockRestore();
     });
 });

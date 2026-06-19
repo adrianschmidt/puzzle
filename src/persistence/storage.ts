@@ -17,9 +17,11 @@ import {
     deserializeState,
     recombine,
     readSelection,
+    readViewport,
     type SerializedStaticState,
     type SerializedProgress,
     type SerializedGameState,
+    type SerializedViewport,
 } from './serialization.js';
 import { compressForStorage, decompressFromStorage } from './compression.js';
 
@@ -76,7 +78,7 @@ export type UnreadableReason = 'parse-error' | 'seed-mismatch' | 'torn-write';
  *                  are overwritten, rather than silently destroying the data.
  */
 export type LoadOutcome =
-    | { status: 'ok'; state: GameState; selection: number[] }
+    | { status: 'ok'; state: GameState; selection: number[]; viewport?: SerializedViewport }
     | { status: 'empty' }
     | { status: 'unreadable'; reason: UnreadableReason; raw: CorruptSaveData };
 
@@ -156,7 +158,11 @@ export function saveGeometry(state: GameState): SaveResult {
  * confirmed seed mismatch skips — absent / unreadable / seedless geometry writes
  * as before.
  */
-export function saveProgress(state: GameState, selection?: Iterable<number>): SaveResult {
+export function saveProgress(
+    state: GameState,
+    selection?: Iterable<number>,
+    viewport?: SerializedViewport,
+): SaveResult {
     const geometrySeed = currentGeometrySeed();
     if (
         geometrySeed !== undefined &&
@@ -169,14 +175,21 @@ export function saveProgress(state: GameState, selection?: Iterable<number>): Sa
         );
         return 'skipped';
     }
-    return writeWithOverflow(PROGRESS_KEY, JSON.stringify(serializeProgress(state, selection)));
+    return writeWithOverflow(
+        PROGRESS_KEY,
+        JSON.stringify(serializeProgress(state, selection, viewport)),
+    );
 }
 
 /**
  * Persist a freshly created puzzle: geometry (once) + initial progress.
  * Used on new game and share-link load. Worst sub-result wins.
  */
-export function saveNewPuzzle(state: GameState, selection?: Iterable<number>): SaveResult {
+export function saveNewPuzzle(
+    state: GameState,
+    selection?: Iterable<number>,
+    viewport?: SerializedViewport,
+): SaveResult {
     const g = saveGeometry(state);
     if (g === 'failed') {
         // The new geometry was too large to persist even compressed; the previous
@@ -188,7 +201,7 @@ export function saveNewPuzzle(state: GameState, selection?: Iterable<number>): S
         // puzzle, so the previous pair stays consistent.
         return 'failed';
     }
-    const p = saveProgress(state, selection);
+    const p = saveProgress(state, selection, viewport);
     if (p === 'failed') return 'failed';
     if (g === 'ok-compressed' || p === 'ok-compressed') return 'ok-compressed';
     return 'ok';
@@ -251,10 +264,22 @@ export function loadSavedGame(): LoadOutcome {
                 );
                 return { status: 'unreadable', reason: 'seed-mismatch', raw };
             }
+            const viewport = readViewport(progress);
+            if (viewport === undefined && progress.viewport !== undefined) {
+                // A viewport field was present but malformed (non-finite scale,
+                // missing offset, etc.). The save still loads — the player just
+                // falls back to the default view — but unlike the normal
+                // "no viewport on a pre-feature save" case this is a corrupt
+                // blob, so make the silent zoom loss observable in diagnostics.
+                diagnostics.warn(
+                    'Saved game has a malformed viewport; restoring the default view.',
+                );
+            }
             return {
                 status: 'ok',
                 state: recombine(staticData, progress),
                 selection: readSelection(progress),
+                viewport,
             };
         }
 
@@ -319,7 +344,7 @@ export function clearSavedState(): void {
 export function createDebouncedSave(
     { onSaveFailed, onSaveSkipped }: { onSaveFailed?: () => void; onSaveSkipped?: () => void } = {},
 ): {
-    save: (state: GameState, selection?: Iterable<number>) => void;
+    save: (state: GameState, selection?: Iterable<number>, viewport?: SerializedViewport) => void;
     flush: () => void;
     cancel: () => void;
 } {
@@ -328,12 +353,16 @@ export function createDebouncedSave(
     // Snapshot of the selection captured with the pending state. `null` means
     // "no pending save"; an empty array means "save with an empty selection".
     let pendingSelection: number[] | null = null;
+    // Snapshot of the viewport captured with the pending state. `undefined`
+    // means "no viewport supplied with this save".
+    let pendingViewport: SerializedViewport | undefined;
 
     function flushPending(): void {
         if (pendingState !== null) {
-            const result = saveProgress(pendingState, pendingSelection ?? []);
+            const result = saveProgress(pendingState, pendingSelection ?? [], pendingViewport);
             pendingState = null;
             pendingSelection = null;
+            pendingViewport = undefined;
             if (result === 'failed') {
                 onSaveFailed?.();
             } else if (result === 'skipped') {
@@ -342,9 +371,14 @@ export function createDebouncedSave(
         }
     }
 
-    function save(state: GameState, selection?: Iterable<number>): void {
+    function save(
+        state: GameState,
+        selection?: Iterable<number>,
+        viewport?: SerializedViewport,
+    ): void {
         pendingState = state;
         pendingSelection = selection === undefined ? [] : [...selection];
+        pendingViewport = viewport;
 
         if (timer !== null) {
             clearTimeout(timer);
@@ -373,6 +407,7 @@ export function createDebouncedSave(
 
         pendingState = null;
         pendingSelection = null;
+        pendingViewport = undefined;
     }
 
     return { save, flush, cancel };
