@@ -122,7 +122,7 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(list, [['strong', 'Drag pieces'], ' to move them around']);
     appendInlineLi(list, [['strong', 'Drop near matching edges'], ' to merge pieces']);
     appendInlineLi(list, [['strong', 'Pinch to zoom'], ' (or scroll wheel)']);
-    appendInlineLi(list, [['strong', 'Pan on empty space'], ' to move around']);
+    appendInlineLi(list, [['strong', 'Drag the background'], ' to move your view around']);
     appendInlineLi(list, [['strong', 'Use the buttons'], ' for convenience:']);
 
     const buttons = document.createElement('ul');
@@ -143,7 +143,7 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(buttons, [
         '⬚ ',
         ['strong', 'Multi-select'],
-        ' (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all. Your selection is remembered if you reload, and cleared when you deselect all or start a new game.',
+        ' (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all.',
     ]);
     appendInlineLi(buttons, [
         '▭ ',
@@ -164,13 +164,6 @@ function buildHowToPlaySection(): HTMLElement {
         ' setting.',
     ]);
     list.appendChild(buttons);
-
-    appendInlineLi(list, [
-        ['strong', 'Share this puzzle'],
-        ' — use the ',
-        ['em', 'Share this puzzle'],
-        ' section above to copy a link your friends can open to get the exact same puzzle.',
-    ]);
 
     section.appendChild(list);
     return section;
@@ -216,7 +209,9 @@ function buildCutStylesSection(): HTMLElement {
     ]);
     appendInlineLi(wavySub, [
         ['strong', 'Free rotation'],
-        ' (when rotation is also enabled) — Pieces rotate continuously to any angle instead of snapping to the four 90° orientations. Use the round drag handle below the focused piece.',
+        ' (when rotation is also enabled) — Pieces rotate continuously to any angle instead of snapping to the four 90° orientations. See ',
+        ['em', 'How to Play'],
+        ' for the rotation controls.',
     ]);
     wavyLi.appendChild(wavySub);
     list.appendChild(wavyLi);
