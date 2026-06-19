@@ -12,6 +12,7 @@ export type {
     SerializedPieceGroup,
     SerializedStaticState,
     SerializedProgress,
+    SerializedViewport,
 } from './serialization.js';
 
 export {

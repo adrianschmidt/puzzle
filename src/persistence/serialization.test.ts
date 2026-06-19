@@ -10,6 +10,7 @@ import {
     readSelection,
     serializeStatic,
     serializeProgress,
+    readViewport,
     recombine,
     STATE_VERSION,
     type SerializedGameState,
@@ -911,5 +912,54 @@ describe('static/progress split (v11)', () => {
         const restored = recombine(s, serializeProgress(state, []));
         expect(restored.imageSize.width).toBeGreaterThan(0);
         expect(restored.imageSize.height).toBeGreaterThan(0);
+    });
+});
+
+describe('viewport persistence', () => {
+    const VP = { scale: 1.5, offset: { x: 30, y: -40 } };
+
+    it('serializeProgress includes the viewport when passed', () => {
+        const p = serializeProgress(makeGameState(), [], VP);
+        expect(p.viewport).toEqual(VP);
+    });
+
+    it('serializeProgress omits the viewport when not passed', () => {
+        const p = serializeProgress(makeGameState(), []);
+        expect('viewport' in p).toBe(false);
+    });
+
+    it('round-trips the viewport through serializeProgress + JSON + readViewport', () => {
+        const onDisk = JSON.stringify(serializeProgress(makeGameState(), [], VP));
+        const parsed = JSON.parse(onDisk) as ReturnType<typeof serializeProgress>;
+        expect(readViewport(parsed)).toEqual(VP);
+    });
+
+    it('readViewport returns undefined when the field is absent', () => {
+        expect(readViewport(serializeProgress(makeGameState(), []))).toBeUndefined();
+    });
+
+    it('readViewport returns undefined for a non-finite scale (NaN survived as null)', () => {
+        const onDisk = JSON.stringify(
+            serializeProgress(makeGameState(), [], { scale: NaN, offset: { x: 0, y: 0 } }),
+        );
+        const parsed = JSON.parse(onDisk) as ReturnType<typeof serializeProgress>;
+        // Sanity: NaN serialized to null inside the offset-less scale field.
+        expect(readViewport(parsed)).toBeUndefined();
+    });
+
+    it('readViewport returns undefined for a malformed offset', () => {
+        const data = {
+            ...serializeProgress(makeGameState(), []),
+            viewport: { scale: 1, offset: { x: 'nope', y: 0 } },
+        } as unknown as ReturnType<typeof serializeProgress>;
+        expect(readViewport(data)).toBeUndefined();
+    });
+
+    it('readViewport returns undefined for a non-object viewport from hand-edited storage', () => {
+        const data = {
+            ...serializeProgress(makeGameState(), []),
+            viewport: 'garbage',
+        } as unknown as ReturnType<typeof serializeProgress>;
+        expect(readViewport(data)).toBeUndefined();
     });
 });
