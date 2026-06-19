@@ -133,7 +133,6 @@ function buildHowToPlaySection(): HTMLElement {
         ['strong', 'Vibrant colours'],
         ' for more saturated photos.',
     ]);
-    appendInlineLi(buttons, ['📍 ', ['strong', 'Centre View'], ' — Reset zoom and pan']);
     appendInlineLi(buttons, [
         '🔄 ',
         ['strong', 'Gather Pieces'],

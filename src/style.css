@@ -114,42 +114,10 @@ html, body {
   background: var(--ui-control-scrim-active);
 }
 
-/* Center View button */
-.center-view-button {
-  position: absolute;
-  top: 52px;
-  right: 12px;
-  z-index: 9999;
-  padding: 8px 16px;
-  font-size: 0.875rem;
-  font-family: inherit;
-  font-weight: 500;
-  color: var(--ui-fg);
-  background: var(--ui-control-scrim);
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: background 0.15s ease, border-color 0.15s ease;
-  touch-action: manipulation;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.center-view-button:hover {
-  background: var(--ui-control-scrim-hover);
-  border-color: var(--ui-border-hover);
-}
-
-.center-view-button:active {
-  background: var(--ui-control-scrim-active);
-}
-
 /* Gather Pieces button */
 .gather-pieces-button {
   position: absolute;
-  top: 92px;
+  top: 52px;
   right: 12px;
   z-index: 9999;
   padding: 8px 16px;
@@ -870,7 +838,7 @@ html, body {
 /* Background color picker button */
 .bg-color-button {
   position: absolute;
-  top: 132px;
+  top: 92px;
   right: 12px;
   z-index: 9999;
   width: 36px;
@@ -922,7 +890,7 @@ html, body {
 /* Background-picker popover position (anchored under its toolbar button). */
 .bg-color-panel {
   position: absolute;
-  top: 132px;
+  top: 92px;
   right: 8px;
   z-index: 10000;
 }
@@ -1004,7 +972,7 @@ html, body {
 /* Info button */
 .info-button {
   position: absolute;
-  top: 175px;
+  top: 135px;
   right: 12px;
   z-index: 9999;
   width: 36px;
@@ -1298,21 +1266,19 @@ details.info-section[open] > .info-section-summary {
 /* Responsive: ensure buttons don't overlap on small screens */
 @media (max-height: 400px) {
   .new-game-button,
-  .center-view-button,
   .gather-pieces-button {
     padding: 6px 10px;
     font-size: 0.75rem;
   }
 
   .new-game-button { top: 8px; right: 8px; }
-  .center-view-button { top: 40px; right: 8px; }
-  .gather-pieces-button { top: 72px; right: 8px; }
+  .gather-pieces-button { top: 40px; right: 8px; }
 
-  .bg-color-button { top: 96px; right: 8px; }
-  .bg-color-panel { top: 96px; right: 8px; }
+  .bg-color-button { top: 64px; right: 8px; }
+  .bg-color-panel { top: 64px; right: 8px; }
 
-  .info-button { 
-    top: 120px; 
+  .info-button {
+    top: 88px;
     right: 8px;
     width: 32px;
     height: 32px;
