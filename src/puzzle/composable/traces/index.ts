@@ -7,6 +7,7 @@
  */
 
 import type { Point } from '../../../model/types.js';
+import { diagnostics } from '../../../diagnostics.js';
 import tab02 from './02-tab-a.json';
 import tab03 from './03-tab-b.json';
 import tab04 from './04-tab-c.json';
@@ -129,3 +130,32 @@ export const TRACED_TEMPLATES: readonly TracedTemplate[] = [
     assertTracedTemplate(tab20, '20-tab-s'),
     assertTracedTemplate(tab21, '21-tab-t'),
 ] as const;
+
+/**
+ * Version 1 trace set: the original ordered library. FROZEN — never edit this
+ * list (no reorders or removals). A new trace set ships as a new entry in
+ * TRACE_SETS plus a CURRENT_TRACE_SET_VERSION bump, leaving every older
+ * snapshot byte-for-byte intact so old share-links still reproduce.
+ */
+const TRACE_SET_V1: readonly TracedTemplate[] = TRACED_TEMPLATES;
+
+/** version → frozen ordered template list. */
+const TRACE_SETS: Readonly<Record<number, readonly TracedTemplate[]>> = {
+    1: TRACE_SET_V1,
+};
+
+/**
+ * Resolve a trace-set version to its frozen ordered template list. Unknown
+ * versions fall back to v1 — a defensive net only; the share-link decoder
+ * clamps `wf.tv` to [1, CURRENT_TRACE_SET_VERSION] before generation, so a
+ * known client never asks for a version it lacks.
+ */
+export function getTracedTemplates(version: number): readonly TracedTemplate[] {
+    const set = TRACE_SETS[version];
+    if (set) return set;
+    // Unreachable on a correct client (the share-link decoder clamps to a
+    // known version, and the new-game path stamps CURRENT_TRACE_SET_VERSION).
+    // Leave a breadcrumb so a regressed upstream clamp doesn't fail silently.
+    diagnostics.warn(`getTracedTemplates: unknown trace-set version ${version}, falling back to v1`);
+    return TRACE_SET_V1;
+}
