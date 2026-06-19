@@ -24,7 +24,6 @@ import {
 } from './persistence/index.js';
 import {
     createNewGameButton,
-    createCenterViewButton,
     createGatherPiecesButton,
     loadColorPreference,
     saveColorPreference,
@@ -1126,18 +1125,6 @@ createNewGameButton({
                 });
             },
         });
-    },
-});
-
-// Set up the Center View button
-createCenterViewButton({
-    container: app,
-    onCenterView: () => {
-        viewportTransform.reset();
-        applyViewportTransform();
-        // Persist the reset view so a reload reopens centered, matching the
-        // Gather button and the "reopens to the same view you left" promise (#420).
-        autoSave();
     },
 });
 
