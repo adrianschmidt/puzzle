@@ -157,6 +157,9 @@ export type { CompletionOverlayOptions } from './completion-overlay.js';
 
 export { showToast } from './toast.js';
 
+export { createUpdateAvailableIndicator } from './update-available-indicator.js';
+export type { UpdateAvailableIndicatorOptions } from './update-available-indicator.js';
+
 export {
     showLoadingOverlay,
     hideLoadingOverlay,

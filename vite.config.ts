@@ -21,7 +21,7 @@ export default defineConfig({
   base: BASE_PATH,
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       manifest: createManifestConfig(BASE_PATH),
       workbox: {
         navigateFallbackDenylist,
