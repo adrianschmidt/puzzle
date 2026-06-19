@@ -644,7 +644,8 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             wavySection.setVisible(id === 'wavy');
             composableSection.setVisible(id === 'composable');
             updateFreeRotationVisibility();
-            if (id === 'composable' && composableSection.getSelectedTabGenerator() === 'traced') {
+            if (id === 'wavy'
+                || (id === 'composable' && composableSection.getSelectedTabGenerator() === 'traced')) {
                 options.onPreloadTracedTabs?.();
             }
         },
@@ -654,9 +655,11 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     wavySection.setVisible(currentCutStyleId === 'wavy');
     composableSection.setVisible(currentCutStyleId === 'composable');
 
-    // Cover the "open with Composable + traced already saved" path so the
-    // lazy chunk starts loading even if the user never touches a radio.
-    if (currentCutStyleId === 'composable' && composableSection.getSelectedTabGenerator() === 'traced') {
+    // Cover the "open with traced tabs already selected" paths so the lazy
+    // chunk starts loading even if the user never touches a radio: Wavy (always
+    // traced) or Composable with the Traced tab generator saved.
+    if (currentCutStyleId === 'wavy'
+        || (currentCutStyleId === 'composable' && composableSection.getSelectedTabGenerator() === 'traced')) {
         options.onPreloadTracedTabs?.();
     }
 

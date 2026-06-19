@@ -80,6 +80,33 @@ describe('track', () => {
         });
     });
 
+    it('forwards a Wavy traceSetVersion on new-game-started', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = {
+            track: umamiTrack,
+        };
+
+        track('new-game-started', {
+            source: 'fresh',
+            cutStyle: 'wavy',
+            traceSetVersion: 1,
+            rotationMode: 'none',
+            cols: 8,
+            rows: 6,
+            pieceCount: 48,
+        });
+
+        expect(umamiTrack).toHaveBeenCalledWith('new-game-started', {
+            source: 'fresh',
+            cutStyle: 'wavy',
+            traceSetVersion: 1,
+            rotationMode: 'none',
+            cols: 8,
+            rows: 6,
+            pieceCount: 48,
+        });
+    });
+
     it('is silent when window.umami is undefined', () => {
         expect(() => {
             track('puzzle-shared', {

@@ -30,6 +30,13 @@ const DEFAULT_SCRIPT_URL = 'https://cloud.umami.is/script.js';
 export interface NewGameData {
     source: 'fresh' | 'shared';
     cutStyle: string;
+    /**
+     * Trace-set version backing a Wavy puzzle's tabs. Present only for
+     * traced-tab Wavy games (omitted for every other cut style and for
+     * legacy classic-tab Wavy links), so analytics can tell traced Wavy from
+     * legacy Wavy and follow trace-set versions once a v2 ships.
+     */
+    traceSetVersion?: number;
     rotationMode: 'none' | 'quarter-turn' | 'free';
     cols: number;
     rows: number;
