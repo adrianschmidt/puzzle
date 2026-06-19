@@ -14,6 +14,7 @@ import {
     listTabGeneratorIds,
 } from '../puzzle/topology/generator-registry.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
+import { CURRENT_TRACE_SET_VERSION } from '../puzzle/composable/traces/trace-set-version.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -49,8 +50,8 @@ export interface SharePayload {
     };
     /** Fractal-cut config. */
     ff?: { bl: boolean };
-    /** Wavy-cut config. */
-    wf?: { bl: boolean };
+    /** Wavy-cut config. `tv` = trace-set version (present ⇒ traced tabs; absent ⇒ classic). */
+    wf?: { bl: boolean; tv?: number };
     /** Optional progress snapshot. */
     pr?: {
         m: number[][];
@@ -82,6 +83,9 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
                 throw new Error(`Share payload cf.bgc.${key} must be finite (got ${v})`);
             }
         }
+    }
+    if (payload.c === 'wavy' && payload.wf?.tv !== undefined) {
+        check(payload.wf.tv, 'wf.tv');
     }
 }
 
@@ -172,6 +176,19 @@ function clampSineConfig(cf: NonNullable<SharePayload['cf']>): void {
     }
 }
 
+/**
+ * Bound a decoded wavy trace-set version. A non-number or sub-1 value is
+ * dropped (undefined ⇒ the puzzle reproduces with classic tabs, matching
+ * pre-versioning links); a version newer than this client knows is clamped
+ * down to the newest it can reproduce, so a forward-link still plays.
+ */
+function clampTraceSetVersion(tv: unknown): number | undefined {
+    if (typeof tv !== 'number' || !Number.isFinite(tv)) return undefined;
+    const v = Math.floor(tv);
+    if (v < 1) return undefined;
+    return Math.min(v, CURRENT_TRACE_SET_VERSION);
+}
+
 export function decodePayload(encoded: string): SharePayload | null {
     try {
         const json = base64UrlDecode(encoded);
@@ -195,6 +212,11 @@ export function decodePayload(encoded: string): SharePayload | null {
         // above, so this covers them too.
         if (translated.c === 'composable' && translated.cf) {
             clampSineConfig(translated.cf);
+        }
+        if (translated.c === 'wavy' && translated.wf) {
+            const clamped = clampTraceSetVersion(translated.wf.tv);
+            if (clamped === undefined) delete translated.wf.tv;
+            else translated.wf.tv = clamped;
         }
         return translated;
     } catch {
@@ -428,6 +450,9 @@ export function gameStateToPayload(
 
     if (cutStyle === 'wavy' && state.wavyConfig) {
         payload.wf = { bl: state.wavyConfig.borderless ?? false };
+        if (state.wavyConfig.traceSetVersion !== undefined) {
+            payload.wf.tv = state.wavyConfig.traceSetVersion;
+        }
     }
 
     if (options.includeProgress) {
