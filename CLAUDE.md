@@ -1,25 +1,29 @@
 # Repo conventions for Claude
 
-## Keep the in-app help text in sync with features
+## Keep the in-app help text correct
 
 The info modal (`src/ui/info-modal.ts`) is the only in-app place where the
 player learns how the app works — there is no separate README shown in the
-UI. When you add, remove, or change a user-visible feature, update the
-modal's **How to Play**, **Cut Styles**, and/or **Settings** sections in the
-same PR so the help text stays accurate.
+UI. The goal is a **short, useful** modal: explain the things a player might
+actually need explained, and leave out what they'd already expect.
 
-Triggers for a help-text update include:
+The requirement is that the help text stays **correct**, not that every
+user-visible behaviour is documented. When a change makes an existing
+sentence in the **How to Play**, **Cut Styles**, or **Settings** sections
+wrong or misleading, fix it in the same PR. When a change removes a feature
+the modal describes, remove that description too.
 
-- New or removed toolbar button (icon + what it does).
-- New or changed interaction (gesture, keyboard shortcut, drag behaviour).
-- New cut style, or a new option on an existing cut style (e.g. a checkbox
-  in the new-game dialog).
-- New or renamed setting in the info modal itself.
-- Behaviour change that a returning player would need to be told about
-  (e.g. multi-select now being on by default for rotation puzzles).
+Adding new copy is a judgment call, not an obligation. Add it only when a
+player would plausibly be confused or miss the feature without it — a new
+toolbar button, a new cut style or new option in the new-game dialog, a new
+setting, or a non-obvious interaction or behaviour change. Do **not** add
+copy for behaviour a user would naturally expect (e.g. "your zoom and pan
+are remembered across reloads"); spelling out the obvious only makes the
+modal longer and less useful.
 
 If the change is purely internal (refactor, perf, bug fix with no visible
-behaviour change), no help-text update is needed.
+behaviour change), or the visible behaviour is what a player would already
+expect, no help-text update is needed.
 
 ## Isolate new seeded randomness behind a sub-PRNG
 
