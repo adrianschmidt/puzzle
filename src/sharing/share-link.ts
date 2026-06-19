@@ -14,7 +14,7 @@ import {
     listTabGeneratorIds,
 } from '../puzzle/topology/generator-registry.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
-import { CURRENT_TRACE_SET_VERSION } from '../puzzle/composable/traces/trace-set-version.js';
+import { CURRENT_TRACE_SET_VERSION, normalizeTraceSetVersion } from '../puzzle/composable/traces/trace-set-version.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -183,10 +183,8 @@ function clampSineConfig(cf: NonNullable<SharePayload['cf']>): void {
  * down to the newest it can reproduce, so a forward-link still plays.
  */
 function clampTraceSetVersion(tv: unknown): number | undefined {
-    if (typeof tv !== 'number' || !Number.isFinite(tv)) return undefined;
-    const v = Math.floor(tv);
-    if (v < 1) return undefined;
-    return Math.min(v, CURRENT_TRACE_SET_VERSION);
+    const v = normalizeTraceSetVersion(tv);
+    return v === undefined ? undefined : Math.min(v, CURRENT_TRACE_SET_VERSION);
 }
 
 export function decodePayload(encoded: string): SharePayload | null {
