@@ -215,8 +215,11 @@ export function decodePayload(encoded: string): SharePayload | null {
         }
         if (translated.c === 'wavy' && translated.wf) {
             const clamped = clampTraceSetVersion(translated.wf.tv);
-            if (clamped === undefined) delete translated.wf.tv;
-            else translated.wf.tv = clamped;
+            if (clamped === undefined) {
+                if (translated.wf.tv !== undefined) delete translated.wf.tv;
+            } else {
+                translated.wf.tv = clamped;
+            }
         }
         return translated;
     } catch {

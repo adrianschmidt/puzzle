@@ -100,6 +100,7 @@ export function createTracedTabTemplate(
 
             const idx       = Math.floor(local() * templates.length); // local 1
             const flip      = local() < 0.5;                          // local 2
+            // Cache the template id now so the recorder below sees the same index→id mapping the chosen template will use.
             const templateId = templates[idx].id;
             const scalex    = lerp(0.14, 0.20, local());              // local 3
             const scaley    = lerp(0.85, 1.15, local());              // local 4

@@ -1238,7 +1238,6 @@ describe('share-link wavy traceSetVersion (wf.tv)', () => {
     it('omits wf.tv for a legacy wavy puzzle (classic tabs)', () => {
         const payload = gameStateToPayload(wavyState(undefined), { includeProgress: false });
         expect(payload.wf).toEqual({ bl: false });
-        expect(payload.wf!.tv).toBeUndefined();
     });
 
     it('round-trips wf.tv through encode/decode', () => {
