@@ -79,71 +79,66 @@ function pinchNeck(
     return { x: px + (p.x - px) * k, y: p.y };
 }
 
-export const tracedTabTemplate: TabTemplate = {
-    name: 'Traced',
+/**
+ * Build a traced tab template bound to a specific (frozen) ordered trace
+ * list. The trace-set version chooses which list — see getTracedTemplates.
+ *
+ * Outer-PRNG contract LOCKED: exactly ONE outer call per generation, which
+ * seeds a local sub-PRNG that drives every per-edge transform. Changing
+ * `templates` changes only which trace is selected and its geometry; it does
+ * not change the outer- or local-PRNG call sequence.
+ */
+export function createTracedTabTemplate(
+    templates: readonly TracedTemplate[],
+): TabTemplate {
+    return {
+        name: 'Traced',
 
-    generate(random: () => number): BezierPath {
-        // Outer PRNG advances by exactly ONE call. The local sub-PRNG
-        // then drives every per-edge parameter — future additions slot
-        // in below without touching the outer stream.
-        const subSeed = random();
-        const local = createSeededRandom(seedFromFloat(subSeed));
+        generate(random: () => number): BezierPath {
+            const subSeed = random();
+            const local = createSeededRandom(seedFromFloat(subSeed));
 
-        const idx       = Math.floor(local() * TRACED_TEMPLATES.length); // local 1
-        const flip      = local() < 0.5;                                 // local 2
-        // Cache template id now so the recorder below sees the same
-        // index→id mapping the chosen template will use.
-        const templateId = TRACED_TEMPLATES[idx].id;
-        // scalex is the desired neck-to-neck width on the host edge
-        // (the same dimension classic's halfWidth × 2 controls). scaley
-        // is a multiplicative aspect adjustment around the photo's
-        // natural apex-to-neck ratio — 1.0 keeps the photographed
-        // proportions, > 1 stretches taller, < 1 squashes flatter. mid
-        // shifts the neck center laterally inside [mid - scalex/2,
-        // mid + scalex/2].
-        const scalex    = lerp(0.14, 0.20, local());                     // local 3
-        const scaley    = lerp(0.85, 1.15, local());                     // local 4
-        const mid       = lerp(0.45, 0.55, local());                     // local 5
-        const neckScale = lerp(0.75, 1.10, local());                     // local 6
+            const idx       = Math.floor(local() * templates.length); // local 1
+            const flip      = local() < 0.5;                          // local 2
+            const templateId = templates[idx].id;
+            const scalex    = lerp(0.14, 0.20, local());              // local 3
+            const scaley    = lerp(0.85, 1.15, local());              // local 4
+            const mid       = lerp(0.45, 0.55, local());              // local 5
+            const neckScale = lerp(0.75, 1.10, local());              // local 6
 
-        recordTracedTabChoice({
-            templateIdx: idx, templateId,
-            flip, scalex, scaley, mid, neckScale,
-        });
+            recordTracedTabChoice({
+                templateIdx: idx, templateId,
+                flip, scalex, scaley, mid, neckScale,
+            });
 
-        const template: TracedTemplate = TRACED_TEMPLATES[idx];
-        let path: Point[] = template.path.map(p => ({ x: p.x, y: p.y }));
-        let landmarks = template.landmarks;
+            const template: TracedTemplate = templates[idx];
+            let path: Point[] = template.path.map(p => ({ x: p.x, y: p.y }));
+            let landmarks = template.landmarks;
 
-        if (flip) {
-            // Mirror across x = 0.5 AND reverse the segment order so the
-            // path still goes left-to-right (start.x < end.x). prepareTab
-            // assumes that convention; without the reverse, splicing
-            // produces a swapped tLeft/tRight and crashes.
-            path = reverseBezierPath(path.map(p => ({ x: 1 - p.x, y: p.y })));
-            landmarks = mirrorLandmarksX(landmarks);
-        }
+            if (flip) {
+                path = reverseBezierPath(path.map(p => ({ x: 1 - p.x, y: p.y })));
+                landmarks = mirrorLandmarksX(landmarks);
+            }
 
-        // Pinch neck (uses pre-shift landmarks in [0,1] template space).
-        path = path.map(p => pinchNeck(p, landmarks, neckScale));
+            path = path.map(p => pinchNeck(p, landmarks, neckScale));
 
-        // Re-anchor the scale to the actual neck. The JSON's chord
-        // (path[0] → path[-1]) often sits at the image-crop edges,
-        // wider than the real neck. We use the neck landmarks instead
-        // so scalex maps to the tab's neck-to-neck width on the edge,
-        // not the photo crop. The flat-shoulder padding outside the
-        // neck still extends in x but stays at y ≈ 0, so it overlaps
-        // the parent edge invisibly after splicing. xFactor is clamped
-        // against degenerate neck.width values that would amplify the
-        // path beyond reason.
-        const xFactor = scalex / Math.max(0.05, landmarks.neck.width);
-        const yFactor = xFactor * scaley;
+            const xFactor = scalex / Math.max(0.05, landmarks.neck.width);
+            const yFactor = xFactor * scaley;
 
-        path = path.map(p => ({
-            x: mid + (p.x - landmarks.neck.center_x) * xFactor,
-            y: p.y * yFactor,
-        }));
+            path = path.map(p => ({
+                x: mid + (p.x - landmarks.neck.center_x) * xFactor,
+                y: p.y * yFactor,
+            }));
 
-        return path;
-    },
-};
+            return path;
+        },
+    };
+}
+
+/**
+ * Default (version 1) traced template. Retained for the TabTemplate surface,
+ * the traced-tab-recorder docs, and direct unit tests; production generation
+ * resolves the template for the requested trace-set version via the generator
+ * (see traced-tab-generator.ts).
+ */
+export const tracedTabTemplate: TabTemplate = createTracedTabTemplate(TRACED_TEMPLATES);
