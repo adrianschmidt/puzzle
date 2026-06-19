@@ -199,7 +199,7 @@ function buildCutStylesSection(): HTMLElement {
     const wavyLi = document.createElement('li');
     appendInline(wavyLi, [
         ['strong', 'Wavy'],
-        ' — Smooth sinewave edges with classic jigsaw tabs — a more dramatic take on Classic. Options:',
+        ' — Smooth sinewave edges with hand-traced tab shapes — a more organic, dramatic take on Classic. Options:',
     ]);
     const wavySub = document.createElement('ul');
     appendInlineLi(wavySub, [
