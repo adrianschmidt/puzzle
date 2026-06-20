@@ -740,11 +740,11 @@ html, body {
 }
 
 /*
- * Scope the bottom-margin trim to the boxed sub-sections (fractal options
- * and composable sliders), where the last row sits flush against the box's
- * own padding. Top-level rows in the dialog still need their 10px gap.
+ * Trim the bottom margin off the last row of the boxed composable section,
+ * where it would otherwise sit flush against the box's own padding. The
+ * unboxed cut-style options (fractal/wavy) keep their 10px gap so the row
+ * below — the image source — doesn't crowd the Borderless checkbox.
  */
-.fractal-options .dialog-row:last-child,
 .composable-sliders .dialog-row:last-child {
   margin-bottom: 0;
 }

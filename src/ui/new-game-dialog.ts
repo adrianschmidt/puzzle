@@ -117,15 +117,16 @@ interface SizeSection {
     updateLabels(): void;
 }
 
-interface FractalSection {
+/**
+ * A cut-style options sub-section holding a single "Borderless" checkbox.
+ * Both Fractal and Wavy render identically — only their test id differs —
+ * so they share one builder. `getValues()` returns the structural
+ * `{ borderless }` shape of both {@link FractalDialogConfig} and
+ * {@link WavyDialogConfig}.
+ */
+interface BorderlessOptionsSection {
     element: HTMLElement;
-    getValues(): FractalDialogConfig;
-    setVisible(visible: boolean): void;
-}
-
-interface WavySection {
-    element: HTMLElement;
-    getValues(): WavyDialogConfig;
+    getValues(): { borderless: boolean };
     setVisible(visible: boolean): void;
 }
 
@@ -204,34 +205,15 @@ function buildSizeSection(args: {
     return { element: grid, updateLabels };
 }
 
-function buildFractalOptionsSection(args: {
-    saved?: FractalDialogConfig;
-}): FractalSection {
+function buildBorderlessOptionsSection(args: {
+    saved?: { borderless: boolean };
+    testid: string;
+}): BorderlessOptionsSection {
     const section = document.createElement('div');
-    section.className = 'fractal-options';
+    section.className = 'cut-style-options';
 
     const borderlessCheckbox = appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false);
-    borderlessCheckbox.dataset.testid = 'fractal-borderless-toggle';
-
-    return {
-        element: section,
-        getValues: () => ({
-            borderless: borderlessCheckbox.checked,
-        }),
-        setVisible: (visible) => {
-            section.style.display = visible ? 'block' : 'none';
-        },
-    };
-}
-
-function buildWavyOptionsSection(args: {
-    saved?: WavyDialogConfig;
-}): WavySection {
-    const section = document.createElement('div');
-    section.className = 'wavy-options';
-
-    const borderlessCheckbox = appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false);
-    borderlessCheckbox.dataset.testid = 'wavy-borderless-toggle';
+    borderlessCheckbox.dataset.testid = args.testid;
 
     return {
         element: section,
@@ -562,8 +544,14 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     sizeSubtitle.textContent = 'Puzzle Size';
     dialog.appendChild(sizeSubtitle);
 
-    const fractalSection = buildFractalOptionsSection({ saved: options.savedFractalConfig });
-    const wavySection = buildWavyOptionsSection({ saved: options.savedWavyConfig });
+    const fractalSection = buildBorderlessOptionsSection({
+        saved: options.savedFractalConfig,
+        testid: 'fractal-borderless-toggle',
+    });
+    const wavySection = buildBorderlessOptionsSection({
+        saved: options.savedWavyConfig,
+        testid: 'wavy-borderless-toggle',
+    });
     const composableSection = buildComposableSlidersSection({
         saved: options.savedComposableConfig,
         showBorderless: options.composableSupportsBorderless ?? false,
