@@ -185,12 +185,14 @@ export function setupUpdateChecks(
         ((handler: () => void) =>
             document.addEventListener('visibilitychange', handler));
 
-    // `registration.update()` rejections are deliberately swallowed here and in
-    // the visibility path below: a failed *check* is best-effort and self-heals
-    // on the next poll / visibility change. This leaves the detection stage
-    // intentionally uninstrumented — a consistently-failing check is invisible
-    // (the unhandled-error backstop does not catch these void-swallowed
-    // rejections). Instrumentation only begins once an update is *applied*.
+    // `registration.update()` rejections are deliberately not given a distinct
+    // event here and in the visibility path below: a failed *check* is
+    // best-effort and self-heals on the next poll / visibility change. The
+    // rejection is NOT swallowed — `void` does not attach a handler — so a
+    // consistently-failing check still surfaces via the global backstop as a
+    // generic, rate-limited `unhandled-error{source:'rejection'}` (observable
+    // but unlabeled). A dedicated `pwa-update-check-failed` event is tracked
+    // separately (#431).
     setIntervalFn(() => {
         void registration.update();
     }, pollIntervalMs);
