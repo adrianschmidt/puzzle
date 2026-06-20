@@ -12,7 +12,7 @@ import {
 } from '../sharing/index.js';
 import { isWebShareAvailable, sharePuzzle } from './share.js';
 import { showToast } from './toast.js';
-import { track } from '../analytics/index.js';
+import { track, sanitizeErrorReason } from '../analytics/index.js';
 
 export function attachShareSection(
     parent: HTMLElement,
@@ -109,7 +109,13 @@ export function attachShareSection(
             title: 'Puzzle',
             text: 'Have a go at this puzzle!',
             onClipboardFallback: () => showToast('Link copied to clipboard'),
-            onError: (e) => showToast(`Couldn't share: ${e.message}`),
+            onError: (e) => {
+                track('share-failed', {
+                    source: 'info-modal',
+                    reason: sanitizeErrorReason(e),
+                });
+                showToast(`Couldn't share: ${e.message}`);
+            },
         });
     });
 

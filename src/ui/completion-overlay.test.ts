@@ -118,6 +118,46 @@ describe('showCompletionOverlay', () => {
         });
     });
 
+    it('tracks share-failed when the share flow has no working mechanism', async () => {
+        const umamiTrack = vi.fn();
+        window.umami = { track: umamiTrack };
+        // No native share, no clipboard => onError fires with 'No share mechanism available'.
+        vi.stubGlobal('navigator', {});
+
+        showCompletionOverlay({ container, state: makeState() });
+        container.querySelector<HTMLButtonElement>('.completion-share-btn')!.click();
+
+        await vi.waitFor(() => {
+            expect(umamiTrack).toHaveBeenCalledWith('share-failed', {
+                source: 'completion-overlay',
+                reason: 'No share mechanism available',
+            });
+        });
+    });
+
+    it('sanitizes a URL-bearing error message before tracking share-failed', async () => {
+        const umamiTrack = vi.fn();
+        window.umami = { track: umamiTrack };
+        // No native share; clipboard write rejects with a URL-bearing message.
+        // The call site must run it through sanitizeErrorReason before tracking.
+        vi.stubGlobal('navigator', {
+            clipboard: {
+                writeText: () =>
+                    Promise.reject(new Error('copy failed at https://example.com/secret?t=abc')),
+            },
+        });
+
+        showCompletionOverlay({ container, state: makeState() });
+        container.querySelector<HTMLButtonElement>('.completion-share-btn')!.click();
+
+        await vi.waitFor(() => {
+            expect(umamiTrack).toHaveBeenCalledWith('share-failed', {
+                source: 'completion-overlay',
+                reason: 'copy failed at <url>',
+            });
+        });
+    });
+
     it('share-button click invokes navigator.share with a share URL and does not dismiss', () => {
         const shareSpy = vi.fn().mockResolvedValue(undefined);
         vi.stubGlobal('navigator', { share: shareSpy });

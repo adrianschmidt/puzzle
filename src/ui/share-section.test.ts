@@ -30,6 +30,7 @@ describe('attachShareSection', () => {
     });
     afterEach(() => {
         vi.unstubAllGlobals();
+        delete window.umami;
     });
 
     it('renders a heading, checkbox, primary button, and URL preview', () => {
@@ -107,6 +108,46 @@ describe('attachShareSection', () => {
         const urlAfter = preview.value;
         expect(urlAfter).not.toBe(urlBefore);
         expect(urlAfter.length).toBeGreaterThan(urlBefore.length);
+    });
+
+    it('tracks share-failed when the share flow has no working mechanism', async () => {
+        const umamiTrack = vi.fn();
+        window.umami = { track: umamiTrack };
+        // No native share, no clipboard => onError fires with 'No share mechanism available'.
+        vi.stubGlobal('navigator', {});
+
+        attachShareSection(host, state(), 'https://example.com/');
+        host.querySelector<HTMLButtonElement>('[data-testid="share-primary-btn"]')!.click();
+
+        await vi.waitFor(() => {
+            expect(umamiTrack).toHaveBeenCalledWith('share-failed', {
+                source: 'info-modal',
+                reason: 'No share mechanism available',
+            });
+        });
+    });
+
+    it('sanitizes a URL-bearing error message before tracking share-failed', async () => {
+        const umamiTrack = vi.fn();
+        window.umami = { track: umamiTrack };
+        // No native share; clipboard write rejects with a URL-bearing message.
+        // The call site must run it through sanitizeErrorReason before tracking.
+        vi.stubGlobal('navigator', {
+            clipboard: {
+                writeText: () =>
+                    Promise.reject(new Error('copy failed at https://example.com/secret?t=abc')),
+            },
+        });
+
+        attachShareSection(host, state(), 'https://example.com/');
+        host.querySelector<HTMLButtonElement>('[data-testid="share-primary-btn"]')!.click();
+
+        await vi.waitFor(() => {
+            expect(umamiTrack).toHaveBeenCalledWith('share-failed', {
+                source: 'info-modal',
+                reason: 'copy failed at <url>',
+            });
+        });
     });
 
     it('primary button label is "Share…" when navigator.share is available', () => {
