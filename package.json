@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && tsc -p tsconfig.sw.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -16,7 +16,9 @@
     "typescript": "~5.9.3",
     "vite": "^8.0.1",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.0",
+    "workbox-precaching": "^7.4.0",
+    "workbox-routing": "^7.4.0"
   },
   "dependencies": {
     "bezier-js": "^6.1.4",

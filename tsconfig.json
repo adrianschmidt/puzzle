@@ -23,5 +23,7 @@
     "noUncheckedSideEffectImports": true,
     "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "//exclude": "sw.ts is the service worker; it needs the WebWorker lib, not DOM, so it is type-checked separately via tsconfig.sw.json.",
+  "exclude": ["src/pwa/sw.ts"]
 }

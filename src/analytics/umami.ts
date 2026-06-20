@@ -130,10 +130,13 @@ export interface TracedChunkLoadFailedData {
  * Data attached to `unhandled-error` — the app-wide backstop for async
  * failures that no local `try/catch` handled.
  *
- * `source` is the channel that caught it: a rejected promise or a
- * thrown exception. (Named `source`, not `kind`, to avoid colliding
- * with the failure-class `kind` on {@link TracedChunkLoadFailedData} —
- * the two carry different semantics.)
+ * `source` is the channel that caught it. The page realm reports a rejected
+ * promise (`'rejection'`) or a thrown exception (`'error'`); the
+ * service-worker backstop reports the same two channels from inside the
+ * worker scope as `'sw-rejection'` / `'sw-error'`, so an operator can tell a
+ * worker-scope failure from a page-scope one. (Named `source`, not `kind`, to
+ * avoid colliding with the failure-class `kind` on
+ * {@link TracedChunkLoadFailedData} — the two carry different semantics.)
  *
  * `name` is the low-cardinality bucket for aggregation/alerting: the
  * thrown value's constructor name (`TypeError`, `RangeError`, …), or
@@ -142,9 +145,17 @@ export interface TracedChunkLoadFailedData {
  * `reason` is the sanitized message (URLs/extension origins redacted,
  * empty falls back to `'unknown'`, length-capped); see
  * {@link import('./sanitize-error-reason.js').sanitizeErrorReason}.
+ *
+ * Coverage caveat for the `sw-*` sources: the worker backstop only sees
+ * synchronous throws and unhandled promise rejections in the worker scope.
+ * It does NOT capture `FetchEvent.respondWith` / precache / `waitUntil`
+ * failures (those surface as the event's own failure, not a global error),
+ * and a report is dropped when no window client is open to relay it. So
+ * absence of `sw-rejection`/`sw-error` events is not proof the worker is
+ * healthy. See `pwa/sw.ts` for the full rationale.
  */
 export interface UnhandledErrorData {
-    source: 'rejection' | 'error';
+    source: 'rejection' | 'error' | 'sw-rejection' | 'sw-error';
     name: string;
     reason: string;
 }
