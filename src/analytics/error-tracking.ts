@@ -9,8 +9,11 @@
  *
  * The traced-chunk preload paths catch and report their own failures
  * (`traced-chunk-load-failed`), so they don't reach here; this catches
- * everything else — image fetches, persistence, future async code, and
- * the service worker.
+ * everything else uncaught in the page realm — image fetches, persistence,
+ * future async code. It does NOT see errors thrown inside the service
+ * worker's own scope: a `window` listener runs in the page realm, so only
+ * SW→page message failures surface here. Dedicated SW instrumentation is
+ * tracked separately (#430).
  */
 
 import { diagnostics } from '../diagnostics.js';
