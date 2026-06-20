@@ -1,0 +1,11 @@
+{
+  "//": "Type-checks the custom service worker (src/pwa/sw.ts) in isolation. It needs the WebWorker lib (ServiceWorkerGlobalScope, clients, skipWaiting) instead of DOM, so it cannot share the app's tsconfig.json — which is why sw.ts is excluded there and checked here. vite-plugin-pwa bundles the worker itself; this config only adds the missing type coverage.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "WebWorker"],
+    "types": ["vite/client", "vite-plugin-pwa/client"]
+  },
+  "include": ["src/pwa/sw.ts"],
+  "//exclude": "Clear the base config's exclude (which lists sw.ts itself) so this config can include it.",
+  "exclude": []
+}

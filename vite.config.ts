@@ -5,27 +5,21 @@ import { createManifestConfig } from './src/pwa/manifest.js';
 
 const BASE_PATH = process.env.VITE_BASE_PATH ?? '/puzzle/';
 
-// Prevent this SW from intercepting navigations to paths that belong to
-// other deployments under the same origin (e.g. /puzzle/dev/ when we're
-// the production build at /puzzle/). Without this, the production SW's
-// navigation fallback would serve the production index.html for requests
-// to /puzzle/dev/, blocking the dev preview from ever bootstrapping.
-const escapedBase = BASE_PATH.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const navigateFallbackDenylist = [
-  // Deny any path that starts with a subdirectory immediately below our base
-  // (e.g. /puzzle/dev/, /puzzle/pr-123/, etc.)
-  new RegExp(`^${escapedBase}[^/]+/`),
-];
-
 export default defineConfig({
   base: BASE_PATH,
   plugins: [
+    // We use the `injectManifest` strategy (custom worker at src/pwa/sw.ts)
+    // rather than `generateSW` so the worker can register its own `error` /
+    // `unhandledrejection` listeners (#430). The navigation fallback and its
+    // cross-deployment denylist — which `generateSW`'s `workbox` options used
+    // to configure — now live in the worker source; this config only injects
+    // the precache manifest.
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src/pwa',
+      filename: 'sw.ts',
       registerType: 'prompt',
       manifest: createManifestConfig(BASE_PATH),
-      workbox: {
-        navigateFallbackDenylist,
-      },
     }),
   ],
   test: {

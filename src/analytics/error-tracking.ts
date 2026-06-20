@@ -12,8 +12,10 @@
  * everything else uncaught in the page realm — image fetches, persistence,
  * future async code. It does NOT see errors thrown inside the service
  * worker's own scope: a `window` listener runs in the page realm, so only
- * SW→page message failures surface here. Dedicated SW instrumentation is
- * tracked separately (#430).
+ * SW→page message failures surface here. The worker's own scope is
+ * instrumented separately — its `error`/`unhandledrejection` handlers post
+ * reports to the page, which `pwa/sw-error-bridge.ts` relays into the same
+ * `unhandled-error` event under the `sw-error` / `sw-rejection` source.
  */
 
 import { diagnostics } from '../diagnostics.js';

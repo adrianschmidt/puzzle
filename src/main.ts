@@ -117,6 +117,7 @@ import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { initPwaUpdates } from './pwa/register.js';
+import { initSwErrorReporting } from './pwa/sw-error-bridge.js';
 
 /** Fallback image used when Unsplash is unavailable. */
 const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
@@ -144,6 +145,11 @@ initAnalytics();
 // Global backstop: report unhandled rejections / uncaught errors that
 // no local try/catch handled. Observe-only; never swallows them.
 initErrorTracking();
+
+// Companion backstop for the service worker's own scope (#430): the
+// `window` listeners above run in the page realm and never see exceptions
+// thrown inside the worker, so the worker posts those here for reporting.
+initSwErrorReporting();
 
 // Resource Timing entries back the traced-chunk `cacheState` dimension
 // (see detectCacheState in traced-tab-loader.ts). The 250-entry default
