@@ -14,15 +14,20 @@ import { showToast } from '../ui/toast.js';
 
 /**
  * `track` is overloaded per event name, so it can't be called with a union
- * event variable directly. Narrowing the union to a literal in each branch
- * lets each call resolve against its concrete overload, so a future rename of
- * either event name is still type-checked here (unlike a blanket cast).
+ * event variable directly. Switching over the union narrows `event` to a
+ * single literal in each case, so the matching `track` overload binds and a
+ * future rename of either event name is still type-checked here (unlike a
+ * blanket cast). The cases are identical by design — the switch exists only
+ * for the per-case literal narrowing.
  */
 function trackReasonEvent(event: 'shared-load-failed' | 'new-game-failed', data: { reason: string }): void {
-    if (event === 'new-game-failed') {
-        track(event, data);
-    } else {
-        track(event, data);
+    switch (event) {
+        case 'new-game-failed':
+            track(event, data);
+            return;
+        case 'shared-load-failed':
+            track(event, data);
+            return;
     }
 }
 
