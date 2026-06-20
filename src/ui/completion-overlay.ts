@@ -13,7 +13,7 @@
 
 import type { GameState } from '../model/types.js';
 import { gameStateToPayload, buildShareUrl } from '../sharing/index.js';
-import { track } from '../analytics/index.js';
+import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
 import { sharePuzzle } from './share.js';
 import { showToast } from './toast.js';
@@ -77,7 +77,13 @@ export function showCompletionOverlay(
             title: 'Puzzle',
             text: 'I finished this puzzle — can you?',
             onClipboardFallback: () => showToast('Link copied to clipboard'),
-            onError: (err) => showToast(`Couldn't share: ${err.message}`),
+            onError: (err) => {
+                track('share-failed', {
+                    source: 'completion-overlay',
+                    reason: sanitizeErrorReason(err),
+                });
+                showToast(`Couldn't share: ${err.message}`);
+            },
         });
     });
     message.appendChild(challengeBtn);
