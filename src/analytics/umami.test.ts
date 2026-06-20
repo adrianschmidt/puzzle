@@ -171,4 +171,43 @@ describe('track', () => {
             reason: 'boom',
         });
     });
+
+    it('forwards shared-load-failed with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('shared-load-failed', { reason: 'topology unsupported' });
+
+        expect(umamiTrack).toHaveBeenCalledWith('shared-load-failed', { reason: 'topology unsupported' });
+    });
+
+    it('forwards image-fetch-failed with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('image-fetch-failed', { reason: 'network down' });
+
+        expect(umamiTrack).toHaveBeenCalledWith('image-fetch-failed', { reason: 'network down' });
+    });
+
+    it('forwards new-game-failed with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('new-game-failed', { reason: 'chunk load failed' });
+
+        expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', { reason: 'chunk load failed' });
+    });
+
+    it('forwards share-failed with source and reason', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('share-failed', { source: 'completion-overlay', reason: 'No share mechanism available' });
+
+        expect(umamiTrack).toHaveBeenCalledWith('share-failed', {
+            source: 'completion-overlay',
+            reason: 'No share mechanism available',
+        });
+    });
 });
