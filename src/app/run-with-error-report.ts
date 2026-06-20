@@ -12,12 +12,19 @@ import { diagnostics } from '../diagnostics.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { showToast } from '../ui/toast.js';
 
-// TypeScript's overload resolution doesn't distribute over union types, so
-// calling track() with a union-typed event name doesn't compile against the
-// individual overload signatures. Cast to a minimal compatible signature for
-// the two events this helper actually handles — both accept { reason: string }.
-type TrackReasonEvent = (name: 'shared-load-failed' | 'new-game-failed', data: { reason: string }) => void;
-const trackReasonEvent = track as unknown as TrackReasonEvent;
+/**
+ * `track` is overloaded per event name, so it can't be called with a union
+ * event variable directly. Narrowing the union to a literal in each branch
+ * lets each call resolve against its concrete overload, so a future rename of
+ * either event name is still type-checked here (unlike a blanket cast).
+ */
+function trackReasonEvent(event: 'shared-load-failed' | 'new-game-failed', data: { reason: string }): void {
+    if (event === 'new-game-failed') {
+        track(event, data);
+    } else {
+        track(event, data);
+    }
+}
 
 export async function runWithErrorReport<T>(opts: {
     run: () => Promise<T>;
