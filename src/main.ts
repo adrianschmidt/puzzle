@@ -69,7 +69,7 @@ import {
     signedAngularDelta,
 } from './model/helpers.js';
 import { reorderGroupsAfterDrop } from './game/z-order.js';
-import { fetchRandomImage, getUnsplashAccessKey } from './images/index.js';
+import { getUnsplashAccessKey } from './images/index.js';
 import {
     loadSizePreference,
     saveSizePreference,
@@ -100,10 +100,8 @@ import {
 import {
     loadImageCategoryPreference,
     saveImageCategoryPreference,
-    findImageCategory,
     loadVibrantPreference,
     saveVibrantPreference,
-    buildImageQuery,
 } from './game/image-categories.js';
 import {
     parseLocationHash,
@@ -117,6 +115,7 @@ import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
+import { resolveUnsplashImage } from './app/resolve-image.js';
 import { initPwaUpdates } from './pwa/register.js';
 
 /** Fallback image used when Unsplash is unavailable. */
@@ -959,31 +958,11 @@ async function startNewGame(
         const accessKey = imageSource !== 'blank' ? getUnsplashAccessKey() : null;
 
         if (accessKey) {
-            try {
-                const category = findImageCategory(imageCategory ?? 'any');
-                const query = buildImageQuery(category.query, vibrant);
-                const result = await fetchRandomImage(accessKey, fetch, query);
-
-                if (result) {
-                    imageUrl = result.imageUrl;
-                    attribution = {
-                        photographerName: result.photographerName,
-                        photographerUrl: result.photographerUrl,
-                        photoUrl: result.photoUrl,
-                    };
-
-                    // The Unsplash "regular" URL delivers images scaled to 1080px
-                    // wide. Compute the height from the original aspect ratio so
-                    // the puzzle generator produces correctly proportioned pieces.
-                    const aspectRatio = result.height / result.width;
-                    const displayWidth = 1080;
-                    imageSize = {
-                        width: displayWidth,
-                        height: Math.round(displayWidth * aspectRatio),
-                    };
-                }
-            } catch (error) {
-                diagnostics.warn('Failed to fetch Unsplash image, using fallback:', error);
+            const resolved = await resolveUnsplashImage(accessKey, imageCategory ?? 'any', vibrant);
+            if (resolved) {
+                imageUrl = resolved.imageUrl;
+                imageSize = resolved.imageSize;
+                attribution = resolved.attribution;
             }
         }
 
