@@ -150,6 +150,53 @@ export interface UnhandledErrorData {
 }
 
 /**
+ * Data attached to `shared-load-failed` — a shared puzzle link satisfied
+ * surface-shape validation but failed while building the puzzle (e.g. a
+ * config combination the current build's topology pipeline doesn't support).
+ * The user saw a "Couldn't load shared puzzle" toast. `reason` is the
+ * sanitized error message.
+ */
+export interface SharedLoadFailedData {
+    reason: string;
+}
+
+/**
+ * Data attached to `image-fetch-failed` — fetching a random Unsplash image
+ * threw (network/parse failure). This is NOT the "no image found" case:
+ * `fetchRandomImage` returns `undefined` (and is untracked) on a 4xx/5xx
+ * response, so this event only fires on a genuine throw. The new game still
+ * proceeds with the fallback image. `reason` is the sanitized error message.
+ */
+export interface ImageFetchFailedData {
+    reason: string;
+}
+
+/**
+ * Data attached to `new-game-failed` — starting a fresh puzzle rejected and
+ * the user saw a "Couldn't start new game" toast. The most likely cause (the
+ * traced-tab lazy chunk import) ALSO emits `traced-chunk-load-failed` one
+ * layer down, so a single failure can produce both events; there is no
+ * guaranteed 1-to-1 correlation (topology and other errors reach this catch
+ * without a chunk event). This event captures the user-facing outcome that
+ * the inner event does not. `reason` is the sanitized error message.
+ */
+export interface NewGameFailedData {
+    reason: string;
+}
+
+/**
+ * Data attached to `share-failed` — the share flow fell through to its error
+ * path (clipboard write failed, or no share mechanism was available) and the
+ * user saw a "Couldn't share" toast. User cancellation of the native share
+ * sheet (`AbortError`) is NOT a failure and is never tracked. `source` mirrors
+ * `puzzle-shared`: the info-modal share section or the completion overlay.
+ */
+export interface ShareFailedData {
+    source: 'info-modal' | 'completion-overlay';
+    reason: string;
+}
+
+/**
  * Data attached to `save-failed` — a `localStorage` write failed even after
  * the lz-string compression fallback (typically quota exhaustion).
  *
@@ -297,6 +344,10 @@ export function track(name: 'traced-chunk-preload-started', data: TracedChunkPre
 export function track(name: 'traced-chunk-loaded', data: TracedChunkLoadedData): void;
 export function track(name: 'traced-chunk-load-failed', data: TracedChunkLoadFailedData): void;
 export function track(name: 'unhandled-error', data: UnhandledErrorData): void;
+export function track(name: 'shared-load-failed', data: SharedLoadFailedData): void;
+export function track(name: 'image-fetch-failed', data: ImageFetchFailedData): void;
+export function track(name: 'new-game-failed', data: NewGameFailedData): void;
+export function track(name: 'share-failed', data: ShareFailedData): void;
 export function track(name: 'save-failed', data: SaveFailedData): void;
 export function track(name: 'save-compressed', data: SaveCompressedData): void;
 export function track(name: 'save-unreadable', data: SaveUnreadableData): void;
