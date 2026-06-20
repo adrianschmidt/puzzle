@@ -116,6 +116,7 @@ import { CURRENT_TRACE_SET_VERSION } from './puzzle/composable/traces/trace-set-
 import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
+import { runWithErrorReport } from './app/run-with-error-report.js';
 import { initPwaUpdates } from './pwa/register.js';
 
 /** Fallback image used when Unsplash is unavailable. */
@@ -1112,7 +1113,7 @@ createNewGameButton({
                 const option = getSizeOption(sizeId);
                 const cutStyle = cutStyleId as CutStyle;
                 clearSavedState();
-                startNewGame(
+                const newGame = startNewGame(
                     toGridSize(option),
                     cutStyle,
                     composableConfig
@@ -1125,14 +1126,17 @@ createNewGameButton({
                     vibrant,
                     rotationEnabled,
                     freeRotation,
-                ).catch((error) => {
-                    // The chunk-load path (traced tabs lazy import) is
-                    // the most likely source of a rejection here — a
-                    // network blip or stale deploy hash. Surface a
-                    // toast so the user knows the click didn't silently
-                    // do nothing.
-                    diagnostics.warn('Failed to start new game:', error);
-                    showToast("Couldn't start new game");
+                );
+                void runWithErrorReport({
+                    // The chunk-load path (traced tabs lazy import) is the most
+                    // likely source of a rejection here — a network blip or
+                    // stale deploy hash. The user gets a toast so the click
+                    // doesn't silently do nothing; `new-game-failed` records it.
+                    run: () => newGame,
+                    warnMessage: 'Failed to start new game:',
+                    event: 'new-game-failed',
+                    toastMessage: "Couldn't start new game",
+                    fallback: undefined,
                 });
             },
         });
@@ -1413,19 +1417,21 @@ async function tryLoadSharedPuzzle(): Promise<boolean> {
 
     clearSavedState();
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    try {
-        await loadSharedPuzzle(payload, hasExistingProgress);
-    } catch (error) {
-        // Surface-shape validation (`isValidComposableCf` etc.) catches
-        // most malformed payloads at decode time, but a link can still
-        // satisfy the schema and then trip the topology pipeline — e.g.
-        // a config combination the current build doesn't support. A
-        // toast is friendlier than an unhandled rejection.
-        diagnostics.warn('Failed to load shared puzzle:', error);
-        showToast("Couldn't load shared puzzle");
-        return false;
-    }
-    return true;
+    // Surface-shape validation (`isValidComposableCf` etc.) catches most
+    // malformed payloads at decode time, but a link can still satisfy the
+    // schema and then trip the topology pipeline — e.g. a config combination
+    // the current build doesn't support. Report it and toast rather than
+    // letting it surface as an unhandled rejection.
+    return runWithErrorReport({
+        run: async () => {
+            await loadSharedPuzzle(payload, hasExistingProgress);
+            return true;
+        },
+        warnMessage: 'Failed to load shared puzzle:',
+        event: 'shared-load-failed',
+        toastMessage: "Couldn't load shared puzzle",
+        fallback: false,
+    });
 }
 
 // On load: shared-link (hash) > saved game > fresh start.
