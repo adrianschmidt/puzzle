@@ -18,4 +18,5 @@ export type {
     PwaUpdateAppliedData,
     PwaUpdateFallbackReloadData,
     PwaUpdateApplyFailedData,
+    PwaRegisterFailedData,
 } from './umami.js';

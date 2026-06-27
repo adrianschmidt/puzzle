@@ -13,6 +13,8 @@ import {
     setupUpdateChecks,
 } from './update-controller.js';
 import { createUpdateAvailableIndicator } from '../ui/index.js';
+import { track, sanitizeErrorReason } from '../analytics/index.js';
+import { diagnostics } from '../diagnostics.js';
 
 /**
  * Initialize PWA update handling.
@@ -35,6 +37,15 @@ export function initPwaUpdates(flush: () => void): void {
         },
         onRegisteredSW(_swScriptUrl, registration) {
             if (registration) setupUpdateChecks(registration, controller);
+        },
+        // The registration precondition: if the service worker can't be
+        // registered at all, there is no controller-driven funnel and no
+        // update checks for the session. Label it instead of letting it
+        // surface as a generic `unhandled-error`. Fires at most once per page
+        // load, so — unlike the update-check path — it needs no flood guard.
+        onRegisterError(error) {
+            diagnostics.warn('[pwa] service worker registration failed', error);
+            track('pwa-register-failed', { reason: sanitizeErrorReason(error) });
         },
     });
 
