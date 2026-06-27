@@ -376,6 +376,11 @@ export function initAnalytics(): void {
     script.defer = true;
     script.src = scriptUrl;
     script.dataset.websiteId = websiteId;
+    // Opt into Umami's tracker-side Core Web Vitals collection (LCP/INP/
+    // CLS/FCP/TTFB). Without this attribute those native event columns
+    // stay null. Collection happens in the browser and is reported
+    // straight to Umami, so it's independent of the (Pro-gated) REST API.
+    script.dataset.performance = 'true';
     document.head.appendChild(script);
 }
 
