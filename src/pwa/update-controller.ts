@@ -185,21 +185,45 @@ export function setupUpdateChecks(
         ((handler: () => void) =>
             document.addEventListener('visibilitychange', handler));
 
-    // `registration.update()` rejections are deliberately not given a distinct
-    // event here and in the visibility path below: a failed *check* is
-    // best-effort and self-heals on the next poll / visibility change. The
-    // rejection is NOT swallowed — `void` does not attach a handler — so a
-    // consistently-failing check still surfaces via the global backstop as a
-    // generic, rate-limited `unhandled-error{source:'rejection'}` (observable
-    // but unlabeled). A dedicated `pwa-update-check-failed` event is tracked
-    // separately (#431).
+    // A failed update *check* is best-effort and self-heals on the next poll /
+    // visibility change, but we still label it as `pwa-update-check-failed` so
+    // the funnel is complete (detected → check failures → applied / apply-
+    // failed) instead of leaving the rejection to surface as a generic
+    // `unhandled-error`.
+    //
+    // Checks fire on a timer and on every visibility regain, so an offline or
+    // server-error session would reject on every poll. Guard against flooding:
+    // report each distinct sanitized `reason` at most once per session, and cap
+    // the number of distinct reasons (a cardinality bound against pathologically
+    // varying messages). This mirrors the backstop's per-reason + total caps but
+    // is stricter — once per reason is enough for a "is this path failing"
+    // funnel signal; repetition adds no information.
+    const reportedReasons = new Set<string>();
+    function reportCheckFailure(err: unknown): void {
+        const reason = sanitizeErrorReason(err);
+        if (reportedReasons.has(reason)) return;
+        if (reportedReasons.size >= MAX_CHECK_FAILURE_REASONS) return;
+        reportedReasons.add(reason);
+        diagnostics.warn('[pwa] registration.update() rejected', err);
+        track('pwa-update-check-failed', { reason });
+    }
+
+    // `registration.update()` returns `Promise<unknown> | void`; wrap in
+    // `Promise.resolve` so the void case is a no-op rather than a throw.
+    function checkForUpdate(): void {
+        void Promise.resolve(registration.update()).catch(reportCheckFailure);
+    }
+
     setIntervalFn(() => {
-        void registration.update();
+        checkForUpdate();
     }, pollIntervalMs);
 
     addVisibilityListener(() => {
         if (!isVisible()) return;
-        void registration.update();
+        checkForUpdate();
         controller.requestReloadIfPending();
     });
 }
+
+/** Max distinct check-failure reasons reported per session (cardinality guard). */
+const MAX_CHECK_FAILURE_REASONS = 5;

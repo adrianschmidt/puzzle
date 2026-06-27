@@ -280,6 +280,26 @@ export interface SaveRecoveryData {
 export type PwaUpdateDetectedData = Record<string, never>;
 
 /**
+ * Data attached to `pwa-update-check-failed` — a background update *check*
+ * (`registration.update()` on the poll interval or a visibility regain)
+ * rejected. This is distinct from `pwa-update-apply-failed`: nothing was being
+ * applied, the check itself failed (typically offline or a server error), and
+ * it self-heals on the next poll / visibility change. It labels the
+ * check-failure leg of the funnel (`pwa-update-detected` → check failures →
+ * `pwa-update-applied` / `pwa-update-apply-failed`) that would otherwise only
+ * surface as a generic `unhandled-error`.
+ *
+ * Checks fire on a timer and on every visibility regain, so an offline session
+ * would reject on every poll. To avoid flooding, each distinct sanitized
+ * `reason` is reported at most once per session and the number of distinct
+ * reasons is capped (see `setupUpdateChecks`). `reason` is the sanitized
+ * rejection message.
+ */
+export interface PwaUpdateCheckFailedData {
+    reason: string;
+}
+
+/**
  * Data attached to `pwa-update-applied` — a deferred service-worker update was
  * applied (the page committed to reloading into the new version).
  *
@@ -365,6 +385,7 @@ export function track(name: 'save-unreadable', data: SaveUnreadableData): void;
 export function track(name: 'save-recovery', data: SaveRecoveryData): void;
 export function track(name: 'progress-save-skipped', data: ProgressSaveSkippedData): void;
 export function track(name: 'pwa-update-detected', data: PwaUpdateDetectedData): void;
+export function track(name: 'pwa-update-check-failed', data: PwaUpdateCheckFailedData): void;
 export function track(name: 'pwa-update-applied', data: PwaUpdateAppliedData): void;
 export function track(name: 'pwa-update-fallback-reload', data: PwaUpdateFallbackReloadData): void;
 export function track(name: 'pwa-update-apply-failed', data: PwaUpdateApplyFailedData): void;
