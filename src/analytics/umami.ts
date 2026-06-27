@@ -338,6 +338,25 @@ export interface PwaUpdateApplyFailedData {
 }
 
 /**
+ * Data attached to `pwa-register-failed` — `registerSW`'s `onRegisterError`
+ * fired: the service worker could not be registered at all (script 404,
+ * security error, or the browser blocking registration). This is the
+ * registration *precondition*, conceptually upstream of the
+ * `pwa-update-detected` → applied funnel: when it fires there is no
+ * registration, so no update checks run and the PWA update mechanism is dead
+ * for the session. That makes it the most severe update-related failure — a
+ * failed *check* (`pwa-update-check-failed`) self-heals on the next poll,
+ * whereas a failed registration does not recover until the next page load.
+ *
+ * `registerSW` is called exactly once per page load, so `onRegisterError` fires
+ * at most once; unlike `pwa-update-check-failed` this needs no per-reason dedup
+ * or cardinality guard. `reason` is the sanitized rejection message.
+ */
+export interface PwaRegisterFailedData {
+    reason: string;
+}
+
+/**
  * Inject the Umami tracking script if a website ID is configured.
  *
  * Call exactly once, early in app startup, before any rendering.
@@ -389,6 +408,7 @@ export function track(name: 'pwa-update-check-failed', data: PwaUpdateCheckFaile
 export function track(name: 'pwa-update-applied', data: PwaUpdateAppliedData): void;
 export function track(name: 'pwa-update-fallback-reload', data: PwaUpdateFallbackReloadData): void;
 export function track(name: 'pwa-update-apply-failed', data: PwaUpdateApplyFailedData): void;
+export function track(name: 'pwa-register-failed', data: PwaRegisterFailedData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);
