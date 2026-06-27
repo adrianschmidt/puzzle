@@ -310,4 +310,127 @@ describe('setupUpdateChecks', () => {
         expect(registration.update).not.toHaveBeenCalled();
         expect(controller.requestReloadIfPending).not.toHaveBeenCalled();
     });
+
+    it('does not track a check failure when the poll resolves', async () => {
+        const registration = { update: vi.fn().mockResolvedValue(undefined) };
+        let intervalFn: (() => void) | null = null;
+        setupUpdateChecks(registration, fakeController(), {
+            setInterval: (fn) => {
+                intervalFn = fn;
+                return 0;
+            },
+            addVisibilityListener: () => {},
+            isVisible: () => true,
+        });
+        intervalFn!();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(track).not.toHaveBeenCalledWith(
+            'pwa-update-check-failed',
+            expect.anything(),
+        );
+    });
+
+    it('tracks pwa-update-check-failed with a sanitized reason when an interval poll rejects', async () => {
+        const registration = {
+            update: vi.fn().mockRejectedValue(new Error('offline')),
+        };
+        let intervalFn: (() => void) | null = null;
+        setupUpdateChecks(registration, fakeController(), {
+            setInterval: (fn) => {
+                intervalFn = fn;
+                return 0;
+            },
+            addVisibilityListener: () => {},
+            isVisible: () => true,
+        });
+        intervalFn!();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(track).toHaveBeenCalledWith('pwa-update-check-failed', {
+            reason: 'offline',
+        });
+    });
+
+    it('tracks pwa-update-check-failed when the visibility-path check rejects', async () => {
+        const registration = {
+            update: vi.fn().mockRejectedValue(new Error('offline')),
+        };
+        let visHandler: (() => void) | null = null;
+        setupUpdateChecks(registration, fakeController(), {
+            setInterval: () => 0,
+            addVisibilityListener: (fn) => {
+                visHandler = fn;
+            },
+            isVisible: () => true,
+        });
+        visHandler!();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(track).toHaveBeenCalledWith('pwa-update-check-failed', {
+            reason: 'offline',
+        });
+    });
+
+    it('reports each distinct reason only once across repeated rejecting checks', async () => {
+        const registration = {
+            update: vi.fn().mockRejectedValue(new Error('offline')),
+        };
+        let intervalFn: (() => void) | null = null;
+        setupUpdateChecks(registration, fakeController(), {
+            setInterval: (fn) => {
+                intervalFn = fn;
+                return 0;
+            },
+            addVisibilityListener: () => {},
+            isVisible: () => true,
+        });
+        for (let i = 0; i < 4; i++) {
+            intervalFn!();
+            await Promise.resolve();
+            await Promise.resolve();
+        }
+        const checkFailures = track.mock.calls.filter(
+            ([name]) => name === 'pwa-update-check-failed',
+        );
+        expect(checkFailures).toHaveLength(1);
+    });
+
+    it('caps the number of distinct reasons reported per session', async () => {
+        const errors = [
+            'reason-a',
+            'reason-b',
+            'reason-c',
+            'reason-d',
+            'reason-e',
+            'reason-f',
+        ];
+        let i = 0;
+        const registration = {
+            update: vi.fn(() => Promise.reject(new Error(errors[i++]))),
+        };
+        let intervalFn: (() => void) | null = null;
+        setupUpdateChecks(registration, fakeController(), {
+            setInterval: (fn) => {
+                intervalFn = fn;
+                return 0;
+            },
+            addVisibilityListener: () => {},
+            isVisible: () => true,
+        });
+        for (let n = 0; n < errors.length; n++) {
+            intervalFn!();
+            await Promise.resolve();
+            await Promise.resolve();
+        }
+        const checkFailures = track.mock.calls.filter(
+            ([name]) => name === 'pwa-update-check-failed',
+        );
+        // Five distinct reasons get through; the sixth is dropped as a
+        // cardinality guard.
+        expect(checkFailures).toHaveLength(5);
+        expect(checkFailures.map(([, data]) => data.reason)).not.toContain(
+            'reason-f',
+        );
+    });
 });

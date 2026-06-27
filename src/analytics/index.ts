@@ -14,6 +14,7 @@ export type {
     NewGameFailedData,
     ShareFailedData,
     PwaUpdateDetectedData,
+    PwaUpdateCheckFailedData,
     PwaUpdateAppliedData,
     PwaUpdateFallbackReloadData,
     PwaUpdateApplyFailedData,
