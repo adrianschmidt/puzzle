@@ -36,6 +36,15 @@ describe('initAnalytics', () => {
         expect(scripts[0].defer).toBe(true);
     });
 
+    it('opts into Umami Web Vitals collection via data-performance', () => {
+        vi.stubEnv('VITE_UMAMI_WEBSITE_ID', 'abc-123');
+
+        initAnalytics();
+
+        const script = document.head.querySelector('script')!;
+        expect(script.dataset.performance).toBe('true');
+    });
+
     it('honours VITE_UMAMI_SCRIPT_URL override when provided', () => {
         vi.stubEnv('VITE_UMAMI_WEBSITE_ID', 'abc-123');
         vi.stubEnv('VITE_UMAMI_SCRIPT_URL', 'https://my-proxy.example/script.js');
