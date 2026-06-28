@@ -17,12 +17,14 @@ import { createDismissableOverlay } from './dismissable-overlay.js';
 
 /** Composable generator config passed through from sliders. */
 export interface ComposableSliderConfig {
+    baseCut: 'sine' | 'triangular';
     horizontalAmplitude: number;
     horizontalFrequency: number;
     verticalAmplitude: number;
     verticalFrequency: number;
     tabGenerator: 'classic' | 'traced' | 'none';
     borderless: boolean;
+    jitter: number;
 }
 
 /** Fractal generator config passed through from the dialog. */
@@ -317,7 +319,7 @@ function buildComposableSlidersSection(args: {
     section.className = 'composable-sliders';
 
     interface SliderDef {
-        id: keyof Omit<ComposableSliderConfig, 'tabGenerator' | 'borderless'>;
+        id: keyof Omit<ComposableSliderConfig, 'tabGenerator' | 'borderless' | 'baseCut' | 'jitter'>;
         label: string;
         min: number;
         max: number;
@@ -391,12 +393,14 @@ function buildComposableSlidersSection(args: {
     return {
         element: section,
         getValues: () => ({
+            baseCut: 'sine' as const,
             horizontalAmplitude: parseFloat(sliderInputs.get('horizontalAmplitude')!.value),
             horizontalFrequency: parseFloat(sliderInputs.get('horizontalFrequency')!.value),
             verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
             verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
             tabGenerator: tabGeneratorRow.getValue(),
             borderless: borderlessCheckbox?.checked ?? false,
+            jitter: 0.15,
         }),
         setVisible: (visible) => {
             section.style.display = visible ? 'block' : 'none';
