@@ -277,3 +277,76 @@ describe('generateTopologyPuzzle borderless', () => {
         expect(pieces.length).toBe(4);
     });
 });
+
+describe('generateTopologyPuzzle with triangular base cut', () => {
+    // Unlike the unit tests in triangular-cut-generator.test.ts (which inspect
+    // the raw Curve[]), these run the lattice through the full DCEL builder and
+    // assert the result is well-formed: valid M…Z piece shapes, unique piece
+    // IDs, and bidirectional edge mates. Mate-consistency is a topological proxy
+    // for a sound face set (these tests do not measure area coverage, so they do
+    // not directly prove the tiling is gap-free) — the degree-6 vertices a
+    // triangular lattice produces are exactly the case a per-curve test can't
+    // exercise.
+    function triangularConfig(jitter: number): TopologyGeneratorConfig {
+        return {
+            baseCutGeneratorId: 'triangular',
+            baseCutConfig: { jitter },
+            tabGeneratorId: 'none',
+        };
+    }
+
+    it.each([0, 0.15, 0.4])('produces valid pieces through the DCEL pipeline (jitter %s)', (jitter) => {
+        const { pieces } = generateTopologyPuzzle(
+            6, 6, { width: 600, height: 400 },
+            seededRandom(42),
+            triangularConfig(jitter),
+        );
+        expect(pieces.length).toBeGreaterThan(0);
+        for (const p of pieces) {
+            expect(p.shape).toBeTruthy();
+            expect(p.shape.startsWith('M')).toBe(true);
+            expect(p.shape.endsWith('Z')).toBe(true);
+        }
+    });
+
+    it('assigns unique piece IDs and bidirectional mates', () => {
+        const { pieces } = generateTopologyPuzzle(
+            6, 6, { width: 600, height: 400 },
+            seededRandom(7),
+            triangularConfig(0.2),
+        );
+        const ids = new Set(pieces.map((p) => p.id));
+        expect(ids.size).toBe(pieces.length);
+
+        const edgeMap = new Map<number, { pieceId: number; mateEdgeId: number; matePieceId: number }>();
+        for (const p of pieces) {
+            for (const e of p.edges) {
+                edgeMap.set(e.id, { pieceId: p.id, mateEdgeId: e.mateEdgeId, matePieceId: e.matePieceId });
+            }
+        }
+        for (const p of pieces) {
+            for (const e of p.edges) {
+                if (e.mateEdgeId === -1) continue;
+                const mate = edgeMap.get(e.mateEdgeId);
+                expect(mate).toBeDefined();
+                expect(mate!.mateEdgeId).toBe(e.id);
+                expect(mate!.matePieceId).toBe(p.id);
+                expect(mate!.pieceId).toBe(e.matePieceId);
+            }
+        }
+    });
+
+    it('works with classic tabs applied', () => {
+        const { pieces } = generateTopologyPuzzle(
+            6, 6, { width: 600, height: 400 },
+            seededRandom(99),
+            { baseCutGeneratorId: 'triangular', baseCutConfig: { jitter: 0.15 }, tabGeneratorId: 'classic' },
+        );
+        expect(pieces.length).toBeGreaterThan(0);
+        for (const p of pieces) {
+            expect(p.shape).toBeTruthy();
+            expect(p.shape.startsWith('M')).toBe(true);
+            expect(p.shape.endsWith('Z')).toBe(true);
+        }
+    });
+});
