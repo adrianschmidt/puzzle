@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createNewGameDialog, getSizeClass } from './new-game-dialog.js';
+import { createNewGameDialog, getSizeClass, type ComposableSliderConfig } from './new-game-dialog.js';
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 
 describe('getSizeClass', () => {
@@ -805,6 +805,67 @@ describe('createNewGameDialog — wavy borderless toggle', () => {
         container.querySelectorAll<HTMLElement>('.size-picker-option')[0].click();
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({ wavyConfig: undefined }),
+        );
+    });
+});
+
+describe('composable base-cut picker', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        localStorage.clear();
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        container.remove();
+    });
+
+    function openDialogAndSelectComposable(onSelect = vi.fn()): ReturnType<typeof vi.fn> {
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect });
+        // Composable is dev-visible under vitest (import.meta.env.DEV).
+        const composableBtn = Array.from(
+            container.querySelectorAll<HTMLButtonElement>('.cut-style-option'),
+        ).find(b => b.textContent?.toLowerCase().includes('composable'));
+        composableBtn!.click();
+        return onSelect;
+    }
+
+    it('shows sine controls and hides triangular controls by default', () => {
+        openDialogAndSelectComposable();
+        const sine = container.querySelector<HTMLElement>('[data-testid="composable-sine-controls"]')!;
+        const tri = container.querySelector<HTMLElement>('[data-testid="composable-triangular-controls"]')!;
+        expect(sine.style.display).not.toBe('none');
+        expect(tri.style.display).toBe('none');
+    });
+
+    it('reveals the irregularity slider when triangular is picked', () => {
+        openDialogAndSelectComposable();
+        const triRadio = container.querySelector<HTMLInputElement>(
+            'input[type="radio"][value="triangular"]',
+        )!;
+        triRadio.click();
+        const sine = container.querySelector<HTMLElement>('[data-testid="composable-sine-controls"]')!;
+        const tri = container.querySelector<HTMLElement>('[data-testid="composable-triangular-controls"]')!;
+        expect(sine.style.display).toBe('none');
+        expect(tri.style.display).not.toBe('none');
+        expect(container.querySelector('[data-testid="composable-jitter-slider"]')).not.toBeNull();
+    });
+
+    it('reports baseCut + jitter through onSelect', () => {
+        const onSelect = openDialogAndSelectComposable();
+        container.querySelector<HTMLInputElement>('input[type="radio"][value="triangular"]')!.click();
+        const jitter = container.querySelector<HTMLInputElement>('[data-testid="composable-jitter-slider"]')!;
+        jitter.value = '0.3';
+        jitter.dispatchEvent(new Event('input'));
+        // Pick a size to fire onSelect.
+        container.querySelectorAll<HTMLButtonElement>('.size-picker-option')[0].click();
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({
+                cutStyleId: 'composable',
+                composableConfig: expect.objectContaining<Partial<ComposableSliderConfig>>({ baseCut: 'triangular', jitter: 0.3 }),
+            }),
         );
     });
 });
