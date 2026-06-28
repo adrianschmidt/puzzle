@@ -318,6 +318,39 @@ function buildComposableSlidersSection(args: {
     const section = document.createElement('div');
     section.className = 'composable-sliders';
 
+    // Sine controls wrapper — holds the four amplitude/frequency sliders.
+    const sineControls = document.createElement('div');
+    sineControls.dataset.testid = 'composable-sine-controls';
+
+    // Triangular controls wrapper — holds the Irregularity (jitter) slider.
+    const triangularControls = document.createElement('div');
+    triangularControls.dataset.testid = 'composable-triangular-controls';
+
+    // Borderless toggle wrapper — created up front so the visibility helper
+    // can toggle it; appended to the section later in DOM order.
+    const borderlessWrap = document.createElement('div');
+
+    // Toggle control visibility for the chosen base cut: triangular hides the
+    // sine sliders + Borderless and shows the Irregularity slider.
+    const applyBaseCutVisibility = (baseCut: 'sine' | 'triangular'): void => {
+        const tri = baseCut === 'triangular';
+        sineControls.style.display = tri ? 'none' : 'block';
+        triangularControls.style.display = tri ? 'block' : 'none';
+        borderlessWrap.style.display = tri ? 'none' : 'block';
+    };
+
+    // Base-cut picker: Sine | Triangular.
+    const baseCutRow = appendSegmentedRow<'sine' | 'triangular'>(
+        section,
+        'Base cut',
+        [
+            { value: 'sine', label: 'Sine' },
+            { value: 'triangular', label: 'Triangular' },
+        ],
+        args.saved?.baseCut ?? 'sine',
+        (value) => applyBaseCutVisibility(value),
+    );
+
     interface SliderDef {
         id: keyof Omit<ComposableSliderConfig, 'tabGenerator' | 'borderless' | 'baseCut' | 'jitter'>;
         label: string;
@@ -365,8 +398,34 @@ function buildComposableSlidersSection(args: {
         row.appendChild(lbl);
         row.appendChild(input);
         row.appendChild(valueDisplay);
-        section.appendChild(row);
+        sineControls.appendChild(row);
     }
+
+    section.appendChild(sineControls);
+
+    // Irregularity (jitter) slider — lives in the triangular controls wrapper.
+    const jitterRow = document.createElement('div');
+    jitterRow.className = 'dialog-row';
+    const jitterLabel = document.createElement('label');
+    jitterLabel.className = 'dialog-row-label';
+    jitterLabel.textContent = 'Irregularity';
+    const jitterValue = document.createElement('span');
+    jitterValue.className = 'dialog-row-value';
+    const jitterInput = document.createElement('input');
+    jitterInput.type = 'range';
+    jitterInput.className = 'dialog-row-input';
+    jitterInput.dataset.testid = 'composable-jitter-slider';
+    jitterInput.min = '0';
+    jitterInput.max = '0.5';
+    jitterInput.step = '0.01';
+    jitterInput.value = String(args.saved?.jitter ?? 0.15);
+    jitterValue.textContent = jitterInput.value;
+    jitterInput.addEventListener('input', () => { jitterValue.textContent = jitterInput.value; });
+    jitterRow.appendChild(jitterLabel);
+    jitterRow.appendChild(jitterInput);
+    jitterRow.appendChild(jitterValue);
+    triangularControls.appendChild(jitterRow);
+    section.appendChild(triangularControls);
 
     // Traced has no dev/prod gate of its own — it inherits Composable's
     // visibility via `getVisibleCutStyleOptions()`. When Composable is
@@ -385,22 +444,30 @@ function buildComposableSlidersSection(args: {
         args.onTabGeneratorChange,
     );
 
+    // Borderless toggle — hidden for triangular cut since it doesn't apply.
+    section.appendChild(borderlessWrap);
     const borderlessCheckbox = args.showBorderless
-        ? appendCheckboxRow(section, 'Borderless', args.saved?.borderless ?? false)
+        ? appendCheckboxRow(borderlessWrap, 'Borderless', args.saved?.borderless ?? false)
         : null;
     if (borderlessCheckbox) borderlessCheckbox.dataset.testid = 'composable-borderless-toggle';
+
+    applyBaseCutVisibility(args.saved?.baseCut ?? 'sine');
 
     return {
         element: section,
         getValues: () => ({
-            baseCut: 'sine' as const,
+            baseCut: baseCutRow.getValue(),
             horizontalAmplitude: parseFloat(sliderInputs.get('horizontalAmplitude')!.value),
             horizontalFrequency: parseFloat(sliderInputs.get('horizontalFrequency')!.value),
             verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
             verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
             tabGenerator: tabGeneratorRow.getValue(),
+            // Report the raw checkbox state; composableSliderToGeneratorConfig
+            // forces borderless off for the triangular base cut, so coercing it
+            // here too would be redundant — and would clobber the player's sine
+            // borderless choice when they toggle back from triangular.
             borderless: borderlessCheckbox?.checked ?? false,
-            jitter: 0.15,
+            jitter: parseFloat(jitterInput.value),
         }),
         setVisible: (visible) => {
             section.style.display = visible ? 'block' : 'none';
