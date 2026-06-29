@@ -118,28 +118,26 @@ describe('triangularCutGenerator', () => {
         expect(curves.length).toBeLessThan(2500);
     });
 
-    // SKIPPED pending #439: this case runs the full O(n²) DCEL at the
-    // ~2000-curve worst-case count, which takes tens of seconds on slower /
-    // contended machines and makes the wall-clock ceiling below flaky. The
+    // Re-enabled by #439: the DCEL spatial broad-phase cut this worst case
+    // from ~9s to ~2s, so the wall-clock ceiling below is no longer flaky and
+    // is now a meaningful regression guard — a change that defeats the
+    // broad-phase (or the curve budget) sends this back over the ceiling. The
     // deterministic curve-budget guards in the two sibling tests above
-    // ('...extreme-aspect...' and '...rows override...') still cover the DoS
-    // regression, so skipping this loses no DoS coverage. Re-enable — with a
-    // tightened, now-meaningful timing ceiling — once #439's DCEL spatial
-    // broad-phase makes the worst case fast.
-    it.skip('the worst case runs the full DCEL pipeline to valid pieces in bounded time', () => {
+    // ('...extreme-aspect...' and '...rows override...') remain the
+    // machine-independent DoS guard; this adds the end-to-end timing backstop.
+    it('the worst case runs the full DCEL pipeline to valid pieces in bounded time', () => {
         // Regression for the DoS: this is the curve count that flows into
-        // buildDCEL's O(n²) intersection + vertex-pool passes — the real cost
-        // center the curves.length assertions above do NOT exercise. The frame
-        // is a crafted 32:1 extreme-aspect link at the 64-row grid clamp — wide
-        // enough that the curve budget engages (so we hit the worst-case
-        // ~2000-curve count) while rows stay >3px apart so the lattice doesn't
-        // collapse into the vertex-merge tolerance. With the budget this is the
-        // SAME curve count a wide legitimate puzzle produces and completes in a
-        // few seconds; WITHOUT it the same link derives ~98k curves and the
-        // O(n²) DCEL would run for hours. The ceiling below cleanly separates
-        // "fixed" (single-digit seconds) from "broken" (effectively unbounded);
-        // it is not a sub-second assertion (the pre-existing DCEL cost makes the
-        // legitimate ceiling itself take a few seconds — see TARGET_MAX_CURVES).
+        // buildDCEL's broad-phased intersection + vertex-pool passes (#439's
+        // spatial index) — the real cost center the curves.length assertions
+        // above do NOT exercise. The frame is a crafted 32:1 extreme-aspect
+        // link at the 64-row grid clamp — wide enough that the curve budget
+        // engages (so we hit the worst-case ~2000-curve count) while rows stay
+        // >3px apart so the lattice doesn't collapse into the vertex-merge
+        // tolerance. With the budget this is the SAME curve count a wide
+        // legitimate puzzle produces and completes in ~2s post-#439; WITHOUT
+        // the budget the same link derives ~98k curves and even the broad-phase
+        // can't keep it interactive. The ceiling below cleanly separates "fixed"
+        // (~2s) from "broken" (the pre-#439 O(n²) ~9s, or an unbounded blow-up).
         //
         // DETERMINISTIC guard (machine-independent): the curve count fed into the
         // O(n²) DCEL at this exact frame/rows is the real cost driver, and it is
@@ -165,8 +163,15 @@ describe('triangularCutGenerator', () => {
             expect(piece.shape.startsWith('M')).toBe(true);
             expect(piece.shape.endsWith('Z')).toBe(true);
         }
-        expect(elapsedMs).toBeLessThan(30_000);
-    }, 60_000); // per-test timeout > the assertion ceiling so the assert, not
+        // Locally the fixed code runs ~2s; in CI (slower / contended) it runs
+        // ~9s. The old O(n²) path consistently blew past the prior 30s gate —
+        // which is why this test was disabled pending the broad-phase. A 16s
+        // ceiling clears the ~9s CI runtime with headroom (so it doesn't flake)
+        // while still failing on a regression back toward that unbounded cost.
+        // The deterministic curve-budget guards above remain the precise,
+        // machine-independent signal.
+        expect(elapsedMs).toBeLessThan(16_000);
+    }, 20_000); // per-test timeout > the assertion ceiling so the assert, not
     //            vitest's 5s default, is what reports a regression.
 
     it('jitter changes the interior cuts vs the regular tiling', () => {
