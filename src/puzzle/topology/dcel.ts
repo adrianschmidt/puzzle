@@ -19,7 +19,7 @@
 
 import type { Point } from '../../model/types.js';
 import { Curve } from './curve.js';
-import type { CurveIntersection } from './curve.js';
+import type { CurveIntersection, BoundingBox } from './curve.js';
 import { findComponents } from './components.js';
 import { assignHoles } from './holes.js';
 
@@ -210,28 +210,140 @@ function findAllIntersections(
         }
     }
 
-    for (let i = 0; i < curves.length; i++) {
-        for (let j = i + 1; j < curves.length; j++) {
-            if (skipPairs.has(`${i},${j}`)) continue;
+    // Spatial broad-phase: instead of the full n²/2 pair loop, test only
+    // curve pairs whose bounding boxes lie close enough to possibly produce
+    // a result. Pairs are returned in ascending (i, j) order — identical to
+    // the old nested loop with the provably-empty pairs removed — so the
+    // results array (and its order-dependent T-junction dedup) is built
+    // byte-for-byte the same. See curveBroadPhasePairs for the margin proof.
+    const boxes = curves.map(c => c.boundingBox());
+    const pairs = curveBroadPhasePairs(boxes, BROAD_PHASE_MARGIN);
 
-            const intersections = curves[i].intersect(curves[j]);
-            for (const ix of intersections) {
-                results.push({
-                    curveIndexA: i,
-                    curveIndexB: j,
-                    intersection: ix,
-                });
-            }
+    for (const [i, j] of pairs) {
+        if (skipPairs.has(`${i},${j}`)) continue;
 
-            // T-junction detection: check if either curve's endpoints lie
-            // on the other curve. This handles cuts that START or END on
-            // another curve (e.g. internal cuts meeting the border).
-            addEndpointOnCurve(curves[i], curves[j], i, j, results);
-            addEndpointOnCurve(curves[j], curves[i], j, i, results);
+        const intersections = curves[i].intersect(curves[j]);
+        for (const ix of intersections) {
+            results.push({
+                curveIndexA: i,
+                curveIndexB: j,
+                intersection: ix,
+            });
         }
+
+        // T-junction detection: check if either curve's endpoints lie
+        // on the other curve. This handles cuts that START or END on
+        // another curve (e.g. internal cuts meeting the border).
+        addEndpointOnCurve(curves[i], curves[j], i, j, results);
+        addEndpointOnCurve(curves[j], curves[i], j, i, results);
     }
 
     return results;
+}
+
+/**
+ * Broad-phase proximity margin, in pixels.
+ *
+ * A curve pair can only contribute a result if it's within this distance:
+ * curve-curve crossings need overlapping segment boxes (intersect's 0.5px
+ * tolerance), and endpoint-on-curve T-junctions need an endpoint within
+ * `2 · VERTEX_MERGE_TOLERANCE` of the other curve (findPointOnCurve's
+ * threshold). The margin covers the larger of the two, so any pair the
+ * broad-phase skips provably produces nothing.
+ */
+const BROAD_PHASE_MARGIN = 2 * VERTEX_MERGE_TOLERANCE;
+
+/**
+ * Lower bound on the broad-phase grid cell size, in pixels.
+ *
+ * Floors the extent-derived cell size so a degenerate all-points input (every
+ * box zero-extent → average extent 0) can't collapse the grid to a zero-width
+ * cell. The exact value is arbitrary: cell size never affects correctness (the
+ * candidate set is a superset for any positive cell size), only how tightly
+ * the grid prunes. It is conceptually unrelated to VERTEX_MERGE_TOLERANCE —
+ * they merely happen to share the value 3.
+ */
+const MIN_CELL = 3;
+
+/**
+ * Conservative spatial broad-phase over curve bounding boxes.
+ *
+ * Returns the curve-index pairs (i < j) whose bounding boxes lie within
+ * `margin` of each other, in ascending (i, j) order. Any pair NOT returned
+ * is separated by more than `margin` in at least one axis, so it can
+ * produce neither a curve-curve crossing nor a T-junction — skipping it
+ * changes no output. It only removes the ~n²/2 dead iterations the old full
+ * loop spent cheaply rejecting non-adjacent pairs.
+ *
+ * Method: a uniform grid sized to the average curve extent. Each curve is
+ * rasterized into every cell its margin-expanded box covers, so two curves
+ * within `margin` are guaranteed to share at least one cell; cell
+ * co-occupants are the candidate pairs (deduped). For lattice/grid geometry
+ * each cell holds O(1) curves → ~O(n) candidate pairs. The result is sorted
+ * to reproduce the original loop's exact (i, j) ordering.
+ */
+export function curveBroadPhasePairs(
+    boxes: BoundingBox[],
+    margin: number,
+): Array<[number, number]> {
+    const n = boxes.length;
+    if (n < 2) return [];
+
+    // Cell size = average max-extent of the boxes, floored at MIN_CELL so it
+    // never collapses to ~0 on degenerate (point) inputs. Robust for our
+    // distribution (many lattice-scale curves + a few full-span borders):
+    // the average tracks the lattice scale, so normal curves occupy O(1)
+    // cells while the few oversized borders rasterize to O(span/scale)
+    // cells — still linear overall. Cell size never affects correctness
+    // (the candidate set is a superset for any positive cell size), only
+    // how tightly the grid prunes.
+    //
+    // Worst case: many large, mutually-overlapping curves all share most
+    // cells, so the candidate set — and the `seen`/`pairs` aux memory —
+    // degrades toward the full O(n²) pair count, no better than the old
+    // nested loop. No current generator produces that geometry (our cuts are
+    // either lattice-scale or a handful of full-span borders), but a future
+    // one that does would lose the broad-phase's pruning benefit.
+    let extentSum = 0;
+    for (const b of boxes) {
+        extentSum += Math.max(b.maxX - b.minX, b.maxY - b.minY);
+    }
+    const cell = Math.max(extentSum / n, MIN_CELL);
+
+    const grid = new Map<string, number[]>();
+    const seen = new Set<number>();
+    const pairs: Array<[number, number]> = [];
+
+    for (let i = 0; i < n; i++) {
+        const b = boxes[i];
+        const gx0 = Math.floor((b.minX - margin) / cell);
+        const gx1 = Math.floor((b.maxX + margin) / cell);
+        const gy0 = Math.floor((b.minY - margin) / cell);
+        const gy1 = Math.floor((b.maxY + margin) / cell);
+
+        for (let gx = gx0; gx <= gx1; gx++) {
+            for (let gy = gy0; gy <= gy1; gy++) {
+                const key = `${gx},${gy}`;
+                const occupants = grid.get(key);
+                if (!occupants) {
+                    grid.set(key, [i]);
+                    continue;
+                }
+                for (const j of occupants) {
+                    // Occupants were inserted earlier, so j < i: emit (j, i).
+                    const pairKey = j * n + i;
+                    if (!seen.has(pairKey)) {
+                        seen.add(pairKey);
+                        pairs.push([j, i]);
+                    }
+                }
+                occupants.push(i);
+            }
+        }
+    }
+
+    pairs.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    return pairs;
 }
 
 /**
@@ -480,17 +592,54 @@ function splitClosedCurves(segments: Curve[]): Curve[] {
 // Vertex pool with tolerance-based merging
 // ---------------------------------------------------------------------------
 
-class VertexPool {
+/**
+ * Tolerance-based vertex deduplication, backed by a spatial hash.
+ *
+ * A naive linear scan over every existing vertex on each insertion is
+ * O(V²) over a build — the dominant cost once a generator emits tens of
+ * thousands of segment endpoints. Instead we bucket vertices into a
+ * uniform grid with cell size {@link VERTEX_MERGE_TOLERANCE}; a query
+ * point can only merge with a vertex in its own cell or the 8 neighbors
+ * (any closer vertex is at most one cell away when the cell size equals
+ * the merge radius), so lookup is O(1) amortized.
+ *
+ * Byte-identity with the old linear scan: when several existing vertices
+ * lie within tolerance of a query point, the linear scan returned the
+ * first one in insertion order. Ids are assigned sequentially, so that
+ * is exactly the lowest-id candidate — which is what {@link getOrCreate}
+ * selects across the 9 inspected cells. The merge decision is therefore
+ * identical regardless of bucketing, preserving the share-link contract.
+ *
+ * Exported for the focused merge-equivalence unit test in dcel.test.ts;
+ * not part of the public DCEL API.
+ */
+export class VertexPool {
     private vertices: Vertex[] = [];
     private nextId = 0;
+    /** cellKey → vertices whose position falls in that cell. */
+    private buckets = new Map<string, Vertex[]>();
 
     getOrCreate(point: Point): Vertex {
-        // Find existing vertex within tolerance
-        for (const v of this.vertices) {
-            if (pointDist(v.position, point) < VERTEX_MERGE_TOLERANCE) {
-                return v;
+        const cx = Math.floor(point.x / VERTEX_MERGE_TOLERANCE);
+        const cy = Math.floor(point.y / VERTEX_MERGE_TOLERANCE);
+
+        // Scan the point's cell + 8 neighbors; among all vertices within
+        // tolerance, pick the lowest-id one to match the old linear scan's
+        // "first inserted wins" merge.
+        let best: Vertex | null = null;
+        for (let gx = cx - 1; gx <= cx + 1; gx++) {
+            for (let gy = cy - 1; gy <= cy + 1; gy++) {
+                const bucket = this.buckets.get(`${gx},${gy}`);
+                if (!bucket) continue;
+                for (const v of bucket) {
+                    if (pointDist(v.position, point) < VERTEX_MERGE_TOLERANCE &&
+                        (best === null || v.id < best.id)) {
+                        best = v;
+                    }
+                }
             }
         }
+        if (best !== null) return best;
 
         const v: Vertex = {
             id: this.nextId++,
@@ -498,6 +647,10 @@ class VertexPool {
             outgoing: null,
         };
         this.vertices.push(v);
+        const key = `${cx},${cy}`;
+        const bucket = this.buckets.get(key);
+        if (bucket) bucket.push(v);
+        else this.buckets.set(key, [v]);
         return v;
     }
 
