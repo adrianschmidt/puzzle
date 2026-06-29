@@ -70,6 +70,9 @@ export class Curve {
     /** Cached bezier-js instances (one per segment). */
     private _beziers?: Bezier[];
 
+    /** Cached per-segment bounding boxes (one per segment). */
+    private _segmentBoxes?: BBox[];
+
     constructor(segments: BezierSegment[]) {
         if (segments.length === 0) {
             throw new Error('Curve must have at least one segment');
@@ -90,6 +93,22 @@ export class Curve {
             ));
         }
         return this._beziers;
+    }
+
+    /**
+     * Per-segment bounding boxes (lazily created, cached).
+     *
+     * `intersect` is called O(n) times per curve by the DCEL builder's
+     * pair loop; recomputing the segment boxes on every call rebuilds
+     * each curve's boxes ~n times (millions of tiny allocations on
+     * curve-heavy generators). Caching makes it once per curve. Safe
+     * because segments are immutable (`readonly`).
+     */
+    private get segmentBoxes(): BBox[] {
+        if (!this._segmentBoxes) {
+            this._segmentBoxes = this.segments.map(segmentBBox);
+        }
+        return this._segmentBoxes;
     }
 
     // -- Factory methods ---------------------------------------------------
@@ -343,10 +362,11 @@ export class Curve {
         const selfN = this.segments.length;
         const otherN = other.segments.length;
 
-        // Pre-compute bounding boxes for all segments to skip
-        // non-overlapping pairs (avoids expensive bezier-js calls).
-        const selfBoxes = this.segments.map(segmentBBox);
-        const otherBoxes = other.segments.map(segmentBBox);
+        // Per-segment bounding boxes to skip non-overlapping pairs
+        // (avoids expensive bezier-js calls). Cached on each curve so the
+        // DCEL builder's O(n) repeated intersect calls don't rebuild them.
+        const selfBoxes = this.segmentBoxes;
+        const otherBoxes = other.segmentBoxes;
 
         for (let i = 0; i < selfN; i++) {
             for (let j = 0; j < otherN; j++) {
