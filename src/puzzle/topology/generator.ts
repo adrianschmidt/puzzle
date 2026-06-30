@@ -25,6 +25,7 @@ import { autoGroupSmallPieces } from './auto-group.js';
 import type { AutoGroup } from './auto-group.js';
 import { getBaseCutGenerator, getTabGenerator } from './generator-registry.js';
 import { stripBorderRing } from './strip-border-ring.js';
+import { clampGridDim } from './grid-dim.js';
 import { diagnostics } from '../../diagnostics.js';
 
 // ---------------------------------------------------------------------------
@@ -135,9 +136,15 @@ export function generateTopologyPuzzle(
     // (it must know how to oversize its grid). Otherwise the flag is ignored.
     const applyBorderless =
         config?.borderless === true && baseCutGenerator.supportsBorderless === true;
+    // Apply the grid dims AFTER spreading the opaque baseCutConfig so a crafted
+    // `cf.bgc.rows`/`cols` can't override them, and clamp them so no generator is
+    // ever handed an out-of-range grid (see clampGridDim / MAX_GRID_DIM in
+    // grid-dim.ts). A strict no-op for every legitimate puzzle (dims are already
+    // <= the UI/decoder ceiling).
     const baseCutCfg = {
-        cols, rows,
         ...(config?.baseCutConfig ?? {}),
+        cols: clampGridDim(cols),
+        rows: clampGridDim(rows),
         borderless: applyBorderless,
     };
     const curves = baseCutGenerator.generate(imageSize, random, baseCutCfg);
