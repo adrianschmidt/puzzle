@@ -40,12 +40,21 @@ function seedFromFloat(v: number): number {
  * Worst-case budget on the TOTAL number of lattice curves this generator may
  * emit. The lattice emits ~`3 · rows · cols` single-segment curves (one
  * horizontal + two diagonal families), and that whole set is fed to
- * `buildDCEL`, whose intersection pass (`findAllIntersections`) and vertex pool
- * (`VertexPool.getOrCreate`) are both O(n²) with no spatial index — so DCEL
- * cost grows with the SQUARE of the curve count. Bounding the curve count to a
- * few thousand keeps that n²/2 comfortably sub-second.
+ * `buildDCEL`. Since #439 the DCEL's intersection pass (`findAllIntersections`)
+ * and vertex pool (`VertexPool.getOrCreate`) are fronted by a spatial
+ * broad-phase, so for lattice-scale geometry their candidate work is ~O(n)
+ * rather than the old O(n²). That made raw curve count cheap — a real
+ * rows = 12 panorama builds ~7k curves in a few hundred ms — and is what lets
+ * this budget sit far higher than its pre-#439 value of 2000 (see #441).
  *
- * Neither dimension is bounded by the share-link decode clamps on its own:
+ * The residual super-linear cost is not curve count but lattice *fineness*: a
+ * crafted link with many rows packed into a tiny frame height collapses the
+ * vertical spacing toward the DCEL's 3px vertex-merge tolerance, multiplying
+ * the per-curve merge/T-junction work. Empirically that cost climbs steeply
+ * with the row count (a 16×12-equivalent wide puzzle is sub-second, but the
+ * same curve budget at rows ≈ 64 runs several seconds). The two crafted
+ * dimensions that drive it are NOT bounded by the share-link decode clamps on
+ * their own:
  *   - `cols` is NOT the grid `cols` the caller passes; it is derived from the
  *     frame aspect ratio (`cols ≈ (w/h)·rows·√3/2`), and no decode clamp bounds
  *     the aspect ratio. A crafted extreme-aspect link (`is:[8192,1]`) derives
@@ -54,56 +63,65 @@ function seedFromFloat(v: number): number {
  *     `baseCutConfig` (share-link `cf.bgc`) is spread over it in the topology
  *     generator AFTER the clamp, so a crafted `cf.bgc.rows = 1e6` flows in
  *     unbounded.
- * Either alone (or both together) would otherwise emit tens of millions of
- * curves and freeze the main thread for minutes inside the O(n²) DCEL.
+ * This budget squeezes `cols` so total curves stay ≤ ~TARGET_MAX_CURVES for any
+ * `rows` (curves ≈ 3·rows·cols, and cols ≤ TARGET_MAX_CURVES/(3·rows)), while
+ * {@link MAX_ROWS} independently caps the row count — together they bound the
+ * fineness term, so the crafted worst case stays in the ~4–5.25s range (measured)
+ * regardless of how the two dimensions are pushed.
  *
- * The budget squeezes `cols` so total curves stay ≤ ~TARGET_MAX_CURVES for any
- * `rows` (curves ≈ 3·rows·cols, and cols ≤ TARGET_MAX_CURVES/(3·rows)), and
- * {@link MAX_ROWS} independently bounds the O(rows) node-allocation loop
- * against the `bgc.rows` override.
- *
- * Value chosen to be a no-op for every typical landscape puzzle while reining
- * the crafted case down to a comparable ceiling. The largest real puzzle is the
+ * Value chosen so the clamp is a no-op across the entire real landscape range,
+ * engaging only on clearly-absurd aspects. The largest real puzzle is the
  * 16×12 grid (rows = 12); at rows = 12 the per-row column budget is
- * floor(2000 / 36) = 55, and the derived column count is cols ≈ (w/h)·rows·√3/2,
- * so the budget first engages at an aspect of ~5.34:1. A typical landscape
- * Unsplash photo (or the 1080×720 blank) sits well under that (a 5:1 panorama
- * derives ~52 columns, ≈ 1900 curves), so the budget is a no-op for them and
- * does not perturb their geometry or jitter draw order.
+ * floor(7500 / 36) = 208, and the derived column count is cols ≈ (w/h)·rows·√3/2,
+ * so the budget first engages at an aspect of ~20:1. Every real landscape photo
+ * — including genuine ultrawide panoramas up to 20:1 at the 192-piece size —
+ * now renders at full triangle density, so the budget does not perturb their
+ * geometry or jitter draw order.
  *
- * It is NOT a strict no-op for every conceivable puzzle: a genuinely ultrawide
- * max-size panorama wider than ~5.34:1 at rows = 12 derives more than 55 columns
- * and IS clamped, compressing its horizontal lattice slightly. That clamp is
- * deterministic — it runs identically on sender and receiver from the same
- * inputs — so it is a bounded, deliberate geometry trade-off, not a
- * reproducibility break (and triangular is unreleased, so no existing share link
- * depends on the unclamped geometry).
+ * It is NOT a strict no-op for every conceivable puzzle: a panorama wider than
+ * ~20:1 at rows = 12 derives more than 208 columns and IS clamped, compressing
+ * its horizontal lattice slightly. That clamp is deterministic — it runs
+ * identically on sender and receiver from the same inputs — so it is a bounded,
+ * deliberate geometry trade-off, not a reproducibility break. Raising the value
+ * from 2000 (the #441 change) re-derives geometry for any previously-clamped
+ * 5.34:1–20:1 puzzle; that is a forward-only, deliberate change, acceptable
+ * because triangular is unreleased so no existing share link depends on the old
+ * geometry.
  *
- * It is deliberately NOT lower: the DCEL's intersection/vertex passes are
- * O(n²) in the curve count (empirically a 16×12 wide puzzle already runs a few
- * seconds), so a sub-second worst case would require a budget below the typical
- * landscape ceiling, which would clamp ordinary wide puzzles and compress their
- * geometry — keeping the budget a no-op for typical puzzles wins. The win here
- * is eliminating the DoS *amplification*: a crafted `is:[8192,1]`, `g:[*,64]`
- * link drops from tens of millions of curves (~450k columns — a multi-minute /
- * effectively unbounded O(n²) main-thread freeze) to the bounded ~2000-curve
- * ceiling (a few seconds), so a share link can no longer cost more than the
- * worst puzzle a user could already build. Capping here (rather than at decode)
- * also protects the dev console and any future entry point.
+ * It is deliberately NOT higher: pushing the budget past the real-landscape
+ * ceiling would only raise the crafted worst case's curve count and build time
+ * with no fidelity benefit (no real puzzle exceeds ~20:1 at max size). The win
+ * here is eliminating the DoS *amplification*: a crafted `is:[8192,1]`,
+ * `g:[*,64]` link drops from tens of millions of curves (~450k columns — a
+ * multi-minute, effectively unbounded freeze) to the bounded ~7500-curve
+ * ceiling at the {@link MAX_ROWS}-capped row count (~4–5.25s), so a share link can
+ * no longer cost more than the worst real max-size panorama. Capping here
+ * (rather than at decode) also protects the dev console and any future entry
+ * point.
  */
-const TARGET_MAX_CURVES = 2000;
+const TARGET_MAX_CURVES = 7500;
 
 /**
- * Hard upper bound on the triangle-row count, bounding the O(rows · cols)
- * node-allocation loop against the `cf.bgc.rows` override described above.
- * Set to 64 to match the share-link `MAX_GRID_DIM` grid-dimension clamp, so it
- * is a strict no-op for every value the grid decoder can produce (legitimate
- * UI puzzles top out at rows = 12; the whole crafted-ceiling range up to 64
- * still passes through unchanged) — only a `bgc.rows` override above the grid
- * clamp is reined in. Because it never engages for any decoder-reachable row
- * count, it cannot perturb a legitimate puzzle's geometry or jitter draws.
+ * Hard upper bound on the triangle-row count. It serves two ends: bounding the
+ * O(rows · cols) node-allocation loop against a crafted `cf.bgc.rows` override,
+ * and — since #441 raised {@link TARGET_MAX_CURVES} — capping the lattice
+ * fineness that is now the DCEL's dominant super-linear cost (many rows in a
+ * tight frame collapse toward the 3px vertex-merge tolerance; see the
+ * TARGET_MAX_CURVES rationale).
+ *
+ * Set to 16: the largest real puzzle is the 16×12 grid (rows = 12), so 16 is a
+ * strict no-op for every legitimate puzzle while leaving a little headroom for
+ * a future slightly-larger size preset. It is deliberately BELOW the share-link
+ * `MAX_GRID_DIM` (64): with the higher curve budget, an unclamped crafted
+ * rows ≈ 64 link in a tight frame would run several seconds, so anything the
+ * decoder or a `bgc.rows` override pushes into the 17–64 range is reined back to
+ * 16, keeping the crafted worst-case build at ~today's ~4–5.25s level (measured).
+ * The clamp engaging within the decoder's range is intentional and only affects
+ * crafted links (no real puzzle exceeds 12 rows); like the curve budget it is
+ * deterministic, so it does not break reproducibility, and triangular is
+ * unreleased so no existing share link depends on the unclamped row count.
  */
-const MAX_ROWS = 64;
+const MAX_ROWS = 16;
 
 /**
  * Border / jitter inset margin, in pixels, added on top of the jitter reach.
@@ -153,9 +171,11 @@ export const triangularCutGenerator: BaseCutGenerator = {
 
     generate(frame: Size, random: () => number, config: unknown): Curve[] {
         const cfg = (config ?? {}) as Partial<TriangularCutConfig>;
-        // MAX_ROWS bounds the node-allocation loop against a crafted
-        // `cf.bgc.rows` override; it equals the grid-dim decode clamp, so it is
-        // a no-op for every legitimate (and dev-console) row count.
+        // MAX_ROWS bounds the node-allocation loop AND the lattice fineness
+        // (the DCEL's dominant cost) against a crafted `cf.bgc.rows` override or
+        // an over-range grid; it sits just above the largest real puzzle's 12
+        // rows, so it is a no-op for every legitimate (and dev-console) row
+        // count and only reins in crafted links.
         const rows = Math.min(MAX_ROWS, Math.max(1, Math.floor(cfg.rows ?? 1)));
         const jitter = Math.min(0.5, Math.max(0, cfg.jitter ?? 0.15));
         const w = frame.width;
@@ -173,11 +193,11 @@ export const triangularCutGenerator: BaseCutGenerator = {
         // Snap the horizontal spacing so a whole number of columns divides the
         // width exactly, aligning the lattice to the left/right borders (no
         // sliver column). Triangles become very slightly isoceles.
-        // The total-curve budget caps the absurd extreme-aspect case (see
+        // The total-curve budget caps clearly-absurd extreme-aspect cases (see
         // TARGET_MAX_CURVES): the lattice emits ~3·rows·cols curves, so the
-        // per-row column budget keeps the total bounded for the O(n²) DCEL. A
-        // normal puzzle derives far fewer columns than the budget and is
-        // unaffected.
+        // per-row column budget keeps the total bounded for the DCEL. Every real
+        // landscape — up to ~20:1 panoramas at the 192-piece size — derives no
+        // more columns than the budget and is unaffected.
         const colBudget = Math.max(1, Math.floor(TARGET_MAX_CURVES / (3 * rows)));
         const cols = Math.min(colBudget, Math.max(1, Math.round(w / equilateralSide)));
         const colStep = w / cols;
