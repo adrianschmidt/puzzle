@@ -281,6 +281,9 @@ const MIN_CELL = 3;
  * co-occupants are the candidate pairs (deduped). For lattice/grid geometry
  * each cell holds O(1) curves → ~O(n) candidate pairs. The result is sorted
  * to reproduce the original loop's exact (i, j) ordering.
+ *
+ * Exported for the focused broad-phase unit test in dcel.test.ts; not part
+ * of the public DCEL API.
  */
 export function curveBroadPhasePairs(
     boxes: BoundingBox[],
