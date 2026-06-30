@@ -350,3 +350,72 @@ describe('generateTopologyPuzzle with triangular base cut', () => {
         }
     });
 });
+
+describe('generateTopologyPuzzle grid-dim clamp (issue #440)', () => {
+    // A crafted share link can smuggle an out-of-range `rows`/`cols` into the
+    // opaque `baseCutConfig` (the share-link `cf.bgc` blob). The generator must
+    // never let that override the clamped grid dims it was handed: a generator
+    // that scales its work by `rows`/`cols` (notably sine) would otherwise
+    // allocate unbounded cuts and hang the tab. The clamp lives in the shared
+    // path so it covers every base-cut generator, not just sine.
+    const FLAT_SINE = { ha: 0, hf: 0, va: 0, vf: 0 } as const;
+
+    it('ignores rows/cols smuggled into baseCutConfig (override neutralized)', () => {
+        const baseline = generateTopologyPuzzle(
+            3, 3, { width: 300, height: 300 }, seededRandom(42),
+            { baseCutGeneratorId: 'sine', baseCutConfig: { ...FLAT_SINE }, tabGeneratorId: 'none' },
+        ).pieces.length;
+
+        const crafted = generateTopologyPuzzle(
+            3, 3, { width: 300, height: 300 }, seededRandom(42),
+            {
+                baseCutGeneratorId: 'sine',
+                // 70 is above MAX_GRID_DIM (64); mimics a crafted `cf.bgc`
+                // override. It must not win over the 3×3 grid args.
+                baseCutConfig: { ...FLAT_SINE, rows: 70, cols: 70 },
+                tabGeneratorId: 'none',
+            },
+        ).pieces.length;
+
+        expect(baseline).toBe(9);
+        expect(crafted).toBe(baseline);
+    });
+
+    it('clamps oversized grid args themselves to MAX_GRID_DIM (defense in depth)', () => {
+        // The decoder already clamps `g` to 64 upstream; this asserts the
+        // generator independently bounds an out-of-range dimension instead of
+        // attempting an unbounded grid. A 1000×1000 request must behave exactly
+        // like the clamped 64×64 grid, not blow up.
+        const clamped = generateTopologyPuzzle(
+            1000, 1000, { width: 640, height: 640 }, seededRandom(42),
+            { baseCutGeneratorId: 'sine', baseCutConfig: { ...FLAT_SINE }, tabGeneratorId: 'none' },
+        ).pieces.length;
+        const atCeiling = generateTopologyPuzzle(
+            64, 64, { width: 640, height: 640 }, seededRandom(42),
+            { baseCutGeneratorId: 'sine', baseCutConfig: { ...FLAT_SINE }, tabGeneratorId: 'none' },
+        ).pieces.length;
+        expect(clamped).toBe(atCeiling);
+    });
+
+    it('an in-range rows/cols in baseCutConfig is inert (no crash, identical geometry)', () => {
+        // Companion to the out-of-range case above. The generator overwrites
+        // `cols`/`rows` unconditionally, so a `bgc` override is always dropped —
+        // this can't distinguish "honored" from "dropped" on its own. What it
+        // does prove is that supplying an in-range rows/cols in `baseCutConfig`
+        // (a shape a real share link could carry) neither throws nor perturbs
+        // the seeded geometry: the pieces are byte-identical to passing no
+        // override at all. Together with the override-neutralization test above,
+        // this shows a `bgc` rows/cols never affects output, in range or out.
+        const withoutOverride = generateTopologyPuzzle(
+            4, 5, { width: 400, height: 500 }, seededRandom(7),
+            { baseCutGeneratorId: 'sine', baseCutConfig: { ...FLAT_SINE }, tabGeneratorId: 'none' },
+        ).pieces.map(p => p.shape);
+
+        const withMatchingOverride = generateTopologyPuzzle(
+            4, 5, { width: 400, height: 500 }, seededRandom(7),
+            { baseCutGeneratorId: 'sine', baseCutConfig: { ...FLAT_SINE, rows: 5, cols: 4 }, tabGeneratorId: 'none' },
+        ).pieces.map(p => p.shape);
+
+        expect(withMatchingOverride).toEqual(withoutOverride);
+    });
+});

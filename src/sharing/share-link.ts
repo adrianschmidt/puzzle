@@ -13,6 +13,7 @@ import {
     listBaseCutGeneratorIds,
     listTabGeneratorIds,
 } from '../puzzle/topology/generator-registry.js';
+import { clampGridDim } from '../puzzle/topology/grid-dim.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 import { CURRENT_TRACE_SET_VERSION, normalizeTraceSetVersion } from '../puzzle/composable/traces/trace-set-version.js';
 
@@ -90,16 +91,6 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
 }
 
 /**
- * Upper bound on a decoded grid dimension. The UI tops out at 16×12
- * (192 pieces); this cap sits generously above that so no real or
- * dev-console puzzle is altered, while bounding the O(E²) crossing
- * check against a crafted link with an absurd grid (e.g. 1e9×1e9),
- * which would otherwise hang the tab. Decode-time clamp keeps every
- * downstream consumer (generators read `g` as cols/rows) safe.
- */
-const MAX_GRID_DIM = 64;
-
-/**
  * Upper bound on a decoded image dimension (pixels). The app delivers
  * images at 1080px wide (height scaled by aspect ratio), so this cap
  * sits several times above any real image while bounding the canvas
@@ -113,8 +104,8 @@ const MAX_IMAGE_DIM = 8192;
  * Upper bound on a decoded sine base-cut frequency (`hf`/`vf`). The
  * new-game dialog caps frequency at 10, so this sits an order of
  * magnitude above any UI-reachable value (mirroring how
- * {@link MAX_GRID_DIM} keeps headroom over the UI grid cap) and alters no
- * real or dev-console puzzle.
+ * {@link clampGridDim}'s ceiling keeps headroom over the UI grid cap) and
+ * alters no real or dev-console puzzle.
  *
  * It bounds `generateSineCurve`'s segment allocation against a crafted
  * `cf.bgc.hf = 1e9` link. Per-curve segments grow linearly with
@@ -148,11 +139,6 @@ const MAX_SINE_AMPLITUDE = 0.5;
 function clampDim(n: number, max: number): number {
     if (!Number.isFinite(n)) return 1;
     return Math.max(1, Math.min(max, Math.floor(n)));
-}
-
-/** Clamp a decoded grid dimension to a positive integer within bounds. */
-function clampGridDim(n: number): number {
-    return clampDim(n, MAX_GRID_DIM);
 }
 
 /**
@@ -194,7 +180,7 @@ export function decodePayload(encoded: string): SharePayload | null {
         const translated = translateLegacyComposable(parsed);
         if (!isValidPayload(translated)) return null;
         // Bound the grid before it reaches the generators (O(E²) crossing
-        // check). Normal grids (<= MAX_GRID_DIM) pass through unchanged.
+        // check). Normal grids (<= the shared grid cap) pass through unchanged.
         translated.g = [clampGridDim(translated.g[0]), clampGridDim(translated.g[1])];
         // Bound the image size before it reaches the canvas allocation in
         // main.ts (`canvas.width/height`). Legitimate sizes (<= MAX_IMAGE_DIM)
