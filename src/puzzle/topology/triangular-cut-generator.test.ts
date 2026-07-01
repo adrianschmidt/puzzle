@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { triangularCutGenerator } from './triangular-cut-generator.js';
+import { triangularCutGenerator, catmullRomBezierEdge } from './triangular-cut-generator.js';
+import { Curve } from './curve.js';
 import { getBaseCutGenerator } from './generator-registry.js';
 import { generateTopologyPuzzle } from './generator.js';
 
@@ -21,6 +22,37 @@ function countingRandom() {
     const fn = () => { calls++; return 0.42; };
     return { fn, calls: () => calls };
 }
+
+describe('catmullRomBezierEdge', () => {
+    const seg = (c: ReturnType<typeof catmullRomBezierEdge>) => c.segments[0];
+    const near = (p: { x: number; y: number }, q: { x: number; y: number }) => {
+        expect(p.x).toBeCloseTo(q.x, 9);
+        expect(p.y).toBeCloseTo(q.y, 9);
+    };
+
+    it('reproduces a straight line for collinear, evenly-spaced neighbors', () => {
+        const a = { x: 10, y: 0 }, b = { x: 20, y: 0 };
+        const got = seg(catmullRomBezierEdge(a, b, { x: 0, y: 0 }, { x: 30, y: 0 }));
+        const line = seg(Curve.line(a, b));
+        near(got.cp1, line.cp1);
+        near(got.cp2, line.cp2);
+    });
+
+    it('shares a tangent across a vertex (C1) between adjacent edges', () => {
+        const z = { x: 0, y: 0 }, a = { x: 10, y: 5 }, b = { x: 20, y: -5 }, c = { x: 30, y: 0 }, d = { x: 40, y: 4 };
+        const e1 = catmullRomBezierEdge(a, b, z, c);
+        const e2 = catmullRomBezierEdge(b, c, a, d);
+        near(e1.tangentAt(1), e2.tangentAt(0));
+    });
+
+    it('falls back to a straight edge when both neighbors are missing', () => {
+        const a = { x: 3, y: 7 }, b = { x: 9, y: 2 };
+        const got = seg(catmullRomBezierEdge(a, b, undefined, undefined));
+        const line = seg(Curve.line(a, b));
+        near(got.cp1, line.cp1);
+        near(got.cp2, line.cp2);
+    });
+});
 
 describe('triangularCutGenerator', () => {
     const frame = { width: 800, height: 600 };

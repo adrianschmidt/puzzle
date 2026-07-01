@@ -164,6 +164,30 @@ function clipSegmentToFrame(a: Point, b: Point, w: number, h: number): [Point, P
     ];
 }
 
+/**
+ * Build one cubic Bézier for the cut edge a→b, bowed so its endpoint tangents
+ * are shared with the adjacent edges on the same lattice line (uniform
+ * Catmull-Rom → Bézier). `beyondA` is the crossing before `a` on that line and
+ * `beyondB` the crossing after `b`; either may be undefined at a chain end, in
+ * which case that end uses the straight control point (identical to
+ * `Curve.line`). Parameter-free: when the four points are collinear and evenly
+ * spaced (the lattice at jitter 0) it reproduces an exact straight line.
+ */
+export function catmullRomBezierEdge(
+    a: Point,
+    b: Point,
+    beyondA: Point | undefined,
+    beyondB: Point | undefined,
+): Curve {
+    const cp1 = beyondA
+        ? { x: a.x + (b.x - beyondA.x) / 6, y: a.y + (b.y - beyondA.y) / 6 }
+        : { x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 };
+    const cp2 = beyondB
+        ? { x: b.x - (beyondB.x - a.x) / 6, y: b.y - (beyondB.y - a.y) / 6 }
+        : { x: b.x - (b.x - a.x) / 3, y: b.y - (b.y - a.y) / 3 };
+    return new Curve([{ p0: a, cp1, cp2, p3: b }]);
+}
+
 export const triangularCutGenerator: BaseCutGenerator = {
     id: 'triangular',
     // supportsBorderless intentionally omitted (falsy): a jittered, partial-edge
