@@ -28,6 +28,9 @@ export const DEFAULT_BASE_CUT: ComposableBaseCut = 'sine';
 /** Default triangular irregularity (fraction of side length). */
 export const DEFAULT_JITTER = 0.15;
 
+/** Default triangular smooth ("flowing edges") toggle. */
+export const DEFAULT_SMOOTH = false;
+
 /**
  * Translate the legacy `disableTabs: boolean` field into the new
  * `tabGenerator` enum. Centralised so the localStorage preference,
@@ -55,6 +58,7 @@ export interface ComposableSliderPreference {
     tabGenerator: ComposableTabGenerator;
     borderless: boolean;
     jitter: number;
+    smooth: boolean;
 }
 
 function parseComposableConfig(
@@ -94,6 +98,7 @@ function parseComposableConfig(
     const jitter = Number.isFinite(jitterRaw)
         ? Math.min(0.5, Math.max(0, jitterRaw))
         : DEFAULT_JITTER;
+    const smooth = config.smooth === true;
 
     return {
         baseCut,
@@ -104,6 +109,7 @@ function parseComposableConfig(
         tabGenerator,
         borderless: config.borderless === true,
         jitter,
+        smooth,
     };
 }
 
@@ -135,7 +141,7 @@ export function composableSliderToGeneratorConfig(
     if (slider.baseCut === 'triangular') {
         return {
             baseCutGenerator: 'triangular',
-            baseCutConfig: { jitter: slider.jitter },
+            baseCutConfig: { jitter: slider.jitter, smooth: slider.smooth },
             tabGenerator: slider.tabGenerator,
             tabConfig: {},
             borderless: false,
