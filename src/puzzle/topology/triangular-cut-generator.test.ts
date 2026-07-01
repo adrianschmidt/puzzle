@@ -260,4 +260,145 @@ describe('triangularCutGenerator', () => {
     it('is registered in the generator registry', () => {
         expect(getBaseCutGenerator('triangular')).toBe(triangularCutGenerator);
     });
+
+    // Cross product of (p0→cp) and (p0→p3); ~0 means the control point is on the chord.
+    const chordCross = (s: { p0: { x: number; y: number }; cp1: { x: number; y: number }; cp2: { x: number; y: number }; p3: { x: number; y: number } }, cp: 'cp1' | 'cp2') => {
+        const u = { x: s[cp].x - s.p0.x, y: s[cp].y - s.p0.y };
+        const v = { x: s.p3.x - s.p0.x, y: s.p3.y - s.p0.y };
+        return Math.abs(u.x * v.y - u.y * v.x);
+    };
+    const allStraight = (curves: ReturnType<typeof triangularCutGenerator.generate>) =>
+        curves.slice(4).every(c => c.segments.length === 1
+            && chordCross(c.segments[0], 'cp1') < 1e-6
+            && chordCross(c.segments[0], 'cp2') < 1e-6);
+
+    it('leaves interior edges straight when smooth is off', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0.3 });
+        expect(allStraight(curves)).toBe(true);
+    });
+
+    it('stays straight with smooth on but jitter 0', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0, smooth: true });
+        expect(allStraight(curves)).toBe(true);
+    });
+
+    it('bows at least one interior edge with smooth + jitter', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0.3, smooth: true });
+        const bowed = curves.slice(4).some(c => chordCross(c.segments[0], 'cp1') > 1e-3 || chordCross(c.segments[0], 'cp2') > 1e-3);
+        expect(bowed).toBe(true);
+    });
+
+    it('shares a tangent between adjacent smoothed edges at a jittered crossing', () => {
+        // Two consecutive lattice-line edges are emitted sharing their crossing
+        // vertex exactly (same internal node lookup), so curves[i].end ===
+        // curves[i+1].start pinpoints a real interior crossing that both edges
+        // bow around. At a genuinely jitter-kinked crossing the two edges must
+        // leave a shared tangent (C1). This catches a wrong-but-collinear
+        // beyond-neighbor index that the jitter-0 on-chord tests cannot: a wrong
+        // neighbor is jittered to a different position, so it tilts the tangent
+        // even though it still lies on the same lattice line.
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0.3, smooth: true });
+        const same = (p: { x: number; y: number }, q: { x: number; y: number }) =>
+            Math.abs(p.x - q.x) < 1e-9 && Math.abs(p.y - q.y) < 1e-9;
+        let checked = 0;
+        for (let i = 4; i + 1 < curves.length; i++) {
+            const c1 = curves[i], c2 = curves[i + 1];
+            if (!same(c1.end, c2.start)) continue;
+            // Only assert at a genuine interior crossing: both edges must
+            // actually bow *at the shared vertex* (c1's cp2 and c2's cp1 off
+            // their chords), which means each used a real beyond-neighbor rather
+            // than the straight chain-end fallback. This both proves jitter
+            // kinked the crossing and is exactly the case the on-chord jitter-0
+            // tests can't reach.
+            if (chordCross(c1.segments[0], 'cp2') < 1 || chordCross(c2.segments[0], 'cp1') < 1) continue;
+            const t1 = c1.tangentAt(1), t2 = c2.tangentAt(0);
+            expect(t1.x).toBeCloseTo(t2.x, 6);
+            expect(t1.y).toBeCloseTo(t2.y, 6);
+            checked++;
+            if (checked >= 3) break;
+        }
+        // Guard the guard: fail if no real jittered crossing was exercised.
+        expect(checked).toBeGreaterThan(0);
+    });
+
+    it('shares a tangent between adjacent smoothed DIAGONAL edges at a jittered crossing', () => {
+        // The horizontal C1 test above relies on array order (consecutive
+        // horizontal edges are collinear continuations). Diagonal continuation
+        // edges are NOT adjacent in emission order, so that test never exercises
+        // the diagonal beyond-neighbor indices (drStartK/drK/dlStartK/dlK). This
+        // test reconstructs diagonal continuation pairs directly from geometry.
+        //
+        // Selection is independent of the indices under test: an edge's endpoints
+        // (hence its chord) are fixed by the emission loop; the beyond-neighbor
+        // indices only shape the Bézier tangents. So pairing edges by "shared
+        // exact vertex + near-parallel chords + steeply diagonal orientation"
+        // isolates a genuine down-right/down-left lattice line without smuggling
+        // in the property being asserted. A wrong diagonal index leaves the chord
+        // untouched but tilts a tangent, breaking C1 here.
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0.3, smooth: true });
+        const same = (p: { x: number; y: number }, q: { x: number; y: number }) =>
+            Math.abs(p.x - q.x) < 1e-9 && Math.abs(p.y - q.y) < 1e-9;
+        const unit = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const len = Math.hypot(dx, dy) || 1;
+            return { x: dx / len, y: dy / len };
+        };
+        let checked = 0;
+        for (let i = 4; i < curves.length; i++) {
+            const c1 = curves[i];
+            const d1 = unit(c1.start, c1.end);
+            // Require c1 to be steeply diagonal (|dy|/|chord| ~0.87 for lattice
+            // diagonals, ~0 for horizontals), excluding the horizontal case.
+            if (Math.abs(d1.y) < 0.6) continue;
+            for (let m = 4; m < curves.length; m++) {
+                if (m === i) continue;
+                const c2 = curves[m];
+                if (!same(c1.end, c2.start)) continue;
+                // Collinear continuation only: the down-right/down-left line
+                // through the shared vertex, not a differently-oriented edge that
+                // merely touches it (e.g. a DR-in / DL-out pair sits at dot ~0.5).
+                const d2 = unit(c2.start, c2.end);
+                if (d1.x * d2.x + d1.y * d2.y < 0.8) continue;
+                // Both edges must bow at the shared vertex (real beyond-neighbors,
+                // not the straight chain-end fallback) so the tangent is index-
+                // sensitive.
+                if (chordCross(c1.segments[0], 'cp2') < 1 || chordCross(c2.segments[0], 'cp1') < 1) continue;
+                const t1 = c1.tangentAt(1), t2 = c2.tangentAt(0);
+                expect(t1.x).toBeCloseTo(t2.x, 6);
+                expect(t1.y).toBeCloseTo(t2.y, 6);
+                checked++;
+                break;
+            }
+            if (checked >= 3) break;
+        }
+        // Guard the guard: fail if no real jittered diagonal crossing was found.
+        expect(checked).toBeGreaterThan(0);
+    });
+
+    it('draws exactly one outer PRNG value with smooth on', () => {
+        const c = countingRandom();
+        triangularCutGenerator.generate(frame, c.fn, { rows: 12, jitter: 0.4, smooth: true });
+        expect(c.calls()).toBe(1);
+    });
+
+    it('emits the same interior edge count with smooth on vs off', () => {
+        const off = triangularCutGenerator.generate(frame, makeSeededRandom(4), { rows: 8, jitter: 0.3 });
+        const on = triangularCutGenerator.generate(frame, makeSeededRandom(4), { rows: 8, jitter: 0.3, smooth: true });
+        expect(on.length).toBe(off.length);
+    });
+
+    it('keeps smoothed curves within the frame', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(2), { rows: 6, jitter: 0.4, smooth: true });
+        const eps = 1e-6;
+        for (let i = 4; i < curves.length; i++) {
+            // Fine step so a transient bow-out between samples can't slip through.
+            for (let t = 0; t <= 1; t += 0.02) {
+                const p = curves[i].pointAt(t);
+                expect(p.x).toBeGreaterThanOrEqual(-eps);
+                expect(p.x).toBeLessThanOrEqual(frame.width + eps);
+                expect(p.y).toBeGreaterThanOrEqual(-eps);
+                expect(p.y).toBeLessThanOrEqual(frame.height + eps);
+            }
+        }
+    });
 });
