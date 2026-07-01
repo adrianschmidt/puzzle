@@ -76,6 +76,64 @@ describe('tracedTabGenerator.generateVariants', () => {
             expect(v.end.x).toBeCloseTo(240);
         }
     });
+
+    it('default ladder (no deepResolve) yields exactly the 4 original rungs', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const all = [...tracedTabGenerator.generateVariants!(edge, createSeededRandom(7), {})];
+        expect(all).toHaveLength(4);
+    });
+
+    it('deepResolve yields the 10-rung deep ladder', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const all = [
+            ...tracedTabGenerator.generateVariants!(edge, createSeededRandom(7), {
+                deepResolve: true,
+            }),
+        ];
+        expect(all).toHaveLength(10);
+    });
+
+    it('deep ladder shares its first three rungs with the default ladder', () => {
+        // Order contract: place -> invert -> shrink0.8 are identical in both
+        // ladders (deep only diverges at rung 3, where it inverts the 0.8 tab
+        // instead of pulling toward center).
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        const def = [...tracedTabGenerator.generateVariants!(edge, createSeededRandom(7), {})];
+        const deep = [
+            ...tracedTabGenerator.generateVariants!(edge, createSeededRandom(7), {
+                deepResolve: true,
+            }),
+        ];
+        for (let i = 0; i < 3; i++) {
+            expect(deep[i]).not.toBeNull();
+            expect(def[i]).not.toBeNull();
+            expect(deep[i]!.segments).toEqual(def[i]!.segments);
+        }
+        // Diverges at rung 3.
+        expect(deep[3]!.segments).not.toEqual(def[3]!.segments);
+    });
+
+    it('deep ladder still consumes exactly 3 outer PRNG calls', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        let calls = 0;
+        const counting = () => { calls++; return 0.5; };
+        const all = [
+            ...tracedTabGenerator.generateVariants!(edge, counting, { deepResolve: true }),
+        ];
+        expect(all).toHaveLength(10);
+        expect(calls).toBe(3);
+    });
+
+    it('every deep-ladder variant keeps the edge endpoints', () => {
+        const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
+        for (const v of tracedTabGenerator.generateVariants!(edge, createSeededRandom(3), {
+            deepResolve: true,
+        })) {
+            if (!v) continue;
+            expect(v.start.x).toBeCloseTo(0);
+            expect(v.end.x).toBeCloseTo(240);
+        }
+    });
 });
 
 describe('tracedTabGenerator trace-set version', () => {

@@ -166,8 +166,17 @@ export function generateTopologyPuzzle(
     //    `none` generator is registered like any other and returns
     //    null on every edge, so we don't special-case it here.
     const tabGenerator = getTabGenerator(tabId);
+    // Triangular pieces have little interior room, so the traced resolver's
+    // shallow ladder leaves many edges flat. Opt those cuts into the deep
+    // ladder via the opaque tab config; every other cut keeps today's ladder
+    // (and its exact share-link output). Derived here, from baseCutId, so no
+    // config-construction site can forget to set it.
+    const tabConfig =
+        baseCutId === 'triangular'
+            ? { ...(config?.tabConfig ?? {}), deepResolve: true }
+            : config?.tabConfig;
     applyTabs(graph, tabGenerator, random, {
-        tabConfig: config?.tabConfig,
+        tabConfig,
         onCandidate: config?.tabDebug?.onCandidate,
     });
 
