@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { generateTopologyPuzzle } from './generator.js';
 import type { TopologyGeneratorConfig } from './generator.js';
-import { registerBaseCutGenerator } from './generator-registry.js';
-import type { BaseCutGenerator } from './plugin-types.js';
+import { registerBaseCutGenerator, registerTabGenerator } from './generator-registry.js';
+import type { BaseCutGenerator, TabGenerator } from './plugin-types.js';
 import { Curve } from './curve.js';
 
 function seededRandom(seed: number): () => number {
@@ -417,5 +417,43 @@ describe('generateTopologyPuzzle grid-dim clamp (issue #440)', () => {
         ).pieces.map(p => p.shape);
 
         expect(withMatchingOverride).toEqual(withoutOverride);
+    });
+});
+
+describe('generateTopologyPuzzle deep-resolution gating', () => {
+    // A fake tab generator that records the opaque config it is handed, so we
+    // can assert the deepResolve flag is threaded through the real generator
+    // path (not by reading generator internals). Applies no tabs.
+    function recordingTabGenerator(id: string, sink: { config?: unknown }): TabGenerator {
+        return {
+            id,
+            generate: () => null,
+            generateVariants: (_edge, _random, config) => {
+                sink.config = config;
+                return [];
+            },
+        };
+    }
+
+    it('sets deepResolve for the triangular base cut', () => {
+        const sink: { config?: unknown } = {};
+        registerTabGenerator(recordingTabGenerator('test-record-triangular', sink));
+        generateTopologyPuzzle(6, 6, { width: 600, height: 600 }, seededRandom(42), {
+            baseCutGeneratorId: 'triangular',
+            baseCutConfig: { jitter: 0.1 },
+            tabGeneratorId: 'test-record-triangular',
+        });
+        expect((sink.config as { deepResolve?: unknown }).deepResolve).toBe(true);
+    });
+
+    it('does not set deepResolve for a non-triangular base cut', () => {
+        const sink: { config?: unknown } = {};
+        registerTabGenerator(recordingTabGenerator('test-record-sine', sink));
+        generateTopologyPuzzle(6, 6, { width: 600, height: 600 }, seededRandom(42), {
+            baseCutGeneratorId: 'sine',
+            baseCutConfig: { ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5 },
+            tabGeneratorId: 'test-record-sine',
+        });
+        expect((sink.config as { deepResolve?: unknown } | undefined)?.deepResolve).not.toBe(true);
     });
 });
