@@ -58,31 +58,57 @@ bowed base edge instead of a straight one, with no topology change.
      `(P_next − P_prev)` along that chain.
    - An endpoint that is a chain end / unjittered border node → straight
      tangent along the chord to the other endpoint (unchanged from today).
-3. For each edge `Pi → Pj`, build the cubic with control points
-   `cp1 = Pi + Ti·(|PiPj|/3)`, `cp2 = Pj − Tj·(|PiPj|/3)` (via
-   `Curve.fromBezierPath` or a small local helper), instead of
-   `Curve.line`. Endpoints with a straight tangent produce a control point on
-   the chord, so a border-touching edge bows only at its interior end
-   (asymmetric cubic).
+3. For each edge `Pi → Pj` with chain-neighbors `Ph` (before `Pi`) and `Pk`
+   (after `Pj`), build the cubic with the classic **uniform Catmull-Rom →
+   Bézier** control points:
+   `cp1 = Pi + (Pj − Ph)/6`, `cp2 = Pj − (Pk − Pi)/6`.
+   When a neighbor is absent (chain end / off-lattice), that end falls back to
+   the straight control point `lerp(Pi, Pj, 1/3)` / `lerp(Pi, Pj, 2/3)` —
+   identical to `Curve.line`. So a border-touching edge bows only at its
+   interior end (asymmetric cubic). The formula is parameter-free.
+
+### Straight-line reproduction (why jitter 0 is a no-op)
+
+The uniform formula reproduces an exact straight line whenever the four chain
+points are collinear and evenly spaced — which is precisely the lattice at
+jitter 0 (every horizontal step is `colStep`; every diagonal step is
+`(±colStep/2, rowHeight)`). So with `smooth: true, jitter: 0` the output is
+byte-identical to the straight tiling, and the option only bends cuts once
+jitter displaces the crossings. No separate special-casing needed.
 
 ### Overshoot safety
 
-Uniform Catmull-Rom can overshoot and self-intersect at high jitter, which
-risks invalid/crossing geometry. Use **centripetal parametrization
-(α = 0.5)** and a tension factor tuned so a control-arm length cannot exceed
-~⅓ of the shorter adjacent edge. This keeps curves cusp-free and
-non-self-intersecting even at jitter 0.5, so the result is reliably "flowing"
-and never tangled.
+The bow magnitude is inherently bounded: a control arm is `|Pj − Ph|/6`,
+i.e. proportional to the neighbor spread over 6, so with jitter ≤ 0.5 the
+per-edge deflection stays modest and a single cubic cannot self-loop. This is
+the v1 choice for its simplicity and exact straight-line reproduction. If
+visual testing at high jitter shows overshoot or cuts tangling across
+neighboring lines, the documented fallback is **centripetal parametrization
+(α = 0.5)** and/or a tension clamp limiting the control arm to ~⅓ of the
+shorter adjacent edge — deferred unless observed.
 
 ### Frame boundary
 
-Border-touching edges bow at the interior end and stay straight at the border
-end (see step 2). For the fringe edges that actually cross the frame
-(extended columns at `k = -1` / `k = cols+1`), clip by finding the
-frame-intersection parameter on the chord and trimming the curve with
-`splitAt`. Because the outer end is straight, the chord intersection is
-exact/near-exact there. If precision artifacts appear, revisit — the user has
-accepted a "try and adjust" approach here.
+Bow only edges whose **both endpoints lie within the frame** `[0,w]×[0,h]`
+(bounds inclusive). Edges with an endpoint outside the frame — the extended
+fringe columns at `k = -1` / `k = cols+1` — stay straight and are clipped with
+the existing `clipSegmentToFrame` + `Curve.line`, exactly as today. This
+sidesteps clipping a bowed cubic entirely.
+
+Border-row nodes (`j = 0` / `j = rows`, on `y = 0` / `y = h`) and even-row
+left/right nodes (`k = 0` / `k = cols`, on `x = 0` / `x = w`) are *on* the
+frame, so they count as in-frame and their edges bow — straight at the
+on-frame side (its beyond-neighbor is off-lattice → straight control point)
+and Catmull-Rom at the interior side. That is the "inner end adjusted like any
+other" behaviour requested; only the truly off-frame fringe stubs stay fully
+straight.
+
+A cut curve could in principle bulge outside the frame between two in-frame
+endpoints. In practice interior nodes sit ~`cell` from the border while the
+bow is ~neighbor-spread/6, so the curve stays inside; this is **verified by a
+test that samples points along every curve** and asserts they remain within
+`[0,w]×[0,h]`. If that test ever fails, the fix is to clamp each control point
+into the frame (a cubic stays within its control points' convex hull).
 
 ### Randomness
 
@@ -110,16 +136,22 @@ contract is preserved unchanged.
 
 Unit tests in `triangular-cut-generator.test.ts`:
 
-- With `smooth: true, jitter > 0`, interior edges are non-degenerate curves
-  (control points off the chord).
-- C1 continuity across a shared interior node: the outgoing tangent of one
-  edge matches the incoming tangent of the next edge on the same chain,
-  within tolerance.
-- With `smooth: true, jitter: 0`, cuts stay collinear (control points on the
-  chord).
-- All interior endpoints remain within the frame.
-- Still exactly one outer PRNG draw regardless of `smooth`.
-- No new duplicate interior edges; `buildDCEL` still succeeds.
+Helper (`catmullRomBezierEdge`):
+- Collinear, evenly-spaced neighbors → segment equals `Curve.line`.
+- C1 continuity: for two adjacent edges sharing a vertex and Catmull-Rom
+  neighbors, the first edge's end tangent equals the second's start tangent.
+- A missing neighbor → straight control point (equals `Curve.line`).
+
+Generator:
+- `smooth` defaults off: interior edges are single straight segments.
+- `smooth: true, jitter: 0` → cuts stay collinear (control points on chord).
+- `smooth: true, jitter > 0` → at least one interior edge is bowed (a control
+  point off the chord).
+- Exactly one outer PRNG draw with `smooth: true`.
+- Same interior edge count with `smooth` on vs off (only shape differs).
+- Sampled points along every curve stay within the frame (bulge safety).
+- Existing suite (endpoints in frame, no duplicates, determinism, curve
+  budgets) continues to pass.
 
 Add a round-trip assertion for `smooth` to the existing triangular
 share-link test. The flat-edge measurement harness
