@@ -55,6 +55,7 @@ export interface ComposableSliderPreference {
     tabGenerator: ComposableTabGenerator;
     borderless: boolean;
     jitter: number;
+    smooth: boolean;
 }
 
 function parseComposableConfig(
@@ -94,6 +95,7 @@ function parseComposableConfig(
     const jitter = Number.isFinite(jitterRaw)
         ? Math.min(0.5, Math.max(0, jitterRaw))
         : DEFAULT_JITTER;
+    const smooth = config.smooth === true;
 
     return {
         baseCut,
@@ -104,6 +106,7 @@ function parseComposableConfig(
         tabGenerator,
         borderless: config.borderless === true,
         jitter,
+        smooth,
     };
 }
 
@@ -135,7 +138,7 @@ export function composableSliderToGeneratorConfig(
     if (slider.baseCut === 'triangular') {
         return {
             baseCutGenerator: 'triangular',
-            baseCutConfig: { jitter: slider.jitter },
+            baseCutConfig: { jitter: slider.jitter, smooth: slider.smooth },
             tabGenerator: slider.tabGenerator,
             tabConfig: {},
             borderless: false,

@@ -24,6 +24,7 @@ describe('saveComposableConfigPreference / loadComposableConfigPreference', () =
         tabGenerator: 'none' as const,
         borderless: false,
         jitter: 0.15,
+        smooth: false,
     };
 
     it('returns undefined when nothing is saved', () => {
@@ -104,7 +105,7 @@ describe('composable borderless preference', () => {
 
     it('round-trips borderless: true', () => {
         saveComposableConfigPreference({
-            baseCut: 'sine', jitter: 0.15,
+            baseCut: 'sine', jitter: 0.15, smooth: false,
             horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
             verticalAmplitude: 0.15, verticalFrequency: 1.5,
             tabGenerator: 'classic', borderless: true,
@@ -178,6 +179,7 @@ describe('composable base-cut + jitter', () => {
             tabGenerator: 'classic' as const,
             borderless: false,
             jitter: 0.3,
+            smooth: false,
         };
         saveComposableConfigPreference(tri);
         expect(loadComposableConfigPreference()).toEqual(tri);
@@ -193,6 +195,7 @@ describe('composable base-cut + jitter', () => {
             tabGenerator: 'classic',
             borderless: true,
             jitter: 0.3,
+            smooth: false,
         });
         expect(cfg).toEqual({
             baseCutGenerator: 'sine',
@@ -213,13 +216,41 @@ describe('composable base-cut + jitter', () => {
             tabGenerator: 'traced',
             borderless: true,
             jitter: 0.3,
+            smooth: false,
         });
         expect(cfg).toEqual({
             baseCutGenerator: 'triangular',
-            baseCutConfig: { jitter: 0.3 },
+            baseCutConfig: { jitter: 0.3, smooth: false },
             tabGenerator: 'traced',
             tabConfig: {},
             borderless: false,
         });
+    });
+
+    it('defaults smooth to false for legacy saved configs', () => {
+        localStorage.setItem(COMPOSABLE_CONFIG_KEY, JSON.stringify({
+            horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
+            verticalAmplitude: 0.15, verticalFrequency: 1.5,
+            baseCut: 'triangular', jitter: 0.2,
+        }));
+        expect(loadComposableConfigPreference()?.smooth).toBe(false);
+    });
+
+    it('round-trips smooth true through the preference', () => {
+        saveComposableConfigPreference({
+            baseCut: 'triangular', horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
+            verticalAmplitude: 0.15, verticalFrequency: 1.5, tabGenerator: 'classic',
+            borderless: false, jitter: 0.3, smooth: true,
+        });
+        expect(loadComposableConfigPreference()?.smooth).toBe(true);
+    });
+
+    it('passes smooth into the triangular generator config', () => {
+        const cfg = composableSliderToGeneratorConfig({
+            baseCut: 'triangular', horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
+            verticalAmplitude: 0.15, verticalFrequency: 1.5, tabGenerator: 'classic',
+            borderless: false, jitter: 0.3, smooth: true,
+        });
+        expect(cfg.baseCutConfig).toEqual({ jitter: 0.3, smooth: true });
     });
 });
