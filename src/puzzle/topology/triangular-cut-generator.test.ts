@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { triangularCutGenerator } from './triangular-cut-generator.js';
+import { triangularCutGenerator, catmullRomBezierEdge } from './triangular-cut-generator.js';
+import { Curve } from './curve.js';
 import { getBaseCutGenerator } from './generator-registry.js';
 import { generateTopologyPuzzle } from './generator.js';
 
@@ -21,6 +22,37 @@ function countingRandom() {
     const fn = () => { calls++; return 0.42; };
     return { fn, calls: () => calls };
 }
+
+describe('catmullRomBezierEdge', () => {
+    const seg = (c: ReturnType<typeof catmullRomBezierEdge>) => c.segments[0];
+    const near = (p: { x: number; y: number }, q: { x: number; y: number }) => {
+        expect(p.x).toBeCloseTo(q.x, 9);
+        expect(p.y).toBeCloseTo(q.y, 9);
+    };
+
+    it('reproduces a straight line for collinear, evenly-spaced neighbors', () => {
+        const a = { x: 10, y: 0 }, b = { x: 20, y: 0 };
+        const got = seg(catmullRomBezierEdge(a, b, { x: 0, y: 0 }, { x: 30, y: 0 }));
+        const line = seg(Curve.line(a, b));
+        near(got.cp1, line.cp1);
+        near(got.cp2, line.cp2);
+    });
+
+    it('shares a tangent across a vertex (C1) between adjacent edges', () => {
+        const z = { x: 0, y: 0 }, a = { x: 10, y: 5 }, b = { x: 20, y: -5 }, c = { x: 30, y: 0 }, d = { x: 40, y: 4 };
+        const e1 = catmullRomBezierEdge(a, b, z, c);
+        const e2 = catmullRomBezierEdge(b, c, a, d);
+        near(e1.tangentAt(1), e2.tangentAt(0));
+    });
+
+    it('falls back to a straight edge when both neighbors are missing', () => {
+        const a = { x: 3, y: 7 }, b = { x: 9, y: 2 };
+        const got = seg(catmullRomBezierEdge(a, b, undefined, undefined));
+        const line = seg(Curve.line(a, b));
+        near(got.cp1, line.cp1);
+        near(got.cp2, line.cp2);
+    });
+});
 
 describe('triangularCutGenerator', () => {
     const frame = { width: 800, height: 600 };
@@ -227,5 +259,59 @@ describe('triangularCutGenerator', () => {
 
     it('is registered in the generator registry', () => {
         expect(getBaseCutGenerator('triangular')).toBe(triangularCutGenerator);
+    });
+
+    // Cross product of (p0→cp) and (p0→p3); ~0 means the control point is on the chord.
+    const chordCross = (s: { p0: { x: number; y: number }; cp1: { x: number; y: number }; cp2: { x: number; y: number }; p3: { x: number; y: number } }, cp: 'cp1' | 'cp2') => {
+        const u = { x: s[cp].x - s.p0.x, y: s[cp].y - s.p0.y };
+        const v = { x: s.p3.x - s.p0.x, y: s.p3.y - s.p0.y };
+        return Math.abs(u.x * v.y - u.y * v.x);
+    };
+    const allStraight = (curves: ReturnType<typeof triangularCutGenerator.generate>) =>
+        curves.slice(4).every(c => c.segments.length === 1
+            && chordCross(c.segments[0], 'cp1') < 1e-6
+            && chordCross(c.segments[0], 'cp2') < 1e-6);
+
+    it('leaves interior edges straight when smooth is off', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0.3 });
+        expect(allStraight(curves)).toBe(true);
+    });
+
+    it('stays straight with smooth on but jitter 0', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0, smooth: true });
+        expect(allStraight(curves)).toBe(true);
+    });
+
+    it('bows at least one interior edge with smooth + jitter', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0.3, smooth: true });
+        const bowed = curves.slice(4).some(c => chordCross(c.segments[0], 'cp1') > 1e-3 || chordCross(c.segments[0], 'cp2') > 1e-3);
+        expect(bowed).toBe(true);
+    });
+
+    it('draws exactly one outer PRNG value with smooth on', () => {
+        const c = countingRandom();
+        triangularCutGenerator.generate(frame, c.fn, { rows: 12, jitter: 0.4, smooth: true });
+        expect(c.calls()).toBe(1);
+    });
+
+    it('emits the same interior edge count with smooth on vs off', () => {
+        const off = triangularCutGenerator.generate(frame, makeSeededRandom(4), { rows: 8, jitter: 0.3 });
+        const on = triangularCutGenerator.generate(frame, makeSeededRandom(4), { rows: 8, jitter: 0.3, smooth: true });
+        expect(on.length).toBe(off.length);
+    });
+
+    it('keeps smoothed curves within the frame', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(2), { rows: 6, jitter: 0.4, smooth: true });
+        const eps = 1e-6;
+        for (let i = 4; i < curves.length; i++) {
+            // Fine step so a transient bow-out between samples can't slip through.
+            for (let t = 0; t <= 1; t += 0.02) {
+                const p = curves[i].pointAt(t);
+                expect(p.x).toBeGreaterThanOrEqual(-eps);
+                expect(p.x).toBeLessThanOrEqual(frame.width + eps);
+                expect(p.y).toBeGreaterThanOrEqual(-eps);
+                expect(p.y).toBeLessThanOrEqual(frame.height + eps);
+            }
+        }
     });
 });

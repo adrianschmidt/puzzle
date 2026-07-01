@@ -287,6 +287,19 @@ describe('share-link codec — optional fields', () => {
         expect(decodePayload(encodePayload(payload))).toEqual(payload);
     });
 
+    it('round-trips a triangular composable config with smooth enabled', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'composable', s: 1, r: 'none',
+            cf: {
+                bg: 'triangular',
+                bgc: { jitter: 0.3, smooth: true },
+                tg: 'classic',
+                tgc: {},
+            },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
     it('round-trips fractal config with rotation', () => {
         const payload: SharePayload = {
             v: 1, i: 'x', is: [100, 100], g: [8, 6], c: 'fractal', s: 1, r: 'quarter-turn',

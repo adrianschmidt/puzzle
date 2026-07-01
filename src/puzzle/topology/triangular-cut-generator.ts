@@ -29,6 +29,10 @@ export interface TriangularCutConfig {
     rows: number;
     /** Irregularity amplitude, fraction of side length (0–0.5). */
     jitter: number;
+    /** When true, bow each interior cut edge so adjacent edges on the same
+     *  lattice line share a tangent (smooth "flowing" cuts). No-op at
+     *  jitter 0. Consumes no randomness. */
+    smooth: boolean;
 }
 
 /** Map a [0,1) float onto a 32-bit integer seed (CLAUDE.md sub-PRNG helper). */
@@ -164,6 +168,30 @@ function clipSegmentToFrame(a: Point, b: Point, w: number, h: number): [Point, P
     ];
 }
 
+/**
+ * Build one cubic Bézier for the cut edge a→b, bowed so its endpoint tangents
+ * are shared with the adjacent edges on the same lattice line (uniform
+ * Catmull-Rom → Bézier). `beyondA` is the crossing before `a` on that line and
+ * `beyondB` the crossing after `b`; either may be undefined at a chain end, in
+ * which case that end uses the straight control point (identical to
+ * `Curve.line`). Parameter-free: when the four points are collinear and evenly
+ * spaced (the lattice at jitter 0) it reproduces an exact straight line.
+ */
+export function catmullRomBezierEdge(
+    a: Point,
+    b: Point,
+    beyondA: Point | undefined,
+    beyondB: Point | undefined,
+): Curve {
+    const cp1 = beyondA
+        ? { x: a.x + (b.x - beyondA.x) / 6, y: a.y + (b.y - beyondA.y) / 6 }
+        : { x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 };
+    const cp2 = beyondB
+        ? { x: b.x - (beyondB.x - a.x) / 6, y: b.y - (beyondB.y - a.y) / 6 }
+        : { x: b.x - (b.x - a.x) / 3, y: b.y - (b.y - a.y) / 3 };
+    return new Curve([{ p0: a, cp1, cp2, p3: b }]);
+}
+
 export const triangularCutGenerator: BaseCutGenerator = {
     id: 'triangular',
     // supportsBorderless intentionally omitted (falsy): a jittered, partial-edge
@@ -178,6 +206,7 @@ export const triangularCutGenerator: BaseCutGenerator = {
         // count and only reins in crafted links.
         const rows = Math.min(MAX_ROWS, Math.max(1, Math.floor(cfg.rows ?? 1)));
         const jitter = Math.min(0.5, Math.max(0, cfg.jitter ?? 0.15));
+        const smooth = (cfg.smooth ?? false) === true;
         const w = frame.width;
         const h = frame.height;
 
@@ -237,6 +266,19 @@ export const triangularCutGenerator: BaseCutGenerator = {
         }
         const pos = (j: number, k: number): Point => nodes.get(key(j, k))!;
 
+        // Neighbor lattice direction helpers (col index in the adjacent row).
+        // These mirror the diagonal emission below; `maybePos` returns
+        // undefined off-lattice so the smoothed edge stays straight at a chain
+        // end. Used only when `smooth` is on.
+        const maybePos = (j: number, k: number): Point | undefined => nodes.get(key(j, k));
+        const even = (j: number) => j % 2 === 0;
+        const drK = (j: number, k: number) => even(j) ? k : k + 1;   // down-right col, row j+1
+        const dlK = (j: number, k: number) => even(j) ? k - 1 : k;   // down-left col, row j+1
+        // Beyond-start neighbor (row j-1) continuing each diagonal line upward,
+        // i.e. the node whose down-right / down-left neighbor is (j,k).
+        const drStartK = (j: number, k: number) => even(j) ? k - 1 : k;   // prev node on the down-right line
+        const dlStartK = (j: number, k: number) => even(j) ? k : k + 1;   // prev node on the down-left line
+
         // Borders FIRST (top, right, bottom, left), per the contract.
         const curves: Curve[] = [
             Curve.line({ x: 0, y: 0 }, { x: w, y: 0 }),
@@ -245,7 +287,20 @@ export const triangularCutGenerator: BaseCutGenerator = {
             Curve.line({ x: 0, y: h }, { x: 0, y: 0 }),
         ];
 
-        const pushEdge = (a: Point, b: Point): void => {
+        const inFrame = (p: Point) => p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= h;
+        const pushEdge = (
+            a: Point,
+            b: Point,
+            beyondA?: Point,
+            beyondB?: Point,
+        ): void => {
+            // Smooth path: both endpoints inside the frame → bow the edge.
+            // (Fringe edges with an endpoint outside the frame fall through to
+            // the straight clip below, as before.)
+            if (smooth && inFrame(a) && inFrame(b)) {
+                curves.push(catmullRomBezierEdge(a, b, beyondA, beyondB));
+                return;
+            }
             const clipped = clipSegmentToFrame(a, b, w, h);
             if (!clipped) return;
             const [p2, q2] = clipped;
@@ -258,7 +313,7 @@ export const triangularCutGenerator: BaseCutGenerator = {
         // border curves (overlapping collinear segments).
         for (let j = 1; j < rows; j++) {
             for (let k = kMin; k < kMax; k++) {
-                pushEdge(pos(j, k), pos(j, k + 1));
+                pushEdge(pos(j, k), pos(j, k + 1), maybePos(j, k - 1), maybePos(j, k + 2));
             }
         }
 
@@ -268,11 +323,19 @@ export const triangularCutGenerator: BaseCutGenerator = {
         for (let j = 0; j < rows; j++) {
             for (let k = kMin + 1; k < kMax; k++) {
                 if (j % 2 === 0) {
-                    pushEdge(pos(j, k), pos(j + 1, k));     // down-right
-                    pushEdge(pos(j, k), pos(j + 1, k - 1)); // down-left
+                    // down-right (j,k) -> (j+1,k)
+                    pushEdge(pos(j, k), pos(j + 1, k),
+                        maybePos(j - 1, drStartK(j, k)), maybePos(j + 2, drK(j + 1, k)));
+                    // down-left (j,k) -> (j+1,k-1)
+                    pushEdge(pos(j, k), pos(j + 1, k - 1),
+                        maybePos(j - 1, dlStartK(j, k)), maybePos(j + 2, dlK(j + 1, k - 1)));
                 } else {
-                    pushEdge(pos(j, k), pos(j + 1, k + 1)); // down-right
-                    pushEdge(pos(j, k), pos(j + 1, k));     // down-left
+                    // down-right (j,k) -> (j+1,k+1)
+                    pushEdge(pos(j, k), pos(j + 1, k + 1),
+                        maybePos(j - 1, drStartK(j, k)), maybePos(j + 2, drK(j + 1, k + 1)));
+                    // down-left (j,k) -> (j+1,k)
+                    pushEdge(pos(j, k), pos(j + 1, k),
+                        maybePos(j - 1, dlStartK(j, k)), maybePos(j + 2, dlK(j + 1, k)));
                 }
             }
         }
