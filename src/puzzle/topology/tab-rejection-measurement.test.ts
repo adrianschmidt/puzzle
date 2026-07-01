@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { createSeededRandom } from '../seeded-random.js';
 import { sineCutGenerator } from './sine-cut-generator.js';
+import { triangularCutGenerator } from './triangular-cut-generator.js';
 import { buildDCEL } from './dcel.js';
 import { applyTabs } from './apply-tabs.js';
 import { preloadTracedTabGenerator } from './traced-tab-loader.js';
@@ -65,5 +66,43 @@ describe('traced-tab rejection measurement', () => {
         // it goes through the real registry+preload path; pre-ladder this
         // regime sat at ~20.7%, with the ladder ~2%.
         expect(rejectPct).toBeLessThan(6);
+    });
+
+    (RUN ? it : it.skip)('reports the triangular flat-edge rate with the deep ladder', { timeout: 300_000 }, async () => {
+        const frame = { width: 1600, height: 1200 };
+        const SEEDS = 15;
+        await preloadTracedTabGenerator();
+        const generator = getTabGenerator('traced');
+
+        let total = 0;
+        let accepted = 0;
+        // Deep ladder has 10 rungs (see deepRungs in traced-tab-generator.ts):
+        // scale x invert for 1.0/0.8/0.64/0.512, then 0.512 center upright/invert.
+        const rungCommits = new Array(10).fill(0);
+        for (let s = 0; s < SEEDS; s++) {
+            const random = createSeededRandom(s);
+            const curves = triangularCutGenerator.generate(frame, random, {
+                cols: 16,
+                rows: 12,
+                jitter: 0.1,
+            });
+            const graph = buildDCEL({ curves });
+            applyTabs(graph, generator, random, {
+                tabConfig: { deepResolve: true },
+                onCandidate: (_he, ok, idx) => {
+                    total++;
+                    if (ok) {
+                        accepted++;
+                        if (idx !== undefined && idx < rungCommits.length) rungCommits[idx]++;
+                    }
+                },
+            });
+        }
+        const rejectPct = (100 * (total - accepted)) / total;
+        // eslint-disable-next-line no-console
+        console.log(`[triangular] eligible=${total} accepted=${accepted} flat=${total - accepted} reject=${rejectPct.toFixed(1)}%`);
+        // eslint-disable-next-line no-console
+        console.log(`[triangular] per-rung commits: ${rungCommits.join(',')}`);
+        expect(total).toBeGreaterThan(0);
     });
 });
