@@ -25,6 +25,7 @@ export interface ComposableSliderConfig {
     tabGenerator: 'classic' | 'traced' | 'none';
     borderless: boolean;
     jitter: number;
+    smooth: boolean;
 }
 
 /** Fractal generator config passed through from the dialog. */
@@ -425,6 +426,14 @@ function buildComposableSlidersSection(args: {
     jitterRow.appendChild(jitterInput);
     jitterRow.appendChild(jitterValue);
     triangularControls.appendChild(jitterRow);
+
+    const smoothCheckbox = appendCheckboxRow(
+        triangularControls,
+        'Flowing edges',
+        args.saved?.smooth ?? false,
+    );
+    smoothCheckbox.dataset.testid = 'composable-smooth-toggle';
+
     section.appendChild(triangularControls);
 
     // Traced has no dev/prod gate of its own — it inherits Composable's
@@ -468,6 +477,7 @@ function buildComposableSlidersSection(args: {
             // borderless choice when they toggle back from triangular.
             borderless: borderlessCheckbox?.checked ?? false,
             jitter: parseFloat(jitterInput.value),
+            smooth: smoothCheckbox.checked,
         }),
         setVisible: (visible) => {
             section.style.display = visible ? 'block' : 'none';
