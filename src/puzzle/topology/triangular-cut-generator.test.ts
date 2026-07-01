@@ -260,4 +260,58 @@ describe('triangularCutGenerator', () => {
     it('is registered in the generator registry', () => {
         expect(getBaseCutGenerator('triangular')).toBe(triangularCutGenerator);
     });
+
+    // Cross product of (p0→cp) and (p0→p3); ~0 means the control point is on the chord.
+    const chordCross = (s: { p0: { x: number; y: number }; cp1: { x: number; y: number }; cp2: { x: number; y: number }; p3: { x: number; y: number } }, cp: 'cp1' | 'cp2') => {
+        const u = { x: s[cp].x - s.p0.x, y: s[cp].y - s.p0.y };
+        const v = { x: s.p3.x - s.p0.x, y: s.p3.y - s.p0.y };
+        return Math.abs(u.x * v.y - u.y * v.x);
+    };
+    const allStraight = (curves: ReturnType<typeof triangularCutGenerator.generate>) =>
+        curves.slice(4).every(c => c.segments.length === 1
+            && chordCross(c.segments[0], 'cp1') < 1e-6
+            && chordCross(c.segments[0], 'cp2') < 1e-6);
+
+    it('leaves interior edges straight when smooth is off', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0.3 });
+        expect(allStraight(curves)).toBe(true);
+    });
+
+    it('stays straight with smooth on but jitter 0', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0, smooth: true });
+        expect(allStraight(curves)).toBe(true);
+    });
+
+    it('bows at least one interior edge with smooth + jitter', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(9), { rows: 6, jitter: 0.3, smooth: true });
+        const bowed = curves.slice(4).some(c => chordCross(c.segments[0], 'cp1') > 1e-3 || chordCross(c.segments[0], 'cp2') > 1e-3);
+        expect(bowed).toBe(true);
+    });
+
+    it('draws exactly one outer PRNG value with smooth on', () => {
+        const c = countingRandom();
+        triangularCutGenerator.generate(frame, c.fn, { rows: 12, jitter: 0.4, smooth: true });
+        expect(c.calls()).toBe(1);
+    });
+
+    it('emits the same interior edge count with smooth on vs off', () => {
+        const off = triangularCutGenerator.generate(frame, makeSeededRandom(4), { rows: 8, jitter: 0.3 });
+        const on = triangularCutGenerator.generate(frame, makeSeededRandom(4), { rows: 8, jitter: 0.3, smooth: true });
+        expect(on.length).toBe(off.length);
+    });
+
+    it('keeps smoothed curves within the frame', () => {
+        const curves = triangularCutGenerator.generate(frame, makeSeededRandom(2), { rows: 6, jitter: 0.4, smooth: true });
+        const eps = 1e-6;
+        for (let i = 4; i < curves.length; i++) {
+            // Fine step so a transient bow-out between samples can't slip through.
+            for (let t = 0; t <= 1; t += 0.02) {
+                const p = curves[i].pointAt(t);
+                expect(p.x).toBeGreaterThanOrEqual(-eps);
+                expect(p.x).toBeLessThanOrEqual(frame.width + eps);
+                expect(p.y).toBeGreaterThanOrEqual(-eps);
+                expect(p.y).toBeLessThanOrEqual(frame.height + eps);
+            }
+        }
+    });
 });
