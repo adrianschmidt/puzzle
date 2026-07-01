@@ -868,4 +868,20 @@ describe('composable base-cut picker', () => {
             }),
         );
     });
+
+    it('reports the smooth toggle through onSelect', () => {
+        const onSelect = openDialogAndSelectComposable();
+        container.querySelector<HTMLInputElement>('input[type="radio"][value="triangular"]')!.click();
+        const smooth = container.querySelector<HTMLInputElement>('[data-testid="composable-smooth-toggle"]')!;
+        expect(smooth).not.toBeNull();
+        smooth.checked = true;
+        smooth.dispatchEvent(new Event('change'));
+        // Pick a size to fire onSelect.
+        container.querySelectorAll<HTMLButtonElement>('.size-picker-option')[0].click();
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({
+                composableConfig: expect.objectContaining<Partial<ComposableSliderConfig>>({ baseCut: 'triangular', smooth: true }),
+            }),
+        );
+    });
 });
