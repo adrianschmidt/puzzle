@@ -497,10 +497,44 @@ describe('setupInteraction', () => {
             selectionManager.toolActive = true;
 
             // Two single-piece groups, both selected. Dragging group 7 also
-            // moves group 8, so this is not a single-piece drag and the
-            // offset must not be applied.
+            // moves group 8, so more than one group moves and the offset
+            // must not be applied.
             const group7 = makeGroup(7, [3], { x: 0, y: 0 });
             const group8 = makeGroup(8, [4], { x: 0, y: 0 });
+            selectionManager.select(7);
+            selectionManager.select(8);
+            const state = makeState([group7, group8]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
+                selectionManager,
+            });
+
+            const pieceTarget = { _pieceId: 3 };
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 })); // promote
+
+            expect(group7.position.y).toBe(0);
+        });
+
+        it('does NOT apply when dragging a multi-piece group within a multi-selection', () => {
+            vi.mocked(loadOffsetDragPreference).mockReturnValue(true);
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+            const selectionManager = new SelectionManager();
+            selectionManager.toolActive = true;
+
+            // The dragged group has two pieces, but the multi-selection still
+            // moves two groups, so the offset must not be applied: the
+            // exclusion depends on the group count, not the piece count.
+            const group7 = makeGroup(7, [3, 4], { x: 0, y: 0 });
+            const group8 = makeGroup(8, [5], { x: 0, y: 0 });
             selectionManager.select(7);
             selectionManager.select(8);
             const state = makeState([group7, group8]);
@@ -543,6 +577,34 @@ describe('setupInteraction', () => {
                 onDrop: vi.fn(),
                 onViewportChanged: vi.fn(),
                 selectionManager,
+            });
+
+            const pieceTarget = { _pieceId: 3 };
+            container.fire('pointerdown', fakePointerEvent({ target: pieceTarget as unknown as EventTarget, pointerId: 1, clientX: 100, clientY: 100 }));
+            container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 })); // promote
+
+            // OFFSET_DRAG_SCREEN_PX = 50, shifted upward (negative Y).
+            expect(group7.position.y).toBe(-50);
+        });
+
+        it('applies when dragging a single multi-piece group', () => {
+            vi.mocked(loadOffsetDragPreference).mockReturnValue(true);
+            const container = createFakeContainer();
+            const renderer = createFakeRenderer();
+
+            // One group with two pieces, no multi-select involved. Exactly
+            // one group moves, so the offset applies despite the piece count.
+            const group7 = makeGroup(7, [3, 4], { x: 0, y: 0 });
+            const state = makeState([group7]);
+
+            setupInteraction({
+                container: container as unknown as HTMLElement,
+                renderer,
+                viewportTransform: new ViewportTransform(),
+                getState: () => state,
+                onStateChanged: vi.fn(),
+                onDrop: vi.fn(),
+                onViewportChanged: vi.fn(),
             });
 
             const pieceTarget = { _pieceId: 3 };
