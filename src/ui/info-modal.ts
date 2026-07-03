@@ -411,7 +411,7 @@ function buildOffsetDragSetting(): HTMLElement {
     const desc = document.createElement('p');
     desc.className = 'info-setting-description';
     desc.textContent =
-        "Shift single pieces upward when dragging, so your finger doesn't block the view.";
+        "Shift the dragged piece or group upward, so your finger doesn't block the view.";
     setting.appendChild(desc);
 
     return setting;

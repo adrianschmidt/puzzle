@@ -1,8 +1,10 @@
 /**
  * Offset drag setting — persistence and defaults.
  *
- * When enabled, single pieces are shifted upward on drag start
- * so the user's finger doesn't block the view on touch devices.
+ * When enabled, the dragged piece or group is shifted upward on drag
+ * start so the user's finger doesn't block the view on touch devices.
+ * Only applies when a single group moves — multi-select drags of
+ * several groups are excluded.
  *
  * Disabled by default. Users can enable it in the info modal.
  */
