@@ -122,9 +122,9 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     // Decided once at drag start and held until the gesture resolves.
     let backgroundMode: 'pan' | 'marquee' = 'pan';
 
-    function applyOffsetDragIfSinglePiece(groupId: number): void {
+    function applyOffsetDragIfSingleGroup(groupId: number): void {
         const group = tryGetGroup(getState(), groupId);
-        if (!group || group.pieces.size !== 1) return;
+        if (!group) return;
         if (expandToSelection(groupId).length > 1) return;
         if (!loadOffsetDragPreference()) return;
         const offset = deltaToWorld({ x: 0, y: -OFFSET_DRAG_SCREEN_PX });
@@ -174,7 +174,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                 dragController.handlePointerDown(pieceId, evt);
                 const drag = dragController.getActiveDrag();
                 if (!drag) return;
-                applyOffsetDragIfSinglePiece(drag.groupId);
+                applyOffsetDragIfSingleGroup(drag.groupId);
                 autoPan?.start(drag.groupId);
                 autoPan?.updatePointer({ x: evt.clientX, y: evt.clientY });
             },
