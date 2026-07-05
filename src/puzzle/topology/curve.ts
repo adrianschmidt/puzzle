@@ -53,6 +53,18 @@ export interface BoundingBox {
     maxY: number;
 }
 
+/** Options accepted by the Curve constructor and factories. */
+export interface CurveOptions {
+    /**
+     * When true, edges derived from this curve are never given tabs
+     * (see apply-tabs.ts). Set by generators for cuts that must stay
+     * knife-edged (e.g. silhouette outlines). Propagated through
+     * splitAt / splitAtSegmentLocal / reverse, so every DCEL segment
+     * of a flagged input curve inherits it.
+     */
+    suppressTabs?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Curve class
 // ---------------------------------------------------------------------------
@@ -66,6 +78,8 @@ export interface BoundingBox {
 export class Curve {
     /** The raw segments composing this curve. */
     readonly segments: readonly BezierSegment[];
+    /** See {@link CurveOptions.suppressTabs}. */
+    readonly suppressTabs: boolean;
 
     /** Cached bezier-js instances (one per segment). */
     private _beziers?: Bezier[];
@@ -73,11 +87,12 @@ export class Curve {
     /** Cached per-segment bounding boxes (one per segment). */
     private _segmentBoxes?: BBox[];
 
-    constructor(segments: BezierSegment[]) {
+    constructor(segments: BezierSegment[], options?: CurveOptions) {
         if (segments.length === 0) {
             throw new Error('Curve must have at least one segment');
         }
         this.segments = segments;
+        this.suppressTabs = options?.suppressTabs ?? false;
     }
 
     // -- bezier-js interop -------------------------------------------------
@@ -116,13 +131,13 @@ export class Curve {
     /**
      * Create a straight-line curve between two points.
      */
-    static line(start: Point, end: Point): Curve {
+    static line(start: Point, end: Point, options?: CurveOptions): Curve {
         return new Curve([{
             p0: start,
             cp1: lerpPoint(start, end, 1 / 3),
             cp2: lerpPoint(start, end, 2 / 3),
             p3: end,
-        }]);
+        }], options);
     }
 
     /**
@@ -130,7 +145,7 @@ export class Curve {
      * Format: [p0, cp1, cp2, p1, cp1, cp2, p2, ...]
      * (Same format as BezierPath from tab-shapes.ts)
      */
-    static fromBezierPath(points: Point[]): Curve {
+    static fromBezierPath(points: Point[], options?: CurveOptions): Curve {
         if (points.length < 4 || (points.length - 1) % 3 !== 0) {
             throw new Error(
                 `Invalid Bézier path: need 3n+1 points, got ${points.length}`,
@@ -145,7 +160,7 @@ export class Curve {
                 p3: points[i + 3],
             });
         }
-        return new Curve(segments);
+        return new Curve(segments, options);
     }
 
     /**
@@ -154,7 +169,7 @@ export class Curve {
      *
      * Starts at the rightmost point (center + (radius, 0)) and goes CCW.
      */
-    static circle(center: Point, radius: number): Curve {
+    static circle(center: Point, radius: number, options?: CurveOptions): Curve {
         const k = 0.5522847498307933;  // 4*(sqrt(2)-1)/3
         const r = radius, kr = k * r;
         const cx = center.x, cy = center.y;
@@ -169,7 +184,7 @@ export class Curve {
             { x: cx - kr, y: cy + r  }, { x: cx - r,  y: cy + kr }, left,
             { x: cx - r,  y: cy - kr }, { x: cx - kr, y: cy - r  }, top,
             { x: cx + kr, y: cy - r  }, { x: cx + r,  y: cy - kr }, right,
-        ]);
+        ], options);
     }
 
     // -- Accessors ---------------------------------------------------------
@@ -216,10 +231,10 @@ export class Curve {
     splitAt(t: number): [Curve, Curve] {
         const clamped = Math.max(0, Math.min(1, t));
         if (clamped <= 1e-10) {
-            return [Curve.line(this.start, this.start), this];
+            return [Curve.line(this.start, this.start, { suppressTabs: this.suppressTabs }), this];
         }
         if (clamped >= 1 - 1e-10) {
-            return [this, Curve.line(this.end, this.end)];
+            return [this, Curve.line(this.end, this.end, { suppressTabs: this.suppressTabs })];
         }
 
         const { segmentIndex, localT } = this.resolveTWithIndex(clamped);
@@ -235,7 +250,10 @@ export class Curve {
             ...this.segments.slice(segmentIndex + 1),
         ];
 
-        return [new Curve(beforeSegments), new Curve(afterSegments)];
+        return [
+            new Curve(beforeSegments, { suppressTabs: this.suppressTabs }),
+            new Curve(afterSegments, { suppressTabs: this.suppressTabs }),
+        ];
     }
 
     /**
@@ -246,28 +264,28 @@ export class Curve {
         if (localT <= 1e-10) {
             // Split at the start of this segment
             if (segmentIndex === 0) {
-                return [Curve.line(this.start, this.start), this];
+                return [Curve.line(this.start, this.start, { suppressTabs: this.suppressTabs }), this];
             }
             return [
-                new Curve([...this.segments.slice(0, segmentIndex)]),
-                new Curve([...this.segments.slice(segmentIndex)]),
+                new Curve([...this.segments.slice(0, segmentIndex)], { suppressTabs: this.suppressTabs }),
+                new Curve([...this.segments.slice(segmentIndex)], { suppressTabs: this.suppressTabs }),
             ];
         }
         if (localT >= 1 - 1e-10) {
             // Split at the end of this segment
             if (segmentIndex === this.segments.length - 1) {
-                return [this, Curve.line(this.end, this.end)];
+                return [this, Curve.line(this.end, this.end, { suppressTabs: this.suppressTabs })];
             }
             return [
-                new Curve([...this.segments.slice(0, segmentIndex + 1)]),
-                new Curve([...this.segments.slice(segmentIndex + 1)]),
+                new Curve([...this.segments.slice(0, segmentIndex + 1)], { suppressTabs: this.suppressTabs }),
+                new Curve([...this.segments.slice(segmentIndex + 1)], { suppressTabs: this.suppressTabs }),
             ];
         }
 
         const [left, right] = splitCubicAt(this.segments[segmentIndex], localT);
         return [
-            new Curve([...this.segments.slice(0, segmentIndex), left]),
-            new Curve([right, ...this.segments.slice(segmentIndex + 1)]),
+            new Curve([...this.segments.slice(0, segmentIndex), left], { suppressTabs: this.suppressTabs }),
+            new Curve([right, ...this.segments.slice(segmentIndex + 1)], { suppressTabs: this.suppressTabs }),
         ];
     }
 
@@ -503,7 +521,7 @@ export class Curve {
                 p3: s.p0,
             });
         }
-        return new Curve(reversed);
+        return new Curve(reversed, { suppressTabs: this.suppressTabs });
     }
 
     // -- Internal ----------------------------------------------------------

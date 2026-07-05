@@ -16,6 +16,8 @@ import { describe, it, expect } from 'vitest';
 import { Curve } from './curve.js';
 import { buildDCEL } from './dcel.js';
 import { applyTabs } from './apply-tabs.js';
+import { classicTabGenerator } from './classic-tab-generator.js';
+import { createSeededRandom } from '../seeded-random.js';
 import type { TabGenerator } from './plugin-types.js';
 
 describe('applyTabs', () => {
@@ -367,6 +369,29 @@ describe('applyTabs', () => {
         applyTabs(graph, tabGenerator, makeSeededRandom(1));
 
         expect(internalEdge.curve).not.toBe(curveBefore);
+    });
+
+    it('never puts a tab on an edge derived from a suppressTabs curve', () => {
+        // Two internal cuts: one normal, one suppressed. Both cross the frame.
+        const curves = [
+            Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 }),
+            Curve.line({ x: 100, y: 0 }, { x: 100, y: 100 }),
+            Curve.line({ x: 100, y: 100 }, { x: 0, y: 100 }),
+            Curve.line({ x: 0, y: 100 }, { x: 0, y: 0 }),
+            Curve.line({ x: 0, y: 33 }, { x: 100, y: 33 }),
+            Curve.line({ x: 0, y: 66 }, { x: 100, y: 66 }, { suppressTabs: true }),
+        ];
+        const graph = buildDCEL({ curves });
+        const before = new Map(graph.halfEdges.map(he => [he.id, he.curve]));
+        applyTabs(graph, classicTabGenerator, createSeededRandom(42), {});
+        for (const he of graph.halfEdges) {
+            if (he.curve.suppressTabs) {
+                expect(he.curve).toBe(before.get(he.id)); // untouched
+            }
+        }
+        // Sanity: at least one non-suppressed edge DID get a tab.
+        const changed = graph.halfEdges.some(he => he.curve !== before.get(he.id));
+        expect(changed).toBe(true);
     });
 });
 

@@ -124,6 +124,8 @@ export interface TopologyEdge {
     readonly id: number;
     /** Arc length of the edge's current curve, in pixels. */
     readonly length: number;
+    /** True when the edge derives from a suppressTabs input curve. */
+    readonly suppressTabs: boolean;
 }
 
 /**

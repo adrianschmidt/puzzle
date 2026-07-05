@@ -95,6 +95,7 @@ export function applyTabs(
         const view: TopologyEdge = {
             id: he.id,
             length: he.curve.arcLength(),
+            suppressTabs: he.curve.suppressTabs,
         };
         if (!policy(view)) continue;
 
@@ -128,7 +129,7 @@ export function applyTabs(
     }
 }
 
-const defaultTabPolicy: TabPolicy = () => true;
+const defaultTabPolicy: TabPolicy = (edge) => !edge.suppressTabs;
 
 function isAcceptable(
     candidate: Curve,

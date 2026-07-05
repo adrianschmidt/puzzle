@@ -483,3 +483,27 @@ describe('Curve.boundingBox', () => {
         expect(box.maxY).toBeCloseTo(30);
     });
 });
+
+// ---------------------------------------------------------------------------
+// suppressTabs propagation
+// ---------------------------------------------------------------------------
+
+describe('suppressTabs propagation', () => {
+    it('defaults to false and is set via options', () => {
+        expect(Curve.line({ x: 0, y: 0 }, { x: 10, y: 0 }).suppressTabs).toBe(false);
+        const c = Curve.line({ x: 0, y: 0 }, { x: 10, y: 0 }, { suppressTabs: true });
+        expect(c.suppressTabs).toBe(true);
+    });
+
+    it('survives splitAt, splitAtSegmentLocal, and reverse', () => {
+        const c = Curve.circle({ x: 0, y: 0 }, 10);
+        const flagged = new Curve([...c.segments], { suppressTabs: true });
+        const [a, b] = flagged.splitAt(0.5);
+        expect(a.suppressTabs).toBe(true);
+        expect(b.suppressTabs).toBe(true);
+        const [d, e] = flagged.splitAtSegmentLocal(1, 0.5);
+        expect(d.suppressTabs).toBe(true);
+        expect(e.suppressTabs).toBe(true);
+        expect(flagged.reverse().suppressTabs).toBe(true);
+    });
+});
