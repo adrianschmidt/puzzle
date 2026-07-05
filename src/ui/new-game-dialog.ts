@@ -26,7 +26,7 @@ export interface ComposableSliderConfig {
     borderless: boolean;
     jitter: number;
     smooth: boolean;
-    /** Number of quantized colour bands used to segment the image. */
+    /** Number of quantized color bands used to segment the image. */
     silhouetteColorLevels: number;
     /** Maximum number of silhouette regions selected. */
     silhouetteMaxRegions: number;
@@ -34,7 +34,7 @@ export interface ComposableSliderConfig {
     silhouetteMinRegionPct: number;
     /** Maximum region size as a percentage (0-100) of the image area. */
     silhouetteMaxRegionPct: number;
-    /** Whether adjacent same-colour regions may both be selected. */
+    /** Whether adjacent same-color regions may both be selected. */
     silhouetteAllowAdjacent: boolean;
     /** Whole-piece area threshold, as a multiple of the average piece area. */
     silhouetteWholePieceFactor: number;
@@ -439,7 +439,7 @@ function buildComposableSlidersSection(args: {
     section.appendChild(triangularControls);
 
     // Silhouette segmentation sliders — control how the image is quantized
-    // into colour regions and traced into piece-boundary outlines.
+    // into color regions and traced into piece-boundary outlines.
     interface SilhouetteSliderDef {
         id: keyof Pick<ComposableSliderConfig,
             | 'silhouetteColorLevels'
