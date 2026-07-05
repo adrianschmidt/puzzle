@@ -25,6 +25,14 @@ describe('saveComposableConfigPreference / loadComposableConfigPreference', () =
         borderless: false,
         jitter: 0.15,
         smooth: false,
+        silhouetteColorLevels: 8,
+        silhouetteMaxRegions: 5,
+        silhouetteMinRegionPct: 1,
+        silhouetteMaxRegionPct: 25,
+        silhouetteAllowAdjacent: false,
+        silhouetteWholePieceFactor: 3,
+        silhouetteSimplifyTolerance: 4,
+        silhouetteSmoothing: 0.8,
     };
 
     it('returns undefined when nothing is saved', () => {
@@ -109,6 +117,10 @@ describe('composable borderless preference', () => {
             horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
             verticalAmplitude: 0.15, verticalFrequency: 1.5,
             tabGenerator: 'classic', borderless: true,
+            silhouetteColorLevels: 8, silhouetteMaxRegions: 5,
+            silhouetteMinRegionPct: 1, silhouetteMaxRegionPct: 25,
+            silhouetteAllowAdjacent: false, silhouetteWholePieceFactor: 3,
+            silhouetteSimplifyTolerance: 4, silhouetteSmoothing: 0.8,
         });
         expect(loadComposableConfigPreference()?.borderless).toBe(true);
     });
@@ -180,6 +192,14 @@ describe('composable base-cut + jitter', () => {
             borderless: false,
             jitter: 0.3,
             smooth: false,
+            silhouetteColorLevels: 8,
+            silhouetteMaxRegions: 5,
+            silhouetteMinRegionPct: 1,
+            silhouetteMaxRegionPct: 25,
+            silhouetteAllowAdjacent: false,
+            silhouetteWholePieceFactor: 3,
+            silhouetteSimplifyTolerance: 4,
+            silhouetteSmoothing: 0.8,
         };
         saveComposableConfigPreference(tri);
         expect(loadComposableConfigPreference()).toEqual(tri);
@@ -196,6 +216,14 @@ describe('composable base-cut + jitter', () => {
             borderless: true,
             jitter: 0.3,
             smooth: false,
+            silhouetteColorLevels: 8,
+            silhouetteMaxRegions: 5,
+            silhouetteMinRegionPct: 1,
+            silhouetteMaxRegionPct: 25,
+            silhouetteAllowAdjacent: false,
+            silhouetteWholePieceFactor: 3,
+            silhouetteSimplifyTolerance: 4,
+            silhouetteSmoothing: 0.8,
         });
         expect(cfg).toEqual({
             baseCutGenerator: 'sine',
@@ -217,6 +245,14 @@ describe('composable base-cut + jitter', () => {
             borderless: true,
             jitter: 0.3,
             smooth: false,
+            silhouetteColorLevels: 8,
+            silhouetteMaxRegions: 5,
+            silhouetteMinRegionPct: 1,
+            silhouetteMaxRegionPct: 25,
+            silhouetteAllowAdjacent: false,
+            silhouetteWholePieceFactor: 3,
+            silhouetteSimplifyTolerance: 4,
+            silhouetteSmoothing: 0.8,
         });
         expect(cfg).toEqual({
             baseCutGenerator: 'triangular',
@@ -241,6 +277,10 @@ describe('composable base-cut + jitter', () => {
             baseCut: 'triangular', horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
             verticalAmplitude: 0.15, verticalFrequency: 1.5, tabGenerator: 'classic',
             borderless: false, jitter: 0.3, smooth: true,
+            silhouetteColorLevels: 8, silhouetteMaxRegions: 5,
+            silhouetteMinRegionPct: 1, silhouetteMaxRegionPct: 25,
+            silhouetteAllowAdjacent: false, silhouetteWholePieceFactor: 3,
+            silhouetteSimplifyTolerance: 4, silhouetteSmoothing: 0.8,
         });
         expect(loadComposableConfigPreference()?.smooth).toBe(true);
     });
@@ -250,7 +290,41 @@ describe('composable base-cut + jitter', () => {
             baseCut: 'triangular', horizontalAmplitude: 0.15, horizontalFrequency: 1.5,
             verticalAmplitude: 0.15, verticalFrequency: 1.5, tabGenerator: 'classic',
             borderless: false, jitter: 0.3, smooth: true,
+            silhouetteColorLevels: 8, silhouetteMaxRegions: 5,
+            silhouetteMinRegionPct: 1, silhouetteMaxRegionPct: 25,
+            silhouetteAllowAdjacent: false, silhouetteWholePieceFactor: 3,
+            silhouetteSimplifyTolerance: 4, silhouetteSmoothing: 0.8,
         });
         expect(cfg.baseCutConfig).toEqual({ jitter: 0.3, smooth: true });
+    });
+});
+
+describe('composableSliderToGeneratorConfig (silhouette)', () => {
+    const base = {
+        horizontalAmplitude: 0.1, horizontalFrequency: 2,
+        verticalAmplitude: 0.15, verticalFrequency: 1.5,
+        tabGenerator: 'classic' as const, borderless: false,
+        jitter: 0.15, smooth: false,
+        silhouetteColorLevels: 8, silhouetteMaxRegions: 5,
+        silhouetteMinRegionPct: 1, silhouetteMaxRegionPct: 25,
+        silhouetteAllowAdjacent: false, silhouetteWholePieceFactor: 3,
+        silhouetteSimplifyTolerance: 4, silhouetteSmoothing: 0.8,
+    };
+
+    it('emits the compact silhouette bgc including the sine sliders', () => {
+        const config = composableSliderToGeneratorConfig({ ...base, baseCut: 'silhouette' });
+        expect(config.baseCutGenerator).toBe('silhouette');
+        expect(config.baseCutConfig).toEqual({
+            ha: 0.1, hf: 2, va: 0.15, vf: 1.5,
+            cl: 8, mr: 5, mnf: 0.01, mxf: 0.25,
+            aa: false, st: 4, sm: 0.8, wp: 3,
+        });
+        expect(config.borderless).toBe(false); // silhouette never borderless (v1)
+    });
+
+    it('still emits the plain sine shape for baseCut sine', () => {
+        const config = composableSliderToGeneratorConfig({ ...base, baseCut: 'sine' });
+        expect(config.baseCutGenerator).toBe('sine');
+        expect(config.baseCutConfig).toEqual({ ha: 0.1, hf: 2, va: 0.15, vf: 1.5 });
     });
 });
