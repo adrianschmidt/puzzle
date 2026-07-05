@@ -54,6 +54,8 @@ export interface InitOptions {
     fractalConfig?: FractalConfig;
     /** Configuration for the wavy generator (only used when cutStyle is 'wavy'). */
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
+    /** Runtime silhouette outlines; see StrategyContext.silhouetteOutlines. */
+    silhouetteOutlines?: import('../puzzle/silhouette/types.js').SilhouetteOutline[];
     /**
      * Rotation mode for this puzzle. Defaults to `'none'`.
      *
@@ -91,6 +93,7 @@ export function createNewGame(
         composableConfig: options.composableConfig,
         wavyConfig: options.wavyConfig,
         tabDebug,
+        silhouetteOutlines: options.silhouetteOutlines,
     };
 
     const generationGrid = strategy.scaleGrid(gridSize, imageSize, ctx);

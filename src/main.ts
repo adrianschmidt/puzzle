@@ -111,6 +111,7 @@ import {
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
 import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
+import { computeSilhouetteOutlines } from './puzzle/silhouette/compute-outlines.js';
 import { CURRENT_TRACE_SET_VERSION } from './puzzle/composable/traces/trace-set-version.js';
 import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
@@ -964,6 +965,19 @@ async function startNewGame(
             }
             : undefined;
 
+        // Silhouette base cut: trace the image before generation (async,
+        // pre-generation — the composable strategy injects the outlines
+        // transiently; they are never persisted). Degrades to [] on any
+        // failure, which produces a plain sine lattice.
+        let silhouetteOutlines:
+            import('./puzzle/silhouette/types.js').SilhouetteOutline[] | undefined;
+        if (cutStyle === 'composable'
+            && composableConfig?.baseCutGenerator === 'silhouette') {
+            silhouetteOutlines = await computeSilhouetteOutlines(
+                imageUrl, imageSize, composableConfig.baseCutConfig,
+            );
+        }
+
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
 
@@ -974,6 +988,7 @@ async function startNewGame(
             wavyConfig: generatorWavyConfig,
             rotationMode,
             seed,
+            silhouetteOutlines,
         });
 
         if (attribution) {
@@ -1287,6 +1302,18 @@ async function loadSharedPuzzle(
             height: app.clientHeight || window.innerHeight,
         };
 
+        // Silhouette base cut: trace the image before generation (async,
+        // pre-generation — the composable strategy injects the outlines
+        // transiently; they are never persisted). Degrades to [] on any
+        // failure, which produces a plain sine lattice.
+        let silhouetteOutlines:
+            import('./puzzle/silhouette/types.js').SilhouetteOutline[] | undefined;
+        if (payload.c === 'composable' && payload.cf?.bg === 'silhouette') {
+            silhouetteOutlines = await computeSilhouetteOutlines(
+                imageUrl, imageSize, payload.cf.bgc,
+            );
+        }
+
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
 
@@ -1301,6 +1328,7 @@ async function loadSharedPuzzle(
             composableConfig: payload.cf
                 ? shareCfToComposableConfig(payload.cf)
                 : undefined,
+            silhouetteOutlines,
         });
 
         if (payload.a) {

@@ -32,6 +32,7 @@ import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
 import type { TabDebugSession, TabDebugReport } from '../puzzle/topology/tab-debug.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
+import type { SilhouetteOutline } from '../puzzle/silhouette/types.js';
 import type { CutStyle } from './cut-styles.js';
 
 /**
@@ -49,6 +50,15 @@ export interface StrategyContext {
      * `init.ts` based on the `tabDebug=1` URL flag.
      */
     tabDebug?: TabDebugSession;
+    /**
+     * Runtime-computed silhouette outlines (composable style with the
+     * 'silhouette' base cut only). Injected transiently into the
+     * generator config at generation time — the same pattern as
+     * `tabDebug` — and NEVER stored on GameState.composableConfig,
+     * which is what saves and share links serialize (see the design
+     * spec's persistence boundary).
+     */
+    silhouetteOutlines?: SilhouetteOutline[];
 }
 
 /**
@@ -105,16 +115,23 @@ const classicStrategy: CutStyleStrategy = {
 const composableStrategy: CutStyleStrategy = {
     scaleGrid: (grid) => grid,
     inscribePuzzleSize: (imageSize) => imageSize,
-    generatePieces: (grid, puzzleSize, seed, ctx) =>
-        generateComposablePuzzle(
-            grid.cols,
-            grid.rows,
-            puzzleSize,
-            seed,
-            ctx.tabDebug
-                ? { ...ctx.composableConfig, tabDebug: ctx.tabDebug }
-                : ctx.composableConfig,
-        ),
+    generatePieces: (grid, puzzleSize, seed, ctx) => {
+        let config = ctx.composableConfig;
+        if (ctx.silhouetteOutlines !== undefined
+            && config?.baseCutGenerator === 'silhouette') {
+            config = {
+                ...config,
+                baseCutConfig: {
+                    ...config.baseCutConfig,
+                    outlines: ctx.silhouetteOutlines,
+                },
+            };
+        }
+        if (ctx.tabDebug) {
+            config = { ...config, tabDebug: ctx.tabDebug };
+        }
+        return generateComposablePuzzle(grid.cols, grid.rows, puzzleSize, seed, config);
+    },
     configKey: 'composableConfig',
 };
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
 import { createNewGame } from './init.js';
+import type { SilhouetteOutline } from '../puzzle/silhouette/types.js';
 
 describe('wavy strategy', () => {
     it('is registered for cutStyle "wavy"', () => {
@@ -109,5 +110,57 @@ describe('wavy borderless', () => {
         const borderedShapes = bordered.pieces.map((p) => p.shape).sort();
         const borderlessShapes = borderless.pieces.map((p) => p.shape).sort();
         expect(borderlessShapes).not.toEqual(borderedShapes);
+    });
+});
+
+describe('composable strategy silhouette outline injection', () => {
+    const outline: SilhouetteOutline = {
+        path: [
+            { x: 180, y: 130 },
+            { x: 193, y: 130 }, { x: 207, y: 130 }, { x: 220, y: 130 },
+            { x: 220, y: 143 }, { x: 220, y: 157 }, { x: 220, y: 170 },
+            { x: 207, y: 170 }, { x: 193, y: 170 }, { x: 180, y: 170 },
+            { x: 180, y: 157 }, { x: 180, y: 143 }, { x: 180, y: 130 },
+        ],
+        polygon: [
+            { x: 180, y: 130 }, { x: 220, y: 130 },
+            { x: 220, y: 170 }, { x: 180, y: 170 },
+        ],
+        area: 1600,
+    };
+
+    it('threads ctx.silhouetteOutlines into generation without touching the config', () => {
+        const strategy = getCutStyleStrategy('composable');
+        const composableConfig = {
+            baseCutGenerator: 'silhouette',
+            baseCutConfig: { ha: 0.1, hf: 1, va: 0.1, vf: 1 },
+            tabGenerator: 'none' as const,
+            tabConfig: {},
+        };
+        const ctx = { composableConfig, silhouetteOutlines: [outline] };
+        const { pieces } = strategy.generatePieces(
+            { cols: 4, rows: 3 }, { width: 400, height: 300 }, 42, ctx,
+        );
+        // The whole blob became a real piece: some piece area ≈ 1600 and
+        // more pieces exist than the plain 4×3 lattice would produce.
+        expect(pieces.length).toBeGreaterThan(12);
+        // The persisted config object was not mutated.
+        expect('outlines' in composableConfig.baseCutConfig).toBe(false);
+    });
+
+    it('generates a plain lattice when no outlines are provided', () => {
+        const strategy = getCutStyleStrategy('composable');
+        const { pieces } = strategy.generatePieces(
+            { cols: 4, rows: 3 }, { width: 400, height: 300 }, 42,
+            {
+                composableConfig: {
+                    baseCutGenerator: 'silhouette',
+                    baseCutConfig: {},
+                    tabGenerator: 'none',
+                    tabConfig: {},
+                },
+            },
+        );
+        expect(pieces.length).toBe(12);
     });
 });
