@@ -68,7 +68,7 @@ export interface ComposableSliderPreference {
     silhouetteAllowAdjacent: boolean;
     /** Whole-piece area threshold, as a multiple of the average piece area. */
     silhouetteWholePieceFactor: number;
-    /** Contour simplification tolerance, in source pixels. */
+    /** Contour simplification tolerance, in puzzle-frame pixels. */
     silhouetteSimplifyTolerance: number;
     /** Contour smoothing strength, 0 (polygon) to 1 (full Catmull-Rom). */
     silhouetteSmoothing: number;

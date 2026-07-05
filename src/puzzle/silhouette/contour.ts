@@ -16,6 +16,11 @@ import type { Point } from '../../model/types.js';
  * a corner) on the outer boundary rather than crossing through.
  * Collinear steps are merged, so the result contains corners only.
  * First point is the region's topmost-leftmost boundary corner.
+ *
+ * Only the outer boundary is traced: a region with an interior hole
+ * (a donut-shaped color blob) becomes a filled outline, its hole
+ * swallowed into the piece. Acceptable for the v1 "coherent color
+ * blob" model; revisit if hole-aware tracing is ever wanted.
  */
 export function traceContour(
     width: number,
