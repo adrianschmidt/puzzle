@@ -36,8 +36,20 @@ interface Bucket {
  * Median-cut quantization in Oklab space.
  *
  * Repeatedly splits the bucket with the widest Oklab channel range at
- * that channel's median until `levels` buckets exist (or no bucket is
- * splittable). Ties are broken by lowest bucket index — deterministic.
+ * that channel's value midpoint until `levels` buckets exist (or no
+ * bucket is splittable). Ties in bucket/channel selection are broken by
+ * lowest index — deterministic.
+ *
+ * The split point is the midpoint of the channel's VALUE range, not the
+ * pixel-count median: a count-based median split forces every split to
+ * divide a bucket's pixels 50/50, so a small, visually-distinct region
+ * (e.g. a salient foreground blob under a large uniform background)
+ * gets fractured across both children instead of staying in one — the
+ * background "spills over" into the same bucket as the minority color,
+ * merging what should be a separate connected component into a single,
+ * frame-touching blob. A value-midpoint split keeps every pixel of a
+ * uniform region together (all its samples sit on one side of the
+ * midpoint) regardless of how small that region is by pixel count.
  */
 export function quantize(
     raster: Raster,
@@ -81,13 +93,22 @@ export function quantize(
 
         const bucket = buckets[bestBucket];
         const ch = bestChannel;
-        // Sort by channel value with pixel index as deterministic tiebreak.
-        bucket.pixels.sort((a, b) =>
-            (lab[a * 3 + ch] - lab[b * 3 + ch]) || (a - b));
-        const mid = bucket.pixels.length >> 1;
-        buckets.splice(bestBucket, 1,
-            { pixels: bucket.pixels.slice(0, mid) },
-            { pixels: bucket.pixels.slice(mid) });
+        // Split at the channel's value midpoint (see function doc for why
+        // this isn't a pixel-count median). Every pixel in [lo, mid] goes
+        // left, every pixel in (mid, hi] goes right; since lo <= mid < hi,
+        // both sides are guaranteed non-empty.
+        let lo = Infinity, hi = -Infinity;
+        for (const p of bucket.pixels) {
+            const v = lab[p * 3 + ch];
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
+        }
+        const mid = (lo + hi) / 2;
+        const below: number[] = [], above: number[] = [];
+        for (const p of bucket.pixels) {
+            (lab[p * 3 + ch] <= mid ? below : above).push(p);
+        }
+        buckets.splice(bestBucket, 1, { pixels: below }, { pixels: above });
     }
 
     const labels = new Int32Array(n);
