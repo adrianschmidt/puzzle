@@ -10,6 +10,7 @@ import { sineCutGenerator } from './sine-cut-generator.js';
 import { classicTabGenerator } from './classic-tab-generator.js';
 import { vennCutGenerator } from './venn-cut-generator.js';
 import { triangularCutGenerator } from './triangular-cut-generator.js';
+import { silhouetteCutGenerator } from './silhouette-cut-generator.js';
 import { noneTabGenerator } from './none-tab-generator.js';
 import { tracedTabGeneratorStub } from './traced-tab-loader.js';
 
@@ -51,6 +52,7 @@ registerTabGenerator(classicTabGenerator);
 // Register additional generators
 registerBaseCutGenerator(vennCutGenerator);
 registerBaseCutGenerator(triangularCutGenerator);
+registerBaseCutGenerator(silhouetteCutGenerator);
 registerTabGenerator(noneTabGenerator);
 // Traced tabs are registered as a stub that throws unless
 // preloadTracedTabGenerator() has been awaited. See traced-tab-loader.ts.
