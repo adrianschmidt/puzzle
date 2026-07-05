@@ -1298,3 +1298,37 @@ describe('share-link wavy traceSetVersion (wf.tv)', () => {
         }
     });
 });
+
+describe('silhouette bgc clamping', () => {
+    function payloadWith(bgc: Record<string, unknown>) {
+        return {
+            v: 1 as const, i: 'blank', is: [400, 300] as [number, number],
+            g: [4, 3] as [number, number], c: 'composable' as const,
+            s: 1, r: 'none' as const,
+            cf: { bg: 'silhouette', bgc, tg: 'none', tgc: {} },
+        };
+    }
+
+    it('caps sine fields on a silhouette link', () => {
+        const decoded = decodePayload(encodePayload(payloadWith({ hf: 1e9, ha: 99 })));
+        expect(decoded?.cf?.bgc.hf).toBe(100);   // MAX_SINE_FREQUENCY
+        expect(decoded?.cf?.bgc.ha).toBe(0.5);   // MAX_SINE_AMPLITUDE
+    });
+
+    it('bounds silhouette-specific fields', () => {
+        const decoded = decodePayload(encodePayload(payloadWith({
+            cl: 9999, mr: 9999, st: 0.0001, mnf: 50, mxf: -3, sm: 42, wp: 1e9,
+        })));
+        expect(decoded?.cf?.bgc.cl).toBe(32);
+        expect(decoded?.cf?.bgc.mr).toBe(20);
+        expect(decoded?.cf?.bgc.st).toBe(2);     // floor — curve-count budget
+        expect(decoded?.cf?.bgc.mnf).toBe(1);
+        expect(decoded?.cf?.bgc.mxf).toBe(0);
+        expect(decoded?.cf?.bgc.sm).toBe(1);
+        expect(decoded?.cf?.bgc.wp).toBe(100);
+    });
+
+    it('accepts silhouette as a known base-cut id', () => {
+        expect(decodePayload(encodePayload(payloadWith({})))).not.toBeNull();
+    });
+});

@@ -163,6 +163,37 @@ function clampSineConfig(cf: NonNullable<SharePayload['cf']>): void {
 }
 
 /**
+ * Bounds for a decoded silhouette `bgc`. The silhouette base cut reads
+ * the sine fields too (its lattice delegates to the sine generator), so
+ * the sine caps apply; the silhouette-specific fields are bounded to the
+ * ranges silhouetteParamsFromConfig enforces at runtime (the decode
+ * clamp keeps hostile values out of persisted state as well —
+ * mirroring how sine links are handled). `st` has a FLOOR, not a cap:
+ * a tiny simplify tolerance is the curve-count DoS vector (the
+ * O(segments²) DCEL intersection pass).
+ */
+function clampSilhouetteConfig(cf: NonNullable<SharePayload['cf']>): void {
+    if (cf.bg !== 'silhouette') return;
+    const capNum = (key: string, lo: number, hi: number): void => {
+        const v = cf.bgc[key];
+        if (typeof v === 'number') {
+            cf.bgc[key] = Math.min(hi, Math.max(lo, v));
+        }
+    };
+    capNum('hf', 0, MAX_SINE_FREQUENCY);
+    capNum('vf', 0, MAX_SINE_FREQUENCY);
+    capNum('ha', 0, MAX_SINE_AMPLITUDE);
+    capNum('va', 0, MAX_SINE_AMPLITUDE);
+    capNum('cl', 2, 32);
+    capNum('mr', 0, 20);
+    capNum('mnf', 0, 1);
+    capNum('mxf', 0, 1);
+    capNum('st', 2, 64);
+    capNum('sm', 0, 1);
+    capNum('wp', 0, 100);
+}
+
+/**
  * Bound a decoded wavy trace-set version. A non-number or sub-1 value is
  * dropped (undefined ⇒ the puzzle reproduces with classic tabs, matching
  * pre-versioning links); a version newer than this client knows is clamped
@@ -196,6 +227,7 @@ export function decodePayload(encoded: string): SharePayload | null {
         // above, so this covers them too.
         if (translated.c === 'composable' && translated.cf) {
             clampSineConfig(translated.cf);
+            clampSilhouetteConfig(translated.cf);
         }
         if (translated.c === 'wavy' && translated.wf) {
             const clamped = clampTraceSetVersion(translated.wf.tv);
