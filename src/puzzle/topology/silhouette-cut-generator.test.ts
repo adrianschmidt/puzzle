@@ -6,6 +6,7 @@ import { applyTabs } from './apply-tabs.js';
 import { classicTabGenerator } from './classic-tab-generator.js';
 import { createSeededRandom } from '../seeded-random.js';
 import type { SilhouetteOutline } from '../silhouette/types.js';
+import type { Point } from '../../model/types.js';
 
 const FRAME = { width: 400, height: 300 };
 
@@ -26,6 +27,47 @@ function squareOutline(cx = 200, cy = 150, half = 20): SilhouetteOutline {
         );
     }
     return { path, polygon, area: (half * 2) ** 2 };
+}
+
+/** < dcel.ts's VERTEX_MERGE_TOLERANCE (3px). */
+const SUB_TOLERANCE_NUDGE = 1.5;
+
+/**
+ * Square-ish blob outline like `squareOutline`, but with corner 1
+ * nudged to within `nudge` (< 3px) of corner 0, creating one
+ * sub-tolerance outline edge. Used to pin how `buildDCEL`'s
+ * `splitClosedCurves` (which treats any curve whose own start/end lie
+ * within tolerance as a closed self-loop) interacts with this
+ * generator's one-curve-per-edge outline emission.
+ */
+function nudgedSquareOutline(
+    cx = 200, cy = 150, half = 20, nudge = SUB_TOLERANCE_NUDGE,
+): SilhouetteOutline {
+    const polygon = [
+        { x: cx - half, y: cy - half },
+        { x: cx - half + nudge, y: cy - half }, // <3px from the previous corner
+        { x: cx + half, y: cy + half },
+        { x: cx - half, y: cy + half },
+    ];
+    const path = [polygon[0]];
+    for (let i = 0; i < 4; i++) {
+        const a = polygon[i], b = polygon[(i + 1) % 4];
+        path.push(
+            { x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 },
+            { x: a.x + (b.x - a.x) * 2 / 3, y: a.y + (b.y - a.y) * 2 / 3 },
+            { x: b.x, y: b.y },
+        );
+    }
+    return { path, polygon, area: shoelaceArea(polygon) };
+}
+
+function shoelaceArea(polygon: Point[]): number {
+    let area = 0;
+    for (let i = 0; i < polygon.length; i++) {
+        const a = polygon[i], b = polygon[(i + 1) % polygon.length];
+        area += a.x * b.y - b.x * a.y;
+    }
+    return Math.abs(area / 2);
 }
 
 function generate(config: Record<string, unknown>) {
@@ -82,6 +124,50 @@ describe('silhouetteCutGenerator', () => {
         // The blob face exists: one inner face whose area ≈ 1600.
         const areas = graph.faces.filter(f => !f.isOuter).map(faceArea);
         expect(areas.some(a => Math.abs(a - 1600) < 100)).toBe(true);
+    });
+
+    it('absorbs a sub-tolerance outline edge into a closed single blob face', () => {
+        // One outline edge (corner0→corner1) is 1.5px — below dcel.ts's
+        // VERTEX_MERGE_TOLERANCE (3px). splitClosedCurves treats any
+        // curve whose own start/end lie within tolerance as a closed
+        // self-loop: it splits this edge at t=0.5, and both halves
+        // collapse to zero length (every point involved falls in the
+        // same vertex-pool tolerance cell), so the edge is dropped
+        // entirely — Step 4 skips zero-length segments. The two
+        // neighboring outline edges still independently register
+        // corner0 and corner1 in that same vertex cell, so the ring
+        // stays closed: the dropped corner is silently absorbed rather
+        // than opening the outline. This test pins that (coincidental,
+        // per review) behavior; it does NOT exercise the generator's
+        // normal (well-separated-corner) path, which the other tests
+        // above already cover.
+        const outline = nudgedSquareOutline();
+        // Below the whole-piece threshold (3 × 10_000 = 30_000), same
+        // as the plain-square whole-blob test above.
+        const curves = generate({ outlines: [outline] });
+        const graph = buildDCEL({ curves });
+
+        const inner = graph.faces.filter(f => !f.isOuter);
+        expect(inner.length).toBeGreaterThan(0);
+
+        // Every inner face boundary is a closed loop: a guarded walk
+        // via .next must return to the starting half-edge (same
+        // pattern as dcel-junction.test.ts's dangling-stub check).
+        for (const face of inner) {
+            let e = face.outerEdge;
+            let steps = 0;
+            do { e = e.next; steps++; } while (e !== face.outerEdge && steps < 10_000);
+            expect(e).toBe(face.outerEdge);
+        }
+
+        // One inner face is the (nearly) whole blob. Its vertex-based
+        // area is the outline's own area minus the tiny dropped sliver
+        // (corner0, nudged corner1, corner2) — computed here as ~30px²
+        // out of ~830px² — so a margin an order of magnitude above that
+        // sliver still confirms the corner was absorbed, not that the
+        // face lost real area or vanished.
+        const areas = inner.map(faceArea);
+        expect(areas.some(a => Math.abs(a - outline.area) < 100)).toBe(true);
     });
 
     it('a large blob keeps the lattice inside (subdivided)', () => {
