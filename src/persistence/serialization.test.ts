@@ -253,6 +253,24 @@ describe('serializeState', () => {
         const restored = recombine(serializeStatic(state), serializeProgress(state));
         expect(restored.wavyConfig).toEqual({ borderless: false, traceSetVersion: 1 });
     });
+
+    it('round-trips trianglesConfig through serializeState/deserializeState', () => {
+        const state = makeGameState({
+            cutStyle: 'triangles',
+            trianglesConfig: { traceSetVersion: 1 },
+        });
+        const restored = deserializeState(serializeState(state));
+        expect(restored.trianglesConfig).toEqual({ traceSetVersion: 1 });
+    });
+
+    it('round-trips trianglesConfig through serializeStatic/recombine', () => {
+        const state = makeGameState({
+            cutStyle: 'triangles',
+            trianglesConfig: { traceSetVersion: 1 },
+        });
+        const restored = recombine(serializeStatic(state), serializeProgress(state));
+        expect(restored.trianglesConfig).toEqual({ traceSetVersion: 1 });
+    });
 });
 
 describe('deserializeState', () => {
