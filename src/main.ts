@@ -1366,8 +1366,9 @@ async function loadSharedPuzzle(
             includesProgress: payload.pr !== undefined,
             recipientHadSavedState,
         };
-        // Present only for a traced-tab Wavy link; a legacy (classic-tab) Wavy
-        // link carries no wf.tv, matching the fresh path's stamping condition.
+        // Present for a traced-tab Wavy link or a Triangles link; a legacy
+        // (classic-tab) Wavy link carries no wf.tv, matching the fresh path's
+        // stamping conditions.
         if (payload.wf?.tv !== undefined) {
             data.traceSetVersion = payload.wf.tv;
         }
