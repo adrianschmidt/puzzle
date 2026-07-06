@@ -234,6 +234,16 @@ describe('createInfoModal — Cut Styles section', () => {
         expect(freeRotIdx).toBeGreaterThan(wavyIdx);
     });
 
+    it('mentions Triangles and its approximate piece counts', () => {
+        createInfoModal({ container });
+        const lis = cutStylesSection().querySelectorAll<HTMLLIElement>('ul > li');
+        const trianglesLi = [...lis].find((li) =>
+            li.textContent?.includes('Triangles'),
+        );
+        expect(trianglesLi).toBeDefined();
+        expect(trianglesLi!.textContent).toContain('approximate');
+    });
+
     it('mentions Borderless in the Wavy cut-style help', () => {
         createInfoModal({ container });
         // Find the Wavy <li> specifically — Fractal already has a Borderless
