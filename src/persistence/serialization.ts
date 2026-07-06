@@ -89,6 +89,10 @@ export interface SerializedGameState {
      */
     wavyConfig?: GameState['wavyConfig'];
     /**
+     * Triangles-cut config (only set when cutStyle === 'triangles').
+     */
+    trianglesConfig?: GameState['trianglesConfig'];
+    /**
      * v7 legacy field: opaque generator config. Migrated to the typed
      * `composableConfig` / `fractalConfig` fields based on `cutStyle` on
      * deserialization. v7 saves are still produced in the wild, so keep
@@ -124,6 +128,7 @@ export interface SerializedStaticState {
     composableConfig?: GameState['composableConfig'];
     fractalConfig?: GameState['fractalConfig'];
     wavyConfig?: GameState['wavyConfig'];
+    trianglesConfig?: GameState['trianglesConfig'];
     /** Present only on legacy v7 blobs read through the static path. */
     generatorConfig?: Record<string, unknown>;
 }
@@ -235,6 +240,10 @@ export function serializeState(
         serialized.wavyConfig = state.wavyConfig;
     }
 
+    if (state.trianglesConfig) {
+        serialized.trianglesConfig = state.trianglesConfig;
+    }
+
     return serialized;
 }
 
@@ -254,6 +263,7 @@ export function serializeStatic(state: GameState): SerializedStaticState {
     if (state.composableConfig) s.composableConfig = state.composableConfig;
     if (state.fractalConfig) s.fractalConfig = state.fractalConfig;
     if (state.wavyConfig) s.wavyConfig = state.wavyConfig;
+    if (state.trianglesConfig) s.trianglesConfig = state.trianglesConfig;
     return s;
 }
 
@@ -351,6 +361,10 @@ export function deserializeState(data: SerializedGameState): GameState {
         state.wavyConfig = data.wavyConfig;
     }
 
+    if (data.trianglesConfig) {
+        state.trianglesConfig = data.trianglesConfig;
+    }
+
     return state;
 }
 
@@ -411,6 +425,7 @@ export function recombine(
     const fractalConfig = resolveFractalConfig(staticData);
     if (fractalConfig) state.fractalConfig = fractalConfig;
     if (staticData.wavyConfig) state.wavyConfig = staticData.wavyConfig;
+    if (staticData.trianglesConfig) state.trianglesConfig = staticData.trianglesConfig;
     return state;
 }
 
