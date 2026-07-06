@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { triangularCutGenerator, catmullRomBezierEdge } from './triangular-cut-generator.js';
+import { triangularCutGenerator, catmullRomBezierEdge, estimateTriangleFaceCount } from './triangular-cut-generator.js';
 import { Curve } from './curve.js';
 import { getBaseCutGenerator } from './generator-registry.js';
 import { generateTopologyPuzzle } from './generator.js';
+import { generateComposablePuzzle } from '../composable-generator.js';
 
 // Inline mulberry32 mirror (same family as createSeededRandom), matching the
 // pattern used by sine-cut-generator.test.ts.
@@ -400,5 +401,46 @@ describe('triangularCutGenerator', () => {
                 expect(p.y).toBeLessThanOrEqual(frame.height + eps);
             }
         }
+    });
+});
+
+describe('estimateTriangleFaceCount', () => {
+    it('computes the strip formula for known cases', () => {
+        // 400×400, rows 2: side = 2·200/√3 ≈ 230.9, cols = round(400/230.9) = 2
+        expect(estimateTriangleFaceCount(2, { width: 400, height: 400 })).toBe(2 * (2 * 2 + 1));
+        // 1080×720, rows 3: side ≈ 277.1, cols = round(1080/277.1) = 4
+        expect(estimateTriangleFaceCount(3, { width: 1080, height: 720 })).toBe(3 * (2 * 4 + 1));
+        // 720×1080, rows 4: side ≈ 311.8, cols = round(720/311.8) = 2
+        expect(estimateTriangleFaceCount(4, { width: 720, height: 1080 })).toBe(4 * (2 * 2 + 1));
+    });
+
+    it('matches the exact face count of an unjittered, unsmoothed lattice', () => {
+        const cases: Array<[number, { width: number; height: number }]> = [
+            [2, { width: 400, height: 400 }],
+            [3, { width: 1080, height: 720 }],
+            [4, { width: 720, height: 1080 }],
+        ];
+        for (const [rows, frame] of cases) {
+            const { pieces } = generateComposablePuzzle(1, rows, frame, 42, {
+                baseCutGenerator: 'triangular',
+                baseCutConfig: { jitter: 0, smooth: false },
+                tabGenerator: 'none',
+            });
+            expect(pieces.length).toBe(estimateTriangleFaceCount(rows, frame));
+        }
+    });
+
+    it('stays close under the production preset (jitter 0.5, smooth)', () => {
+        const frame = { width: 1080, height: 720 };
+        const estimate = estimateTriangleFaceCount(6, frame);
+        const { pieces } = generateComposablePuzzle(1, 6, frame, 7, {
+            baseCutGenerator: 'triangular',
+            baseCutConfig: { jitter: 0.5, smooth: true },
+            tabGenerator: 'none',
+        });
+        // Jittered+bowed edges can add/drop the odd micro-face; ±15% is plenty
+        // for a "~N" label while still catching a broken formula.
+        expect(pieces.length).toBeGreaterThan(estimate * 0.85);
+        expect(pieces.length).toBeLessThan(estimate * 1.15);
     });
 });
