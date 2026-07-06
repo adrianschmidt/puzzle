@@ -31,10 +31,11 @@ export interface NewGameData {
     source: 'fresh' | 'shared';
     cutStyle: string;
     /**
-     * Trace-set version backing a Wavy puzzle's tabs. Present only for
-     * traced-tab Wavy games (omitted for every other cut style and for
-     * legacy classic-tab Wavy links), so analytics can tell traced Wavy from
-     * legacy Wavy and follow trace-set versions once a v2 ships.
+     * Trace-set version backing a Wavy or Triangles puzzle's tabs. Present
+     * for traced-tab Wavy games and all Triangles games (omitted for every
+     * other cut style and for legacy classic-tab Wavy links), so analytics
+     * can tell traced from legacy Wavy and follow trace-set versions once a
+     * v2 ships.
      */
     traceSetVersion?: number;
     rotationMode: 'none' | 'quarter-turn' | 'free';

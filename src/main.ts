@@ -240,6 +240,19 @@ function buildPuzzleCompletedData(state: GameState): PuzzleCompletedData {
         imageSource: classifyImageSource(state.imageUrl),
     };
 
+    // The trace-set version survives in the per-style config on the saved
+    // state, so resumed-then-completed Wavy/Triangles games can report it
+    // just like fresh ones (where currentGameAnalytics carries it).
+    const traceSetVersion =
+        state.cutStyle === 'triangles'
+            ? state.trianglesConfig?.traceSetVersion
+            : state.cutStyle === 'wavy'
+              ? state.wavyConfig?.traceSetVersion
+              : undefined;
+    if (traceSetVersion !== undefined) {
+        derived.traceSetVersion = traceSetVersion;
+    }
+
     if (currentGameAnalytics) {
         return { ...derived, ...currentGameAnalytics };
     }
@@ -903,7 +916,8 @@ async function startNewGame(
         // resolves instantly. The await is the safety net for paths that
         // didn't go through the dialog (e.g. the __newComposableGame
         // console hook).
-        if (composableConfig?.tabGenerator === 'traced' || cutStyle === 'wavy') {
+        if (composableConfig?.tabGenerator === 'traced' || cutStyle === 'wavy'
+            || cutStyle === 'triangles') {
             await preloadTracedTabGenerator();
         }
 
@@ -944,6 +958,10 @@ async function startNewGame(
         let rotationMode: 'none' | 'quarter-turn' | 'free';
         if (!rotationEnabled) {
             rotationMode = 'none';
+        } else if (cutStyle === 'triangles') {
+            // Triangles offers no quarter-turn mode: 90° steps don't match a
+            // triangle lattice, so enabling rotation means free rotation.
+            rotationMode = 'free';
         } else if (freeRotation && (cutStyle === 'wavy' || cutStyle === 'composable')) {
             rotationMode = 'free';
         } else {
@@ -964,6 +982,12 @@ async function startNewGame(
             }
             : undefined;
 
+        // Every new Triangles game uses traced tabs at the current trace-set
+        // version — same stamping rationale as generatorWavyConfig above.
+        const generatorTrianglesConfig = cutStyle === 'triangles'
+            ? { traceSetVersion: CURRENT_TRACE_SET_VERSION }
+            : undefined;
+
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
 
@@ -972,6 +996,7 @@ async function startNewGame(
             composableConfig,
             fractalConfig: generatorFractalConfig,
             wavyConfig: generatorWavyConfig,
+            trianglesConfig: generatorTrianglesConfig,
             rotationMode,
             seed,
         });
@@ -996,6 +1021,9 @@ async function startNewGame(
         };
         if (generatorWavyConfig) {
             data.traceSetVersion = generatorWavyConfig.traceSetVersion;
+        }
+        if (generatorTrianglesConfig) {
+            data.traceSetVersion = generatorTrianglesConfig.traceSetVersion;
         }
         if (data.imageSource === 'unsplash') {
             data.imageCategory = imageCategory ?? 'any';
@@ -1264,7 +1292,8 @@ async function loadSharedPuzzle(
         // generation runs. The await is short on warm caches and fits
         // inside the loading overlay the user already sees.
         if (payload.cf?.tg === 'traced'
-            || (payload.c === 'wavy' && payload.wf?.tv !== undefined)) {
+            || (payload.c === 'wavy' && payload.wf?.tv !== undefined)
+            || payload.c === 'triangles') {
             await preloadTracedTabGenerator();
         }
 
@@ -1297,6 +1326,9 @@ async function loadSharedPuzzle(
             fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
             wavyConfig: payload.wf
                 ? { borderless: payload.wf.bl, traceSetVersion: payload.wf.tv }
+                : undefined,
+            trianglesConfig: payload.tf
+                ? { traceSetVersion: payload.tf.tv }
                 : undefined,
             composableConfig: payload.cf
                 ? shareCfToComposableConfig(payload.cf)
@@ -1338,6 +1370,9 @@ async function loadSharedPuzzle(
         // link carries no wf.tv, matching the fresh path's stamping condition.
         if (payload.wf?.tv !== undefined) {
             data.traceSetVersion = payload.wf.tv;
+        }
+        if (payload.c === 'triangles' && payload.tf?.tv !== undefined) {
+            data.traceSetVersion = payload.tf.tv;
         }
         currentGameAnalytics = data;
         track('new-game-started', currentGameAnalytics);

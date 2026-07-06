@@ -74,6 +74,7 @@ function buildReproParams(state: GameState): Record<string, unknown> {
     if (state.composableConfig) params.composableConfig = state.composableConfig;
     if (state.fractalConfig) params.fractalConfig = state.fractalConfig;
     if (state.wavyConfig) params.wavyConfig = state.wavyConfig;
+    if (state.trianglesConfig) params.trianglesConfig = state.trianglesConfig;
     return params;
 }
 
