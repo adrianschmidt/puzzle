@@ -125,7 +125,49 @@ const TARGET_MAX_CURVES = 7500;
  * deterministic, so it does not break reproducibility, and triangular is
  * unreleased so no existing share link depends on the unclamped row count.
  */
-const MAX_ROWS = 16;
+export const MAX_ROWS = 16;
+
+/**
+ * Derive the lattice column count for a (clamped) row count and frame — the
+ * single column derivation shared by `generate` and
+ * {@link estimateTriangleFaceCount}, so the estimator cannot drift from the
+ * generator's real lattice.
+ *
+ * The equilateral side implied by the row height is used only to choose how
+ * many whole columns best fit the width; the caller snaps the horizontal
+ * spacing so that many columns divide the width exactly (triangles become
+ * very slightly isosceles). The total-curve budget caps clearly-absurd
+ * extreme-aspect cases (see {@link TARGET_MAX_CURVES}): the lattice emits
+ * ~3·rows·cols curves, so the per-row column budget keeps the total bounded
+ * for the DCEL. Every real landscape — up to ~20:1 panoramas at the
+ * 192-piece size — derives no more columns than the budget and is unaffected.
+ *
+ * Part of the released Triangles share-link contract: both the generator's
+ * geometry and the row selection re-derive from this on every decode.
+ */
+function deriveTriangleColumns(rows: number, frame: Size): number {
+    const rowHeight = frame.height / rows;
+    const equilateralSide = (2 * rowHeight) / Math.sqrt(3);
+    const colBudget = Math.max(1, Math.floor(TARGET_MAX_CURVES / (3 * rows)));
+    return Math.min(colBudget, Math.max(1, Math.round(frame.width / equilateralSide)));
+}
+
+/**
+ * Estimate the face (piece) count the lattice produces for a given row count
+ * and frame — the sizing input for the Triangles cut style's aspect-adaptive
+ * row selection. Shares {@link deriveTriangleColumns} with `generate`, so the
+ * estimate tracks the generator's real column math by construction.
+ *
+ * Exact for `jitter: 0, smooth: false` (each strip holds 2·cols full
+ * triangles plus two border half-triangles); the production preset's jitter
+ * and bowing can add or drop the odd micro-face, which the ~N size labels
+ * absorb.
+ */
+export function estimateTriangleFaceCount(rows: number, frame: Size): number {
+    const r = Math.min(MAX_ROWS, Math.max(1, Math.floor(rows)));
+    const cols = deriveTriangleColumns(r, frame);
+    return r * (2 * cols + 1);
+}
 
 /**
  * Border / jitter inset margin, in pixels, added on top of the jitter reach.
@@ -216,19 +258,11 @@ export const triangularCutGenerator: BaseCutGenerator = {
         const local = createSeededRandom(seedFromFloat(random()));
 
         const rowHeight = h / rows;
-        // Equilateral side implied by the row height; used only to choose how
-        // many whole columns best fit the width.
-        const equilateralSide = (2 * rowHeight) / Math.sqrt(3);
         // Snap the horizontal spacing so a whole number of columns divides the
         // width exactly, aligning the lattice to the left/right borders (no
-        // sliver column). Triangles become very slightly isoceles.
-        // The total-curve budget caps clearly-absurd extreme-aspect cases (see
-        // TARGET_MAX_CURVES): the lattice emits ~3·rows·cols curves, so the
-        // per-row column budget keeps the total bounded for the DCEL. Every real
-        // landscape — up to ~20:1 panoramas at the 192-piece size — derives no
-        // more columns than the budget and is unaffected.
-        const colBudget = Math.max(1, Math.floor(TARGET_MAX_CURVES / (3 * rows)));
-        const cols = Math.min(colBudget, Math.max(1, Math.round(w / equilateralSide)));
+        // sliver column); see deriveTriangleColumns for the equilateral snap
+        // and the curve-budget clamp.
+        const cols = deriveTriangleColumns(rows, frame);
         const colStep = w / cols;
         // Representative cell size for jitter magnitude / border inset — use the
         // smaller axis so a jittered vertex can't reach a neighbour or border.
