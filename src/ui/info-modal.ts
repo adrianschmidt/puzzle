@@ -159,7 +159,7 @@ function buildHowToPlaySection(): HTMLElement {
         ['strong', '90° rotation'],
         ', the ↺ / ↻ buttons rotate the focused piece (and anything merged with it) by a quarter-turn. With ',
         ['strong', 'Free rotation'],
-        " (Wavy puzzles only), a single round handle below the focused piece lets you drag to rotate continuously — the group follows your finger like a dial. Pieces snap together when their rotations are close to alignment; how close they need to be depends on your ",
+        " (Wavy and Triangles puzzles), a single round handle below the focused piece lets you drag to rotate continuously — the group follows your finger like a dial. Pieces snap together when their rotations are close to alignment; how close they need to be depends on your ",
         ['strong', 'Snap distance'],
         ' setting.',
     ]);
@@ -215,6 +215,11 @@ function buildCutStylesSection(): HTMLElement {
     ]);
     wavyLi.appendChild(wavySub);
     list.appendChild(wavyLi);
+
+    appendInlineLi(list, [
+        ['strong', 'Triangles'],
+        " — An irregular lattice of triangles with flowing cuts and hand-traced tabs. Piece counts adapt to each photo's shape, so they're approximate. Enabling rotation lets pieces rotate freely to any angle.",
+    ]);
 
     section.appendChild(list);
     return section;
