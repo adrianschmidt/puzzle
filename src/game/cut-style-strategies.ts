@@ -33,6 +33,11 @@ import type { TabDebugSession, TabDebugReport } from '../puzzle/topology/tab-deb
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 import type { CutStyle } from './cut-styles.js';
+import {
+    estimateTriangleFaceCount,
+    MAX_ROWS as MAX_TRIANGLE_ROWS,
+} from '../puzzle/topology/triangular-cut-generator.js';
+import { CURRENT_TRACE_SET_VERSION } from '../puzzle/composable/traces/trace-set-version.js';
 
 /**
  * Per-call configuration passed through to whichever strategy is active.
@@ -42,6 +47,7 @@ export interface StrategyContext {
     fractalConfig?: FractalConfig;
     composableConfig?: ComposableConfig;
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
+    trianglesConfig?: { traceSetVersion?: number };
     /**
      * Optional dev-time tab-debug session. When provided, strategies
      * whose pipeline supports it (composable, wavy) thread it through
@@ -91,7 +97,7 @@ export interface CutStyleStrategy {
      * Where the generator's config should be stored on `GameState`. Omit
      * for styles that don't take a config (e.g. classic).
      */
-    configKey?: 'fractalConfig' | 'composableConfig' | 'wavyConfig';
+    configKey?: 'fractalConfig' | 'composableConfig' | 'wavyConfig' | 'trianglesConfig';
 }
 
 const classicStrategy: CutStyleStrategy = {
@@ -182,11 +188,66 @@ const wavyStrategy: CutStyleStrategy = {
     configKey: 'wavyConfig',
 };
 
+/**
+ * Pick the triangle row count whose estimated piece count lands closest to
+ * the requested target for this image's shape. The triangular lattice takes
+ * only `rows` from the grid — its column count derives from the frame aspect
+ * ratio — so the same target needs more rows on portrait images than on
+ * landscapes. Bounded by the generator's MAX_ROWS; extreme portraits
+ * (aspect ≲ 1:3 at the largest size) therefore undershoot the target, which
+ * the size buttons' approximate ~N labels absorb.
+ */
+export function selectTriangleRows(targetPieceCount: number, imageSize: Size): number {
+    let best = 1;
+    let bestDelta = Infinity;
+    for (let rows = 1; rows <= MAX_TRIANGLE_ROWS; rows++) {
+        const delta = Math.abs(estimateTriangleFaceCount(rows, imageSize) - targetPieceCount);
+        if (delta < bestDelta) {
+            best = rows;
+            bestDelta = delta;
+        }
+    }
+    return best;
+}
+
+const trianglesStrategy: CutStyleStrategy = {
+    // The generator ignores `cols` (it derives columns from the aspect);
+    // pass the user grid's cols through so the generation grid stays
+    // well-formed for the shared plumbing.
+    scaleGrid: (userGrid, imageSize) => ({
+        cols: userGrid.cols,
+        rows: selectTriangleRows(userGrid.cols * userGrid.rows, imageSize),
+    }),
+    inscribePuzzleSize: (imageSize) => imageSize,
+    generatePieces: (grid, puzzleSize, seed, ctx) =>
+        // Fixed production preset: max irregularity with flowing edges and
+        // hand-traced tabs. No explicit minPieceArea — the composable
+        // generator still applies its 4px² DEFAULT_MIN_PIECE_AREA floor;
+        // what's deliberately avoided is wavy's aggressive avgPieceArea/4
+        // threshold, since the lattice's snapped columns leave clean border
+        // half-triangles, not slivers (matches the dev-tested
+        // composable-triangular path). The trace-set version
+        // falls back to the current one only for payloads that lost their
+        // config block (crafted links); every real game/link carries it.
+        generateComposablePuzzle(grid.cols, grid.rows, puzzleSize, seed, {
+            baseCutGenerator: 'triangular',
+            baseCutConfig: { jitter: 0.5, smooth: true },
+            tabGenerator: 'traced',
+            tabConfig: {
+                traceSetVersion:
+                    ctx.trianglesConfig?.traceSetVersion ?? CURRENT_TRACE_SET_VERSION,
+            },
+            tabDebug: ctx.tabDebug,
+        }),
+    configKey: 'trianglesConfig',
+};
+
 const STRATEGIES: Record<CutStyle, CutStyleStrategy> = {
     classic: classicStrategy,
     composable: composableStrategy,
     fractal: fractalStrategy,
     wavy: wavyStrategy,
+    triangles: trianglesStrategy,
 };
 
 /** Look up the strategy for a cut style. */

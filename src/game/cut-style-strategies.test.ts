@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCutStyleStrategy } from './cut-style-strategies.js';
+import { getCutStyleStrategy, selectTriangleRows } from './cut-style-strategies.js';
 import { createNewGame } from './init.js';
 
 describe('wavy strategy', () => {
@@ -109,5 +109,40 @@ describe('wavy borderless', () => {
         const borderedShapes = bordered.pieces.map((p) => p.shape).sort();
         const borderlessShapes = borderless.pieces.map((p) => p.shape).sort();
         expect(borderlessShapes).not.toEqual(borderedShapes);
+    });
+});
+
+describe('selectTriangleRows', () => {
+    const landscape = { width: 1080, height: 720 };
+
+    it('maps the standard size targets on a 3:2 landscape', () => {
+        expect(selectTriangleRows(24, landscape)).toBe(3);   // est 27
+        expect(selectTriangleRows(48, landscape)).toBe(4);   // est 44
+        expect(selectTriangleRows(96, landscape)).toBe(6);   // est 102
+        expect(selectTriangleRows(192, landscape)).toBe(8);  // est 168
+    });
+
+    it('uses more rows on portrait images for the same target', () => {
+        expect(selectTriangleRows(192, { width: 720, height: 1080 }))
+            .toBeGreaterThan(selectTriangleRows(192, landscape));
+    });
+
+    it('respects the generator row cap on extreme portraits', () => {
+        expect(selectTriangleRows(192, { width: 200, height: 1080 }))
+            .toBeLessThanOrEqual(16);
+    });
+});
+
+describe('triangles strategy grid mapping', () => {
+    it('scaleGrid keeps user cols and derives triangle rows from the aspect', () => {
+        const s = getCutStyleStrategy('triangles');
+        expect(s.scaleGrid({ cols: 6, rows: 4 }, { width: 1080, height: 720 }, {}))
+            .toEqual({ cols: 6, rows: 3 });
+    });
+
+    it('inscribePuzzleSize is the identity', () => {
+        const s = getCutStyleStrategy('triangles');
+        const size = { width: 1080, height: 720 };
+        expect(s.inscribePuzzleSize(size, { cols: 6, rows: 3 }, {})).toEqual(size);
     });
 });
