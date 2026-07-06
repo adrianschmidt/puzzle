@@ -54,6 +54,8 @@ export interface NewGameSelection {
      * True iff cut style is wavy or composable AND rotation is enabled AND
      * the user ticked the free-rotation sub-checkbox. Used by the host to
      * pick `rotationMode: 'free'` instead of `'quarter-turn'`.
+     * Triangles is deliberately not included: the host maps its plain
+     * rotation toggle straight to free rotation (see startNewGame).
      */
     freeRotation: boolean;
     imageSource: string;
@@ -173,7 +175,12 @@ function buildSizeSection(args: {
     }
 
     function updateLabels(): void {
-        const isFractal = args.getCutStyleId() === 'fractal';
+        // Fractal and Triangles piece counts are approximate: fractal scales
+        // an internal grid, and the triangle lattice derives its column count
+        // from the image aspect ratio (unknown until the photo is fetched).
+        // Both show ~N and omit the meaningless cols × rows line.
+        const cutStyleId = args.getCutStyleId();
+        const isApproximate = cutStyleId === 'fractal' || cutStyleId === 'triangles';
 
         for (let i = 0; i < buttons.length; i++) {
             const btn = buttons[i];
@@ -183,7 +190,7 @@ function buildSizeSection(args: {
 
             const count = document.createElement('span');
             count.className = 'size-picker-count';
-            count.textContent = isFractal ? `~${opt.pieceCount}` : String(opt.pieceCount);
+            count.textContent = isApproximate ? `~${opt.pieceCount}` : String(opt.pieceCount);
 
             const label = document.createElement('span');
             label.className = 'size-picker-label';
@@ -192,9 +199,7 @@ function buildSizeSection(args: {
             btn.appendChild(count);
             btn.appendChild(label);
 
-            // Fractal piece counts are approximate — its grid dimensions
-            // aren't a meaningful "cols × rows", so omit them.
-            if (!isFractal) {
+            if (!isApproximate) {
                 const dims = document.createElement('span');
                 dims.className = 'size-picker-dims';
                 dims.textContent = `${opt.cols} × ${opt.rows}`;
@@ -713,7 +718,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             wavySection.setVisible(id === 'wavy');
             composableSection.setVisible(id === 'composable');
             updateFreeRotationVisibility();
-            if (id === 'wavy'
+            if (id === 'wavy' || id === 'triangles'
                 || (id === 'composable' && composableSection.getSelectedTabGenerator() === 'traced')) {
                 options.onPreloadTracedTabs?.();
             }
@@ -727,7 +732,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     // Cover the "open with traced tabs already selected" paths so the lazy
     // chunk starts loading even if the user never touches a radio: Wavy (always
     // traced) or Composable with the Traced tab generator saved.
-    if (currentCutStyleId === 'wavy'
+    if (currentCutStyleId === 'wavy' || currentCutStyleId === 'triangles'
         || (currentCutStyleId === 'composable' && composableSection.getSelectedTabGenerator() === 'traced')) {
         options.onPreloadTracedTabs?.();
     }
