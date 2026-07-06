@@ -177,6 +177,34 @@ describe('createNewGameDialog', () => {
         expect(dims[3].textContent).toBe('16 × 12');
     });
 
+    it('shows approximate piece counts without grid dims for triangles', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'triangles',
+            onSelect: vi.fn(),
+        });
+
+        const counts = container.querySelectorAll('.size-picker-count');
+        expect(counts[0].textContent).toBe('~24');
+        expect(counts[1].textContent).toBe('~48');
+        expect(counts[2].textContent).toBe('~96');
+        expect(counts[3].textContent).toBe('~192');
+        expect(container.querySelectorAll('.size-picker-dims')).toHaveLength(0);
+    });
+
+    it('fires onPreloadTracedTabs when opened with triangles selected', () => {
+        const onPreloadTracedTabs = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'triangles',
+            onSelect: vi.fn(),
+            onPreloadTracedTabs,
+        });
+        expect(onPreloadTracedTabs).toHaveBeenCalled();
+    });
+
     it('includes the cut style picker section', () => {
         createNewGameDialog({
             container,
@@ -667,6 +695,18 @@ describe('createNewGameDialog — free rotation sub-checkbox', () => {
             onSelect: vi.fn(),
         });
         expect(getFreeRotationRow().style.display).toBe('none');
+    });
+
+    it('keeps the free-rotation sub-checkbox hidden for triangles with rotation enabled', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'triangles',
+            savedRotationEnabled: true,
+            onSelect: vi.fn(),
+        });
+        const row = container.querySelector<HTMLElement>('.free-rotation-row')!;
+        expect(row.style.display).toBe('none');
     });
 });
 
