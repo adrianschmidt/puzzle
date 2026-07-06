@@ -29,7 +29,7 @@ export interface SharePayload {
     /** Grid size [cols, rows]. */
     g: [number, number];
     /** Cut style. */
-    c: 'classic' | 'fractal' | 'composable' | 'wavy';
+    c: 'classic' | 'fractal' | 'composable' | 'wavy' | 'triangles';
     /** PRNG seed. */
     s: number;
     /** Rotation mode. */
@@ -53,6 +53,13 @@ export interface SharePayload {
     ff?: { bl: boolean };
     /** Wavy-cut config. `tv` = trace-set version (present ⇒ traced tabs; absent ⇒ classic). */
     wf?: { bl: boolean; tv?: number };
+    /**
+     * Triangles-cut config. `tv` pins the traced tab-library snapshot.
+     * Unlike wavy's `wf.tv`, absence does NOT mean classic tabs — every
+     * triangles puzzle uses traced tabs; a missing/invalid block just
+     * falls back to the current trace set on the receiver.
+     */
+    tf?: { tv: number };
     /** Optional progress snapshot. */
     pr?: {
         m: number[][];
@@ -87,6 +94,9 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
     }
     if (payload.c === 'wavy' && payload.wf?.tv !== undefined) {
         check(payload.wf.tv, 'wf.tv');
+    }
+    if (payload.c === 'triangles' && payload.tf?.tv !== undefined) {
+        check(payload.tf.tv, 'tf.tv');
     }
 }
 
@@ -205,6 +215,17 @@ export function decodePayload(encoded: string): SharePayload | null {
                 translated.wf.tv = clamped;
             }
         }
+        if (translated.c === 'triangles' && translated.tf) {
+            const clamped = clampTraceSetVersion(translated.tf.tv);
+            // No legacy-classic fallback here (contrast wf.tv): an invalid tv
+            // drops the whole block and the strategy substitutes the current
+            // trace set.
+            if (clamped === undefined) {
+                delete translated.tf;
+            } else {
+                translated.tf.tv = clamped;
+            }
+        }
         return translated;
     } catch {
         return null;
@@ -263,7 +284,7 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (!isTuple2Number(p.is)) return false;
     if (!isTuple2Number(p.g)) return false;
     if (p.c !== 'classic' && p.c !== 'fractal'
-        && p.c !== 'composable' && p.c !== 'wavy') return false;
+        && p.c !== 'composable' && p.c !== 'wavy' && p.c !== 'triangles') return false;
     if (typeof p.s !== 'number') return false;
     if (p.r !== 'none' && p.r !== 'quarter-turn' && p.r !== 'free') return false;
     if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
@@ -440,6 +461,10 @@ export function gameStateToPayload(
         if (state.wavyConfig.traceSetVersion !== undefined) {
             payload.wf.tv = state.wavyConfig.traceSetVersion;
         }
+    }
+
+    if (cutStyle === 'triangles' && state.trianglesConfig?.traceSetVersion !== undefined) {
+        payload.tf = { tv: state.trianglesConfig.traceSetVersion };
     }
 
     if (options.includeProgress) {

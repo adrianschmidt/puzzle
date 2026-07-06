@@ -1298,3 +1298,65 @@ describe('share-link wavy traceSetVersion (wf.tv)', () => {
         }
     });
 });
+
+describe('share-link triangles traceSetVersion (tf)', () => {
+    function trianglesState(traceSetVersion?: number): GameState {
+        return buildState({
+            cutStyle: 'triangles',
+            trianglesConfig: traceSetVersion === undefined ? {} : { traceSetVersion },
+        });
+    }
+
+    it('encodes tf.tv from the triangles config', () => {
+        const payload = gameStateToPayload(trianglesState(1), { includeProgress: false });
+        expect(payload.c).toBe('triangles');
+        expect(payload.tf).toEqual({ tv: 1 });
+    });
+
+    it('omits tf when the config carries no version', () => {
+        const payload = gameStateToPayload(trianglesState(undefined), { includeProgress: false });
+        expect(payload.tf).toBeUndefined();
+    });
+
+    it('round-trips tf.tv through encode/decode', () => {
+        const payload = gameStateToPayload(trianglesState(1), { includeProgress: false });
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded!.c).toBe('triangles');
+        expect(decoded!.tf).toEqual({ tv: 1 });
+    });
+
+    it('accepts a triangles payload without tf', () => {
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'triangles', s: 1, r: 'none',
+        }));
+        expect(decoded).not.toBeNull();
+        expect(decoded!.tf).toBeUndefined();
+    });
+
+    it('clamps a future tv down to the newest known version', () => {
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'triangles', s: 1, r: 'none',
+            tf: { tv: 999 },
+        }));
+        expect(decoded!.tf!.tv).toBe(CURRENT_TRACE_SET_VERSION);
+    });
+
+    it('drops the tf block entirely on an invalid tv', () => {
+        for (const bad of [0, -3, 'x', null] as unknown[]) {
+            const decoded = decodePayload(encodeRaw({
+                v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'triangles', s: 1, r: 'none',
+                tf: { tv: bad },
+            }));
+            expect(decoded).not.toBeNull();
+            expect(decoded!.tf).toBeUndefined();
+        }
+    });
+
+    it('round-trips a triangles payload with free rotation', () => {
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'triangles', s: 7, r: 'free',
+            tf: { tv: 1 },
+        }));
+        expect(decoded!.r).toBe('free');
+    });
+});
