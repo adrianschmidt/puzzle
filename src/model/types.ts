@@ -210,4 +210,21 @@ export interface GameState {
          */
         traceSetVersion?: number;
     };
+    /**
+     * Triangles-cut config (only set when cutStyle === 'triangles').
+     *
+     * Needed to reproduce the puzzle from its seed and surfaced in the
+     * Debug panel. The cut parameters themselves (jitter, smoothing,
+     * traced tabs) are fixed by the preset; only the trace-set version
+     * varies. Mirrors {@link GameState.wavyConfig}.
+     */
+    trianglesConfig?: {
+        /**
+         * Trace-set version for the hand-traced tab shapes. Stamped with
+         * the current version on every new Triangles game; pins the tab
+         * library snapshot so future trace-set releases don't change
+         * existing puzzles. See project_share_link_prng_contract.
+         */
+        traceSetVersion?: number;
+    };
 }

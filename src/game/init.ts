@@ -54,6 +54,8 @@ export interface InitOptions {
     fractalConfig?: FractalConfig;
     /** Configuration for the wavy generator (only used when cutStyle is 'wavy'). */
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
+    /** Configuration for the triangles preset (only used when cutStyle is 'triangles'). */
+    trianglesConfig?: { traceSetVersion?: number };
     /**
      * Rotation mode for this puzzle. Defaults to `'none'`.
      *
@@ -90,6 +92,7 @@ export function createNewGame(
         fractalConfig: options.fractalConfig,
         composableConfig: options.composableConfig,
         wavyConfig: options.wavyConfig,
+        trianglesConfig: options.trianglesConfig,
         tabDebug,
     };
 
@@ -127,6 +130,7 @@ export function createNewGame(
         composableConfig: strategy.configKey === 'composableConfig' ? options.composableConfig : undefined,
         fractalConfig: strategy.configKey === 'fractalConfig' ? options.fractalConfig : undefined,
         wavyConfig: strategy.configKey === 'wavyConfig' ? options.wavyConfig : undefined,
+        trianglesConfig: strategy.configKey === 'trianglesConfig' ? options.trianglesConfig : undefined,
     };
 }
 

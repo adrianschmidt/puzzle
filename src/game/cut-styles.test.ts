@@ -46,6 +46,12 @@ describe('CUT_STYLE_OPTIONS', () => {
         expect(ids).toContain('wavy');
         vi.unstubAllEnvs();
     });
+
+    it('includes triangles between wavy and composable', () => {
+        const ids = CUT_STYLE_OPTIONS.map((o) => o.id);
+        expect(ids.indexOf('triangles')).toBeGreaterThan(ids.indexOf('wavy'));
+        expect(ids.indexOf('composable')).toBeGreaterThan(ids.indexOf('triangles'));
+    });
 });
 
 describe('getCutStyleOption', () => {
@@ -113,6 +119,13 @@ describe('getVisibleCutStyleOptions', () => {
         vi.stubEnv('BASE_URL', '/');
         const ids = getVisibleCutStyleOptions().map((o) => o.id);
         expect(ids).toContain('composable');
+    });
+
+    it('shows triangles on production builds', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/');
+        const ids = getVisibleCutStyleOptions().map((o) => o.id);
+        expect(ids).toContain('triangles');
     });
 });
 
