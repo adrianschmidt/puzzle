@@ -152,8 +152,12 @@ export const MAX_ROWS = 16;
  *
  * Part of the released Triangles share-link contract: both the generator's
  * geometry and the row selection re-derive from this on every decode.
+ *
+ * Exported for tests only (like {@link estimateTriangleFaceCount}), so the
+ * border-jitter-clamp tests derive their danger-band threshold from the real
+ * column math instead of a drift-prone mirror; app code should not call it.
  */
-function deriveTriangleColumns(rows: number, frame: Size): number {
+export function deriveTriangleColumns(rows: number, frame: Size): number {
     const rowHeight = frame.height / rows;
     const equilateralSide = (2 * rowHeight) / Math.sqrt(3);
     const colBudget = Math.max(1, Math.floor(TARGET_MAX_CURVES / (3 * rows)));
@@ -306,6 +310,32 @@ export const triangularCutGenerator: BaseCutGenerator = {
                     const mag = local() * jitter * cell;
                     px = x + Math.cos(ang) * mag;
                     py = y + Math.sin(ang) * mag;
+                    // Half-way rule: never let jitter carry a node more than
+                    // half-way toward a frame edge. The inset gate above only
+                    // decides WHICH nodes jitter; without this clamp the
+                    // border-adjacent odd-row node (x = colStep/2, barely
+                    // beyond the inset at jitter 0.5) could land nearly at the
+                    // 3px merge margin, squashing a degree-6 crossing against
+                    // the border — sliver faces, and bowed control points
+                    // dragged outside the frame. The 3px merge clearance
+                    // itself never depended on this clamp: gate eligibility
+                    // requires border distance > cell·jitter + 3 while the
+                    // jitter reach is < cell·jitter, so even the worst
+                    // pre-clamp landing stays > 3px clear — the clamp only
+                    // tightens the sliver band between 3px and half-way.
+                    // Bowed control points staying in-frame is verified
+                    // empirically by the border-jitter-clamp seed sweeps: the
+                    // generic Catmull-Rom offset bound, (colStep + cell)/6
+                    // ≈ colStep/3 at the shipped presets, EXCEEDS the
+                    // colStep/4 floor, but the near-border neighbor spans
+                    // that would realize it are cut down by the gate (border
+                    // nodes never jitter).
+                    // Structurally a no-op for every other node class (their
+                    // border distance ≥ cell, so jitter ≤ cell/2 can't cross
+                    // half-way); only the pathological landings move, keeping
+                    // healthy share links byte-identical.
+                    px = Math.max(x / 2, Math.min((x + w) / 2, px));
+                    py = Math.max(y / 2, Math.min((y + h) / 2, py));
                 }
                 nodes.set(key(j, k), { x: px, y: py });
             }
