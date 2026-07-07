@@ -87,10 +87,13 @@ function seedFromFloat(v: number): number {
  * its horizontal lattice slightly. That clamp is deterministic — it runs
  * identically on sender and receiver from the same inputs — so it is a bounded,
  * deliberate geometry trade-off, not a reproducibility break. Raising the value
- * from 2000 (the #441 change) re-derives geometry for any previously-clamped
- * 5.34:1–20:1 puzzle; that is a forward-only, deliberate change, acceptable
- * because triangular is unreleased so no existing share link depends on the old
- * geometry.
+ * from 2000 (the #441 change) re-derived geometry for any previously-clamped
+ * 5.34:1–20:1 puzzle; that was acceptable only because triangular was
+ * unreleased at the time. As of the Triangles release, this value is frozen as
+ * part of the share-link contract (like {@link MAX_ROWS}): it feeds both
+ * `generate`'s column budget and {@link estimateTriangleFaceCount} →
+ * `selectTriangleRows`, so changing it would re-derive the selected row count
+ * and lattice geometry for existing links wherever the clamp binds.
  *
  * It is deliberately NOT higher: pushing the budget past the real-landscape
  * ceiling would only raise the crafted worst case's curve count and build time
@@ -113,17 +116,22 @@ const TARGET_MAX_CURVES = 7500;
  * tight frame collapse toward the 3px vertex-merge tolerance; see the
  * TARGET_MAX_CURVES rationale).
  *
- * Set to 16: the largest real puzzle is the 16×12 grid (rows = 12), so 16 is a
- * strict no-op for every legitimate puzzle while leaving a little headroom for
- * a future slightly-larger size preset. It is deliberately BELOW the share-link
- * `MAX_GRID_DIM` (64): with the higher curve budget, an unclamped crafted
- * rows ≈ 64 link in a tight frame would run several seconds, so anything the
- * decoder or a `bgc.rows` override pushes into the 17–64 range is reined back to
- * 16, keeping the crafted worst-case build at ~today's ~4–5.25s level (measured).
- * The clamp engaging within the decoder's range is intentional and only affects
- * crafted links (no real puzzle exceeds 12 rows); like the curve budget it is
- * deterministic, so it does not break reproducibility, and triangular is
- * unreleased so no existing share link depends on the unclamped row count.
+ * Set to 16: the largest real puzzle is the 16×12 grid (rows = 12), but
+ * `selectTriangleRows` legitimately reaches this cap for extreme-portrait
+ * images at the 192-piece target, so the clamp engages for real puzzles, not
+ * just crafted ones. It is deliberately BELOW the share-link `MAX_GRID_DIM`
+ * (64): with the higher curve budget, an unclamped crafted rows ≈ 64 link in
+ * a tight frame would run several seconds, so anything the decoder or a
+ * `bgc.rows` override pushes into the 17–64 range is reined back to 16,
+ * keeping the crafted worst-case build at ~today's ~4–5.25s level (measured).
+ * The clamp engaging within the decoder's range is intentional and only
+ * affects crafted links (no real puzzle exceeds 12 rows); like the curve
+ * budget it is deterministic, so it does not break reproducibility. As of the
+ * Triangles release, this value is frozen as part of the share-link contract:
+ * `selectTriangleRows` re-derives its row count from this cap on every
+ * decode, so raising MAX_ROWS later would change the selected row count —
+ * and therefore the reproduced puzzle — for any existing link that was
+ * capped at 16.
  */
 export const MAX_ROWS = 16;
 
@@ -162,6 +170,10 @@ function deriveTriangleColumns(rows: number, frame: Size): number {
  * triangles plus two border half-triangles); the production preset's jitter
  * and bowing can add or drop the odd micro-face, which the ~N size labels
  * absorb.
+ *
+ * Part of the released Triangles share-link contract: `selectTriangleRows`
+ * re-derives the row count from this estimate on every decode, so changing
+ * the formula changes which puzzle an existing link reproduces.
  */
 export function estimateTriangleFaceCount(rows: number, frame: Size): number {
     const r = Math.min(MAX_ROWS, Math.max(1, Math.floor(rows)));
