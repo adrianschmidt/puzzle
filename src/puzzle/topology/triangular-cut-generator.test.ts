@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { triangularCutGenerator, catmullRomBezierEdge, estimateTriangleFaceCount } from './triangular-cut-generator.js';
+import {
+    triangularCutGenerator,
+    catmullRomBezierEdge,
+    estimateTriangleFaceCount,
+    deriveTriangleColumns,
+} from './triangular-cut-generator.js';
 import { Curve } from './curve.js';
 import { getBaseCutGenerator } from './generator-registry.js';
 import { generateTopologyPuzzle } from './generator.js';
@@ -400,6 +405,121 @@ describe('triangularCutGenerator', () => {
                 expect(p.y).toBeGreaterThanOrEqual(-eps);
                 expect(p.y).toBeLessThanOrEqual(frame.height + eps);
             }
+        }
+    });
+});
+
+describe('border jitter clamp', () => {
+    // Production Triangles preset. The border-adjacent odd-row node sits at
+    // x = colStep/2, barely beyond the jitter-eligibility inset at jitter 0.5,
+    // so before the half-way clamp an unlucky draw could carry it nearly to
+    // the 3px border merge margin — squashing a degree-6 crossing against the
+    // frame edge (sliver pieces) and dragging bowed control points outside
+    // the frame (pieces bulging out of the image). Seed 1194584204 at
+    // 1080×608 is the reported real-world case.
+    const preset = { jitter: 0.5, smooth: true };
+    const cases = [
+        { frame: { width: 1080, height: 608 }, rows: 3 },
+        { frame: { width: 1080, height: 720 }, rows: 4 },
+        { frame: { width: 1920, height: 640 }, rows: 6 },
+    ];
+
+    // Danger-band threshold from the generator's real column derivation, so
+    // the band can't silently drift from the emitted lattice.
+    const colStepOf = (rows: number, frame: { width: number; height: number }) =>
+        frame.width / deriveTriangleColumns(rows, frame);
+
+    it('never leaves a lattice vertex in the left/right border danger band', () => {
+        let checked = 0;
+        for (const { frame, rows } of cases) {
+            const colStep = colStepOf(rows, frame);
+            for (let seed = 0; seed < 200; seed++) {
+                const curves = triangularCutGenerator.generate(
+                    frame, makeSeededRandom(seed), { rows, ...preset },
+                );
+                for (let i = 4; i < curves.length; i++) {
+                    for (const p of [curves[i].pointAt(0), curves[i].pointAt(1)]) {
+                        checked++;
+                        for (const d of [p.x, frame.width - p.x]) {
+                            // Endpoints on/near the border (clip points, border
+                            // nodes) are fine; a vertex strictly inside the
+                            // band (3px, colStep/4) is a squashed crossing.
+                            const inBand = d > 3.001 && d < colStep / 4 - 1e-6;
+                            if (inBand) {
+                                expect.fail(
+                                    `seed ${seed} ${frame.width}x${frame.height} rows ${rows}: ` +
+                                    `endpoint (${p.x.toFixed(2)},${p.y.toFixed(2)}) is ${d.toFixed(2)}px ` +
+                                    `from a vertical border (band 3..${(colStep / 4).toFixed(1)})`,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Guard the guard: fail if the sweep never saw an interior curve.
+        expect(checked).toBeGreaterThan(0);
+    });
+
+    it('keeps production-preset curves within the frame across seeds', () => {
+        const eps = 1e-6;
+        let checked = 0;
+        for (const { frame, rows } of cases) {
+            for (let seed = 0; seed < 200; seed++) {
+                const curves = triangularCutGenerator.generate(
+                    frame, makeSeededRandom(seed), { rows, ...preset },
+                );
+                for (let i = 4; i < curves.length; i++) {
+                    // Integer stepping so t = 1 is sampled exactly (a += 0.02
+                    // float accumulation overshoots 1 and skips the endpoint).
+                    for (let s = 0; s <= 50; s++) {
+                        const p = curves[i].pointAt(s / 50);
+                        checked++;
+                        if (p.x < -eps || p.x > frame.width + eps
+                            || p.y < -eps || p.y > frame.height + eps) {
+                            expect.fail(
+                                `seed ${seed} ${frame.width}x${frame.height} rows ${rows}: ` +
+                                `curve point (${p.x.toFixed(2)},${p.y.toFixed(2)}) outside frame`,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        // Guard the guard: fail if the sweep never sampled an interior curve.
+        expect(checked).toBeGreaterThan(0);
+    });
+
+    it('regression: seed 1194584204 at 1080×608 has no sliver or bulging piece', () => {
+        // The reported bug: a crossing jittered to ~10.8px from the left
+        // border produced 0–200px² slivers and cuts bowing ~8px outside the
+        // frame. Tabs land after the base cut on the outer stream, so
+        // tabGenerator 'none' reproduces the exact lattice cheaply.
+        const frame = { width: 1080, height: 608 };
+        const { pieces } = generateComposablePuzzle(6, 3, frame, 1194584204, {
+            baseCutGenerator: 'triangular',
+            baseCutConfig: { jitter: 0.5, smooth: true },
+            tabGenerator: 'none',
+        });
+        const avgArea = (frame.width * frame.height) / pieces.length;
+        for (const [idx, piece] of pieces.entries()) {
+            const pts = piece.edges.flatMap(
+                (e) => (e.curvePoints?.length ? e.curvePoints : [e.start, e.end]),
+            ).map((p) => ({ x: p.x - piece.imageOffset.x, y: p.y - piece.imageOffset.y }));
+            for (const p of pts) {
+                const at = `piece ${idx} point (${p.x.toFixed(2)},${p.y.toFixed(2)})`;
+                expect(p.x, at).toBeGreaterThanOrEqual(-1);
+                expect(p.x, at).toBeLessThanOrEqual(frame.width + 1);
+                expect(p.y, at).toBeGreaterThanOrEqual(-1);
+                expect(p.y, at).toBeLessThanOrEqual(frame.height + 1);
+            }
+            let area = 0;
+            for (let i = 0; i < pts.length; i++) {
+                const p = pts[i];
+                const q = pts[(i + 1) % pts.length];
+                area += p.x * q.y - q.x * p.y;
+            }
+            expect(Math.abs(area) / 2, `piece ${idx} area`).toBeGreaterThan(avgArea * 0.03);
         }
     });
 });
