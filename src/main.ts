@@ -1368,8 +1368,10 @@ async function loadSharedPuzzle(
         };
         // Present for a traced-tab Wavy link or a Triangles link; a legacy
         // (classic-tab) Wavy link carries no wf.tv, matching the fresh path's
-        // stamping conditions.
-        if (payload.wf?.tv !== undefined) {
+        // stamping conditions. Both branches check the cut style so a crafted
+        // link carrying a stray foreign config block can't mis-attribute the
+        // version.
+        if (payload.c === 'wavy' && payload.wf?.tv !== undefined) {
             data.traceSetVersion = payload.wf.tv;
         }
         if (payload.c === 'triangles' && payload.tf?.tv !== undefined) {
