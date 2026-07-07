@@ -196,6 +196,11 @@ const wavyStrategy: CutStyleStrategy = {
  * landscapes. Bounded by the generator's MAX_ROWS; extreme portraits
  * (aspect ≲ 1:3 at the largest size) therefore undershoot the target, which
  * the size buttons' approximate ~N labels absorb.
+ *
+ * Part of the released Triangles share-link contract — the receiver re-runs
+ * this selection from the encoded image size, so any change to the formula,
+ * loop bound, or tie-break reproduces different puzzles from existing links.
+ * Ties (strict `<`) deliberately resolve to the smaller row count.
  */
 export function selectTriangleRows(targetPieceCount: number, imageSize: Size): number {
     let best = 1;
