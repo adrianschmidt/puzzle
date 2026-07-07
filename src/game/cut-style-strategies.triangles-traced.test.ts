@@ -21,7 +21,10 @@ beforeAll(() => {
 
 const size = { width: 1080, height: 720 };
 
-describe('triangles strategy generation', () => {
+// Every test here runs real traced generation with the deep tab ladder,
+// ~2-3s per puzzle on CI runners — more than vitest's 5s default allows for
+// the multi-generation tests (same idiom as tab-rejection-measurement.test.ts).
+describe('triangles strategy generation', { timeout: 30_000 }, () => {
     it('builds the fixed production config (jitter 0.5, smooth, traced, no minPieceArea)', () => {
         vi.mocked(generateComposablePuzzle).mockClear();
         getCutStyleStrategy('triangles').generatePieces({ cols: 6, rows: 3 }, size, 12345, {
