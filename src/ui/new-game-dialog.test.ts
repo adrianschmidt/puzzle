@@ -205,6 +205,40 @@ describe('createNewGameDialog', () => {
         expect(onPreloadTracedTabs).toHaveBeenCalled();
     });
 
+    it('fires onPreloadTracedTabs when switching the cut style to wavy', () => {
+        const onPreloadTracedTabs = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'classic',
+            onSelect: vi.fn(),
+            onPreloadTracedTabs,
+        });
+        expect(onPreloadTracedTabs).not.toHaveBeenCalled();
+
+        container
+            .querySelector<HTMLButtonElement>('[data-cut-style-id="wavy"]')!
+            .click();
+        expect(onPreloadTracedTabs).toHaveBeenCalled();
+    });
+
+    it('fires onPreloadTracedTabs when switching the cut style to triangles', () => {
+        const onPreloadTracedTabs = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'classic',
+            onSelect: vi.fn(),
+            onPreloadTracedTabs,
+        });
+        expect(onPreloadTracedTabs).not.toHaveBeenCalled();
+
+        container
+            .querySelector<HTMLButtonElement>('[data-cut-style-id="triangles"]')!
+            .click();
+        expect(onPreloadTracedTabs).toHaveBeenCalled();
+    });
+
     it('includes the cut style picker section', () => {
         createNewGameDialog({
             container,
