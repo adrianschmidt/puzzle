@@ -253,6 +253,18 @@ export function getWorldPosition(
 }
 
 /**
+ * A border edge of a group paired with its mate in another group —
+ * one element of the {@link getBorderEdges} result.
+ */
+export interface GroupBorderEdge {
+    piece: Piece;
+    edge: Edge;
+    matePiece: Piece;
+    mateEdge: Edge;
+    mateGroup: PieceGroup;
+}
+
+/**
  * Get all border edges of a group — edges whose mates
  * are in a different group.
  *
@@ -263,20 +275,8 @@ export function getWorldPosition(
 export function getBorderEdges(
     group: PieceGroup,
     state: GameState,
-): Array<{
-    piece: Piece;
-    edge: Edge;
-    matePiece: Piece;
-    mateEdge: Edge;
-    mateGroup: PieceGroup;
-}> {
-    const results: Array<{
-        piece: Piece;
-        edge: Edge;
-        matePiece: Piece;
-        mateEdge: Edge;
-        mateGroup: PieceGroup;
-    }> = [];
+): GroupBorderEdge[] {
+    const results: GroupBorderEdge[] = [];
 
     for (const pieceId of group.pieces.keys()) {
         const piece = getPiece(state, pieceId);
