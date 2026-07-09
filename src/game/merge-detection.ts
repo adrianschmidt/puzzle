@@ -85,13 +85,17 @@ function buildRotationSnapContext(
     group: PieceGroup,
     piecesById: ReadonlyMap<number, Readonly<Piece>>,
     extraDeg: number,
+    precomputedCenterLocal?: Point,
 ): RotationSnapContext | null {
     if (Math.abs(extraDeg) < SNAP_EPSILON_DEG) return null;
-    const bounds = getGroupLocalBounds(group, piecesById);
-    const centerLocal = {
-        x: bounds.minX + bounds.width / 2,
-        y: bounds.minY + bounds.height / 2,
-    };
+    let centerLocal = precomputedCenterLocal;
+    if (!centerLocal) {
+        const bounds = getGroupLocalBounds(group, piecesById);
+        centerLocal = {
+            x: bounds.minX + bounds.width / 2,
+            y: bounds.minY + bounds.height / 2,
+        };
+    }
     return {
         centerLocal,
         worldCenter: localToWorld(centerLocal, group),
@@ -142,6 +146,70 @@ function distance(a: Point, b: Point): number {
 }
 
 /**
+ * Raw alignment measurement for a pair of mate edges — the single source
+ * of truth shared by merge detection (thresholding on drop) and snap
+ * proximity rotation (progressive rotation during drag).
+ *
+ * `distance` is measured AFTER simulating the rotation snap the merge
+ * would perform, so it reflects how far the moved group is from its
+ * snapped placement, not from its current-orientation overlap.
+ */
+export interface EdgeAlignmentMeasurement {
+    /** Signed degrees the moved group must rotate to match the target (wrap-aware). */
+    rotationDelta: number;
+    /** Average distance between mate endpoints after the simulated rotation snap. */
+    distance: number;
+    /** Positional correction to perfect alignment (after the rotation snap). */
+    snapDelta: Point;
+}
+
+/**
+ * Measure how well a moved edge aligns with its mate, without applying
+ * any tolerance. Pass `movedCenterLocal` (the moved group's bbox center
+ * in un-rotated local space) to skip the per-call bounds traversal when
+ * calling repeatedly for the same group — e.g. once per candidate per
+ * animation frame during a drag.
+ */
+export function measureEdgeAlignment(
+    movedPiece: Piece,
+    movedEdge: Edge,
+    movedGroup: PieceGroup,
+    targetPiece: Piece,
+    targetEdge: Edge,
+    targetGroup: PieceGroup,
+    piecesById: ReadonlyMap<number, Readonly<Piece>>,
+    movedCenterLocal?: Point,
+): EdgeAlignmentMeasurement {
+    const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
+
+    const snapCtx = buildRotationSnapContext(
+        movedGroup, piecesById, rotDelta, movedCenterLocal,
+    );
+    const movedStart = getWorldPositionAfterRotationSnap(
+        movedEdge.start, movedPiece.id, movedGroup, snapCtx,
+    );
+    const movedEnd = getWorldPositionAfterRotationSnap(
+        movedEdge.end, movedPiece.id, movedGroup, snapCtx,
+    );
+
+    // Mate edges run in opposite directions: start↔end are swapped.
+    const targetStart = getWorldPosition(targetEdge.start, targetPiece.id, targetGroup);
+    const targetEnd = getWorldPosition(targetEdge.end, targetPiece.id, targetGroup);
+
+    const dist1 = distance(movedStart, targetEnd);
+    const dist2 = distance(movedEnd, targetStart);
+
+    return {
+        rotationDelta: rotDelta,
+        distance: (dist1 + dist2) / 2,
+        snapDelta: {
+            x: targetEnd.x - movedStart.x,
+            y: targetEnd.y - movedStart.y,
+        },
+    };
+}
+
+/**
  * Check alignment between two matching edges.
  *
  * For a pair of mate edges, "correct alignment" means:
@@ -162,54 +230,24 @@ export function checkEdgeAlignment(
     tolerance: number = MERGE_TOLERANCE_PX,
     rotationTolerance: number = MERGE_ROTATION_TOLERANCE_DEG,
 ): { aligned: boolean; snapDelta: Point } {
+    const m = measureEdgeAlignment(
+        movedPiece, movedEdge, movedGroup,
+        targetPiece, targetEdge, targetGroup,
+        piecesById,
+    );
+
     // Two groups can only mate when their rotations are close enough.
     // Exact equality is no longer required: in free-rotation mode the
     // tolerance window lets the player land near the correct orientation
     // and still trigger a merge. In quarter-turn mode the delta is always
     // 0, so the tolerance is a no-op and behavior is unchanged.
-    const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
-    if (Math.abs(rotDelta) > rotationTolerance) {
+    if (Math.abs(m.rotationDelta) > rotationTolerance) {
         return { aligned: false, snapDelta: { x: 0, y: 0 } };
     }
-
-    // Simulate the rotation snap before measuring position alignment.
-    // This ensures the snap delta accounts for both the rotation correction
-    // and the position correction in one step. Build the snap context once
-    // and reuse it for both endpoints so we don't re-traverse the moved
-    // group's bbox for every call.
-    const snapCtx = buildRotationSnapContext(movedGroup, piecesById, rotDelta);
-    const movedStart = getWorldPositionAfterRotationSnap(
-        movedEdge.start, movedPiece.id, movedGroup, snapCtx,
-    );
-    const movedEnd = getWorldPositionAfterRotationSnap(
-        movedEdge.end, movedPiece.id, movedGroup, snapCtx,
-    );
-
-    // World positions of the target edge endpoints
-    // Mate edges run in opposite directions: start↔end are swapped
-    const targetStart = getWorldPosition(targetEdge.start, targetPiece.id, targetGroup);
-    const targetEnd = getWorldPosition(targetEdge.end, targetPiece.id, targetGroup);
-
-    // Check alignment: movedStart should align with targetEnd,
-    // and movedEnd should align with targetStart
-    const dist1 = distance(movedStart, targetEnd);
-    const dist2 = distance(movedEnd, targetStart);
-
-    const avgDist = (dist1 + dist2) / 2;
-
-    if (avgDist > tolerance) {
+    if (m.distance > tolerance) {
         return { aligned: false, snapDelta: { x: 0, y: 0 } };
     }
-
-    // Compute snap delta: how much to move the moved group
-    // to achieve perfect alignment.
-    // We use the start↔end pair for the correction.
-    const snapDelta: Point = {
-        x: targetEnd.x - movedStart.x,
-        y: targetEnd.y - movedStart.y,
-    };
-
-    return { aligned: true, snapDelta };
+    return { aligned: true, snapDelta: m.snapDelta };
 }
 
 /**
