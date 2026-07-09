@@ -163,4 +163,34 @@ describe('rotateGroup', () => {
         expect(worldCenterAfter.x).toBeCloseTo(worldCenterBefore.x);
         expect(worldCenterAfter.y).toBeCloseTo(worldCenterBefore.y);
     });
+
+    it('produces identical results with precomputedCenterLocal and computed bounds', () => {
+        const p0 = makeSquarePiece(0);
+        const p1 = makeSquarePiece(1);
+        const piecesById = buildPiecesById([p0, p1]);
+        const makeGroup = (): PieceGroup => ({
+            id: 0,
+            pieces: new Map([
+                [0, { x: 0, y: 0 }],
+                [1, { x: 100, y: 0 }],
+            ]),
+            position: { x: 500, y: 500 },
+            rotation: 30,
+        });
+
+        const computed = makeGroup();
+        rotateGroup(computed, piecesById, 47);
+
+        const precomputed = makeGroup();
+        const bounds = getGroupLocalBounds(precomputed, piecesById);
+        const centerLocal = {
+            x: bounds.minX + bounds.width / 2,
+            y: bounds.minY + bounds.height / 2,
+        };
+        rotateGroup(precomputed, piecesById, 47, centerLocal);
+
+        expect(precomputed.rotation).toBe(computed.rotation);
+        expect(precomputed.position.x).toBeCloseTo(computed.position.x);
+        expect(precomputed.position.y).toBeCloseTo(computed.position.y);
+    });
 });
