@@ -13,3 +13,5 @@ export { PointerRouter } from './pointer-router.js';
 export type { PointerRouterOptions, ClassifyTarget } from './pointer-router.js';
 export { setupInteraction } from './setup-interaction.js';
 export type { InteractionSetupOptions } from './setup-interaction.js';
+export { SnapProximityRotationController } from './snap-proximity-rotation-controller.js';
+export type { SnapProximityRotationOptions } from './snap-proximity-rotation-controller.js';

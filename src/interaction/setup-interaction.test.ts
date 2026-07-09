@@ -20,7 +20,8 @@ import { SelectionManager } from './selection-manager.js';
 import { RotationFocus } from './rotation-focus.js';
 import type { Renderer } from '../renderer/types.js';
 import type { GameState, PieceGroup } from '../model/types.js';
-import { makeGameState } from '../test-helpers/fixtures.js';
+import { makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
+import { rotatePoint } from '../model/helpers.js';
 import { loadOffsetDragPreference } from '../ui/offset-drag.js';
 
 vi.mock('../ui/offset-drag.js', () => ({
@@ -614,6 +615,109 @@ describe('setupInteraction', () => {
             // OFFSET_DRAG_SCREEN_PX = 50, shifted upward (negative Y).
             expect(group7.position.y).toBe(-50);
         });
+    });
+});
+
+describe('snap proximity rotation', () => {
+    // The 'offset drag' tests above set loadOffsetDragPreference to true and
+    // never reset it, so it leaks into later tests in this file. Reset it
+    // here so a piece-drag start doesn't apply a stray offset that would
+    // throw off the snap-distance measurements below.
+    beforeEach(() => {
+        vi.mocked(loadOffsetDragPreference).mockReturnValue(false);
+    });
+
+    /**
+     * Free-rotation state: piece 0 (group 7) at the origin, piece 1
+     * (group 8) rotated 18° with its bbox center 20px right of its
+     * aligned center (150, 50).
+     */
+    function makeFreeRotationState(rotationMode: GameState['rotationMode'] = 'free'): GameState {
+        const { piece0, piece1 } = makeMatedPiecePair();
+        const r = rotatePoint({ x: 50, y: 50 }, 18);
+        const group7: PieceGroup = { id: 7, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 };
+        const group8: PieceGroup = {
+            id: 8,
+            pieces: new Map([[1, { x: 0, y: 0 }]]),
+            position: { x: 170 - r.x, y: 50 - r.y },
+            rotation: 18,
+        };
+        return makeGameState({ pieces: [piece0, piece1], groups: [group7, group8], rotationMode });
+    }
+
+    const getSnapTolerances = () => ({ tolerancePx: 40, rotationToleranceDeg: 20 });
+
+    function dragPieceOne(container: FakeContainer, toX: number): void {
+        const pieceTarget = { _pieceId: 1 } as unknown as EventTarget;
+        container.fire('pointerdown', fakePointerEvent({ target: pieceTarget, pointerId: 1, clientX: 300, clientY: 300 }));
+        container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 320, clientY: 300 })); // promote
+        container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: toX, clientY: 300 })); // real move
+    }
+
+    it('rotates the dragged group toward a nearby mate during a free-rotation drag', () => {
+        const container = createFakeContainer();
+        const state = makeFreeRotationState();
+
+        setupInteraction({
+            container: container as unknown as HTMLElement,
+            renderer: createFakeRenderer(),
+            viewportTransform: new ViewportTransform(),
+            getState: () => state,
+            onStateChanged: vi.fn(),
+            onDrop: vi.fn(),
+            onViewportChanged: vi.fn(),
+            getSnapTolerances,
+        });
+
+        // Move 10px left: center 170 → 160, d = 10 → cap = 5; 18° → 5°.
+        dragPieceOne(container, 310);
+
+        expect(state.groupsById.get(8)!.rotation).toBeCloseTo(5);
+    });
+
+    it('does not rotate when rotation mode is not free', () => {
+        const container = createFakeContainer();
+        const state = makeFreeRotationState('quarter-turn');
+
+        setupInteraction({
+            container: container as unknown as HTMLElement,
+            renderer: createFakeRenderer(),
+            viewportTransform: new ViewportTransform(),
+            getState: () => state,
+            onStateChanged: vi.fn(),
+            onDrop: vi.fn(),
+            onViewportChanged: vi.fn(),
+            getSnapTolerances,
+        });
+
+        dragPieceOne(container, 310);
+
+        expect(state.groupsById.get(8)!.rotation).toBeCloseTo(18);
+    });
+
+    it('does not rotate during a multi-selection drag', () => {
+        const container = createFakeContainer();
+        const state = makeFreeRotationState();
+        const selectionManager = new SelectionManager();
+        selectionManager.toolActive = true;
+        selectionManager.select(7);
+        selectionManager.select(8);
+
+        setupInteraction({
+            container: container as unknown as HTMLElement,
+            renderer: createFakeRenderer(),
+            viewportTransform: new ViewportTransform(),
+            getState: () => state,
+            onStateChanged: vi.fn(),
+            onDrop: vi.fn(),
+            onViewportChanged: vi.fn(),
+            selectionManager,
+            getSnapTolerances,
+        });
+
+        dragPieceOne(container, 310);
+
+        expect(state.groupsById.get(8)!.rotation).toBeCloseTo(18);
     });
 });
 

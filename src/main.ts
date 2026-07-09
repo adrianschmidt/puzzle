@@ -835,6 +835,14 @@ function initGame(state: GameState): void {
                 reorderGroupsAfterDrop(droppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
             }
         },
+        getSnapTolerances: () => ({
+            tolerancePx: getActiveTolerance(
+                gameState.imageSize.width,
+                gameState.gridSize.cols,
+                gameState.cutStyle,
+            ),
+            rotationToleranceDeg: getActiveRotationTolerance(),
+        }),
         onViewportChanged,
         screenDeltaToWorld: (delta) => viewportTransform.screenDeltaToWorld(delta),
         panViewport: (screenDelta) => {

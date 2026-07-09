@@ -22,6 +22,7 @@ import type { RotationFocus } from './rotation-focus.js';
 import { MarqueeController, groupScreenRect } from './marquee-controller.js';
 import type { ScreenRect } from './marquee-controller.js';
 import { loadOffsetDragPreference, loadMarqueeContainPreference } from '../ui/index.js';
+import { SnapProximityRotationController } from './snap-proximity-rotation-controller.js';
 
 export interface InteractionSetupOptions {
     container: HTMLElement;
@@ -35,6 +36,12 @@ export interface InteractionSetupOptions {
     panViewport?: (screenDelta: Point) => void;
     selectionManager?: SelectionManager;
     rotationFocus?: RotationFocus;
+    /**
+     * Active snap tolerances for snap proximity rotation (progressive
+     * rotation toward a mate while dragging in free-rotation mode).
+     * When omitted, the feature is disabled.
+     */
+    getSnapTolerances?: () => { tolerancePx: number; rotationToleranceDeg: number };
 }
 
 const OFFSET_DRAG_SCREEN_PX = 50;
@@ -43,7 +50,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
     const {
         container, renderer, viewportTransform, getState, onStateChanged,
         onDrop, onViewportChanged, screenDeltaToWorld, panViewport, selectionManager,
-        rotationFocus,
+        rotationFocus, getSnapTolerances,
     } = options;
 
     const deltaToWorld = screenDeltaToWorld ?? ((d: Point) => d);
@@ -53,6 +60,10 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
 
     const viewportController = new ViewportController(viewportTransform, onViewportChanged);
 
+    const snapRotation = getSnapTolerances
+        ? new SnapProximityRotationController({ getState, getTolerances: getSnapTolerances })
+        : null;
+
     const autoPan = panViewport
         ? new AutoPanController({
             panViewport,
@@ -61,6 +72,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                     const group = tryGetGroup(getState(), id);
                     if (group) moveGroup(group, worldDelta);
                 }
+                snapRotation?.onGroupMoved();
             },
             screenDeltaToWorld: deltaToWorld,
             requestRender: onStateChanged,
@@ -82,6 +94,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                     const group = tryGetGroup(getState(), id);
                     if (group) moveGroup(group, delta);
                 }
+                snapRotation?.onGroupMoved();
             },
             bringToFront(groupId) {
                 const ids = expandToSelection(groupId);
@@ -177,6 +190,11 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                 applyOffsetDragIfSingleGroup(drag.groupId);
                 autoPan?.start(drag.groupId);
                 autoPan?.updatePointer({ x: evt.clientX, y: evt.clientY });
+                // Snap proximity rotation only tracks single-group drags: rotating one
+                // group of a multi-selection would disturb the arrangement being moved.
+                if (expandToSelection(drag.groupId).length === 1) {
+                    snapRotation?.start(drag.groupId);
+                }
             },
             move: (evt) => {
                 dragController.handlePointerMove(evt);
@@ -189,12 +207,14 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                 dragController.handlePointerUp(evt);
                 autoPan?.stop();
                 for (const id of expandToSelection(groupId)) renderer.setGroupDragging(id, false);
+                snapRotation?.stop();
                 onDrop(groupId);
             },
             cancel: () => {
                 const drag = dragController.getActiveDrag();
                 if (!drag) return;
                 const groupId = drag.groupId;
+                snapRotation?.stop();
                 dragController.cancel();
                 autoPan?.stop();
                 for (const id of expandToSelection(groupId)) renderer.setGroupDragging(id, false);
