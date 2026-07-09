@@ -22,6 +22,7 @@ import type { GameState, Point } from '../model/types.js';
 import { getBorderEdges, tryGetGroup } from '../model/helpers.js';
 import type { GroupBorderEdge } from '../model/helpers.js';
 import { getGroupLocalBounds } from './group-bounds.js';
+import { measureEdgeAlignment, SNAP_EPSILON_DEG } from './merge-detection.js';
 
 /**
  * Per-drag precomputed context. Valid only while the dragged group's
@@ -76,4 +77,46 @@ export function buildProximityContext(
         tolerancePx,
         rotationToleranceDeg,
     };
+}
+
+/**
+ * Compute the rotation to apply to the dragged group right now, in signed
+ * degrees (apply via `rotateGroup`), or `null` when no correction is due.
+ *
+ * A candidate qualifies exactly when a drop would merge it: simulated-snap
+ * distance `d ≤ tolerancePx` AND angular error `|θ| ≤ rotationToleranceDeg`.
+ * Among qualifying candidates the smallest `d` wins. The correction
+ * reduces `|θ|` to `cap = rotationToleranceDeg × (d / tolerancePx)` — at
+ * the zone edge the cap equals the tolerance (no jump on entry), at zero
+ * distance the group is fully aligned.
+ */
+export function computeSnapProximityRotation(
+    state: GameState,
+    ctx: ProximityContext,
+): number | null {
+    const group = tryGetGroup(state, ctx.groupId);
+    if (!group) return null;
+
+    let bestDistance = Infinity;
+    let bestRotationDelta = 0;
+    for (const candidate of ctx.candidates) {
+        const m = measureEdgeAlignment(
+            candidate.piece, candidate.edge, group,
+            candidate.matePiece, candidate.mateEdge, candidate.mateGroup,
+            state.piecesById, ctx.centerLocal,
+        );
+        if (Math.abs(m.rotationDelta) > ctx.rotationToleranceDeg) continue;
+        if (m.distance > ctx.tolerancePx) continue;
+        if (m.distance < bestDistance) {
+            bestDistance = m.distance;
+            bestRotationDelta = m.rotationDelta;
+        }
+    }
+    if (!Number.isFinite(bestDistance)) return null;
+
+    const cap = ctx.rotationToleranceDeg * (bestDistance / ctx.tolerancePx);
+    const excess = Math.abs(bestRotationDelta) - cap;
+    if (excess <= SNAP_EPSILON_DEG) return null;
+
+    return Math.sign(bestRotationDelta) * excess;
 }
