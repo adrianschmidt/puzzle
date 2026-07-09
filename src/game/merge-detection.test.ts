@@ -3,9 +3,11 @@ import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import {
     checkEdgeAlignment,
     detectMerges,
+    measureEdgeAlignment,
     MERGE_TOLERANCE_PX,
     MERGE_ROTATION_TOLERANCE_DEG,
 } from './merge-detection.js';
+import { getGroupLocalBounds } from './group-bounds.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
 // --- Test helpers ---
@@ -453,6 +455,67 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         expect(result.aligned).toBe(true);
         expect(result.snapDelta.x).toBeCloseTo(0, 1);
         expect(result.snapDelta.y).toBeCloseTo(0, 1);
+    });
+});
+
+describe('measureEdgeAlignment', () => {
+    it('reports distance, rotation delta, and snap delta for an offset pair', () => {
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+        const group0 = makeGroup(0, 0, { x: 0, y: 0 });
+        const group1 = makeGroup(1, 1, { x: 112, y: 0 }); // 12px right of aligned
+
+        const m = measureEdgeAlignment(
+            piece1, leftEdge, group1,
+            piece0, rightEdge, group0,
+            new Map(),
+        );
+
+        expect(m.rotationDelta).toBeCloseTo(0);
+        expect(m.distance).toBeCloseTo(12);
+        expect(m.snapDelta.x).toBeCloseTo(-12);
+        expect(m.snapDelta.y).toBeCloseTo(0);
+    });
+
+    it('reports the wrap-aware rotation delta (target − moved)', () => {
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+        const group0 = makeGroup(0, 0, { x: 0, y: 0 });
+        const group1 = makeGroup(1, 1, { x: 100, y: 0 });
+        group0.rotation = 10;
+        group1.rotation = 350;
+
+        const m = measureEdgeAlignment(
+            piece1, leftEdge, group1,
+            piece0, rightEdge, group0,
+            new Map(),
+        );
+
+        // From 350° to 10° the short way is +20°, not −340°.
+        expect(m.rotationDelta).toBeCloseTo(20);
+    });
+
+    it('a precomputed movedCenterLocal yields identical measurements', () => {
+        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
+        const group0 = makeGroup(0, 0, { x: 0, y: 0 });
+        const group1 = makeGroup(1, 1, { x: 108, y: 6 });
+        group1.rotation = 15;
+        const piecesById = new Map([[0, piece0], [1, piece1]]);
+
+        const plain = measureEdgeAlignment(
+            piece1, leftEdge, group1, piece0, rightEdge, group0, piecesById,
+        );
+        const bounds = getGroupLocalBounds(group1, piecesById);
+        const center = {
+            x: bounds.minX + bounds.width / 2,
+            y: bounds.minY + bounds.height / 2,
+        };
+        const precomputed = measureEdgeAlignment(
+            piece1, leftEdge, group1, piece0, rightEdge, group0, piecesById, center,
+        );
+
+        expect(precomputed.rotationDelta).toBeCloseTo(plain.rotationDelta);
+        expect(precomputed.distance).toBeCloseTo(plain.distance);
+        expect(precomputed.snapDelta.x).toBeCloseTo(plain.snapDelta.x);
+        expect(precomputed.snapDelta.y).toBeCloseTo(plain.snapDelta.y);
     });
 });
 
