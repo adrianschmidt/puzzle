@@ -80,6 +80,14 @@ describe('buildProximityContext', () => {
     it('returns null for a non-positive tolerance', () => {
         expect(buildProximityContext(makePairState({ x: 120, y: 0 }), 11, 0, T)).toBeNull();
     });
+
+    it('returns null for non-finite tolerances (corrupted-state hardening)', () => {
+        const state = () => makePairState({ x: 120, y: 0 });
+        expect(buildProximityContext(state(), 11, NaN, T)).toBeNull();
+        expect(buildProximityContext(state(), 11, Infinity, T)).toBeNull();
+        expect(buildProximityContext(state(), 11, D, NaN)).toBeNull();
+        expect(buildProximityContext(state(), 11, D, Infinity)).toBeNull();
+    });
 });
 
 /** Group-11 position that puts its bbox center at `center` for a given rotation. */
@@ -98,13 +106,23 @@ function makeComputeSetup(center: Point, rotation: number): { state: GameState; 
 
 /**
  * A 1×3 row: piece 0 — piece 1 — piece 2, each 100×100, mated along
- * vertical edges. Piece 1 (the moved group, id 11) sits with its center
- * displaced +12px from alignment with piece 0's group, while piece 2's
- * group is itself displaced +4px right of ITS correct spot — so piece 1
- * is only 8px from alignment with piece 2. Both mates un-rotated;
- * piece 1 rotated 16°.
+ * vertical edges. Piece 1 (the moved group, id 11) is rotated 16° and both
+ * mates are un-rotated; `closest` picks which mate piece 1 sits nearer.
+ * Alignment with group 0 (origin) puts piece 1's center at (150, 50);
+ * alignment with group 2 puts it at group2.position + (−50, 50):
+ *
+ * - 'right': group 1 center (162, 50), group 2 at (204, 0) — left mate at
+ *   d = 12, right mate at d = 8 (aligned-wrt-group-2 center is (154, 50)).
+ * - 'left': group 1 center (158, 50), group 2 at (196, 0) — left mate at
+ *   d = 8, right mate at d = 12 (aligned-wrt-group-2 center is (146, 50)).
+ *
+ * `getBorderEdges` iterates piece 1's right mate (edge index 1) before its
+ * left mate (index 3), so testing BOTH arrangements discriminates genuine
+ * closest-wins from first-qualifying-wins and last-qualifying-wins
+ * iteration bugs: either bug picks the d = 12 mate (cap 6 → −10) in one of
+ * the arrangements instead of the d = 8 mate (cap 4 → −12).
  */
-function makeRowState(): { state: GameState; ctx: ProximityContext } {
+function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: ProximityContext } {
     const { piece0, piece1 } = makeMatedPiecePair();
     // Extend piece 1 with a right-edge mate to a third piece.
     const rightMate = { id: 2, matePieceId: 2, mateEdgeId: 3, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } };
@@ -116,9 +134,11 @@ function makeRowState(): { state: GameState; ctx: ProximityContext } {
         { id: 3, matePieceId: 1, mateEdgeId: 2, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
     ] });
 
+    const group1Center = closest === 'right' ? { x: 162, y: 50 } : { x: 158, y: 50 };
+    const group2Position = closest === 'right' ? { x: 204, y: 0 } : { x: 196, y: 0 };
     const group0 = makeGroupOf(10, 0, { x: 0, y: 0 });
-    const group1 = makeGroupOf(11, 1, positionForCenter({ x: 162, y: 50 }, 16), 16);
-    const group2 = makeGroupOf(12, 2, { x: 204, y: 0 }); // +4px right of correct (200, 0)
+    const group1 = makeGroupOf(11, 1, positionForCenter(group1Center, 16), 16);
+    const group2 = makeGroupOf(12, 2, group2Position);
     const state = makeGameState({
         pieces: [piece0, piece1, piece2],
         groups: [group0, group1, group2],
@@ -183,19 +203,16 @@ describe('computeSnapProximityRotation', () => {
         expect(group.rotation).toBeCloseTo(10);
     });
 
-    it('the closest qualifying mate wins', () => {
-        // Middle piece (1) mated on both sides; see makeRowState below.
-        const { state, ctx } = makeRowState();
-        // Left mate at d = 12 (cap 6), right mate at d = 8 (cap 4); error 16 on both.
-        // Closest (right) wins: excess = 16 − 4 = 12, toward alignment.
-        expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-12);
-    });
-
-    it('returns null for non-finite tolerances (corrupted-state hardening)', () => {
-        const state = () => makePairState({ x: 120, y: 0 });
-        expect(buildProximityContext(state(), 11, NaN, T)).toBeNull();
-        expect(buildProximityContext(state(), 11, Infinity, T)).toBeNull();
-        expect(buildProximityContext(state(), 11, D, NaN)).toBeNull();
-        expect(buildProximityContext(state(), 11, D, Infinity)).toBeNull();
-    });
+    it.each(['left', 'right'] as const)(
+        'the closest qualifying mate wins (%s mate closest)',
+        (closest) => {
+            // Middle piece (1) mated on both sides; see makeRowState above.
+            // Closer mate at d = 8 (cap 4), farther at d = 12 (cap 6); error
+            // 16 on both. Closest wins: excess = 16 − 4 = 12, toward
+            // alignment. Running both arrangements rules out iteration-order
+            // (first/last-qualifying-wins) bugs, which would yield −10.
+            const { state, ctx } = makeRowState(closest);
+            expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-12);
+        },
+    );
 });
