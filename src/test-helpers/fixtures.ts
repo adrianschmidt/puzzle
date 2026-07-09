@@ -144,3 +144,33 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     };
     return { ...base, ...overrides };
 }
+
+/**
+ * Two 100×100 pieces mated along a vertical edge, for snap/merge tests.
+ *
+ * Piece 0's right edge (id 0) mates with piece 1's left edge (id 1);
+ * all other edges are puzzle borders. With both groups un-rotated and
+ * piece offsets at (0,0), the correct relative placement puts piece 1's
+ * group origin exactly 100px right of piece 0's.
+ */
+export function makeMatedPiecePair(): { piece0: Piece; piece1: Piece } {
+    const edge = (
+        id: number, start: Point, end: Point,
+        matePieceId = -1, mateEdgeId = -1,
+    ): Edge => ({ id, matePieceId, mateEdgeId, path: '', start, end });
+
+    const piece0 = makePiece({ id: 0, edges: [
+        edge(10, { x: 0, y: 0 }, { x: 100, y: 0 }),
+        edge(0, { x: 100, y: 0 }, { x: 100, y: 100 }, 1, 1), // mates piece 1
+        edge(11, { x: 100, y: 100 }, { x: 0, y: 100 }),
+        edge(12, { x: 0, y: 100 }, { x: 0, y: 0 }),
+    ] });
+    const piece1 = makePiece({ id: 1, edges: [
+        edge(13, { x: 0, y: 0 }, { x: 100, y: 0 }),
+        edge(14, { x: 100, y: 0 }, { x: 100, y: 100 }),
+        edge(15, { x: 100, y: 100 }, { x: 0, y: 100 }),
+        edge(1, { x: 0, y: 100 }, { x: 0, y: 0 }, 0, 0), // mates piece 0
+    ] });
+
+    return { piece0, piece1 };
+}
