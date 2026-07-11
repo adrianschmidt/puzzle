@@ -20,12 +20,12 @@ import {
     buildProximityContext,
     computeSnapProximityRotation,
 } from '../game/snap-proximity-rotation.js';
-import type { ProximityContext } from '../game/snap-proximity-rotation.js';
+import type { ProximityContext, SnapTolerances } from '../game/snap-proximity-rotation.js';
 
 export interface SnapProximityRotationOptions {
     getState: () => GameState;
     /** Active snap tolerances; read once per drag, at start(). */
-    getTolerances: () => { tolerancePx: number; rotationToleranceDeg: number };
+    getTolerances: () => SnapTolerances;
     /** Injectable frame scheduler for tests. Defaults to requestAnimationFrame. */
     scheduleFrame?: (cb: () => void) => void;
 }
@@ -49,9 +49,8 @@ export class SnapProximityRotationController {
      * the game is in free-rotation mode and the group has cross-group mates.
      */
     start(groupId: number): void {
-        const { tolerancePx, rotationToleranceDeg } = this.getTolerances();
         this.ctx = buildProximityContext(
-            this.getState(), groupId, tolerancePx, rotationToleranceDeg,
+            this.getState(), groupId, this.getTolerances(),
         );
         this.gated = false;
     }
