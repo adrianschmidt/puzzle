@@ -25,6 +25,18 @@ import { getGroupLocalBounds } from './group-bounds.js';
 import { measureEdgeAlignment, SNAP_EPSILON_DEG } from './merge-detection.js';
 
 /**
+ * The pair of thresholds that define when a drop would merge — shared by
+ * merge detection on drop and snap proximity rotation during a drag, so
+ * both always agree on what "close enough" means.
+ */
+export interface SnapTolerances {
+    /** Snap distance (D) in world px. */
+    tolerancePx: number;
+    /** Rotation tolerance (T) in degrees. */
+    rotationToleranceDeg: number;
+}
+
+/**
  * Per-drag precomputed context. Valid only while the dragged group's
  * composition and every mate group stay unchanged — true for the duration
  * of a single-group drag, because merges happen only on drop. Build at
@@ -53,9 +65,9 @@ export interface ProximityContext {
 export function buildProximityContext(
     state: GameState,
     movedGroupId: number,
-    tolerancePx: number,
-    rotationToleranceDeg: number,
+    tolerances: SnapTolerances,
 ): ProximityContext | null {
+    const { tolerancePx, rotationToleranceDeg } = tolerances;
     if (state.rotationMode !== 'free') return null;
     if (!Number.isFinite(tolerancePx) || tolerancePx <= 0) return null;
     if (!Number.isFinite(rotationToleranceDeg)) return null;

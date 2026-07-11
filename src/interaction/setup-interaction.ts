@@ -23,6 +23,7 @@ import { MarqueeController, groupScreenRect } from './marquee-controller.js';
 import type { ScreenRect } from './marquee-controller.js';
 import { loadOffsetDragPreference, loadMarqueeContainPreference } from '../ui/index.js';
 import { SnapProximityRotationController } from './snap-proximity-rotation-controller.js';
+import type { SnapTolerances } from '../game/snap-proximity-rotation.js';
 
 export interface InteractionSetupOptions {
     container: HTMLElement;
@@ -41,7 +42,7 @@ export interface InteractionSetupOptions {
      * rotation toward a mate while dragging in free-rotation mode).
      * When omitted, the feature is disabled.
      */
-    getSnapTolerances?: () => { tolerancePx: number; rotationToleranceDeg: number };
+    getSnapTolerances?: () => SnapTolerances;
 }
 
 const OFFSET_DRAG_SCREEN_PX = 50;

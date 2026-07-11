@@ -60,6 +60,7 @@ import {
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
 import { rotateGroup } from './game/rotate-group.js';
+import type { SnapTolerances } from './game/snap-proximity-rotation.js';
 import {
     buildGroupIndexes,
     rotatePoint,
@@ -779,6 +780,22 @@ function updateAttribution(): void {
 }
 
 /**
+ * The active snap tolerances for `state` — the single definition of "would
+ * a drop merge?" thresholds, shared by drop/commit merge detection and
+ * snap proximity rotation so they can never drift apart.
+ */
+function activeSnapTolerances(state: GameState): SnapTolerances {
+    return {
+        tolerancePx: getActiveTolerance(
+            state.imageSize.width,
+            state.gridSize.cols,
+            state.cutStyle,
+        ),
+        rotationToleranceDeg: getActiveRotationTolerance(),
+    };
+}
+
+/**
  * Set up the game with a given state: render it and wire up interaction.
  */
 function initGame(state: GameState): void {
@@ -816,17 +833,12 @@ function initGame(state: GameState): void {
             autoSave();
         },
         onDrop: (groupId: number) => {
-            const tolerance = getActiveTolerance(
-                gameState.imageSize.width,
-                gameState.gridSize.cols,
-                gameState.cutStyle,
-            );
-            const rotationTolerance = getActiveRotationTolerance();
+            const { tolerancePx, rotationToleranceDeg } = activeSnapTolerances(gameState);
 
             // Primary dragged group + any selected groups (multi-select mode).
             const droppedGroupIds = [...selectionManager.expandToSelectionIfActive(groupId)];
 
-            const result = processDrop(groupId, gameState, tolerance, rotationTolerance);
+            const result = processDrop(groupId, gameState, tolerancePx, rotationToleranceDeg);
             if (result) {
                 applyMergeResult(result, droppedGroupIds);
                 autoSave();
@@ -835,14 +847,7 @@ function initGame(state: GameState): void {
                 reorderGroupsAfterDrop(droppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
             }
         },
-        getSnapTolerances: () => ({
-            tolerancePx: getActiveTolerance(
-                gameState.imageSize.width,
-                gameState.gridSize.cols,
-                gameState.cutStyle,
-            ),
-            rotationToleranceDeg: getActiveRotationTolerance(),
-        }),
+        getSnapTolerances: () => activeSnapTolerances(gameState),
         onViewportChanged,
         screenDeltaToWorld: (delta) => viewportTransform.screenDeltaToWorld(delta),
         panViewport: (screenDelta) => {
@@ -1184,14 +1189,9 @@ const rotateHandle = createRotateHandle({
     onCommit: (groupId) => {
         if (!gameState) return;
 
-        const tolerance = getActiveTolerance(
-            gameState.imageSize.width,
-            gameState.gridSize.cols,
-            gameState.cutStyle,
-        );
-        const rotationTolerance = getActiveRotationTolerance();
+        const { tolerancePx, rotationToleranceDeg } = activeSnapTolerances(gameState);
 
-        const result = processDrop(groupId, gameState, tolerance, rotationTolerance);
+        const result = processDrop(groupId, gameState, tolerancePx, rotationToleranceDeg);
         if (result) {
             applyMergeResult(result, [result.group.id]);
         }

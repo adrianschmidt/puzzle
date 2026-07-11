@@ -7,6 +7,7 @@ import { rotateGroup } from './rotate-group.js';
 
 const D = 40; // tolerancePx used throughout these tests
 const T = 20; // rotationToleranceDeg used throughout these tests
+const TOL = { tolerancePx: D, rotationToleranceDeg: T };
 
 function makeGroupOf(id: number, pieceId: number, position: Point, rotation = 0): PieceGroup {
     return { id, pieces: new Map([[pieceId, { x: 0, y: 0 }]]), position, rotation };
@@ -37,7 +38,7 @@ function makePairState(
 describe('buildProximityContext', () => {
     it('returns a context with the border candidates and bbox center', () => {
         const state = makePairState({ x: 300, y: 0 });
-        const ctx = buildProximityContext(state, 11, D, T);
+        const ctx = buildProximityContext(state, 11, TOL);
 
         expect(ctx).not.toBeNull();
         expect(ctx!.groupId).toBe(11);
@@ -50,13 +51,13 @@ describe('buildProximityContext', () => {
     });
 
     it('returns null unless rotation mode is free', () => {
-        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: 'none' }), 11, D, T)).toBeNull();
-        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: 'quarter-turn' }), 11, D, T)).toBeNull();
-        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: undefined }), 11, D, T)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: 'none' }), 11, TOL)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: 'quarter-turn' }), 11, TOL)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: undefined }), 11, TOL)).toBeNull();
     });
 
     it('returns null for an unknown group', () => {
-        expect(buildProximityContext(makePairState({ x: 300, y: 0 }), 99, D, T)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 300, y: 0 }), 99, TOL)).toBeNull();
     });
 
     it('returns null when the group has no cross-group mates', () => {
@@ -74,19 +75,19 @@ describe('buildProximityContext', () => {
             rotationMode: 'free',
         });
 
-        expect(buildProximityContext(state, 10, D, T)).toBeNull();
+        expect(buildProximityContext(state, 10, TOL)).toBeNull();
     });
 
     it('returns null for a non-positive tolerance', () => {
-        expect(buildProximityContext(makePairState({ x: 120, y: 0 }), 11, 0, T)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 120, y: 0 }), 11, { ...TOL, tolerancePx: 0 })).toBeNull();
     });
 
     it('returns null for non-finite tolerances (corrupted-state hardening)', () => {
         const state = () => makePairState({ x: 120, y: 0 });
-        expect(buildProximityContext(state(), 11, NaN, T)).toBeNull();
-        expect(buildProximityContext(state(), 11, Infinity, T)).toBeNull();
-        expect(buildProximityContext(state(), 11, D, NaN)).toBeNull();
-        expect(buildProximityContext(state(), 11, D, Infinity)).toBeNull();
+        expect(buildProximityContext(state(), 11, { ...TOL, tolerancePx: NaN })).toBeNull();
+        expect(buildProximityContext(state(), 11, { ...TOL, tolerancePx: Infinity })).toBeNull();
+        expect(buildProximityContext(state(), 11, { ...TOL, rotationToleranceDeg: NaN })).toBeNull();
+        expect(buildProximityContext(state(), 11, { ...TOL, rotationToleranceDeg: Infinity })).toBeNull();
     });
 });
 
@@ -99,7 +100,7 @@ function positionForCenter(center: Point, rotation: number): Point {
 /** Build the pair state + context in one go; throws if the context is unexpectedly null. */
 function makeComputeSetup(center: Point, rotation: number): { state: GameState; ctx: ProximityContext } {
     const state = makePairState(positionForCenter(center, rotation), rotation);
-    const ctx = buildProximityContext(state, 11, D, T);
+    const ctx = buildProximityContext(state, 11, TOL);
     if (!ctx) throw new Error('expected a proximity context');
     return { state, ctx };
 }
@@ -144,7 +145,7 @@ function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: Proxi
         groups: [group0, group1, group2],
         rotationMode: 'free',
     });
-    const ctx = buildProximityContext(state, 11, D, T);
+    const ctx = buildProximityContext(state, 11, TOL);
     if (!ctx) throw new Error('expected a proximity context');
     return { state, ctx };
 }
