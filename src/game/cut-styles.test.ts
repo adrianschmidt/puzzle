@@ -12,6 +12,7 @@ import {
     loadCutStylePreference,
     getVisibleCutStyleOptions,
     isComposableVisible,
+    rotationModeForNewGame,
 } from './cut-styles.js';
 
 describe('CUT_STYLE_OPTIONS', () => {
@@ -150,5 +151,24 @@ describe('isComposableVisible', () => {
         vi.stubEnv('DEV', true);
         vi.stubEnv('BASE_URL', '/');
         expect(isComposableVisible()).toBe(true);
+    });
+});
+
+describe('rotationModeForNewGame', () => {
+    it('returns none when rotation is disabled, for every cut style', () => {
+        for (const option of CUT_STYLE_OPTIONS) {
+            expect(rotationModeForNewGame(option.id, false)).toBe('none');
+        }
+    });
+
+    it('returns quarter-turn for classic and fractal', () => {
+        expect(rotationModeForNewGame('classic', true)).toBe('quarter-turn');
+        expect(rotationModeForNewGame('fractal', true)).toBe('quarter-turn');
+    });
+
+    it('returns free for wavy, triangles, and composable', () => {
+        expect(rotationModeForNewGame('wavy', true)).toBe('free');
+        expect(rotationModeForNewGame('triangles', true)).toBe('free');
+        expect(rotationModeForNewGame('composable', true)).toBe('free');
     });
 });

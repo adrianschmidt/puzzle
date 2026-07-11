@@ -19,6 +19,12 @@ export interface CutStyleOption {
     id: CutStyle;
     label: string;
     description: string;
+    /**
+     * How pieces rotate when the player enables rotation for a new game.
+     * Classic and Fractal use 90° steps; the rest rotate freely because
+     * quarter-turns don't match their irregular piece shapes.
+     */
+    rotation: 'quarter-turn' | 'free';
 }
 
 /**
@@ -33,26 +39,31 @@ export const CUT_STYLE_OPTIONS: readonly CutStyleOption[] = [
         id: 'classic',
         label: 'Classic',
         description: 'Traditional jigsaw tabs',
+        rotation: 'quarter-turn',
     },
     {
         id: 'fractal',
         label: 'Fractal',
         description: 'Organic circle-packing',
+        rotation: 'quarter-turn',
     },
     {
         id: 'wavy',
         label: 'Wavy',
         description: 'Like Classic, but each cut curves boldly',
+        rotation: 'free',
     },
     {
         id: 'triangles',
         label: 'Triangles',
         description: 'An irregular lattice of triangles',
+        rotation: 'free',
     },
     {
         id: 'composable',
         label: 'Composable',
         description: 'Experimental — customizable cuts',
+        rotation: 'free',
     },
 ] as const;
 
@@ -100,4 +111,22 @@ export function isComposableVisible(): boolean {
 export function getVisibleCutStyleOptions(): readonly CutStyleOption[] {
     if (isComposableVisible()) return CUT_STYLE_OPTIONS;
     return CUT_STYLE_OPTIONS.filter((o) => o.id !== 'composable');
+}
+
+/**
+ * Rotation mode for a newly created game, as a pure function of cut style.
+ *
+ * Reads each style's `rotation` capability from `CUT_STYLE_OPTIONS`, so a
+ * new cut style must declare its rotation behavior to compile.
+ *
+ * Only new-game creation goes through this mapping. Saves and share links
+ * carry their own rotationMode, so older quarter-turn Wavy/Composable
+ * puzzles keep loading unchanged.
+ */
+export function rotationModeForNewGame(
+    cutStyle: CutStyle,
+    rotationEnabled: boolean,
+): 'none' | 'quarter-turn' | 'free' {
+    if (!rotationEnabled) return 'none';
+    return getCutStyleOption(cutStyle).rotation;
 }
