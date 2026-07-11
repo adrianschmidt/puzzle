@@ -176,7 +176,7 @@ describe('createInfoModal', () => {
         expect(firstSection?.classList.contains('share-section')).toBe(true);
     });
 
-    it('mentions Free rotation in both the How to Play and Cut Styles sections', () => {
+    it('describes rotation in both the How to Play and Cut Styles sections', () => {
         createInfoModal({ container });
 
         const sections = container.querySelectorAll<HTMLElement>('section.info-section');
@@ -188,7 +188,7 @@ describe('createInfoModal', () => {
         );
 
         expect(howToPlay?.textContent).toContain('Free rotation');
-        expect(cutStyles?.textContent).toContain('Free rotation');
+        expect(cutStyles?.textContent).toContain('rotate freely');
     });
 });
 
@@ -225,13 +225,13 @@ describe('createInfoModal — Cut Styles section', () => {
         expect(cutStylesSection().textContent).not.toContain('Composable');
     });
 
-    it('mentions Free rotation in the Wavy bullet', () => {
+    it('says Wavy rotates freely, with no option sub-bullet', () => {
         createInfoModal({ container });
-        const html = cutStylesSection().innerHTML;
-        const wavyIdx = html.indexOf('Wavy');
-        const freeRotIdx = html.indexOf('Free rotation');
-        expect(wavyIdx).toBeGreaterThan(-1);
-        expect(freeRotIdx).toBeGreaterThan(wavyIdx);
+        const lis = cutStylesSection().querySelectorAll<HTMLLIElement>('ul > li');
+        const wavyLi = [...lis].find((li) => li.textContent?.includes('Wavy'));
+        expect(wavyLi).toBeDefined();
+        expect(wavyLi!.textContent).toContain('rotate freely');
+        expect(wavyLi!.textContent).not.toContain('Free rotation');
     });
 
     it('mentions Triangles and its approximate piece counts', () => {
@@ -299,6 +299,16 @@ describe('createInfoModal — How to Play section', () => {
         expect(wavyIdx).toBeGreaterThan(-1);
         // Wavy should be near (within ~60 chars of) the Free rotation phrase.
         expect(Math.abs(wavyIdx - freeRotIdx)).toBeLessThan(60);
+    });
+
+    it('attributes 90° rotation to Classic and Fractal', () => {
+        createInfoModal({ container });
+        const text = howToPlaySection().textContent ?? '';
+        const ninetyIdx = text.indexOf('90° rotation');
+        expect(ninetyIdx).toBeGreaterThan(-1);
+        const context = text.slice(ninetyIdx, ninetyIdx + 60);
+        expect(context).toContain('Classic');
+        expect(context).toContain('Fractal');
     });
 });
 
