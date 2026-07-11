@@ -8,8 +8,8 @@
  * still tune the shape they need.
  */
 
-import type { Edge, GameState, Piece, Point } from '../model/types.js';
-import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
+import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
+import { buildGroupIndexes, buildPiecesById, rotatePoint } from '../model/helpers.js';
 
 /**
  * Re-export `buildPiecesById` for tests that call helpers expecting the
@@ -173,4 +173,30 @@ export function makeMatedPiecePair(): { piece0: Piece; piece1: Piece } {
     ] });
 
     return { piece0, piece1 };
+}
+
+/**
+ * Single-piece group (the piece at local offset (0,0)) positioned so the
+ * group's bbox center sits at `center` under `rotation`.
+ *
+ * Assumes a 100×100 piece — e.g. one of `makeMatedPiecePair` — so the
+ * un-rotated bbox center is at local (50, 50). Placing by center rather
+ * than by raw position matters for rotation tests: pivot-preserving
+ * rotation (`rotateGroup`) keeps the bbox center fixed in world space,
+ * so tests that reason about snap distances pin that point, not
+ * `position`.
+ */
+export function makeCenteredGroup(
+    id: number,
+    pieceId: number,
+    center: Point,
+    rotation = 0,
+): PieceGroup {
+    const r = rotatePoint({ x: 50, y: 50 }, rotation);
+    return {
+        id,
+        pieces: new Map([[pieceId, { x: 0, y: 0 }]]),
+        position: { x: center.x - r.x, y: center.y - r.y },
+        rotation,
+    };
 }

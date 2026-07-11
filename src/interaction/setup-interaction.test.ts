@@ -20,8 +20,7 @@ import { SelectionManager } from './selection-manager.js';
 import { RotationFocus } from './rotation-focus.js';
 import type { Renderer } from '../renderer/types.js';
 import type { GameState, PieceGroup } from '../model/types.js';
-import { makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
-import { rotatePoint } from '../model/helpers.js';
+import { makeCenteredGroup, makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
 import { loadOffsetDragPreference } from '../ui/offset-drag.js';
 
 vi.mock('../ui/offset-drag.js', () => ({
@@ -634,14 +633,8 @@ describe('snap proximity rotation', () => {
      */
     function makeFreeRotationState(rotationMode: GameState['rotationMode'] = 'free'): GameState {
         const { piece0, piece1 } = makeMatedPiecePair();
-        const r = rotatePoint({ x: 50, y: 50 }, 18);
-        const group7: PieceGroup = { id: 7, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 };
-        const group8: PieceGroup = {
-            id: 8,
-            pieces: new Map([[1, { x: 0, y: 0 }]]),
-            position: { x: 170 - r.x, y: 50 - r.y },
-            rotation: 18,
-        };
+        const group7 = makeCenteredGroup(7, 0, { x: 50, y: 50 });
+        const group8 = makeCenteredGroup(8, 1, { x: 170, y: 50 }, 18);
         return makeGameState({ pieces: [piece0, piece1], groups: [group7, group8], rotationMode });
     }
 
