@@ -157,9 +157,9 @@ function buildHowToPlaySection(): HTMLElement {
         ['strong', 'Rotate'],
         ' (when rotation is enabled) — Tap any piece to bring up rotation controls next to it. With ',
         ['strong', '90° rotation'],
-        ', the ↺ / ↻ buttons rotate the focused piece (and anything merged with it) by a quarter-turn. With ',
+        ' (Classic and Fractal puzzles), the ↺ / ↻ buttons rotate the focused piece by a quarter-turn. With ',
         ['strong', 'Free rotation'],
-        " (Wavy and Triangles puzzles), a single round handle below the focused piece lets you drag to rotate continuously — the group follows your finger like a dial. Pieces snap together when their rotations are close to alignment; how close they need to be depends on your ",
+        " (Wavy and Triangles puzzles), a single round handle below the focused piece lets you drag to rotate continuously — the piece follows your finger like a dial. Pieces snap together when their rotations are close to alignment; how close they need to be depends on your ",
         ['strong', 'Snap distance'],
         ' setting.',
     ]);
@@ -200,18 +200,12 @@ function buildCutStylesSection(): HTMLElement {
     const wavyLi = document.createElement('li');
     appendInline(wavyLi, [
         ['strong', 'Wavy'],
-        ' — Smooth sinewave edges with hand-traced tab shapes — a more organic, dramatic take on Classic. Options:',
+        ' — Smooth sinewave edges with hand-traced tab shapes — a more organic, dramatic take on Classic. Enabling rotation lets pieces rotate freely to any angle. Options:',
     ]);
     const wavySub = document.createElement('ul');
     appendInlineLi(wavySub, [
         ['strong', 'Borderless'],
         ' — Removes the flat frame so every piece has a wavy tab or blank on all four sides (a harder puzzle). Pick it in the New Game dialog when Wavy is selected.',
-    ]);
-    appendInlineLi(wavySub, [
-        ['strong', 'Free rotation'],
-        ' (when rotation is also enabled) — Pieces rotate continuously to any angle instead of snapping to the four 90° orientations. See ',
-        ['em', 'How to Play'],
-        ' for the rotation controls.',
     ]);
     wavyLi.appendChild(wavySub);
     list.appendChild(wavyLi);
