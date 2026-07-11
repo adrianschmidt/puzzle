@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import type { GameState, PieceGroup, Point } from '../model/types.js';
-import { makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
-import { getGroup, rotatePoint } from '../model/helpers.js';
+import type { GameState, Point } from '../model/types.js';
+import { makeCenteredGroup, makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
+import { getGroup } from '../model/helpers.js';
 import { SnapProximityRotationController } from './snap-proximity-rotation-controller.js';
 
 const D = 40;
@@ -18,14 +18,8 @@ function makePairState(
     rotationMode: GameState['rotationMode'] = 'free',
 ): GameState {
     const { piece0, piece1 } = makeMatedPiecePair();
-    const r = rotatePoint({ x: 50, y: 50 }, rotation);
-    const group0: PieceGroup = { id: 10, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 };
-    const group1: PieceGroup = {
-        id: 11,
-        pieces: new Map([[1, { x: 0, y: 0 }]]),
-        position: { x: center.x - r.x, y: center.y - r.y },
-        rotation,
-    };
+    const group0 = makeCenteredGroup(10, 0, { x: 50, y: 50 });
+    const group1 = makeCenteredGroup(11, 1, center, rotation);
     return makeGameState({ pieces: [piece0, piece1], groups: [group0, group1], rotationMode });
 }
 

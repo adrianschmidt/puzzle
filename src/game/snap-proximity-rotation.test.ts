@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, PieceGroup, Point } from '../model/types.js';
-import { makeGameState, makeMatedPiecePair, makePiece } from '../test-helpers/fixtures.js';
+import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece } from '../test-helpers/fixtures.js';
 import { buildProximityContext, computeSnapProximityRotation, type ProximityContext } from './snap-proximity-rotation.js';
-import { rotatePoint, getGroup } from '../model/helpers.js';
+import { getGroup } from '../model/helpers.js';
 import { rotateGroup } from './rotate-group.js';
 
 const D = 40; // tolerancePx used throughout these tests
@@ -15,17 +15,17 @@ function makeGroupOf(id: number, pieceId: number, position: Point, rotation = 0)
 
 /**
  * State with piece 0 fixed at the origin (group 10) and piece 1 in its
- * own group (11). Correct placement for group 11 is position (100, 0),
- * i.e. bbox center (150, 50).
+ * own group (11), placed by bbox center. Correct placement for group 11
+ * is bbox center (150, 50).
  */
 function makePairState(
-    group1Position: Point,
+    group1Center: Point,
     group1Rotation = 0,
     opts: { rotationMode?: GameState['rotationMode'] } = {},
 ): GameState {
     const { piece0, piece1 } = makeMatedPiecePair();
     const group0 = makeGroupOf(10, 0, { x: 0, y: 0 });
-    const group1 = makeGroupOf(11, 1, group1Position, group1Rotation);
+    const group1 = makeCenteredGroup(11, 1, group1Center, group1Rotation);
     return makeGameState({
         pieces: [piece0, piece1],
         groups: [group0, group1],
@@ -37,7 +37,7 @@ function makePairState(
 
 describe('buildProximityContext', () => {
     it('returns a context with the border candidates and bbox center', () => {
-        const state = makePairState({ x: 300, y: 0 });
+        const state = makePairState({ x: 350, y: 50 });
         const ctx = buildProximityContext(state, 11, TOL);
 
         expect(ctx).not.toBeNull();
@@ -51,13 +51,13 @@ describe('buildProximityContext', () => {
     });
 
     it('returns null unless rotation mode is free', () => {
-        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: 'none' }), 11, TOL)).toBeNull();
-        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: 'quarter-turn' }), 11, TOL)).toBeNull();
-        expect(buildProximityContext(makePairState({ x: 300, y: 0 }, 0, { rotationMode: undefined }), 11, TOL)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 350, y: 50 }, 0, { rotationMode: 'none' }), 11, TOL)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 350, y: 50 }, 0, { rotationMode: 'quarter-turn' }), 11, TOL)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 350, y: 50 }, 0, { rotationMode: undefined }), 11, TOL)).toBeNull();
     });
 
     it('returns null for an unknown group', () => {
-        expect(buildProximityContext(makePairState({ x: 300, y: 0 }), 99, TOL)).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 350, y: 50 }), 99, TOL)).toBeNull();
     });
 
     it('returns null when the group has no cross-group mates', () => {
@@ -79,11 +79,11 @@ describe('buildProximityContext', () => {
     });
 
     it('returns null for a non-positive tolerance', () => {
-        expect(buildProximityContext(makePairState({ x: 120, y: 0 }), 11, { ...TOL, tolerancePx: 0 })).toBeNull();
+        expect(buildProximityContext(makePairState({ x: 170, y: 50 }), 11, { ...TOL, tolerancePx: 0 })).toBeNull();
     });
 
     it('returns null for non-finite tolerances (corrupted-state hardening)', () => {
-        const state = () => makePairState({ x: 120, y: 0 });
+        const state = () => makePairState({ x: 170, y: 50 });
         expect(buildProximityContext(state(), 11, { ...TOL, tolerancePx: NaN })).toBeNull();
         expect(buildProximityContext(state(), 11, { ...TOL, tolerancePx: Infinity })).toBeNull();
         expect(buildProximityContext(state(), 11, { ...TOL, rotationToleranceDeg: NaN })).toBeNull();
@@ -91,15 +91,9 @@ describe('buildProximityContext', () => {
     });
 });
 
-/** Group-11 position that puts its bbox center at `center` for a given rotation. */
-function positionForCenter(center: Point, rotation: number): Point {
-    const r = rotatePoint({ x: 50, y: 50 }, rotation);
-    return { x: center.x - r.x, y: center.y - r.y };
-}
-
 /** Build the pair state + context in one go; throws if the context is unexpectedly null. */
 function makeComputeSetup(center: Point, rotation: number): { state: GameState; ctx: ProximityContext } {
-    const state = makePairState(positionForCenter(center, rotation), rotation);
+    const state = makePairState(center, rotation);
     const ctx = buildProximityContext(state, 11, TOL);
     if (!ctx) throw new Error('expected a proximity context');
     return { state, ctx };
@@ -138,7 +132,7 @@ function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: Proxi
     const group1Center = closest === 'right' ? { x: 162, y: 50 } : { x: 158, y: 50 };
     const group2Position = closest === 'right' ? { x: 204, y: 0 } : { x: 196, y: 0 };
     const group0 = makeGroupOf(10, 0, { x: 0, y: 0 });
-    const group1 = makeGroupOf(11, 1, positionForCenter(group1Center, 16), 16);
+    const group1 = makeCenteredGroup(11, 1, group1Center, 16);
     const group2 = makeGroupOf(12, 2, group2Position);
     const state = makeGameState({
         pieces: [piece0, piece1, piece2],
