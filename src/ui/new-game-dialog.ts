@@ -50,14 +50,6 @@ export interface NewGameSelection {
     wavyConfig?: WavyDialogConfig;
     /** Whether the player ticked the top-level "Enable rotation" checkbox. */
     rotationEnabled: boolean;
-    /**
-     * True iff cut style is wavy or composable AND rotation is enabled AND
-     * the user ticked the free-rotation sub-checkbox. Used by the host to
-     * pick `rotationMode: 'free'` instead of `'quarter-turn'`.
-     * Triangles is deliberately not included: the host maps its plain
-     * rotation toggle straight to free rotation (see startNewGame).
-     */
-    freeRotation: boolean;
     imageSource: string;
     imageCategory: string;
     vibrant: boolean;
@@ -78,8 +70,6 @@ export interface NewGameDialogOptions {
     savedWavyConfig?: WavyDialogConfig;
     /** Previously saved rotation-enabled preference (defaults to false). */
     savedRotationEnabled?: boolean;
-    /** Previously saved free-rotation-enabled preference (defaults to false). */
-    savedFreeRotationEnabled?: boolean;
     /** Whether the composable base cut generator supports borderless mode. */
     composableSupportsBorderless?: boolean;
     /** Previously saved image source preference. */
@@ -660,27 +650,6 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         options.savedRotationEnabled ?? false,
     );
 
-    // Free rotation sub-checkbox — visible only when rotation is enabled AND
-    // the cut style supports free rotation (wavy or composable). State
-    // persists across visibility toggles.
-    const freeRotationRow = document.createElement('div');
-    freeRotationRow.className = 'free-rotation-row';
-    const freeRotationCheckbox = appendCheckboxRow(
-        freeRotationRow,
-        'Free rotation',
-        options.savedFreeRotationEnabled ?? false,
-    );
-
-    function updateFreeRotationVisibility(): void {
-        const visible =
-            rotationCheckbox.checked &&
-            (currentCutStyleId === 'wavy' || currentCutStyleId === 'composable');
-        freeRotationRow.style.display = visible ? 'block' : 'none';
-    }
-
-    rotationCheckbox.addEventListener('change', updateFreeRotationVisibility);
-    updateFreeRotationVisibility();
-
     const sizeSection = buildSizeSection({
         selectedSizeId,
         getCutStyleId: () => currentCutStyleId,
@@ -699,10 +668,6 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
                     ? wavySection.getValues()
                     : undefined,
                 rotationEnabled: rotationCheckbox.checked,
-                freeRotation:
-                    rotationCheckbox.checked &&
-                    (currentCutStyleId === 'wavy' || currentCutStyleId === 'composable') &&
-                    freeRotationCheckbox.checked,
                 ...imageSourceSection.getValues(),
             });
         },
@@ -717,7 +682,6 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             fractalSection.setVisible(id === 'fractal');
             wavySection.setVisible(id === 'wavy');
             composableSection.setVisible(id === 'composable');
-            updateFreeRotationVisibility();
             if (id === 'wavy' || id === 'triangles'
                 || (id === 'composable' && composableSection.getSelectedTabGenerator() === 'traced')) {
                 options.onPreloadTracedTabs?.();
@@ -739,7 +703,6 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
 
     dialog.appendChild(cutStyleSection);
     dialog.appendChild(rotationRow);
-    dialog.appendChild(freeRotationRow);
     dialog.appendChild(fractalSection.element);
     dialog.appendChild(wavySection.element);
     dialog.appendChild(imageSourceSection.element);
