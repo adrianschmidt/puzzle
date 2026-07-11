@@ -169,56 +169,6 @@ function buildHowToPlaySection(): HTMLElement {
     return section;
 }
 
-function buildCutStylesSection(): HTMLElement {
-    const section = document.createElement('section');
-    section.className = 'info-section';
-
-    const heading = document.createElement('h3');
-    heading.textContent = 'Cut Styles';
-    section.appendChild(heading);
-
-    const list = document.createElement('ul');
-
-    appendInlineLi(list, [
-        ['strong', 'Classic'],
-        ' — Traditional jigsaw tabs on a rectangular grid',
-    ]);
-
-    const fractalLi = document.createElement('li');
-    appendInline(fractalLi, [
-        ['strong', 'Fractal'],
-        ' — Organic circle-packing cuts. Options:',
-    ]);
-    const fractalSub = document.createElement('ul');
-    appendInlineLi(fractalSub, [
-        ['strong', 'Borderless'],
-        " — No pieces with flat edges, so it's not obvious which pieces make up the frame of the puzzle",
-    ]);
-    fractalLi.appendChild(fractalSub);
-    list.appendChild(fractalLi);
-
-    const wavyLi = document.createElement('li');
-    appendInline(wavyLi, [
-        ['strong', 'Wavy'],
-        ' — Smooth sinewave edges with hand-traced tab shapes — a more organic, dramatic take on Classic. Enabling rotation lets pieces rotate freely to any angle. Options:',
-    ]);
-    const wavySub = document.createElement('ul');
-    appendInlineLi(wavySub, [
-        ['strong', 'Borderless'],
-        ' — Removes the flat frame so every piece has a wavy tab or blank on all four sides (a harder puzzle). Pick it in the New Game dialog when Wavy is selected.',
-    ]);
-    wavyLi.appendChild(wavySub);
-    list.appendChild(wavyLi);
-
-    appendInlineLi(list, [
-        ['strong', 'Triangles'],
-        " — An irregular lattice of triangles with flowing cuts and hand-traced tabs. Piece counts adapt to each photo's shape, so they're approximate. Enabling rotation lets pieces rotate freely to any angle.",
-    ]);
-
-    section.appendChild(list);
-    return section;
-}
-
 function buildSettingsSection(args: {
     onToleranceChanged?: (id: string) => void;
 }): HTMLElement {
@@ -748,7 +698,6 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     }
 
     content.appendChild(buildHowToPlaySection());
-    content.appendChild(buildCutStylesSection());
     content.appendChild(buildSettingsSection({ onToleranceChanged }));
     content.appendChild(buildCreditsSection());
     content.appendChild(buildAboutSection());

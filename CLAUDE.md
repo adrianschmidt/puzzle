@@ -9,7 +9,7 @@ actually need explained, and leave out what they'd already expect.
 
 The requirement is that the help text stays **correct**, not that every
 user-visible behaviour is documented. When a change makes an existing
-sentence in the **How to Play**, **Cut Styles**, or **Settings** sections
+sentence in the **How to Play** or **Settings** sections
 wrong or misleading, fix it in the same PR. When a change removes a feature
 the modal describes, remove that description too.
 

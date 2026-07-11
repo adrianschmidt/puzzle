@@ -176,83 +176,25 @@ describe('createInfoModal', () => {
         expect(firstSection?.classList.contains('share-section')).toBe(true);
     });
 
-    it('describes rotation in both the How to Play and Cut Styles sections', () => {
+    it('describes rotation in the How to Play section', () => {
         createInfoModal({ container });
 
         const sections = container.querySelectorAll<HTMLElement>('section.info-section');
         const howToPlay = Array.from(sections).find(
             (s) => s.querySelector('h3')?.textContent === 'How to Play',
         );
-        const cutStyles = Array.from(sections).find(
-            (s) => s.querySelector('h3')?.textContent === 'Cut Styles',
-        );
 
         expect(howToPlay?.textContent).toContain('Free rotation');
-        expect(cutStyles?.textContent).toContain('rotate freely');
-    });
-});
-
-describe('createInfoModal — Cut Styles section', () => {
-    let container: HTMLElement;
-
-    beforeEach(() => {
-        container = document.createElement('div');
-        document.body.appendChild(container);
     });
 
-    afterEach(() => {
-        while (document.body.firstChild) {
-            document.body.removeChild(document.body.firstChild);
-        }
-    });
+    it('does not render a Cut Styles section', () => {
+        createInfoModal({ container });
 
-    function cutStylesSection(): HTMLElement {
-        // Locate the Cut Styles section by its heading text.
         const headings = container.querySelectorAll<HTMLHeadingElement>(
             '.info-section > h3',
         );
         const match = [...headings].find((h) => h.textContent === 'Cut Styles');
-        return match!.parentElement!;
-    }
-
-    it('mentions Wavy as a cut style', () => {
-        createInfoModal({ container });
-        expect(cutStylesSection().textContent).toContain('Wavy');
-    });
-
-    it('does not mention Composable in the help text', () => {
-        createInfoModal({ container });
-        expect(cutStylesSection().textContent).not.toContain('Composable');
-    });
-
-    it('says Wavy rotates freely, with no option sub-bullet', () => {
-        createInfoModal({ container });
-        const lis = cutStylesSection().querySelectorAll<HTMLLIElement>('ul > li');
-        const wavyLi = [...lis].find((li) => li.textContent?.includes('Wavy'));
-        expect(wavyLi).toBeDefined();
-        expect(wavyLi!.textContent).toContain('rotate freely');
-        expect(wavyLi!.textContent).not.toContain('Free rotation');
-    });
-
-    it('mentions Triangles and its approximate piece counts', () => {
-        createInfoModal({ container });
-        const lis = cutStylesSection().querySelectorAll<HTMLLIElement>('ul > li');
-        const trianglesLi = [...lis].find((li) =>
-            li.textContent?.includes('Triangles'),
-        );
-        expect(trianglesLi).toBeDefined();
-        expect(trianglesLi!.textContent).toContain('approximate');
-    });
-
-    it('mentions Borderless in the Wavy cut-style help', () => {
-        createInfoModal({ container });
-        // Find the Wavy <li> specifically — Fractal already has a Borderless
-        // sub-bullet, so we scope to avoid a false positive from that bullet.
-        const section = cutStylesSection();
-        const lis = section.querySelectorAll<HTMLLIElement>('ul > li');
-        const wavyLi = [...lis].find((li) => li.textContent?.includes('Wavy'));
-        expect(wavyLi).toBeDefined();
-        expect(wavyLi!.textContent).toContain('Borderless');
+        expect(match).toBeUndefined();
     });
 });
 
