@@ -55,8 +55,6 @@ import {
     yieldForPaint,
     loadRotationEnabledPreference,
     saveRotationEnabledPreference,
-    loadFreeRotationEnabledPreference,
-    saveFreeRotationEnabledPreference,
     type FractalDialogConfig,
     type WavyDialogConfig,
 } from './ui/index.js';
@@ -79,6 +77,7 @@ import {
 import {
     loadCutStylePreference,
     saveCutStylePreference,
+    rotationModeForNewGame,
 } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
 import {
@@ -559,7 +558,7 @@ function zoomToFitCompletedPuzzle(
     tabGenerator?: string;
     tabConfig?: Record<string, unknown>;
     minPieceArea?: number;
-    rotation?: 'none' | 'quarter-turn' | 'free';
+    rotation?: 'none' | 'free';
     imageSource?: 'random' | 'blank';
     seed?: number;
 }) => {
@@ -588,7 +587,6 @@ function zoomToFitCompletedPuzzle(
         undefined, // wavyConfig
         loadVibrantPreference(),
         rotation !== 'none',
-        rotation === 'free',
         overrides?.seed,
     );
 };
@@ -902,7 +900,6 @@ async function startNewGame(
     wavyConfig?: WavyDialogConfig,
     vibrant: boolean = false,
     rotationEnabled: boolean = false,
-    freeRotation: boolean = false,
     seed?: number,
 ): Promise<void> {
     showLoadingOverlay();
@@ -955,18 +952,7 @@ async function startNewGame(
             }
         }
 
-        let rotationMode: 'none' | 'quarter-turn' | 'free';
-        if (!rotationEnabled) {
-            rotationMode = 'none';
-        } else if (cutStyle === 'triangles') {
-            // Triangles offers no quarter-turn mode: 90° steps don't match a
-            // triangle lattice, so enabling rotation means free rotation.
-            rotationMode = 'free';
-        } else if (freeRotation && (cutStyle === 'wavy' || cutStyle === 'composable')) {
-            rotationMode = 'free';
-        } else {
-            rotationMode = 'quarter-turn';
-        }
+        const rotationMode = rotationModeForNewGame(cutStyle, rotationEnabled);
 
         const generatorFractalConfig = fractalConfig
             ? { borderless: fractalConfig.borderless }
@@ -1048,7 +1034,6 @@ createNewGameButton({
         const savedComposableConfig = loadComposableConfigPreference();
         const savedFractalConfig = loadFractalConfigPreference();
         const savedRotationEnabled = loadRotationEnabledPreference();
-        const savedFreeRotationEnabled = loadFreeRotationEnabledPreference();
         const savedImageSource = loadImageSourcePreference();
         const savedImageCategory = loadImageCategoryPreference();
         const savedVibrant = loadVibrantPreference();
@@ -1060,7 +1045,6 @@ createNewGameButton({
             savedFractalConfig: savedFractalConfig,
             savedWavyConfig: loadWavyConfigPreference(),
             savedRotationEnabled: savedRotationEnabled,
-            savedFreeRotationEnabled: savedFreeRotationEnabled,
             composableSupportsBorderless:
                 getBaseCutGenerator('sine').supportsBorderless ?? false,
             savedImageSource: savedImageSource,
@@ -1075,7 +1059,7 @@ createNewGameButton({
                 // surfacing as an unhandled-rejection warning.
                 preloadTracedTabGenerator().catch(() => {});
             },
-            onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, freeRotation, imageSource, imageCategory, vibrant }) => {
+            onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, imageSource, imageCategory, vibrant }) => {
                 saveSizePreference(sizeId);
                 saveCutStylePreference(cutStyleId);
                 if (composableConfig) {
@@ -1088,7 +1072,6 @@ createNewGameButton({
                     saveWavyConfigPreference(wavyConfig);
                 }
                 saveRotationEnabledPreference(rotationEnabled);
-                saveFreeRotationEnabledPreference(freeRotation);
                 saveImageSourcePreference(imageSource);
                 saveImageCategoryPreference(imageCategory);
                 saveVibrantPreference(vibrant);
@@ -1107,7 +1090,6 @@ createNewGameButton({
                     wavyConfig,
                     vibrant,
                     rotationEnabled,
-                    freeRotation,
                 );
                 void runWithErrorReport({
                     // The chunk-load path (traced tabs lazy import) is the most
@@ -1480,7 +1462,6 @@ void (async () => {
         const preferredFractalConfig = loadFractalConfigPreference();
         const preferredWavyConfig = loadWavyConfigPreference();
         const preferredRotationEnabled = loadRotationEnabledPreference();
-        const preferredFreeRotationEnabled = loadFreeRotationEnabledPreference();
         await startNewGame(
             toGridSize(option),
             preferredCutStyle,
@@ -1493,7 +1474,6 @@ void (async () => {
             preferredWavyConfig,
             loadVibrantPreference(),
             preferredRotationEnabled,
-            preferredFreeRotationEnabled,
         );
     } finally {
         hideLoadingOverlay();
