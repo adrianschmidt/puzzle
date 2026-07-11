@@ -180,9 +180,3 @@ export {
     loadRotationEnabledPreference,
     saveRotationEnabledPreference,
 } from './rotation-preference.js';
-
-export {
-    FREE_ROTATION_ENABLED_PREFERENCE_KEY,
-    loadFreeRotationEnabledPreference,
-    saveFreeRotationEnabledPreference,
-} from './free-rotation-preference.js';
