@@ -250,14 +250,22 @@ describe('adoptSharedBackgroundColor', () => {
         localStorage.clear();
         document.documentElement.style.removeProperty(CSS_CUSTOM_PROPERTY);
     });
+    afterEach(() => vi.restoreAllMocks());
 
     it('adopts and persists when no preference exists', () => {
+        // Stub a resolvable color so applyBackgroundColor's chrome path
+        // doesn't spuriously warn (jsdom can't resolve var() on its own).
+        vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+            backgroundColor: 'rgb(27, 94, 32)',
+        } as CSSStyleDeclaration);
+        const warn = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
         const outcome = adoptSharedBackgroundColor('green-darker');
         expect(outcome).toBe('adopted');
         expect(localStorage.getItem(COLOR_PREFERENCE_KEY)).toBe('green-darker');
         expect(
             document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY),
         ).toBe('var(--color-green-darker)');
+        expect(warn).not.toHaveBeenCalled();
     });
 
     it('keeps an existing preference untouched', () => {
@@ -276,5 +284,19 @@ describe('adoptSharedBackgroundColor', () => {
     it('rejects an unknown swatch id without storing anything', () => {
         expect(adoptSharedBackgroundColor('hotdog-stand')).toBe('invalid');
         expect(localStorage.getItem(COLOR_PREFERENCE_KEY)).toBeNull();
+    });
+
+    it('keeps its own color when persisting the write throws', () => {
+        // Safari private-mode-style quota failure: reads succeed (no
+        // existing preference), but the write throws. The helper should
+        // land in the same 'kept-own' path as unreadable storage rather
+        // than letting the exception escape.
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new Error('quota');
+        });
+        expect(adoptSharedBackgroundColor('green-darker')).toBe('kept-own');
+        expect(
+            document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY),
+        ).not.toBe('var(--color-green-darker)');
     });
 });
