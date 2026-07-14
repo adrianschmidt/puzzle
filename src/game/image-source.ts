@@ -24,3 +24,9 @@ export const saveImageSourcePreference = store.save;
  * Returns `undefined` if no preference is saved.
  */
 export const loadImageSourcePreference = store.load;
+
+/**
+ * Whether any image-source preference is stored — used with the
+ * category check to detect a first-run visitor.
+ */
+export const imageSourcePreferenceExists = store.exists;

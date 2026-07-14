@@ -156,6 +156,12 @@ export const saveImageCategoryPreference = categoryStore.save;
  */
 export const loadImageCategoryPreference = categoryStore.load;
 
+/**
+ * Whether any image-category preference is stored — used with the
+ * source check to detect a first-run visitor.
+ */
+export const imageCategoryPreferenceExists = categoryStore.exists;
+
 const vibrantStore = createBooleanPreference({
     key: VIBRANT_PREFERENCE_KEY,
     defaultValue: false,
