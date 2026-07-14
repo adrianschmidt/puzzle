@@ -78,6 +78,14 @@ export interface PuzzleSharedData {
     includesProgress: boolean;
 }
 
+/** Data attached to `background-color-changed`. */
+export interface BackgroundColorChangedData {
+    /** Swatch id before the switch. */
+    from: string;
+    /** Swatch id after the switch. */
+    to: string;
+}
+
 /**
  * Data attached to `traced-chunk-preload-started`.
  *
@@ -406,6 +414,7 @@ export function initAnalytics(): void {
 export function track(name: 'new-game-started', data: NewGameData): void;
 export function track(name: 'puzzle-completed', data: PuzzleCompletedData): void;
 export function track(name: 'puzzle-shared', data: PuzzleSharedData): void;
+export function track(name: 'background-color-changed', data: BackgroundColorChangedData): void;
 export function track(name: 'traced-chunk-preload-started', data: TracedChunkPreloadStartedData): void;
 export function track(name: 'traced-chunk-loaded', data: TracedChunkLoadedData): void;
 export function track(name: 'traced-chunk-load-failed', data: TracedChunkLoadFailedData): void;
