@@ -117,13 +117,14 @@ import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
-import { classifyImageSource } from './app/classify-image-source.js';
+import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
+import {
+    BUNDLED_IMAGE_URL,
+    BUNDLED_IMAGE_SIZE,
+    BUNDLED_IMAGE_ATTRIBUTION,
+} from './app/bundled-image.js';
 import { initPwaUpdates } from './pwa/register.js';
 import { initSwErrorReporting } from './pwa/sw-error-bridge.js';
-
-/** Fallback image used when Unsplash is unavailable. */
-const FALLBACK_IMAGE_URL = 'puzzle-image.jpg';
-const FALLBACK_IMAGE_SIZE = { width: 800, height: 600 };
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -916,9 +917,9 @@ async function startNewGame(
             height: app.clientHeight || window.innerHeight,
         };
 
-        let imageUrl = FALLBACK_IMAGE_URL;
-        let imageSize = FALLBACK_IMAGE_SIZE;
-        let attribution: GameState['attribution'];
+        let imageUrl: string = BUNDLED_IMAGE_URL;
+        let imageSize = BUNDLED_IMAGE_SIZE;
+        let attribution: GameState['attribution'] = BUNDLED_IMAGE_ATTRIBUTION;
 
         // Blank puzzle: white image, no photo
         if (imageSource === 'blank') {
@@ -931,10 +932,16 @@ async function startNewGame(
             ctx.fillRect(0, 0, 1080, 720);
             imageUrl = canvas.toDataURL('image/png');
             imageSize = { width: 1080, height: 720 };
+            attribution = undefined;
         }
 
-        // Try to fetch a random Unsplash image (unless blank was selected)
-        const accessKey = imageSource !== 'blank' ? getUnsplashAccessKey() : null;
+        // Try to fetch a random Unsplash image — unless the user picked a
+        // blank puzzle, or this is the deterministic first-run puzzle
+        // (which uses the bundled defaults set above).
+        const accessKey =
+            imageSource !== 'blank' && imageSource !== 'first-run'
+                ? getUnsplashAccessKey()
+                : null;
 
         if (accessKey) {
             const resolved = await resolveUnsplashImage(accessKey, imageCategory ?? 'any', vibrant);
@@ -996,7 +1003,10 @@ async function startNewGame(
             cols: gridSize.cols,
             rows: gridSize.rows,
             pieceCount: state.pieces.length,
-            imageSource: classifyImageSource(state.imageUrl),
+            // resolveNewGameImageSource honors the 'first-run' sentinel, which
+            // classifyImageSource can't distinguish from a fallback-after-
+            // failed-fetch (both reuse the bundled URL).
+            imageSource: resolveNewGameImageSource(imageSource, state.imageUrl),
         };
         if (generatorWavyConfig) {
             data.traceSetVersion = generatorWavyConfig.traceSetVersion;
