@@ -30,3 +30,21 @@ export function classifyImageSource(
     }
     return 'fallback';
 }
+
+/**
+ * Resolve the analytics image-source label for a freshly-started game.
+ *
+ * A first-run start reuses the bundled image URL, so
+ * {@link classifyImageSource} alone can't tell it from an
+ * Unsplash-fetch-failure fallback (both land on the bundled URL). The
+ * caller's `'first-run'` sentinel is the only signal, so honor it here;
+ * otherwise classify by URL.
+ */
+export function resolveNewGameImageSource(
+    imageSource: string | undefined,
+    imageUrl: string,
+): 'first-run' | ReturnType<typeof classifyImageSource> {
+    return imageSource === 'first-run'
+        ? 'first-run'
+        : classifyImageSource(imageUrl);
+}
