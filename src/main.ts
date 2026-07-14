@@ -1243,6 +1243,10 @@ const backgroundColorPicker = createBackgroundColorPicker({
     container: app,
     selectedId: currentColorId,
     onSelect: (id) => {
+        // Re-selecting the current swatch is a no-op, not a switch.
+        if (id !== currentColorId) {
+            track('background-color-changed', { from: currentColorId, to: id });
+        }
         currentColorId = id;
         saveColorPreference(id);
         applyBackgroundColor(id);

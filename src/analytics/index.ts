@@ -5,6 +5,7 @@ export type {
     NewGameData,
     PuzzleCompletedData,
     PuzzleSharedData,
+    BackgroundColorChangedData,
     TracedChunkPreloadStartedData,
     TracedChunkLoadedData,
     TracedChunkLoadFailedData,
