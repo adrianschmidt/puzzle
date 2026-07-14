@@ -27,7 +27,7 @@ export interface PieceOutlineColorPickerOptions {
 export function createPieceOutlineColorPicker(
     options: PieceOutlineColorPickerOptions,
 ): () => void {
-    return createSwatchPicker({
+    const picker = createSwatchPicker({
         container: options.container,
         button: {
             // No glyph — the button's background previews the current color.
@@ -42,4 +42,5 @@ export function createPieceOutlineColorPicker(
         onSelect: options.onSelect,
         columnCount: 20,
     });
+    return () => picker.dispose();
 }

@@ -105,11 +105,24 @@ export function createSwatchGrid(
     return grid;
 }
 
+/** Handle returned by {@link createSwatchPicker}. */
+export interface SwatchPickerHandle {
+    /**
+     * Update the highlighted swatch when the selection changed outside
+     * the picker (e.g. a share link adopted a background color). Does
+     * not fire `onSelect`. Dismisses an open panel; the grid is rebuilt
+     * from the current id on the next open.
+     */
+    setSelected: (id: string) => void;
+    /** Remove the picker (button + any open panel) from the DOM. */
+    dispose: () => void;
+}
+
 /**
  * Create and attach the swatch picker (button + popover). Returns a
- * cleanup function that removes the picker from the DOM.
+ * handle with `setSelected` and `dispose`.
  */
-export function createSwatchPicker(options: SwatchPickerOptions): () => void {
+export function createSwatchPicker(options: SwatchPickerOptions): SwatchPickerHandle {
     const { container, swatches, onSelect, ariaLabel, columnCount, panelClassName } =
         options;
     let currentId = options.selectedId;
@@ -169,8 +182,15 @@ export function createSwatchPicker(options: SwatchPickerOptions): () => void {
 
     container.appendChild(button);
 
-    return () => {
-        dismissPanel();
-        button.remove();
+    return {
+        setSelected(id) {
+            if (id === currentId) return;
+            currentId = id;
+            dismissPanel();
+        },
+        dispose() {
+            dismissPanel();
+            button.remove();
+        },
     };
 }

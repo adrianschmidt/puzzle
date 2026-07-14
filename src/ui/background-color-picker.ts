@@ -5,7 +5,7 @@
  */
 
 import { BACKGROUND_COLOR_PRESETS } from './background-color.js';
-import { createSwatchPicker } from './swatch-picker.js';
+import { createSwatchPicker, type SwatchPickerHandle } from './swatch-picker.js';
 
 export interface BackgroundColorPickerOptions {
     /** The container to append the button to. */
@@ -18,11 +18,11 @@ export interface BackgroundColorPickerOptions {
 
 /**
  * Create and attach the background color picker (button + popover).
- * Returns a cleanup function that removes the picker from the DOM.
+ * Returns a handle with `setSelected` and `dispose`.
  */
 export function createBackgroundColorPicker(
     options: BackgroundColorPickerOptions,
-): () => void {
+): SwatchPickerHandle {
     return createSwatchPicker({
         container: options.container,
         button: {
