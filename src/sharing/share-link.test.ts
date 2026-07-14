@@ -1360,3 +1360,46 @@ describe('share-link triangles traceSetVersion (tf)', () => {
         expect(decoded!.r).toBe('free');
     });
 });
+
+describe('share-link background color (bgc)', () => {
+    it('round-trips a payload with bgc', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [1080, 722], g: [8, 6],
+            c: 'classic', s: 42, r: 'none',
+            bgc: 'indigo-darker',
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded?.bgc).toBe('indigo-darker');
+    });
+
+    it('tolerates an absent bgc (pre-feature links)', () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [1080, 722], g: [8, 6],
+            c: 'classic', s: 42, r: 'none',
+        };
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded).not.toBeNull();
+        expect(decoded?.bgc).toBeUndefined();
+    });
+
+    it('rejects a non-string bgc', () => {
+        const payload = {
+            v: 1, i: 'x', is: [1080, 722], g: [8, 6],
+            c: 'classic', s: 42, r: 'none',
+            bgc: 7,
+        } as unknown as SharePayload;
+        expect(decodePayload(encodePayload(payload))).toBeNull();
+    });
+
+    it('gameStateToPayload writes bgc from options and omits it otherwise', () => {
+        const state = makeGameState({ cutStyle: 'classic', seed: 7 });
+        const withColor = gameStateToPayload(state, {
+            includeProgress: false,
+            backgroundColorId: 'green-darker',
+        });
+        expect(withColor.bgc).toBe('green-darker');
+
+        const without = gameStateToPayload(state, { includeProgress: false });
+        expect(without.bgc).toBeUndefined();
+    });
+});

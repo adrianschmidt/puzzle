@@ -13,6 +13,7 @@ import {
 import { isWebShareAvailable, sharePuzzle } from './share.js';
 import { showToast } from './toast.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
+import { loadColorPreference } from './background-color.js';
 
 export function attachShareSection(
     parent: HTMLElement,
@@ -91,6 +92,7 @@ export function attachShareSection(
     function currentUrl(): string {
         const payload = gameStateToPayload(state, {
             includeProgress: checkbox.checked && !checkbox.disabled,
+            backgroundColorId: loadColorPreference(),
         });
         return buildShareUrl(baseUrl, payload);
     }

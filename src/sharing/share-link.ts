@@ -34,6 +34,12 @@ export interface SharePayload {
     s: number;
     /** Rotation mode. */
     r: 'none' | 'quarter-turn' | 'free';
+    /**
+     * Sharer's background color (palette swatch id). Optional and
+     * additive — old links lack it, old clients ignore it. The receiver
+     * adopts it only when it has no color preference of its own.
+     */
+    bgc?: string;
     /** Composable cut config. */
     cf?: {
         /** BaseCutGenerator id. */
@@ -289,6 +295,7 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (p.r !== 'none' && p.r !== 'quarter-turn' && p.r !== 'free') return false;
     if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
     if (p.pr !== undefined && !isValidProgress(p.pr)) return false;
+    if (p.bgc !== undefined && typeof p.bgc !== 'string') return false;
     return true;
 }
 
@@ -404,6 +411,8 @@ export function parseLocationHash(hash: string): SharePayload | null {
 
 export interface EncodeOptions {
     includeProgress: boolean;
+    /** When set, written to `bgc` so the link carries the sharer's background. */
+    backgroundColorId?: string;
 }
 
 export function gameStateToPayload(
@@ -422,6 +431,10 @@ export function gameStateToPayload(
         s: state.seed ?? 0,
         r: rotationMode,
     };
+
+    if (options.backgroundColorId !== undefined) {
+        payload.bgc = options.backgroundColorId;
+    }
 
     if (state.attribution) {
         payload.a = {

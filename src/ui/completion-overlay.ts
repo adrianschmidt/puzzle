@@ -17,6 +17,7 @@ import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
 import { sharePuzzle } from './share.js';
 import { showToast } from './toast.js';
+import { loadColorPreference } from './background-color.js';
 
 export interface CompletionOverlayOptions {
     /** Container the overlay is appended to (also receives the glow class). */
@@ -70,7 +71,10 @@ export function showCompletionOverlay(
     challengeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         track('puzzle-shared', { source: 'completion-overlay', includesProgress: false });
-        const payload = gameStateToPayload(state, { includeProgress: false });
+        const payload = gameStateToPayload(state, {
+            includeProgress: false,
+            backgroundColorId: loadColorPreference(),
+        });
         const url = buildShareUrl(window.location.href.split('#')[0], payload);
         void sharePuzzle({
             url,
