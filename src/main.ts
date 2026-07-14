@@ -117,6 +117,7 @@ import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
+import { classifyImageSource } from './app/classify-image-source.js';
 import { initPwaUpdates } from './pwa/register.js';
 import { initSwErrorReporting } from './pwa/sw-error-bridge.js';
 
@@ -200,27 +201,6 @@ function removeCompletionOverlay(): void {
  * gameState alone.
  */
 let currentGameAnalytics: NewGameData | null = null;
-
-/**
- * Heuristically classify a puzzle image URL into one of the three
- * sources we care about for analytics. Used when the puzzle origin
- * (a share payload, or a resumed save) only carries the URL — not
- * the choice that produced it.
- */
-function classifyImageSource(imageUrl: string): 'unsplash' | 'blank' | 'fallback' {
-    if (imageUrl.startsWith('data:')) {
-        return 'blank';
-    }
-    try {
-        const host = new URL(imageUrl, window.location.href).host;
-        if (host === 'images.unsplash.com') {
-            return 'unsplash';
-        }
-    } catch {
-        // Fall through to 'fallback' on malformed URLs.
-    }
-    return 'fallback';
-}
 
 /**
  * Build the analytics payload for a puzzle completion.
