@@ -228,6 +228,37 @@ describe('createStringPreference', () => {
     });
 });
 
+describe('createStringPreference exists()', () => {
+    const KEY = 'test-string-exists-pref';
+
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    it('is false when nothing is saved', () => {
+        const store = createStringPreference({ key: KEY });
+        expect(store.exists()).toBe(false);
+    });
+
+    it('is true after a save', () => {
+        const store = createStringPreference({ key: KEY });
+        store.save('anything');
+        expect(store.exists()).toBe(true);
+    });
+
+    it('is true even when the stored value is outside the allowed list', () => {
+        // exists() reports raw key presence — a returning user with a
+        // stale/invalid value is still a returning user.
+        localStorage.setItem(KEY, 'not-allowed');
+        const store = createStringPreference({
+            key: KEY,
+            allowed: ['a', 'b'],
+            defaultValue: 'a',
+        });
+        expect(store.exists()).toBe(true);
+    });
+});
+
 describe('createIdPreferenceStore', () => {
     const PRESETS = [
         { id: 'alpha' },

@@ -115,6 +115,12 @@ export function createJsonPreference<T>(opts: {
 export interface StringPreferenceStore<T extends string | undefined> {
     save: (value: string) => void;
     load: () => T;
+    /**
+     * True when a raw value exists under the key — valid or not.
+     * Distinguishes "never chose" from "chose the default", which
+     * `load()` cannot (it returns the default either way).
+     */
+    exists: () => boolean;
 }
 
 export function createStringPreference(opts: {
@@ -151,6 +157,13 @@ export function createStringPreference(opts: {
                 return raw;
             } catch {
                 return defaultValue;
+            }
+        },
+        exists() {
+            try {
+                return localStorage.getItem(key) !== null;
+            } catch {
+                return false;
             }
         },
     };

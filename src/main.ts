@@ -97,12 +97,14 @@ import {
 import {
     loadImageSourcePreference,
     saveImageSourcePreference,
+    imageSourcePreferenceExists,
 } from './game/image-source.js';
 import {
     loadImageCategoryPreference,
     saveImageCategoryPreference,
     loadVibrantPreference,
     saveVibrantPreference,
+    imageCategoryPreferenceExists,
 } from './game/image-categories.js';
 import {
     parseLocationHash,
@@ -1460,13 +1462,21 @@ void (async () => {
         const preferredFractalConfig = loadFractalConfigPreference();
         const preferredWavyConfig = loadWavyConfigPreference();
         const preferredRotationEnabled = loadRotationEnabledPreference();
+        // A brand-new visitor (no save at all, never touched an image
+        // preference) gets the hand-picked bundled image instead of a
+        // random one, so the first impression works against the default
+        // background. An unreadable save means a returning user — they
+        // keep today's random-image behavior.
+        const firstRun = saved.status === 'empty'
+            && !imageSourcePreferenceExists()
+            && !imageCategoryPreferenceExists();
         await startNewGame(
             toGridSize(option),
             preferredCutStyle,
             preferredCutStyle === 'composable' && preferredComposable
                 ? composableSliderToGeneratorConfig(preferredComposable)
                 : undefined,
-            loadImageSourcePreference(),
+            firstRun ? 'first-run' : loadImageSourcePreference(),
             loadImageCategoryPreference(),
             preferredFractalConfig,
             preferredWavyConfig,
