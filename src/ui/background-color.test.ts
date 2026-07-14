@@ -14,6 +14,7 @@ import {
     loadColorPreference,
     applyBackgroundColor,
     isLightColor,
+    adoptSharedBackgroundColor,
 } from './background-color.js';
 
 describe('BACKGROUND_COLOR_PRESETS', () => {
@@ -241,5 +242,39 @@ describe('applyBackgroundColor', () => {
         expect(
             document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY),
         ).toBe(`var(--color-${DEFAULT_COLOR_ID})`);
+    });
+});
+
+describe('adoptSharedBackgroundColor', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        document.documentElement.style.removeProperty(CSS_CUSTOM_PROPERTY);
+    });
+
+    it('adopts and persists when no preference exists', () => {
+        const outcome = adoptSharedBackgroundColor('green-darker');
+        expect(outcome).toBe('adopted');
+        expect(localStorage.getItem(COLOR_PREFERENCE_KEY)).toBe('green-darker');
+        expect(
+            document.documentElement.style.getPropertyValue(CSS_CUSTOM_PROPERTY),
+        ).toBe('var(--color-green-darker)');
+    });
+
+    it('keeps an existing preference untouched', () => {
+        saveColorPreference('blue-default');
+        expect(adoptSharedBackgroundColor('green-darker')).toBe('kept-own');
+        expect(localStorage.getItem(COLOR_PREFERENCE_KEY)).toBe('blue-default');
+    });
+
+    it('treats a legacy British-spelling key as an existing preference', () => {
+        localStorage.setItem('puzzle-background-colour', 'midnight');
+        expect(adoptSharedBackgroundColor('green-darker')).toBe('kept-own');
+        expect(localStorage.getItem('puzzle-background-colour')).toBe('midnight');
+        expect(localStorage.getItem(COLOR_PREFERENCE_KEY)).toBeNull();
+    });
+
+    it('rejects an unknown swatch id without storing anything', () => {
+        expect(adoptSharedBackgroundColor('hotdog-stand')).toBe('invalid');
+        expect(localStorage.getItem(COLOR_PREFERENCE_KEY)).toBeNull();
     });
 });

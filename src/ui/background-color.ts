@@ -162,6 +162,35 @@ export function loadColorPreference(): string {
     return resolved;
 }
 
+/** Outcome of offering a share link's background color to this client. */
+export type SharedColorOutcome = 'adopted' | 'kept-own' | 'invalid';
+
+/**
+ * Adopt a background color carried by a share link — but only for a
+ * recipient who has never chosen one (neither the current key nor the
+ * legacy British-spelling key exists). Adoption persists the color as
+ * the normal preference, so it survives reloads; a recipient with a
+ * preference keeps it untouched. Raw key existence is the test:
+ * `loadColorPreference()` returns the default either way.
+ */
+export function adoptSharedBackgroundColor(id: string): SharedColorOutcome {
+    if (!ALLOWED_IDS.includes(id)) {
+        return 'invalid';
+    }
+    try {
+        if (localStorage.getItem(COLOR_PREFERENCE_KEY) !== null
+            || localStorage.getItem(LEGACY_COLOR_PREFERENCE_KEY) !== null) {
+            return 'kept-own';
+        }
+    } catch {
+        // Can't inspect (or later persist) the preference; leave it be.
+        return 'kept-own';
+    }
+    saveColorPreference(id);
+    applyBackgroundColor(id);
+    return 'adopted';
+}
+
 /** Get the preset for an id, or the default preset for an unknown id. */
 export function getColorPreset(id: string): BackgroundColorPreset {
     return swatchById.get(id) ?? defaultSwatch;
