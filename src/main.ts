@@ -28,6 +28,7 @@ import {
     loadColorPreference,
     saveColorPreference,
     applyBackgroundColor,
+    adoptSharedBackgroundColor,
     onColorSchemeChange,
     installPieceOutlineFilter,
     loadPieceOutlinePreference,
@@ -1238,7 +1239,7 @@ applyBackgroundColor(currentColorId);
 // to recompute the luminance-derived UI-chrome scheme on the flip.
 onColorSchemeChange(() => applyBackgroundColor(currentColorId));
 
-createBackgroundColorPicker({
+const backgroundColorPicker = createBackgroundColorPicker({
     container: app,
     selectedId: currentColorId,
     onSelect: (id) => {
@@ -1337,6 +1338,22 @@ async function loadSharedPuzzle(
         renderer.renderState(gameState);
         persistNewPuzzle();
 
+        // Offer the sharer's background color to a recipient who has
+        // never picked one. Adoption persists it as their preference and
+        // must be reflected in the picker + the OS-theme re-apply state.
+        // 'none' means the link carried no color at all; a present-but-
+        // unrecognized id reports as 'invalid' so palette drift that
+        // silently drops a live link's color stays visible in analytics.
+        let sharedColor: NonNullable<NewGameData['sharedColor']> = 'none';
+        if (payload.bgc !== undefined) {
+            const outcome = adoptSharedBackgroundColor(payload.bgc);
+            if (outcome === 'adopted') {
+                currentColorId = payload.bgc;
+                backgroundColorPicker.setSelected(payload.bgc);
+            }
+            sharedColor = outcome;
+        }
+
         const data: NewGameData = {
             source: 'shared',
             cutStyle: state.cutStyle ?? 'classic',
@@ -1347,6 +1364,7 @@ async function loadSharedPuzzle(
             imageSource: classifyImageSource(state.imageUrl),
             includesProgress: payload.pr !== undefined,
             recipientHadSavedState,
+            sharedColor,
         };
         // Present for a traced-tab Wavy link or a Triangles link; a legacy
         // (classic-tab) Wavy link carries no wf.tv, matching the fresh path's

@@ -88,7 +88,7 @@ describe('createSwatchPicker', () => {
 
     function open() {
         const onSelect = vi.fn();
-        const cleanup = createSwatchPicker({
+        const picker = createSwatchPicker({
             container,
             button: { icon: '🎨', title: 'Colour', className: 'bg-color-button' },
             ariaLabel: 'Colour',
@@ -100,11 +100,11 @@ describe('createSwatchPicker', () => {
         const button = container.querySelector(
             'button.bg-color-button',
         ) as HTMLButtonElement;
-        return { button, cleanup, onSelect };
+        return { button, picker, onSelect };
     }
 
     it('appends a button and toggles the grid open/closed on click', () => {
-        const { button, cleanup } = open();
+        const { button, picker } = open();
         expect(button).toBeTruthy();
         expect(container.querySelector('.swatch-grid')).toBeNull();
 
@@ -114,26 +114,66 @@ describe('createSwatchPicker', () => {
         button.click();
         expect(container.querySelector('.swatch-grid')).toBeNull();
 
-        cleanup();
+        picker.dispose();
     });
 
     it('reports the selected id and dismisses on swatch click', () => {
-        const { button, cleanup, onSelect } = open();
+        const { button, picker, onSelect } = open();
         button.click();
         (
             container.querySelector('[data-swatch-id="b"]') as HTMLButtonElement
         ).click();
         expect(onSelect).toHaveBeenCalledWith('b');
         expect(container.querySelector('.swatch-grid')).toBeNull();
-        cleanup();
+        picker.dispose();
     });
 
-    it('cleanup removes the button and any open grid', () => {
-        const { button, cleanup } = open();
+    it('dispose removes the button and any open grid', () => {
+        const { button, picker } = open();
         button.click();
         expect(container.querySelector('.swatch-grid')).toBeTruthy();
-        cleanup();
+        picker.dispose();
         expect(container.querySelector('button.bg-color-button')).toBeNull();
         expect(container.querySelector('.swatch-grid')).toBeNull();
+    });
+});
+
+describe('setSelected', () => {
+    it('marks the externally-set swatch as selected on the next open', () => {
+        const onSelect = vi.fn();
+        const picker = createSwatchPicker({
+            container: document.body,
+            button: { icon: 'X', title: 'Pick', className: 'pick-btn' },
+            ariaLabel: 'Pick',
+            swatches: [
+                { id: 'a', label: 'A', color: '#aaa' },
+                { id: 'b', label: 'B', color: '#bbb' },
+            ],
+            selectedId: 'a',
+            onSelect,
+        });
+
+        picker.setSelected('b');
+
+        document.querySelector<HTMLButtonElement>('.pick-btn')!.click();
+        const selected = document.querySelector('.swatch--selected');
+        expect(selected?.getAttribute('data-swatch-id')).toBe('b');
+        expect(onSelect).not.toHaveBeenCalled();
+        picker.dispose();
+    });
+
+    it('dismisses an open panel so a stale highlight cannot linger', () => {
+        const picker = createSwatchPicker({
+            container: document.body,
+            button: { icon: 'X', title: 'Pick', className: 'pick-btn' },
+            ariaLabel: 'Pick',
+            swatches: [{ id: 'a', label: 'A', color: '#aaa' }],
+            selectedId: 'a',
+            onSelect: () => {},
+        });
+        document.querySelector<HTMLButtonElement>('.pick-btn')!.click();
+        picker.setSelected('b');
+        expect(document.querySelector('.swatch-grid')).toBeNull();
+        picker.dispose();
     });
 });

@@ -87,6 +87,7 @@ export {
     saveColorPreference,
     loadColorPreference,
     applyBackgroundColor,
+    adoptSharedBackgroundColor,
 } from './background-color.js';
 export type { BackgroundColorPreset } from './background-color.js';
 export { onColorSchemeChange } from './palette.js';
@@ -124,7 +125,11 @@ export {
     createSwatchGrid,
     createSwatch,
 } from './swatch-picker.js';
-export type { SwatchEntry, SwatchPickerOptions } from './swatch-picker.js';
+export type {
+    SwatchEntry,
+    SwatchPickerOptions,
+    SwatchPickerHandle,
+} from './swatch-picker.js';
 
 export { createInfoButton } from './info-button.js';
 export type { InfoButtonOptions } from './info-button.js';

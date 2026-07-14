@@ -47,6 +47,16 @@ export interface NewGameData {
     vibrant?: boolean;
     includesProgress?: boolean;
     recipientHadSavedState?: boolean;
+    /**
+     * Share-link background color outcome: 'adopted' (recipient had no
+     * color preference; the link's color was applied and saved),
+     * 'kept-own' (link carried a color, recipient has their own),
+     * 'invalid' (link carried a `bgc` that isn't a valid palette id —
+     * e.g. palette drift dropped a once-live color), or 'none' (link
+     * predates the feature and carried no `bgc` at all). Only present
+     * when source === 'shared'.
+     */
+    sharedColor?: 'adopted' | 'kept-own' | 'invalid' | 'none';
 }
 
 /**

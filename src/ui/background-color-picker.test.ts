@@ -13,21 +13,21 @@ import { BACKGROUND_COLOR_PRESETS } from './background-color.js';
 describe('createBackgroundColorPicker', () => {
     it('adds the 🎨 button to the container', () => {
         const container = document.createElement('div');
-        const cleanup = createBackgroundColorPicker({
+        const picker = createBackgroundColorPicker({
             container,
             selectedId: BACKGROUND_COLOR_PRESETS[0].id,
             onSelect: vi.fn(),
         });
         const button = container.querySelector('button.bg-color-button');
         expect(button).toBeTruthy();
-        cleanup();
+        picker.dispose();
     });
 
     it('opens a grid with one swatch per preset and reports selections', () => {
         const container = document.createElement('div');
         document.body.appendChild(container);
         const onSelect = vi.fn();
-        const cleanup = createBackgroundColorPicker({
+        const picker = createBackgroundColorPicker({
             container,
             selectedId: 'indigo-darker',
             onSelect,
@@ -42,7 +42,7 @@ describe('createBackgroundColorPicker', () => {
         (container.querySelector('[data-swatch-id="blue-default"]') as HTMLButtonElement).click();
         expect(onSelect).toHaveBeenCalledWith('blue-default');
 
-        cleanup();
+        picker.dispose();
         document.body.removeChild(container);
     });
 });
