@@ -182,11 +182,11 @@ export function adoptSharedBackgroundColor(id: string): SharedColorOutcome {
             || localStorage.getItem(LEGACY_COLOR_PREFERENCE_KEY) !== null) {
             return 'kept-own';
         }
+        saveColorPreference(id);
     } catch {
-        // Can't inspect (or later persist) the preference; leave it be.
+        // Can't inspect or persist the preference; leave it be.
         return 'kept-own';
     }
-    saveColorPreference(id);
     applyBackgroundColor(id);
     return 'adopted';
 }
