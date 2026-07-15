@@ -123,6 +123,13 @@ export interface GridSize {
 }
 
 /**
+ * Which way a puzzle is laid out. Lives here (not in `app/orientation.ts`)
+ * so the `images` layer can reference it without importing from `app`,
+ * which would create a type-only images→app cycle.
+ */
+export type Orientation = 'landscape' | 'portrait';
+
+/**
  * Complete game state — everything needed to render and persist a game.
  *
  * The `*ById` and `pieceToGroup` Maps are derived indexes that mirror
