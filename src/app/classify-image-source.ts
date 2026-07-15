@@ -1,4 +1,4 @@
-import { BUNDLED_IMAGE_URL } from './bundled-image.js';
+import { BUNDLED_IMAGE_URL, BUNDLED_PORTRAIT_IMAGE_URL } from './bundled-image.js';
 
 /**
  * Heuristically classify a puzzle image URL into one of the sources we
@@ -8,7 +8,8 @@ import { BUNDLED_IMAGE_URL } from './bundled-image.js';
  *
  * `'bundled'` is the shipped image (first-run puzzles and
  * Unsplash-failure fallbacks — the fresh-game path distinguishes the
- * two itself); `'fallback'` covers the legacy `puzzle-image.jpg` from
+ * two itself), in either the landscape or portrait variant;
+ * `'fallback'` covers the legacy `puzzle-image.jpg` from
  * old saves/links plus anything unrecognized.
  */
 export function classifyImageSource(
@@ -17,7 +18,7 @@ export function classifyImageSource(
     if (imageUrl.startsWith('data:')) {
         return 'blank';
     }
-    if (imageUrl === BUNDLED_IMAGE_URL) {
+    if (imageUrl === BUNDLED_IMAGE_URL || imageUrl === BUNDLED_PORTRAIT_IMAGE_URL) {
         return 'bundled';
     }
     try {
