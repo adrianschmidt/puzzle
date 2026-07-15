@@ -10,6 +10,8 @@
  * Event schema lives here as the single source of truth.
  */
 
+import type { Orientation } from '../model/types.js';
+
 declare global {
     interface Window {
         umami?: {
@@ -39,6 +41,13 @@ export interface NewGameData {
      */
     traceSetVersion?: number;
     rotationMode: 'none' | 'quarter-turn' | 'free';
+    /**
+     * Puzzle orientation. Derivable from `rows > cols` (both paths store the
+     * post-transpose grid), but broken out as a first-class low-cardinality
+     * dimension so portrait adoption — the point of this feature — is a plain
+     * segment filter in the dashboard rather than a computed comparison.
+     */
+    orientation: Orientation;
     cols: number;
     rows: number;
     pieceCount: number;
@@ -196,9 +205,15 @@ export interface SharedLoadFailedData {
  * `fetchRandomImage` returns `undefined` (and is untracked) on a 4xx/5xx
  * response, so this event only fires on a genuine throw. The new game still
  * proceeds with the fallback image. `reason` is the sanitized error message.
+ *
+ * `orientation` and `imageCategory` describe the request that failed, so a
+ * portrait-specific or category-specific fetch problem is distinguishable
+ * from a generic one rather than being aggregated away.
  */
 export interface ImageFetchFailedData {
     reason: string;
+    orientation: Orientation;
+    imageCategory: string;
 }
 
 /**

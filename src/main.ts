@@ -121,11 +121,12 @@ import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
+import { pickBundledImage } from './app/bundled-image.js';
 import {
-    BUNDLED_IMAGE_URL,
-    BUNDLED_IMAGE_SIZE,
-    BUNDLED_IMAGE_ATTRIBUTION,
-} from './app/bundled-image.js';
+    orientationForViewport,
+    orientGridSize,
+    blankSizeForOrientation,
+} from './app/orientation.js';
 import { initPwaUpdates } from './pwa/register.js';
 import { initSwErrorReporting } from './pwa/sw-error-bridge.js';
 
@@ -920,21 +921,30 @@ async function startNewGame(
             height: app.clientHeight || window.innerHeight,
         };
 
-        let imageUrl: string = BUNDLED_IMAGE_URL;
-        let imageSize = BUNDLED_IMAGE_SIZE;
-        let attribution: GameState['attribution'] = BUNDLED_IMAGE_ATTRIBUTION;
+        // Match the puzzle to the shape of the screen it's created on. This is
+        // the only place orientation is decided; the resulting grid and image
+        // size flow into the save/share payload, so replay reproduces it
+        // without re-reading the viewport.
+        const orientation = orientationForViewport(viewport);
+        const oriented = orientGridSize(gridSize, orientation);
 
-        // Blank puzzle: white image, no photo
+        const bundled = pickBundledImage(orientation);
+        let imageUrl: string = bundled.url;
+        let imageSize = bundled.size;
+        let attribution: GameState['attribution'] = bundled.attribution;
+
+        // Blank puzzle: white image, no photo. Match the puzzle orientation so
+        // a portrait screen gets a portrait blank canvas.
         if (imageSource === 'blank') {
-            // Create a white 1080×720 image via canvas data URL
+            const blankSize = blankSizeForOrientation(orientation);
             const canvas = document.createElement('canvas');
-            canvas.width = 1080;
-            canvas.height = 720;
+            canvas.width = blankSize.width;
+            canvas.height = blankSize.height;
             const ctx = canvas.getContext('2d')!;
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, 1080, 720);
+            ctx.fillRect(0, 0, blankSize.width, blankSize.height);
             imageUrl = canvas.toDataURL('image/png');
-            imageSize = { width: 1080, height: 720 };
+            imageSize = blankSize;
             attribution = undefined;
         }
 
@@ -947,7 +957,7 @@ async function startNewGame(
                 : null;
 
         if (accessKey) {
-            const resolved = await resolveUnsplashImage(accessKey, imageCategory ?? 'any', vibrant);
+            const resolved = await resolveUnsplashImage(accessKey, imageCategory ?? 'any', vibrant, orientation);
             if (resolved) {
                 imageUrl = resolved.imageUrl;
                 imageSize = resolved.imageSize;
@@ -980,7 +990,7 @@ async function startNewGame(
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
 
-        const state = createNewGame(imageUrl, imageSize, viewport, gridSize, {
+        const state = createNewGame(imageUrl, imageSize, viewport, oriented, {
             cutStyle,
             composableConfig,
             fractalConfig: generatorFractalConfig,
@@ -1003,8 +1013,9 @@ async function startNewGame(
             source: 'fresh',
             cutStyle,
             rotationMode,
-            cols: gridSize.cols,
-            rows: gridSize.rows,
+            orientation,
+            cols: oriented.cols,
+            rows: oriented.rows,
             pieceCount: state.pieces.length,
             // resolveNewGameImageSource honors the 'first-run' sentinel, which
             // classifyImageSource can't distinguish from a fallback-after-
@@ -1362,6 +1373,11 @@ async function loadSharedPuzzle(
             source: 'shared',
             cutStyle: state.cutStyle ?? 'classic',
             rotationMode: state.rotationMode ?? 'none',
+            // The link stores the post-transpose grid, so orientation is the
+            // taller-than-wide test on it (square grids read as landscape,
+            // matching orientGridSize's normalization).
+            orientation:
+                state.gridSize.rows > state.gridSize.cols ? 'portrait' : 'landscape',
             cols: state.gridSize.cols,
             rows: state.gridSize.rows,
             pieceCount: state.pieces.length,
