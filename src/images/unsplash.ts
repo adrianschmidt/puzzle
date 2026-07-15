@@ -1,5 +1,5 @@
 /**
- * Unsplash API client for fetching random landscape photos.
+ * Unsplash API client for fetching random photos.
  *
  * Uses the Unsplash API free tier. The access key is provided via
  * `VITE_UNSPLASH_ACCESS_KEY` environment variable at build time.
@@ -8,6 +8,7 @@
  */
 
 import { diagnostics } from '../diagnostics.js';
+import type { Orientation } from '../model/types.js';
 
 /** The API endpoint for fetching a random photo. */
 export const UNSPLASH_RANDOM_URL = 'https://api.unsplash.com/photos/random';
@@ -60,16 +61,17 @@ export interface UnsplashImageResult {
 }
 
 /**
- * Build the URL for fetching a random landscape photo from Unsplash.
+ * Build the URL for fetching a random photo from Unsplash.
  *
- * Filters for landscape orientation to match the puzzle grid aspect ratio.
+ * Filters for the requested orientation.
  */
 export function buildRandomPhotoUrl(
     accessKey: string,
     query?: string,
+    orientation: Orientation = 'landscape',
 ): string {
     const params = new URLSearchParams({
-        orientation: 'landscape',
+        orientation,
         client_id: accessKey,
     });
 
@@ -160,7 +162,7 @@ export function getUnsplashAccessKey(): string | undefined {
 }
 
 /**
- * Fetch a random landscape photo from Unsplash.
+ * Fetch a random photo from Unsplash.
  *
  * @param accessKey - Unsplash API access key
  * @param fetchFn - Fetch implementation (injectable for testing)
@@ -170,8 +172,9 @@ export async function fetchRandomImage(
     accessKey: string,
     fetchFn: typeof fetch = fetch,
     query?: string,
+    orientation: Orientation = 'landscape',
 ): Promise<UnsplashImageResult | undefined> {
-    const url = buildRandomPhotoUrl(accessKey, query);
+    const url = buildRandomPhotoUrl(accessKey, query, orientation);
 
     const response = await fetchFn(url);
 
