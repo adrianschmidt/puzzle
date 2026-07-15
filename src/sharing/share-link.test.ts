@@ -50,6 +50,54 @@ describe('share-link codec — minimal round-trip', () => {
     });
 });
 
+describe('share-link codec — attribution scheme validation', () => {
+    const base: SharePayload = {
+        v: 1,
+        i: 'https://images.unsplash.com/photo-123?w=1080',
+        is: [1080, 720],
+        g: [8, 6],
+        c: 'classic',
+        s: 12345,
+        r: 'none',
+    };
+
+    it('round-trips a valid https attribution block', () => {
+        const payload: SharePayload = {
+            ...base,
+            a: {
+                n: 'Jane Doe',
+                u: 'https://unsplash.com/@janedoe',
+                p: 'https://unsplash.com/photos/abc',
+            },
+        };
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('rejects a link whose attribution URL uses the javascript: scheme', () => {
+        const encoded = encodePayload({
+            ...base,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            a: { n: 'x', u: 'javascript:alert(1)', p: 'https://unsplash.com/p' } as any,
+        });
+        expect(decodePayload(encoded)).toBeNull();
+    });
+
+    it('rejects a link whose photo URL uses a data: scheme', () => {
+        const encoded = encodePayload({
+            ...base,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            a: { n: 'x', u: 'https://unsplash.com/@x', p: 'data:text/html,<script>' } as any,
+        });
+        expect(decodePayload(encoded)).toBeNull();
+    });
+
+    it('rejects a malformed attribution block (missing / non-string fields)', () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const encoded = encodePayload({ ...base, a: { u: 'https://a', p: 'https://b' } as any });
+        expect(decodePayload(encoded)).toBeNull();
+    });
+});
+
 describe('share-link codec — grid-size clamp (crafted-link DoS guard)', () => {
     it('clamps an absurd crafted grid to the max dimension', () => {
         const payload: SharePayload = {

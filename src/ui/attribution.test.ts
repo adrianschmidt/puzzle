@@ -55,6 +55,21 @@ describe('createAttributionElement', () => {
 
         expect(el.textContent).toBe('Photo by Jane Doe on Unsplash');
     });
+
+    it('drops a javascript:-scheme href instead of rendering it', () => {
+        const el = createAttributionElement({
+            photographerName: 'Jane Doe',
+            photographerUrl: 'javascript:alert(1)',
+            photoUrl: 'javascript:alert(2)',
+        });
+        const links = el.querySelectorAll('a');
+
+        // The href is left unset (empty), so no javascript: URL reaches the
+        // DOM; the name still renders as text.
+        expect(links[0].getAttribute('href')).toBeNull();
+        expect(links[1].getAttribute('href')).toBeNull();
+        expect(el.textContent).toBe('Photo by Jane Doe on Unsplash');
+    });
 });
 
 describe('removeAttribution', () => {

@@ -6,6 +6,7 @@
  */
 
 import type { ImageAttribution } from '../model/types.js';
+import { isSafeHttpUrl } from '../sharing/safe-url.js';
 
 const ATTRIBUTION_CLASS = 'image-attribution';
 
@@ -21,14 +22,22 @@ export function createAttributionElement(
     const container = document.createElement('div');
     container.className = ATTRIBUTION_CLASS;
 
+    // Defense-in-depth: the decode path already rejects share links whose
+    // attribution URLs aren't http(s), but this sink is reused, so guard the
+    // href here too. A non-http(s) URL is dropped (the anchor renders as
+    // plain text) rather than smuggling a `javascript:` scheme into the DOM.
     const photographerLink = document.createElement('a');
-    photographerLink.href = attribution.photographerUrl;
+    if (isSafeHttpUrl(attribution.photographerUrl)) {
+        photographerLink.href = attribution.photographerUrl;
+    }
     photographerLink.target = '_blank';
     photographerLink.rel = 'noopener noreferrer';
     photographerLink.textContent = attribution.photographerName;
 
     const unsplashLink = document.createElement('a');
-    unsplashLink.href = attribution.photoUrl;
+    if (isSafeHttpUrl(attribution.photoUrl)) {
+        unsplashLink.href = attribution.photoUrl;
+    }
     unsplashLink.target = '_blank';
     unsplashLink.rel = 'noopener noreferrer';
     unsplashLink.textContent = 'Unsplash';
