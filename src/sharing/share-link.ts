@@ -16,6 +16,7 @@ import {
 import { clampGridDim } from '../puzzle/topology/grid-dim.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 import { CURRENT_TRACE_SET_VERSION, normalizeTraceSetVersion } from '../puzzle/composable/traces/trace-set-version.js';
+import { isSafeHttpUrl } from './safe-url.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -296,6 +297,26 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
     if (p.pr !== undefined && !isValidProgress(p.pr)) return false;
     if (p.bgc !== undefined && typeof p.bgc !== 'string') return false;
+    if (p.a !== undefined && !isValidAttribution(p.a)) return false;
+    return true;
+}
+
+/**
+ * Validate the optional attribution block. The URLs flow into an anchor
+ * `href` (see `createAttributionElement`), so a crafted link could
+ * otherwise carry a `javascript:`-scheme URL that executes on click.
+ * Require the shape `{ n, u, p }` with `u`/`p` restricted to absolute
+ * http(s) URLs; every legitimate (Unsplash) link already satisfies this,
+ * so this rejects only links that were already dangerous. Rejecting the
+ * whole payload matches the codec's all-or-nothing handling of other
+ * malformed optional fields (`bgc`, `pr`).
+ */
+function isValidAttribution(a: unknown): boolean {
+    if (!a || typeof a !== 'object') return false;
+    const o = a as Record<string, unknown>;
+    if (typeof o.n !== 'string') return false;
+    if (typeof o.u !== 'string' || !isSafeHttpUrl(o.u)) return false;
+    if (typeof o.p !== 'string' || !isSafeHttpUrl(o.p)) return false;
     return true;
 }
 
