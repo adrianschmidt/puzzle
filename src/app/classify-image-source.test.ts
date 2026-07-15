@@ -7,7 +7,7 @@ import {
     classifyImageSource,
     resolveNewGameImageSource,
 } from './classify-image-source.js';
-import { BUNDLED_IMAGE_URL } from './bundled-image.js';
+import { BUNDLED_IMAGE_URL, BUNDLED_PORTRAIT_IMAGE_URL } from './bundled-image.js';
 
 describe('classifyImageSource', () => {
     it('classifies data URLs as blank', () => {
@@ -16,6 +16,10 @@ describe('classifyImageSource', () => {
 
     it('classifies the bundled image as bundled', () => {
         expect(classifyImageSource(BUNDLED_IMAGE_URL)).toBe('bundled');
+    });
+
+    it('classifies the portrait bundled image as bundled', () => {
+        expect(classifyImageSource(BUNDLED_PORTRAIT_IMAGE_URL)).toBe('bundled');
     });
 
     it('classifies Unsplash URLs as unsplash', () => {
