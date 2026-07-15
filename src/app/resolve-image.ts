@@ -10,6 +10,7 @@ import { diagnostics } from '../diagnostics.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { fetchRandomImage } from '../images/index.js';
 import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
+import type { Orientation } from '../model/types.js';
 
 export interface ResolvedImage {
     imageUrl: string;
@@ -25,12 +26,13 @@ export async function resolveUnsplashImage(
     accessKey: string,
     imageCategory: string,
     vibrant: boolean,
+    orientation: Orientation,
     fetchFn: typeof fetch = fetch,
 ): Promise<ResolvedImage | null> {
     try {
         const category = findImageCategory(imageCategory);
         const query = buildImageQuery(category.query, vibrant);
-        const result = await fetchRandomImage(accessKey, fetchFn, query);
+        const result = await fetchRandomImage(accessKey, fetchFn, query, orientation);
 
         if (!result) {
             return null;
@@ -55,7 +57,11 @@ export async function resolveUnsplashImage(
         };
     } catch (error) {
         diagnostics.warn('Failed to fetch Unsplash image, using fallback:', error);
-        track('image-fetch-failed', { reason: sanitizeErrorReason(error) });
+        track('image-fetch-failed', {
+            reason: sanitizeErrorReason(error),
+            orientation,
+            imageCategory,
+        });
         return null;
     }
 }
