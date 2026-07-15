@@ -162,20 +162,6 @@ describe('createNewGameDialog', () => {
         expect(counts[3].textContent).toBe('192');
     });
 
-    it('displays grid dimensions in each button', () => {
-        createNewGameDialog({
-            container,
-            selectedSizeId: '48',
-            onSelect: vi.fn(),
-        });
-
-        const dims = container.querySelectorAll('.size-picker-dims');
-        expect(dims[0].textContent).toBe('6 × 4');
-        expect(dims[1].textContent).toBe('8 × 6');
-        expect(dims[2].textContent).toBe('12 × 8');
-        expect(dims[3].textContent).toBe('16 × 12');
-    });
-
     it('shows approximate piece counts without grid dims for triangles', () => {
         createNewGameDialog({
             container,
@@ -189,6 +175,16 @@ describe('createNewGameDialog', () => {
         expect(counts[1].textContent).toBe('~48');
         expect(counts[2].textContent).toBe('~96');
         expect(counts[3].textContent).toBe('~192');
+        expect(container.querySelectorAll('.size-picker-dims')).toHaveLength(0);
+    });
+
+    it('never renders grid dimensions in size buttons', () => {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            onSelect: vi.fn(),
+        });
+
         expect(container.querySelectorAll('.size-picker-dims')).toHaveLength(0);
     });
 

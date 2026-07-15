@@ -168,7 +168,7 @@ function buildSizeSection(args: {
         // Fractal and Triangles piece counts are approximate: fractal scales
         // an internal grid, and the triangle lattice derives its column count
         // from the image aspect ratio (unknown until the photo is fetched).
-        // Both show ~N and omit the meaningless cols × rows line.
+        // Both therefore show ~N rather than an exact piece count.
         const cutStyleId = args.getCutStyleId();
         const isApproximate = cutStyleId === 'fractal' || cutStyleId === 'triangles';
 
@@ -188,13 +188,6 @@ function buildSizeSection(args: {
 
             btn.appendChild(count);
             btn.appendChild(label);
-
-            if (!isApproximate) {
-                const dims = document.createElement('span');
-                dims.className = 'size-picker-dims';
-                dims.textContent = `${opt.cols} × ${opt.rows}`;
-                btn.appendChild(dims);
-            }
         }
     }
 
