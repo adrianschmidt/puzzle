@@ -65,6 +65,18 @@ describe('buildRandomPhotoUrl', () => {
 
         expect(url).not.toContain('query=');
     });
+
+    it('uses orientation=portrait when requested', () => {
+        const url = buildRandomPhotoUrl('test-key', undefined, 'portrait');
+
+        expect(url).toContain('orientation=portrait');
+    });
+
+    it('uses orientation=landscape when requested', () => {
+        const url = buildRandomPhotoUrl('test-key', undefined, 'landscape');
+
+        expect(url).toContain('orientation=landscape');
+    });
 });
 
 describe('parseUnsplashResponse', () => {
@@ -244,5 +256,17 @@ describe('fetchRandomImage', () => {
         await expect(
             fetchRandomImage('test-key', mockFetch as unknown as typeof fetch),
         ).rejects.toThrow('Network error');
+    });
+
+    it('threads portrait orientation into the request URL', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve(makeUnsplashResponse()),
+        });
+
+        await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch, 'city', 'portrait');
+
+        const calledUrl = mockFetch.mock.calls[0][0] as string;
+        expect(calledUrl).toContain('orientation=portrait');
     });
 });
