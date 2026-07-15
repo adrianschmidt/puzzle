@@ -71,6 +71,7 @@ describe('track', () => {
             source: 'fresh',
             cutStyle: 'classic',
             rotationMode: 'none',
+            orientation: 'landscape',
             cols: 8,
             rows: 6,
             pieceCount: 48,
@@ -82,6 +83,7 @@ describe('track', () => {
             source: 'fresh',
             cutStyle: 'classic',
             rotationMode: 'none',
+            orientation: 'landscape',
             cols: 8,
             rows: 6,
             pieceCount: 48,
@@ -100,6 +102,7 @@ describe('track', () => {
             cutStyle: 'wavy',
             traceSetVersion: 1,
             rotationMode: 'none',
+            orientation: 'landscape',
             cols: 8,
             rows: 6,
             pieceCount: 48,
@@ -110,6 +113,7 @@ describe('track', () => {
             cutStyle: 'wavy',
             traceSetVersion: 1,
             rotationMode: 'none',
+            orientation: 'landscape',
             cols: 8,
             rows: 6,
             pieceCount: 48,
@@ -194,9 +198,17 @@ describe('track', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
 
-        track('image-fetch-failed', { reason: 'network down' });
+        track('image-fetch-failed', {
+            reason: 'network down',
+            orientation: 'portrait',
+            imageCategory: 'nature',
+        });
 
-        expect(umamiTrack).toHaveBeenCalledWith('image-fetch-failed', { reason: 'network down' });
+        expect(umamiTrack).toHaveBeenCalledWith('image-fetch-failed', {
+            reason: 'network down',
+            orientation: 'portrait',
+            imageCategory: 'nature',
+        });
     });
 
     it('forwards new-game-failed with the typed payload', () => {
