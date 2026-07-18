@@ -240,43 +240,15 @@ function fakeController(): UpdateController {
 }
 
 describe('setupUpdateChecks', () => {
-    it('polls registration.update on the interval', () => {
+    it('does not check for an update eagerly at setup', () => {
         const registration = { update: vi.fn() };
-        const controller = fakeController();
-        let intervalFn: (() => void) | null = null;
-        setupUpdateChecks(registration, controller, {
-            pollIntervalMs: 1000,
-            setInterval: (fn) => {
-                intervalFn = fn;
-                return 0;
-            },
+        setupUpdateChecks(registration, fakeController(), {
             addVisibilityListener: () => {},
             isVisible: () => true,
         });
+        // Setup only wires the visibility listener; nothing runs until a
+        // visibility regain.
         expect(registration.update).not.toHaveBeenCalled();
-        intervalFn!();
-        expect(registration.update).toHaveBeenCalledOnce();
-    });
-
-    it('the interval poll checks for updates but never requests a reload', () => {
-        const registration = { update: vi.fn() };
-        const controller = fakeController();
-        let intervalFn: (() => void) | null = null;
-        setupUpdateChecks(registration, controller, {
-            pollIntervalMs: 1000,
-            setInterval: (fn) => {
-                intervalFn = fn;
-                return 0;
-            },
-            addVisibilityListener: () => {},
-            isVisible: () => true,
-        });
-        intervalFn!();
-        // Only the visibility path may apply a pending update; the interval
-        // poll must merely detect, so an update mid-puzzle is never applied
-        // until a safe moment (focus regain or a manual tap).
-        expect(controller.requestReloadIfPending).not.toHaveBeenCalled();
-        expect(controller.reloadNow).not.toHaveBeenCalled();
     });
 
     it('on visible: checks for an update and requests reload-if-pending', () => {
@@ -284,7 +256,6 @@ describe('setupUpdateChecks', () => {
         const controller = fakeController();
         let visHandler: (() => void) | null = null;
         setupUpdateChecks(registration, controller, {
-            setInterval: () => 0,
             addVisibilityListener: (fn) => {
                 visHandler = fn;
             },
@@ -300,7 +271,6 @@ describe('setupUpdateChecks', () => {
         const controller = fakeController();
         let visHandler: (() => void) | null = null;
         setupUpdateChecks(registration, controller, {
-            setInterval: () => 0,
             addVisibilityListener: (fn) => {
                 visHandler = fn;
             },
@@ -311,18 +281,16 @@ describe('setupUpdateChecks', () => {
         expect(controller.requestReloadIfPending).not.toHaveBeenCalled();
     });
 
-    it('does not track a check failure when the poll resolves', async () => {
+    it('does not track a check failure when the check resolves', async () => {
         const registration = { update: vi.fn().mockResolvedValue(undefined) };
-        let intervalFn: (() => void) | null = null;
+        let visHandler: (() => void) | null = null;
         setupUpdateChecks(registration, fakeController(), {
-            setInterval: (fn) => {
-                intervalFn = fn;
-                return 0;
+            addVisibilityListener: (fn) => {
+                visHandler = fn;
             },
-            addVisibilityListener: () => {},
             isVisible: () => true,
         });
-        intervalFn!();
+        visHandler!();
         await Promise.resolve();
         await Promise.resolve();
         expect(track).not.toHaveBeenCalledWith(
@@ -331,34 +299,12 @@ describe('setupUpdateChecks', () => {
         );
     });
 
-    it('tracks pwa-update-check-failed with a sanitized reason when an interval poll rejects', async () => {
-        const registration = {
-            update: vi.fn().mockRejectedValue(new Error('offline')),
-        };
-        let intervalFn: (() => void) | null = null;
-        setupUpdateChecks(registration, fakeController(), {
-            setInterval: (fn) => {
-                intervalFn = fn;
-                return 0;
-            },
-            addVisibilityListener: () => {},
-            isVisible: () => true,
-        });
-        intervalFn!();
-        await Promise.resolve();
-        await Promise.resolve();
-        expect(track).toHaveBeenCalledWith('pwa-update-check-failed', {
-            reason: 'offline',
-        });
-    });
-
     it('tracks pwa-update-check-failed when the visibility-path check rejects', async () => {
         const registration = {
             update: vi.fn().mockRejectedValue(new Error('offline')),
         };
         let visHandler: (() => void) | null = null;
         setupUpdateChecks(registration, fakeController(), {
-            setInterval: () => 0,
             addVisibilityListener: (fn) => {
                 visHandler = fn;
             },
@@ -376,17 +322,15 @@ describe('setupUpdateChecks', () => {
         const registration = {
             update: vi.fn().mockRejectedValue(new Error('offline')),
         };
-        let intervalFn: (() => void) | null = null;
+        let visHandler: (() => void) | null = null;
         setupUpdateChecks(registration, fakeController(), {
-            setInterval: (fn) => {
-                intervalFn = fn;
-                return 0;
+            addVisibilityListener: (fn) => {
+                visHandler = fn;
             },
-            addVisibilityListener: () => {},
             isVisible: () => true,
         });
         for (let i = 0; i < 4; i++) {
-            intervalFn!();
+            visHandler!();
             await Promise.resolve();
             await Promise.resolve();
         }
@@ -409,17 +353,15 @@ describe('setupUpdateChecks', () => {
         const registration = {
             update: vi.fn(() => Promise.reject(new Error(errors[i++]))),
         };
-        let intervalFn: (() => void) | null = null;
+        let visHandler: (() => void) | null = null;
         setupUpdateChecks(registration, fakeController(), {
-            setInterval: (fn) => {
-                intervalFn = fn;
-                return 0;
+            addVisibilityListener: (fn) => {
+                visHandler = fn;
             },
-            addVisibilityListener: () => {},
             isVisible: () => true,
         });
         for (let n = 0; n < errors.length; n++) {
-            intervalFn!();
+            visHandler!();
             await Promise.resolve();
             await Promise.resolve();
         }

@@ -315,19 +315,19 @@ export type PwaUpdateDetectedData = Record<string, never>;
 
 /**
  * Data attached to `pwa-update-check-failed` — a background update *check*
- * (`registration.update()` on the poll interval or a visibility regain)
- * rejected. This is distinct from `pwa-update-apply-failed`: nothing was being
- * applied, the check itself failed (typically offline or a server error), and
- * it self-heals on the next poll / visibility change. It labels the
- * check-failure leg of the funnel (`pwa-update-detected` → check failures →
- * `pwa-update-applied` / `pwa-update-apply-failed`) that would otherwise only
- * surface as a generic `unhandled-error`.
+ * (`registration.update()` on a visibility regain) rejected. This is distinct
+ * from `pwa-update-apply-failed`: nothing was being applied, the check itself
+ * failed (typically offline or a server error), and it self-heals on the next
+ * visibility change. It labels the check-failure leg of the funnel
+ * (`pwa-update-detected` → check failures → `pwa-update-applied` /
+ * `pwa-update-apply-failed`) that would otherwise only surface as a generic
+ * `unhandled-error`.
  *
- * Checks fire on a timer and on every visibility regain, so an offline session
- * would reject on every poll. To avoid flooding, each distinct sanitized
- * `reason` is reported at most once per session and the number of distinct
- * reasons is capped (see `setupUpdateChecks`). `reason` is the sanitized
- * rejection message.
+ * Checks fire on every visibility regain, so an offline session would reject on
+ * every return to the tab. To avoid flooding, each distinct sanitized `reason`
+ * is reported at most once per session and the number of distinct reasons is
+ * capped (see `setupUpdateChecks`). `reason` is the sanitized rejection
+ * message.
  */
 export interface PwaUpdateCheckFailedData {
     reason: string;
@@ -379,8 +379,9 @@ export interface PwaUpdateApplyFailedData {
  * `pwa-update-detected` → applied funnel: when it fires there is no
  * registration, so no update checks run and the PWA update mechanism is dead
  * for the session. That makes it the most severe update-related failure — a
- * failed *check* (`pwa-update-check-failed`) self-heals on the next poll,
- * whereas a failed registration does not recover until the next page load.
+ * failed *check* (`pwa-update-check-failed`) self-heals on the next visibility
+ * regain, whereas a failed registration does not recover until the next page
+ * load.
  *
  * `registerSW` is called exactly once per page load, so `onRegisterError` fires
  * at most once; unlike `pwa-update-check-failed` this needs no per-reason dedup
