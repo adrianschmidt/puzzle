@@ -27,6 +27,13 @@
      family) so the chrome coheres with the color set. The accent is used
      at varying alpha via color-mix() at each call site. */
   --ui-accent: var(--color-violet-light);
+  /* Multi-select highlight glow. Isolated from --ui-accent (which colors all
+     the chrome) so it can flip lightness per background without restyling
+     buttons/borders/etc. Dark backgrounds get a pale violet — a notch lighter
+     than the chrome accent (--color-violet-light) for maximum lightness
+     separation; the [data-ui-scheme="light"] block below flips it dark so a
+     same-hue light background doesn't wash it out. */
+  --selection-glow: var(--color-violet-lighter);
   --ui-surface: rgba(30, 27, 52, 0.95);
   --ui-toast-bg: rgba(28, 25, 44, 0.78);
   --ui-backdrop: rgba(12, 10, 24, 0.72);
@@ -53,6 +60,9 @@
   --ui-muted: rgba(0, 0, 0, 0.4);
   --ui-muted-link: rgba(0, 0, 0, 0.55);
   --ui-muted-link-hover: rgba(0, 0, 0, 0.8);
+  /* Dark violet glow reads like a colored shadow on light backgrounds,
+     where the light violet would wash out on same-hue swatches. */
+  --selection-glow: var(--color-violet-darker);
 }
 
 * {
@@ -390,18 +400,18 @@ html, body {
 /* Selected group highlight — must be clearly visible on any background */
 [data-group-id].selected {
   filter: var(--piece-edge-filter, opacity(1))
-          drop-shadow(0 0 6px color-mix(in srgb, var(--ui-accent) 90%, transparent))
-          drop-shadow(0 0 14px color-mix(in srgb, var(--ui-accent) 70%, transparent))
-          drop-shadow(0 0 24px color-mix(in srgb, var(--ui-accent) 40%, transparent));
+          drop-shadow(0 0 6px color-mix(in srgb, var(--selection-glow) 90%, transparent))
+          drop-shadow(0 0 14px color-mix(in srgb, var(--selection-glow) 70%, transparent))
+          drop-shadow(0 0 24px color-mix(in srgb, var(--selection-glow) 40%, transparent));
 }
 
 /* Selected + dragging: keep the glow while lifted */
 [data-group-id].selected.dragging {
   filter: var(--piece-edge-filter, opacity(1))
           drop-shadow(0 0 12px rgba(0, 0, 0, 0.45))
-          drop-shadow(0 0 6px color-mix(in srgb, var(--ui-accent) 90%, transparent))
-          drop-shadow(0 0 14px color-mix(in srgb, var(--ui-accent) 70%, transparent))
-          drop-shadow(0 0 24px color-mix(in srgb, var(--ui-accent) 40%, transparent));
+          drop-shadow(0 0 6px color-mix(in srgb, var(--selection-glow) 90%, transparent))
+          drop-shadow(0 0 14px color-mix(in srgb, var(--selection-glow) 70%, transparent))
+          drop-shadow(0 0 24px color-mix(in srgb, var(--selection-glow) 40%, transparent));
 }
 
 /* Lifted shadow when a group is being dragged — symmetric, no rotation tell */

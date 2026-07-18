@@ -28,7 +28,7 @@ export default defineConfig({
     // into them and runs tests from *other* branches alongside this one,
     // which drifts local test counts away from CI and can mask failures.
     exclude: ['**/node_modules/**', '**/dist/**', '**/.worktrees/**'],
-    // Allow palette.css to be imported as ?raw in palette.test.ts.
-    css: { include: [/palette\.css/] },
+    // Allow palette.css / style.css to be imported as ?raw in their tests.
+    css: { include: [/palette\.css/, /style\.css/] },
   },
 });
