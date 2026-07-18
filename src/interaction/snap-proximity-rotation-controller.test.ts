@@ -46,8 +46,8 @@ function makeController(state: GameState): {
 
 describe('SnapProximityRotationController', () => {
     it('rotates the dragged group toward alignment on move', () => {
-        // d = 20 → cap = 10; error 18 → rotated down to 10°.
-        const state = makePairState({ x: 170, y: 50 }, 18);
+        // d = 30 → cap = 10; error 18 → rotated down to 10°.
+        const state = makePairState({ x: 180, y: 50 }, 18);
         const { controller } = makeController(state);
 
         controller.start(11);
@@ -81,16 +81,16 @@ describe('SnapProximityRotationController', () => {
     });
 
     it('evaluates at most once per frame, then resumes after the frame fires', () => {
-        const state = makePairState({ x: 170, y: 50 }, 18);
+        const state = makePairState({ x: 180, y: 50 }, 18);
         const { controller, flushFrame } = makeController(state);
         const group = getGroup(state, 11);
 
         controller.start(11);
-        controller.onGroupMoved(); // evaluates: 18 → 10 (d = 20)
+        controller.onGroupMoved(); // evaluates: 18 → 10 (d = 30, cap = 10)
         expect(group.rotation).toBeCloseTo(10);
 
-        // Move closer (d = 10 → cap = 5), but the frame gate is still set.
-        group.position = { ...group.position, x: group.position.x - 10 };
+        // Move closer (d = 25 → cap = 5), but the frame gate is still set.
+        group.position = { ...group.position, x: group.position.x - 5 };
         controller.onGroupMoved();
         expect(group.rotation).toBeCloseTo(10); // gated: no change
 

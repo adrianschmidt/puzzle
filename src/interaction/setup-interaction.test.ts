@@ -628,13 +628,13 @@ describe('snap proximity rotation', () => {
 
     /**
      * Free-rotation state: piece 0 (group 7) at the origin, piece 1
-     * (group 8) rotated 18° with its bbox center 20px right of its
+     * (group 8) rotated 18° with its bbox center 40px right of its
      * aligned center (150, 50).
      */
     function makeFreeRotationState(rotationMode: GameState['rotationMode'] = 'free'): GameState {
         const { piece0, piece1 } = makeMatedPiecePair();
         const group7 = makeCenteredGroup(7, 0, { x: 50, y: 50 });
-        const group8 = makeCenteredGroup(8, 1, { x: 170, y: 50 }, 18);
+        const group8 = makeCenteredGroup(8, 1, { x: 190, y: 50 }, 18);
         return makeGameState({ pieces: [piece0, piece1], groups: [group7, group8], rotationMode });
     }
 
@@ -662,10 +662,10 @@ describe('snap proximity rotation', () => {
             getSnapTolerances,
         });
 
-        // Move 10px left: center 170 → 160, d = 10 → cap = 5; 18° → 5°.
+        // Move 10px left: center 190 → 180, d = 30 → cap = 10; 18° → 10°.
         dragPieceOne(container, 310);
 
-        expect(state.groupsById.get(8)!.rotation).toBeCloseTo(5);
+        expect(state.groupsById.get(8)!.rotation).toBeCloseTo(10);
     });
 
     it('does not rotate when rotation mode is not free', () => {
