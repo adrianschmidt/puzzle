@@ -154,30 +154,33 @@ export function createUpdateController(
 }
 
 const DEFAULT_FALLBACK_RELOAD_MS = 3000;
-const DEFAULT_POLL_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 export interface UpdateCheckDeps {
-    pollIntervalMs?: number;
-    setInterval?: (handler: () => void, ms: number) => unknown;
     addVisibilityListener?: (handler: () => void) => void;
     isVisible?: () => boolean;
 }
 
 /**
- * Wire up update detection for a registered service worker:
- * - poll `registration.update()` on an interval while the app is open;
- * - on every visibility → visible, check for an update (catches "reopened
- *   from the home screen") and apply any already-pending update.
+ * Wire up update detection for a registered service worker.
+ *
+ * We deliberately run *no* background timer. Two event-driven triggers cover
+ * every case without one:
+ * - page load already checks for a new worker, because registering the service
+ *   worker (in `register.ts`) makes the browser fetch and byte-compare the SW
+ *   script — so anyone who closes and reopens the app updates on the next open;
+ * - `visibilitychange → visible` checks for an update (catches "returned to a
+ *   long-lived tab" and "reopened from the home screen") and applies any
+ *   already-pending update.
+ *
+ * An always-on interval only ever added value for a tab left open *and*
+ * continuously foregrounded for hours — a niche the two triggers above make
+ * not worth polling in the background for.
  */
 export function setupUpdateChecks(
     registration: UpdatableRegistration,
     controller: UpdateController,
     deps: UpdateCheckDeps = {},
 ): void {
-    const pollIntervalMs = deps.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-    const setIntervalFn =
-        deps.setInterval ??
-        ((handler: () => void, ms: number) => globalThis.setInterval(handler, ms));
     const isVisible =
         deps.isVisible ?? (() => document.visibilityState === 'visible');
     const addVisibilityListener =
@@ -185,14 +188,14 @@ export function setupUpdateChecks(
         ((handler: () => void) =>
             document.addEventListener('visibilitychange', handler));
 
-    // A failed update *check* is best-effort and self-heals on the next poll /
+    // A failed update *check* is best-effort and self-heals on the next
     // visibility change, but we still label it as `pwa-update-check-failed` so
     // the funnel is complete (detected → check failures → applied / apply-
     // failed) instead of leaving the rejection to surface as a generic
     // `unhandled-error`.
     //
-    // Checks fire on a timer and on every visibility regain, so an offline or
-    // server-error session would reject on every poll. Guard against flooding:
+    // Checks fire on every visibility regain, so an offline or server-error
+    // session could reject on each return to the tab. Guard against flooding:
     // report each distinct sanitized `reason` at most once per session, and cap
     // the number of distinct reasons (a cardinality bound against pathologically
     // varying messages). This mirrors the backstop's per-reason + total caps but
@@ -213,10 +216,6 @@ export function setupUpdateChecks(
     function checkForUpdate(): void {
         void Promise.resolve(registration.update()).catch(reportCheckFailure);
     }
-
-    setIntervalFn(() => {
-        checkForUpdate();
-    }, pollIntervalMs);
 
     addVisibilityListener(() => {
         if (!isVisible()) return;
