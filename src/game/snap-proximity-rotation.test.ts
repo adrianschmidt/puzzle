@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, PieceGroup, Point } from '../model/types.js';
 import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece } from '../test-helpers/fixtures.js';
-import { buildProximityContext, computeSnapProximityRotation, type ProximityContext } from './snap-proximity-rotation.js';
+import { buildProximityContext, computeSnapProximityRotation, ROTATION_COMPLETE_AT_FRACTION as F, type ProximityContext } from './snap-proximity-rotation.js';
 import { getGroup } from '../model/helpers.js';
 import { rotateGroup } from './rotate-group.js';
 
@@ -100,23 +100,41 @@ function makeComputeSetup(center: Point, rotation: number): { state: GameState; 
 }
 
 /**
+ * Bbox-center point placing the moved group (aligned center (150, 50)) at a
+ * given fraction along the cap ramp. The ramp runs from the completion
+ * distance (fraction 0 → d = F·D, cap 0) to the zone edge (fraction 1 →
+ * d = D, cap T); at fraction `f` the cap is exactly `T · f`. Anchoring
+ * fixtures to F keeps these tests valid when ROTATION_COMPLETE_AT_FRACTION is
+ * retuned — the caps at these fractions (0, T/4, T/2, 3T/4, T) don't move.
+ */
+function rampCenter(fraction: number): Point {
+    return { x: 150 + D * (F + fraction * (1 - F)), y: 50 };
+}
+
+/** Distance step (world px) to move a fixture from one ramp fraction to another. */
+function rampStep(fromFraction: number, toFraction: number): number {
+    return D * (toFraction - fromFraction) * (1 - F);
+}
+
+/**
  * A 1×3 row: piece 0 — piece 1 — piece 2, each 100×100, mated along
  * vertical edges. Piece 1 (the moved group, id 11) is rotated 16° and both
  * mates are un-rotated; `closest` picks which mate piece 1 sits nearer.
  * Alignment with group 0 (origin) puts piece 1's center at (150, 50);
- * alignment with group 2 puts it at group2.position + (−50, 50). Both mates
- * sit in the outer half of the snap zone so their caps differ:
+ * alignment with group 2 puts it at group2.position + (−50, 50). The two
+ * mates sit at ramp fractions 0.25 (cap T/4 = 5) and 0.5 (cap T/2 = 10) —
+ * both in the outer half of the zone with distinct non-zero caps, anchored
+ * to F so the arrangement holds when the fraction is retuned:
  *
- * - 'right': group 1 center (178, 50), group 2 at (204, 0) — left mate at
- *   d = 28 (cap 8), right mate at d = 24 (cap 4).
- * - 'left': group 1 center (174, 50), group 2 at (196, 0) — left mate at
- *   d = 24 (cap 4), right mate at d = 28 (cap 8).
+ * - 'right': right mate at fraction 0.25 (d = D·(F + 0.25·(1−F)), cap 5),
+ *   left mate at fraction 0.5 (cap 10).
+ * - 'left':  left mate at fraction 0.25 (cap 5), right mate at fraction 0.5.
  *
  * `getBorderEdges` iterates piece 1's right mate (edge index 1) before its
  * left mate (index 3), so testing BOTH arrangements discriminates genuine
  * closest-wins from first-qualifying-wins and last-qualifying-wins
- * iteration bugs: either bug picks the d = 28 mate (cap 8 → −8) in one of
- * the arrangements instead of the d = 24 mate (cap 4 → −12).
+ * iteration bugs: either bug picks the cap-10 mate (16 − 10 = −6) in one of
+ * the arrangements instead of the closest cap-5 mate (16 − 5 = −11).
  */
 function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: ProximityContext } {
     const { piece0, piece1 } = makeMatedPiecePair();
@@ -130,8 +148,16 @@ function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: Proxi
         { id: 3, matePieceId: 1, mateEdgeId: 2, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
     ] });
 
-    const group1Center = closest === 'right' ? { x: 178, y: 50 } : { x: 174, y: 50 };
-    const group2Position = closest === 'right' ? { x: 204, y: 0 } : { x: 196, y: 0 };
+    // Mate distances at ramp fractions 0.25 (closer, cap 5) and 0.5 (cap 10).
+    // Aligned centers: group 0 at (150, 50); group 2 at (group2.x − 50, 50).
+    const dClose = D * (F + 0.25 * (1 - F));
+    const dFar = D * (F + 0.5 * (1 - F));
+    const group1Center = closest === 'right'
+        ? { x: 150 + dFar, y: 50 }
+        : { x: 150 + dClose, y: 50 };
+    const group2Position = closest === 'right'
+        ? { x: (150 + dFar) - dClose + 50, y: 0 }
+        : { x: (150 + dClose) - dFar + 50, y: 0 };
     const group0 = makeGroupOf(10, 0, { x: 0, y: 0 });
     const group1 = makeCenteredGroup(11, 1, group1Center, 16);
     const group2 = makeGroupOf(12, 2, group2Position);
@@ -152,19 +178,19 @@ describe('computeSnapProximityRotation', () => {
     });
 
     it('returns null when the rotation is beyond the rotation tolerance', () => {
-        const { state, ctx } = makeComputeSetup({ x: 170, y: 50 }, T + 5);
+        const { state, ctx } = makeComputeSetup(rampCenter(0.5), T + 5);
         expect(computeSnapProximityRotation(state, ctx)).toBeNull();
     });
 
     it('returns null when the angular error is already under the cap (no jump on zone entry)', () => {
-        // d = 35 → cap = 20 × clamp01(2·35/40 − 1) = 15; error 10 < 15 → nothing to do.
-        const { state, ctx } = makeComputeSetup({ x: 185, y: 50 }, 10);
+        // Ramp fraction 0.75 → cap = T·0.75 = 15; error 10 < 15 → nothing to do.
+        const { state, ctx } = makeComputeSetup(rampCenter(0.75), 10);
         expect(computeSnapProximityRotation(state, ctx)).toBeNull();
     });
 
     it('rotates the error down to the distance-scaled cap, and is idempotent at rest', () => {
-        // d = 30 → cap = 20 × clamp01(2·30/40 − 1) = 10; error 18 → excess 8, toward alignment (negative).
-        const { state, ctx } = makeComputeSetup({ x: 180, y: 50 }, 18);
+        // Ramp midpoint (fraction 0.5) → cap = T/2 = 10; error 18 → excess 8, toward alignment (negative).
+        const { state, ctx } = makeComputeSetup(rampCenter(0.5), 18);
         const delta = computeSnapProximityRotation(state, ctx);
         expect(delta).toBeCloseTo(-8);
 
@@ -174,45 +200,40 @@ describe('computeSnapProximityRotation', () => {
         expect(computeSnapProximityRotation(state, ctx)).toBeNull();
     });
 
-    it('fully aligns at zero distance', () => {
-        const { state, ctx } = makeComputeSetup({ x: 150, y: 50 }, 15);
+    it('fully aligns at the completion distance (F·D)', () => {
+        // Ramp fraction 0 → d = F·D → cap = 0; error 15 fully corrected.
+        const { state, ctx } = makeComputeSetup(rampCenter(0), 15);
         expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-15);
     });
 
-    it('completes rotation at half the snap distance', () => {
-        // d = D/2 = 20 → cap = 20 × clamp01(2·20/40 − 1) = 0; error 15 fully corrected.
-        const { state, ctx } = makeComputeSetup({ x: 150 + D / 2, y: 50 }, 15);
-        expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-15);
-    });
-
-    it('stays fully aligned across the inner half (plateau below D/2)', () => {
-        // d = 10 < D/2 → cap clamps to 0; error 15 fully corrected.
-        const { state, ctx } = makeComputeSetup({ x: 160, y: 50 }, 15);
+    it('stays fully aligned across the inner plateau (below the completion distance)', () => {
+        // d = F·D/2 < F·D → cap clamps to 0; error 15 fully corrected.
+        const { state, ctx } = makeComputeSetup({ x: 150 + (D * F) / 2, y: 50 }, 15);
         expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-15);
     });
 
     it('leaves the full tolerance uncorrected at the zone edge (no jump on entry)', () => {
-        // d = D = 40 → cap = 20 × clamp01(2·40/40 − 1) = 20 = T; error 20 → excess 0 → null.
-        const { state, ctx } = makeComputeSetup({ x: 150 + D, y: 50 }, T);
+        // Ramp fraction 1 → d = D → cap = T; error 20 → excess 0 → null.
+        const { state, ctx } = makeComputeSetup(rampCenter(1), T);
         expect(computeSnapProximityRotation(state, ctx)).toBeNull();
     });
 
     it('is wrap-aware: rotations just below 360° rotate forward through 0°', () => {
-        // error = signedAngularDelta(0, 342) = +18; d = 30 → cap = 10 → +8.
-        const { state, ctx } = makeComputeSetup({ x: 180, y: 50 }, 342);
+        // error = signedAngularDelta(0, 342) = +18; ramp midpoint → cap = 10 → +8.
+        const { state, ctx } = makeComputeSetup(rampCenter(0.5), 342);
         expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(8);
     });
 
     it('never rotates back as the distance increases again (one-way ratchet)', () => {
-        const { state, ctx } = makeComputeSetup({ x: 180, y: 50 }, 18);
+        const { state, ctx } = makeComputeSetup(rampCenter(0.5), 18);
         const group = getGroup(state, 11);
 
-        // Approach: d = 30 → rotated down to the cap (10°).
+        // Approach: ramp midpoint (cap 10) → rotated down to 10°.
         rotateGroup(group, state.piecesById, computeSnapProximityRotation(state, ctx)!);
         expect(group.rotation).toBeCloseTo(10);
 
-        // Retreat to d = 36 (cap = 16 > error 10): no correction, rotation stays.
-        group.position = { ...group.position, x: group.position.x + 6 };
+        // Retreat to fraction 0.75 (cap = 15 > held error 10): no correction, rotation stays.
+        group.position = { ...group.position, x: group.position.x + rampStep(0.5, 0.75) };
         expect(computeSnapProximityRotation(state, ctx)).toBeNull();
         expect(group.rotation).toBeCloseTo(10);
     });
@@ -221,12 +242,13 @@ describe('computeSnapProximityRotation', () => {
         'the closest qualifying mate wins (%s mate closest)',
         (closest) => {
             // Middle piece (1) mated on both sides; see makeRowState above.
-            // Closer mate at d = 24 (cap 4), farther at d = 28 (cap 8); error
-            // 16 on both. Closest wins: excess = 16 − 4 = 12, toward
-            // alignment. Running both arrangements rules out iteration-order
-            // (first/last-qualifying-wins) bugs, which would yield −8.
+            // Closer mate at ramp fraction 0.25 (cap 5), farther at 0.5 (cap
+            // 10); error 16 on both. Closest wins: excess = 16 − 5 = 11,
+            // toward alignment. Running both arrangements rules out
+            // iteration-order (first/last-qualifying-wins) bugs, which would
+            // yield −6.
             const { state, ctx } = makeRowState(closest);
-            expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-12);
+            expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-11);
         },
     );
 });

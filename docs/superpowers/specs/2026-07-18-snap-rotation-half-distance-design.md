@@ -3,6 +3,12 @@
 **Date:** 2026-07-18
 **Status:** Approved, ready for planning
 
+> **Update (post-implementation):** After playtesting, the shipped
+> `ROTATION_COMPLETE_AT_FRACTION` was tuned down to `0.2` (the rotation now
+> finishes within the inner fifth of the snap zone, not the inner half). The
+> `0.5` value and worked examples below reflect the original plan and are kept
+> as the historical planning record; see the code for the current constant.
+
 ## Problem
 
 Snap proximity rotation progressively rotates a dragged group toward its
