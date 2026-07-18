@@ -21,6 +21,7 @@ import { RotationFocus } from './rotation-focus.js';
 import type { Renderer } from '../renderer/types.js';
 import type { GameState, PieceGroup } from '../model/types.js';
 import { makeCenteredGroup, makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
+import { ROTATION_COMPLETE_AT_FRACTION as F } from '../game/snap-proximity-rotation.js';
 import { loadOffsetDragPreference } from '../ui/offset-drag.js';
 
 vi.mock('../ui/offset-drag.js', () => ({
@@ -626,19 +627,30 @@ describe('snap proximity rotation', () => {
         vi.mocked(loadOffsetDragPreference).mockReturnValue(false);
     });
 
+    const D = 40; // snap distance
+    const T = 20; // rotation tolerance
+
     /**
      * Free-rotation state: piece 0 (group 7) at the origin, piece 1
-     * (group 8) rotated 18° with its bbox center 40px right of its
-     * aligned center (150, 50).
+     * (group 8) rotated 18° with its bbox center at the zone edge (d = D,
+     * i.e. 150 + D = 190) right of its aligned center (150, 50).
      */
     function makeFreeRotationState(rotationMode: GameState['rotationMode'] = 'free'): GameState {
         const { piece0, piece1 } = makeMatedPiecePair();
         const group7 = makeCenteredGroup(7, 0, { x: 50, y: 50 });
-        const group8 = makeCenteredGroup(8, 1, { x: 190, y: 50 }, 18);
+        const group8 = makeCenteredGroup(8, 1, { x: 150 + D, y: 50 }, 18);
         return makeGameState({ pieces: [piece0, piece1], groups: [group7, group8], rotationMode });
     }
 
-    const getSnapTolerances = () => ({ tolerancePx: 40, rotationToleranceDeg: 20 });
+    const getSnapTolerances = () => ({ tolerancePx: D, rotationToleranceDeg: T });
+
+    // Drag target that lands group 8's center at the ramp midpoint, where the
+    // cap is T/2 = 10, so an 18° error is corrected down to 10°. Promote
+    // happens at clientX 320; the group starts at center 150 + D = 190 and
+    // moves 1:1 with the pointer (identity viewport). Anchored to F so the
+    // target stays at the ramp midpoint when the fraction is retuned.
+    const midpointCenterX = 150 + D * (F + 0.5 * (1 - F));
+    const toXMidpoint = 320 + (midpointCenterX - (150 + D));
 
     function dragPieceOne(container: FakeContainer, toX: number): void {
         const pieceTarget = { _pieceId: 1 } as unknown as EventTarget;
@@ -662,8 +674,8 @@ describe('snap proximity rotation', () => {
             getSnapTolerances,
         });
 
-        // Move 10px left: center 190 → 180, d = 30 → cap = 10; 18° → 10°.
-        dragPieceOne(container, 310);
+        // Drag to the ramp midpoint (cap = T/2 = 10): 18° → 10°.
+        dragPieceOne(container, toXMidpoint);
 
         expect(state.groupsById.get(8)!.rotation).toBeCloseTo(10);
     });
@@ -683,7 +695,7 @@ describe('snap proximity rotation', () => {
             getSnapTolerances,
         });
 
-        dragPieceOne(container, 310);
+        dragPieceOne(container, toXMidpoint);
 
         expect(state.groupsById.get(8)!.rotation).toBeCloseTo(18);
     });
@@ -708,7 +720,7 @@ describe('snap proximity rotation', () => {
             getSnapTolerances,
         });
 
-        dragPieceOne(container, 310);
+        dragPieceOne(container, toXMidpoint);
 
         expect(state.groupsById.get(8)!.rotation).toBeCloseTo(18);
     });

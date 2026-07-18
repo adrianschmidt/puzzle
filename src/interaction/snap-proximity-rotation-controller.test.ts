@@ -3,9 +3,20 @@ import type { GameState, Point } from '../model/types.js';
 import { makeCenteredGroup, makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
 import { getGroup } from '../model/helpers.js';
 import { SnapProximityRotationController } from './snap-proximity-rotation-controller.js';
+import { ROTATION_COMPLETE_AT_FRACTION as F } from '../game/snap-proximity-rotation.js';
 
 const D = 40;
 const T = 20;
+
+/**
+ * Bbox-center x placing group 11 (aligned center (150, 50)) at a fraction
+ * along the cap ramp: fraction 0 = completion distance (cap 0), fraction 1 =
+ * zone edge (cap T); cap at fraction `f` is `T · f`. Anchored to F so these
+ * stay valid when ROTATION_COMPLETE_AT_FRACTION is retuned.
+ */
+function rampX(fraction: number): number {
+    return 150 + D * (F + fraction * (1 - F));
+}
 
 /**
  * Pair state as in snap-proximity-rotation.test.ts: piece 0 fixed at the
@@ -46,8 +57,8 @@ function makeController(state: GameState): {
 
 describe('SnapProximityRotationController', () => {
     it('rotates the dragged group toward alignment on move', () => {
-        // d = 30 → cap = 10; error 18 → rotated down to 10°.
-        const state = makePairState({ x: 180, y: 50 }, 18);
+        // Ramp midpoint → cap = T/2 = 10; error 18 → rotated down to 10°.
+        const state = makePairState({ x: rampX(0.5), y: 50 }, 18);
         const { controller } = makeController(state);
 
         controller.start(11);
@@ -81,16 +92,17 @@ describe('SnapProximityRotationController', () => {
     });
 
     it('evaluates at most once per frame, then resumes after the frame fires', () => {
-        const state = makePairState({ x: 180, y: 50 }, 18);
+        const state = makePairState({ x: rampX(0.5), y: 50 }, 18);
         const { controller, flushFrame } = makeController(state);
         const group = getGroup(state, 11);
 
         controller.start(11);
-        controller.onGroupMoved(); // evaluates: 18 → 10 (d = 30, cap = 10)
+        controller.onGroupMoved(); // evaluates: 18 → 10 (ramp midpoint, cap = 10)
         expect(group.rotation).toBeCloseTo(10);
 
-        // Move closer (d = 25 → cap = 5), but the frame gate is still set.
-        group.position = { ...group.position, x: group.position.x - 5 };
+        // Move closer to ramp fraction 0.25 (cap = 5), but the frame gate is still set.
+        // A center-x shift equals the same position-x shift (they differ by a constant offset).
+        group.position = { ...group.position, x: group.position.x + (rampX(0.25) - rampX(0.5)) };
         controller.onGroupMoved();
         expect(group.rotation).toBeCloseTo(10); // gated: no change
 

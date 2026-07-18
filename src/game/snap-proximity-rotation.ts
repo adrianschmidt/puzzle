@@ -31,9 +31,10 @@ import { measureEdgeAlignment, SNAP_EPSILON_DEG } from './merge-detection.js';
  * this fraction of the snap distance — not only at the exact position. The
  * cap still equals the full rotation tolerance at the zone edge (no jump on
  * entry) and ramps to zero here. Experiment knob: 0 reproduces the original
- * "exact only at d = 0" behavior. Keep it in [0, 1).
+ * "exact only at d = 0" behavior. Keep it in [0, 1). Exported so tests can
+ * anchor their fixtures to it and stay valid when it is retuned.
  */
-const ROTATION_COMPLETE_AT_FRACTION = 0.5;
+export const ROTATION_COMPLETE_AT_FRACTION = 0.2;
 
 /** Clamp a value to the unit interval [0, 1]. */
 function clamp01(value: number): number {

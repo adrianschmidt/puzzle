@@ -4,6 +4,8 @@
 
 **Goal:** Make snap proximity rotation reach the exact correct orientation once the dragged group is within half the snap distance, instead of only at the exact position.
 
+> **Update (post-implementation):** After playtesting, the shipped `ROTATION_COMPLETE_AT_FRACTION` was tuned down from `0.5` to `0.2`. The `0.5` value throughout this plan is the original planning record; the current constant lives in `src/game/snap-proximity-rotation.ts`.
+
 **Architecture:** Remap the single `cap` ramp in `computeSnapProximityRotation` so it still equals the full rotation tolerance at the zone edge (`d = D`) but reaches zero at a configurable fraction of the snap distance (`d = D/2`), clamped to zero for the inner half. The fraction is a module-level experiment constant. Everything else in the drag pipeline is untouched.
 
 **Tech Stack:** TypeScript, Vite, Vitest.
