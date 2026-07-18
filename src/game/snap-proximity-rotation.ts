@@ -7,12 +7,14 @@
  * toward the snapped orientation as the remaining distance shrinks.
  *
  * The rotation is one-way by construction: the allowed angular error is
- * capped at `rotationTolerance * (distance / tolerance)`. Moving closer
- * tightens the cap (rotation is applied and persists); moving away only
- * loosens it, which never rotates the group back. Pivot-preserving
- * rotation (`rotateGroup`) keeps the group's bbox center fixed, so the
- * measured distance is invariant under the rotation this module applies —
- * the ramp is driven purely by how close the player drags the group.
+ * capped by a ramp that equals `rotationTolerance` at the zone edge and
+ * reaches zero once within `ROTATION_COMPLETE_AT_FRACTION` of the snap
+ * distance. Moving closer tightens the cap (rotation is applied and
+ * persists); moving away only loosens it, which never rotates the group
+ * back. Pivot-preserving rotation (`rotateGroup`) keeps the group's bbox
+ * center fixed, so the measured distance is invariant under the rotation
+ * this module applies — the ramp is driven purely by how close the player
+ * drags the group.
  *
  * Not an assist: the merge condition is unchanged — a qualifying group
  * would snap on drop regardless. This only surfaces the earned snap early.
@@ -23,6 +25,20 @@ import { getBorderEdges, tryGetGroup } from '../model/helpers.js';
 import type { GroupBorderEdge } from '../model/helpers.js';
 import { getGroupLocalBounds } from './group-bounds.js';
 import { measureEdgeAlignment, SNAP_EPSILON_DEG } from './merge-detection.js';
+
+/**
+ * Rotation reaches the exact orientation once the dragged group is within
+ * this fraction of the snap distance — not only at the exact position. The
+ * cap still equals the full rotation tolerance at the zone edge (no jump on
+ * entry) and ramps to zero here. Experiment knob: 0 reproduces the original
+ * "exact only at d = 0" behavior. Keep it in [0, 1).
+ */
+const ROTATION_COMPLETE_AT_FRACTION = 0.5;
+
+/** Clamp a value to the unit interval [0, 1]. */
+function clamp01(value: number): number {
+    return Math.min(1, Math.max(0, value));
+}
 
 /**
  * The pair of thresholds that define when a drop would merge — shared by
@@ -98,9 +114,10 @@ export function buildProximityContext(
  * A candidate qualifies exactly when a drop would merge it: simulated-snap
  * distance `d ≤ tolerancePx` AND angular error `|θ| ≤ rotationToleranceDeg`.
  * Among qualifying candidates the smallest `d` wins. The correction
- * reduces `|θ|` to `cap = rotationToleranceDeg × (d / tolerancePx)` — at
- * the zone edge the cap equals the tolerance (no jump on entry), at zero
- * distance the group is fully aligned.
+ * reduces `|θ|` to a distance-driven `cap` that equals
+ * `rotationToleranceDeg` at the zone edge (no jump on entry) and reaches
+ * zero once `d` is within `ROTATION_COMPLETE_AT_FRACTION` of the snap
+ * distance, so the group is fully aligned across that inner fraction.
  */
 export function computeSnapProximityRotation(
     state: GameState,
@@ -126,7 +143,10 @@ export function computeSnapProximityRotation(
     }
     if (!Number.isFinite(bestDistance)) return null;
 
-    const cap = ctx.rotationToleranceDeg * (bestDistance / ctx.tolerancePx);
+    const ramp =
+        (bestDistance / ctx.tolerancePx - ROTATION_COMPLETE_AT_FRACTION) /
+        (1 - ROTATION_COMPLETE_AT_FRACTION);
+    const cap = ctx.rotationToleranceDeg * clamp01(ramp);
     const excess = Math.abs(bestRotationDelta) - cap;
     if (excess <= SNAP_EPSILON_DEG) return null;
 
