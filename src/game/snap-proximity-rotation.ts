@@ -20,11 +20,21 @@
  * would snap on drop regardless. This only surfaces the earned snap early.
  */
 
-import type { GameState, Point } from '../model/types.js';
-import { getBorderEdges, tryGetGroup } from '../model/helpers.js';
-import type { GroupBorderEdge } from '../model/helpers.js';
-import { getGroupLocalBounds } from './group-bounds.js';
+import type { GameState } from '../model/types.js';
+import { tryGetGroup } from '../model/helpers.js';
 import { measureEdgeAlignment, SNAP_EPSILON_DEG } from './merge-detection.js';
+
+import {
+    buildProximityContext,
+    clamp01,
+    type ProximityContext,
+    type SnapTolerances,
+} from './snap-proximity-context.js';
+
+// Re-exported so existing importers of these symbols from this module keep
+// working; their canonical home is now snap-proximity-context.ts.
+export { buildProximityContext, clamp01 };
+export type { ProximityContext, SnapTolerances };
 
 /**
  * Rotation reaches the exact orientation once the dragged group is within
@@ -35,78 +45,6 @@ import { measureEdgeAlignment, SNAP_EPSILON_DEG } from './merge-detection.js';
  * anchor their fixtures to it and stay valid when it is retuned.
  */
 export const ROTATION_COMPLETE_AT_FRACTION = 0.2;
-
-/** Clamp a value to the unit interval [0, 1]. */
-function clamp01(value: number): number {
-    return Math.min(1, Math.max(0, value));
-}
-
-/**
- * The pair of thresholds that define when a drop would merge — shared by
- * merge detection on drop and snap proximity rotation during a drag, so
- * both always agree on what "close enough" means.
- */
-export interface SnapTolerances {
-    /** Snap distance (D) in world px. */
-    tolerancePx: number;
-    /** Rotation tolerance (T) in degrees. */
-    rotationToleranceDeg: number;
-}
-
-/**
- * Per-drag precomputed context. Valid only while the dragged group's
- * composition and every mate group stay unchanged — true for the duration
- * of a single-group drag, because merges happen only on drop. Build at
- * drag start, discard on drop/cancel.
- */
-export interface ProximityContext {
-    /** The dragged group. */
-    groupId: number;
-    /** Border edges of the dragged group and their mates (fixed during a drag). */
-    candidates: GroupBorderEdge[];
-    /** Dragged group's bbox center in un-rotated local space — the rotation pivot. */
-    centerLocal: Point;
-    /** Active snap distance (D) in world px. */
-    tolerancePx: number;
-    /** Active rotation tolerance (T) in degrees. */
-    rotationToleranceDeg: number;
-}
-
-/**
- * Build the per-drag context, or `null` when the feature does not apply:
- * not in free-rotation mode, unknown group, no cross-group mates, or a
- * degenerate tolerance. Non-finite tolerances (possible from corrupted
- * saved state upstream) are rejected here so `NaN`/`Infinity` can never
- * flow into the rotation math and get persisted as a group rotation.
- */
-export function buildProximityContext(
-    state: GameState,
-    movedGroupId: number,
-    tolerances: SnapTolerances,
-): ProximityContext | null {
-    const { tolerancePx, rotationToleranceDeg } = tolerances;
-    if (state.rotationMode !== 'free') return null;
-    if (!Number.isFinite(tolerancePx) || tolerancePx <= 0) return null;
-    if (!Number.isFinite(rotationToleranceDeg)) return null;
-
-    const group = tryGetGroup(state, movedGroupId);
-    if (!group) return null;
-
-    const candidates = getBorderEdges(group, state);
-    if (candidates.length === 0) return null;
-
-    const bounds = getGroupLocalBounds(group, state.piecesById);
-    return {
-        groupId: movedGroupId,
-        candidates,
-        centerLocal: {
-            x: bounds.minX + bounds.width / 2,
-            y: bounds.minY + bounds.height / 2,
-        },
-        tolerancePx,
-        rotationToleranceDeg,
-    };
-}
 
 /**
  * Compute the rotation to apply to the dragged group right now, in signed
