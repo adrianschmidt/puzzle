@@ -10,6 +10,8 @@ describe('rotate-handle gesture', () => {
     let rotationFocus: RotationFocus;
     let onRotate: ReturnType<typeof vi.fn>;
     let onCommit: ReturnType<typeof vi.fn>;
+    let onRotateStart: ReturnType<typeof vi.fn>;
+    let onRotateEnd: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
         document.body.replaceChildren();
@@ -18,6 +20,8 @@ describe('rotate-handle gesture', () => {
         rotationFocus = new RotationFocus();
         onRotate = vi.fn();
         onCommit = vi.fn();
+        onRotateStart = vi.fn();
+        onRotateEnd = vi.fn();
 
         // jsdom does not implement pointer capture — stub the methods on the
         // prototype so all buttons created during the test have them.
@@ -43,6 +47,8 @@ describe('rotate-handle gesture', () => {
             rotationFocus,
             onRotate: onRotate as (groupId: number, deltaDegrees: number) => void,
             onCommit: onCommit as (groupId: number) => void,
+            onRotateStart: onRotateStart as (groupId: number) => void,
+            onRotateEnd: onRotateEnd as (groupId: number) => void,
             getFocusedGroupScreenBounds: () => ({ left: 100, right: 200, top: 100, bottom: 200 }),
             getViewportSize: () => ({ width: 800, height: 600 }),
             getGroupRotation: () => 0,
@@ -184,6 +190,48 @@ describe('rotate-handle gesture', () => {
         onRotate.mockClear();
         dispatchPointerEvent(button, 'pointermove', { clientX: 150, clientY: 250 });
         expect(onRotate).not.toHaveBeenCalled();
+
+        handle.destroy();
+    });
+
+    it('calls onRotateStart on pointerdown', () => {
+        const handle = makeHandle();
+        handle.show();
+        rotationFocus.setFocus(0);
+
+        const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
+        dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
+
+        expect(onRotateStart).toHaveBeenCalledWith(0);
+
+        handle.destroy();
+    });
+
+    it('calls onRotateEnd on pointerup (commit)', () => {
+        const handle = makeHandle();
+        handle.show();
+        rotationFocus.setFocus(0);
+
+        const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
+        dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
+        dispatchPointerEvent(button, 'pointerup', { clientX: 250, clientY: 150 });
+
+        expect(onRotateEnd).toHaveBeenCalledWith(0);
+
+        handle.destroy();
+    });
+
+    it('calls onRotateEnd on pointercancel (no commit)', () => {
+        const handle = makeHandle();
+        handle.show();
+        rotationFocus.setFocus(0);
+
+        const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
+        dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
+        dispatchPointerEvent(button, 'pointercancel', { clientX: 250, clientY: 150 });
+
+        expect(onRotateEnd).toHaveBeenCalledWith(0);
+        expect(onCommit).not.toHaveBeenCalled();
 
         handle.destroy();
     });

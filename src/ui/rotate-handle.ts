@@ -34,6 +34,13 @@ export interface RotateHandleOptions {
      * merge-detection here.
      */
     onCommit: (groupId: number) => void;
+    /** Emitted at the start of a rotation drag (pointerdown), before the first onRotate. */
+    onRotateStart?: (groupId: number) => void;
+    /**
+     * Emitted when a rotation drag ends — on commit AND on cancel — after
+     * any final onRotate/onCommit. The host stops its per-gesture tracking here.
+     */
+    onRotateEnd?: (groupId: number) => void;
     /** Project the focused group's visual bounds into screen-space. */
     getFocusedGroupScreenBounds: (groupId: number) =>
         | { left: number; right: number; top: number; bottom: number }
@@ -157,6 +164,9 @@ export function createRotateHandle(
             if (commit && groupIdRef !== undefined) {
                 options.onCommit(groupIdRef);
             }
+            if (groupIdRef !== undefined) {
+                options.onRotateEnd?.(groupIdRef);
+            }
             startIdleTimer();
         }
 
@@ -190,6 +200,8 @@ export function createRotateHandle(
                 pointerId: event.pointerId,
                 extraPointerListener,
             };
+
+            options.onRotateStart?.(groupId);
 
             if (active && active.state !== 'visible') rescueActive();
             clearIdleTimer();
