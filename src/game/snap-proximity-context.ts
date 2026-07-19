@@ -64,7 +64,7 @@ export function buildProximityContext(
     const { tolerancePx, rotationToleranceDeg } = tolerances;
     if (state.rotationMode !== 'free') return null;
     if (!Number.isFinite(tolerancePx) || tolerancePx <= 0) return null;
-    if (!Number.isFinite(rotationToleranceDeg)) return null;
+    if (!Number.isFinite(rotationToleranceDeg) || rotationToleranceDeg <= 0) return null;
 
     const group = tryGetGroup(state, movedGroupId);
     if (!group) return null;

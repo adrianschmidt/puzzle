@@ -82,6 +82,10 @@ describe('buildProximityContext', () => {
         expect(buildProximityContext(makePairState({ x: 170, y: 50 }), 11, { ...TOL, tolerancePx: 0 })).toBeNull();
     });
 
+    it('returns null for a non-positive rotation tolerance', () => {
+        expect(buildProximityContext(makePairState({ x: 170, y: 50 }), 11, { ...TOL, rotationToleranceDeg: 0 })).toBeNull();
+    });
+
     it('returns null for non-finite tolerances (corrupted-state hardening)', () => {
         const state = () => makePairState({ x: 170, y: 50 });
         expect(buildProximityContext(state(), 11, { ...TOL, tolerancePx: NaN })).toBeNull();
