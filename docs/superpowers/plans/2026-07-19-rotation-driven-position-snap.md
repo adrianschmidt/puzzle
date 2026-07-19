@@ -526,14 +526,18 @@ function makeController(state: GameState): {
 
 describe('SnapProximityPositionController', () => {
     it('translates the group toward alignment on rotate', () => {
-        // d = 20, |θ| = 5 → cap 10 → excess 10 → move −10 in x (170 → 160).
+        // d = 20, |θ| = 5 → cap 10 → excess 10 → move −10 in x.
+        // Assert the CHANGE in position.x: makeCenteredGroup positions by bbox
+        // center, so the absolute position.x depends on the rotation offset
+        // (rotatePoint of the center), but the applied translation is −10.
         const state = makePairState({ x: 170, y: 50 }, 5);
         const { controller } = makeController(state);
+        const startX = getGroup(state, 11).position.x;
 
         controller.start(11);
         controller.onGroupRotated();
 
-        expect(getGroup(state, 11).position.x).toBeCloseTo(160);
+        expect(getGroup(state, 11).position.x - startX).toBeCloseTo(-10);
     });
 
     it('does nothing before start() or after stop()', () => {
@@ -563,23 +567,26 @@ describe('SnapProximityPositionController', () => {
     });
 
     it('evaluates at most once per frame, then resumes after the frame fires', () => {
-        // Start at d = 20, |θ| = 5 (cap 10): first eval moves 170 → 160 (d = 10).
+        // Start at d = 20, |θ| = 5 (cap 10): first eval moves −10 (d → 10).
+        // Assert cumulative CHANGE in position.x (absolute value depends on the
+        // rotation offset from makeCenteredGroup; the translations do not).
         const state = makePairState({ x: 170, y: 50 }, 5);
         const { controller, flushFrame } = makeController(state);
         const group = getGroup(state, 11);
+        const startX = group.position.x;
 
         controller.start(11);
         controller.onGroupRotated();
-        expect(group.position.x).toBeCloseTo(160);
+        expect(group.position.x - startX).toBeCloseTo(-10);
 
         // Improve rotation to |θ| = 2 (cap 4) but the frame gate is still set.
         group.rotation = 2;
         controller.onGroupRotated();
-        expect(group.position.x).toBeCloseTo(160); // gated: no change
+        expect(group.position.x - startX).toBeCloseTo(-10); // gated: no further move
 
         flushFrame();
-        controller.onGroupRotated(); // evaluates: d 10 → cap 4, move −6 → 154
-        expect(group.position.x).toBeCloseTo(154);
+        controller.onGroupRotated(); // evaluates: d 10 → cap 4, move −6 (total −16)
+        expect(group.position.x - startX).toBeCloseTo(-16);
     });
 });
 ```
