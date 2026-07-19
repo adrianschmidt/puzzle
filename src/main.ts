@@ -60,6 +60,7 @@ import {
     type WavyDialogConfig,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
+import { SnapProximityPositionController } from './interaction/snap-proximity-position-controller.js';
 import { rotateGroup } from './game/rotate-group.js';
 import type { SnapTolerances } from './game/snap-proximity-rotation.js';
 import {
@@ -1175,14 +1176,24 @@ const rotateButtons = createRotateButtons({
     getFocusedGroupScreenBounds,
 });
 
+const snapPosition = new SnapProximityPositionController({
+    getState: () => gameState,
+    getTolerances: () => activeSnapTolerances(gameState),
+});
+
 const rotateHandle = createRotateHandle({
     container: app,
     rotationFocus,
+    onRotateStart: (groupId) => {
+        if (!gameState) return;
+        snapPosition.start(groupId);
+    },
     onRotate: (groupId, deltaDegrees) => {
         if (!gameState) return;
         const group = gameState.groupsById.get(groupId);
         if (!group) return;
         rotateGroup(group, gameState.piecesById, deltaDegrees);
+        snapPosition.onGroupRotated();
         renderer.renderState(gameState);
         // Re-apply selection visuals after re-render.
         for (const selectedId of selectionManager.selectedGroupIds) {
@@ -1200,6 +1211,9 @@ const rotateHandle = createRotateHandle({
             applyMergeResult(result, [result.group.id]);
         }
         autoSave();
+    },
+    onRotateEnd: () => {
+        snapPosition.stop();
     },
     getFocusedGroupScreenBounds,
     getGroupRotation: (groupId) => gameState?.groupsById.get(groupId)?.rotation ?? null,
