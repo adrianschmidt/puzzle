@@ -846,6 +846,26 @@ html, body {
   accent-color: var(--ui-accent);
 }
 
+/*
+ * Short-and-wide viewports (phone landscape): the stacked dialog cannot fit,
+ * so lay the two content groups side by side — settings left, image + size
+ * right — and widen the dialog to hold them. The internal scroll from
+ * .dialog-content remains the fallback when even two columns overflow
+ * (e.g. Composable's sliders open on a very short screen).
+ */
+@media (min-width: 700px) and (max-height: 560px) {
+  .size-picker-dialog {
+    max-width: 680px;
+  }
+
+  .dialog-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 24px;
+    align-items: start;
+  }
+}
+
 /* Info modal solve button (debug) */
 .info-modal-solve-btn {
   display: block;
