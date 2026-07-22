@@ -567,18 +567,30 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
   background: rgba(0, 0, 0, 0.6);
   z-index: 10001;
   animation: fade-in 0.2s ease-out;
 }
 
+/*
+ * Keep this base .size-picker-dialog rule ABOVE its @media duplicate below:
+ * the guard tests in style.test.ts locate a rule via ruleBody(), which matches
+ * the FIRST occurrence of the selector. Reordering it under the @media block
+ * would retarget those assertions at the wrong rule body.
+ */
 .size-picker-dialog {
   background: var(--ui-surface);
   border: 1px solid var(--ui-border-subtle);
   border-radius: 16px;
-  padding: 24px;
+  padding: 24px 0 0;
   max-width: 360px;
   width: 90%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   animation: pop-in 0.25s ease-out;
@@ -589,7 +601,23 @@ html, body {
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--ui-fg);
-  margin-bottom: 20px;
+  margin: 0 24px 20px;
+}
+
+/*
+ * Scrollable body of the new-game dialog — the title above stays pinned.
+ * Carries the dialog's horizontal + bottom padding so the scrollbar hugs
+ * the dialog edge without escaping the rounded corners.
+ *
+ * Keep this base rule ABOVE its @media duplicate below: style.test.ts's
+ * ruleBody() matches the FIRST occurrence of the selector, so reordering it
+ * under the @media block would retarget those guard assertions.
+ */
+.dialog-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  padding: 0 24px 24px;
 }
 
 .size-picker-grid {
@@ -738,6 +766,7 @@ html, body {
  */
 .dialog-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;

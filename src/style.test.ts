@@ -28,6 +28,34 @@ function ruleBody(css: string, selector: string): string {
     return css.slice(open + 1, close);
 }
 
+/**
+ * Guards for the new-game dialog's viewport fit. The dialog once rendered
+ * taller than short viewports with no max-height and no scrolling, clipping
+ * both ends unreachably (see the 2026-07-22 responsive-modal spec). Nothing
+ * but these assertions would catch an accidental revert of the CSS wiring.
+ */
+describe('new-game dialog responsive CSS', () => {
+    it('caps the dialog height and scrolls inside, not outside', () => {
+        const body = ruleBody(styleCss, '.size-picker-dialog');
+        expect(body).toMatch(/max-height:\s*100%/);
+        expect(body).toMatch(/flex-direction:\s*column/);
+        expect(body).toMatch(/overflow:\s*hidden/);
+    });
+
+    it('scrolls the dialog body internally', () => {
+        const body = ruleBody(styleCss, '.dialog-content');
+        expect(body).toMatch(/overflow-y:\s*auto/);
+        expect(body).toMatch(/overscroll-behavior:\s*contain/);
+        // Load-bearing: without min-height:0 the flex child can't shrink
+        // below its content, so it never scrolls inside the flex column.
+        expect(body).toMatch(/min-height:\s*0/);
+    });
+
+    it('lets dialog rows wrap instead of clipping wide controls', () => {
+        expect(ruleBody(styleCss, '.dialog-row')).toMatch(/flex-wrap:\s*wrap/);
+    });
+});
+
 describe('selection glow CSS', () => {
     it('defines --selection-glow on :root (light glow for dark backgrounds)', () => {
         expect(ruleBody(styleCss, ':root')).toMatch(
