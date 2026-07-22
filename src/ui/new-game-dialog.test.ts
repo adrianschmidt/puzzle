@@ -586,6 +586,66 @@ describe('createNewGameDialog — wavy borderless toggle', () => {
     });
 });
 
+describe('createNewGameDialog — responsive layout structure', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        container.remove();
+    });
+
+    function openDialog(): void {
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
+    }
+
+    it('keeps the title outside the scrollable content wrapper', () => {
+        openDialog();
+        const dialog = container.querySelector('.size-picker-dialog')!;
+        const title = dialog.querySelector('.size-picker-title')!;
+        expect(title.parentElement).toBe(dialog);
+        expect(dialog.querySelector('.dialog-content')).not.toBeNull();
+        expect(dialog.querySelector('.dialog-content .size-picker-title')).toBeNull();
+    });
+
+    it('places every section inside the scrollable content wrapper', () => {
+        openDialog();
+        const content = container.querySelector('.dialog-content')!;
+        for (const selector of [
+            '.cut-style-section',
+            '.rotation-row',
+            '.image-source-section',
+            '.size-picker-grid',
+            '.composable-sliders',
+        ]) {
+            expect(content.querySelector(selector), selector).not.toBeNull();
+        }
+    });
+
+    it('splits sections into settings and start groups for the two-column layout', () => {
+        openDialog();
+        const settings = container.querySelector('.dialog-group--settings')!;
+        const start = container.querySelector('.dialog-group--start')!;
+        expect(settings.querySelector('.cut-style-section')).not.toBeNull();
+        expect(settings.querySelector('.rotation-row')).not.toBeNull();
+        // Fractal and wavy borderless sections share the .cut-style-options class.
+        expect(settings.querySelectorAll('.cut-style-options')).toHaveLength(2);
+        expect(settings.querySelector('.composable-sliders')).not.toBeNull();
+        expect(start.querySelector('.image-source-section')).not.toBeNull();
+        expect(start.querySelector('.size-picker-grid')).not.toBeNull();
+    });
+
+    it('renders the "Puzzle Size" heading immediately above the size grid', () => {
+        openDialog();
+        const subtitle = container.querySelector('.size-picker-subtitle')!;
+        expect(subtitle.textContent).toBe('Puzzle Size');
+        expect(subtitle.nextElementSibling?.classList.contains('size-picker-grid')).toBe(true);
+    });
+});
+
 describe('composable base-cut picker', () => {
     let container: HTMLElement;
 

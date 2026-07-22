@@ -611,7 +611,6 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     const sizeSubtitle = document.createElement('h3');
     sizeSubtitle.className = 'size-picker-subtitle';
     sizeSubtitle.textContent = 'Puzzle Size';
-    dialog.appendChild(sizeSubtitle);
 
     const fractalSection = buildBorderlessOptionsSection({
         saved: options.savedFractalConfig,
@@ -694,13 +693,30 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         options.onPreloadTracedTabs?.();
     }
 
-    dialog.appendChild(cutStyleSection);
-    dialog.appendChild(rotationRow);
-    dialog.appendChild(fractalSection.element);
-    dialog.appendChild(wavySection.element);
-    dialog.appendChild(imageSourceSection.element);
-    dialog.appendChild(sizeSection.element);
-    dialog.appendChild(composableSection.element);
+    // Scrollable body: the title stays pinned above; everything else lives in
+    // two groups so the short-and-wide layout can place them side by side.
+    // Settings (cut style + its options) come first; the start group (image +
+    // size grid) last, since picking a size launches the game.
+    const content = document.createElement('div');
+    content.className = 'dialog-content';
+
+    const settingsGroup = document.createElement('div');
+    settingsGroup.className = 'dialog-group dialog-group--settings';
+    settingsGroup.appendChild(cutStyleSection);
+    settingsGroup.appendChild(rotationRow);
+    settingsGroup.appendChild(fractalSection.element);
+    settingsGroup.appendChild(wavySection.element);
+    settingsGroup.appendChild(composableSection.element);
+
+    const startGroup = document.createElement('div');
+    startGroup.className = 'dialog-group dialog-group--start';
+    startGroup.appendChild(imageSourceSection.element);
+    startGroup.appendChild(sizeSubtitle);
+    startGroup.appendChild(sizeSection.element);
+
+    content.appendChild(settingsGroup);
+    content.appendChild(startGroup);
+    dialog.appendChild(content);
 
     overlay.appendChild(dialog);
 
