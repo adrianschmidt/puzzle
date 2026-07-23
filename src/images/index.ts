@@ -1,7 +1,9 @@
 export {
     fetchRandomImage,
+    fetchRandomImages,
     buildRandomPhotoUrl,
     parseUnsplashResponse,
+    triggerPhotoDownload,
     getUnsplashAccessKey,
     UNSPLASH_RANDOM_URL,
 } from './unsplash.js';

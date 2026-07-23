@@ -7,6 +7,8 @@ import {
     buildRandomPhotoUrl,
     parseUnsplashResponse,
     fetchRandomImage,
+    fetchRandomImages,
+    triggerPhotoDownload,
     UNSPLASH_RANDOM_URL,
 } from './unsplash.js';
 
@@ -16,6 +18,7 @@ function makeUnsplashResponse() {
         urls: {
             regular: 'https://images.unsplash.com/photo-abc?w=1080',
             full: 'https://images.unsplash.com/photo-abc',
+            small: 'https://images.unsplash.com/photo-abc?w=400',
         },
         width: 4000,
         height: 2667,
@@ -27,7 +30,9 @@ function makeUnsplashResponse() {
         },
         links: {
             html: 'https://unsplash.com/photos/abc123',
+            download_location: 'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
         },
+        alt_description: 'a mountain lake at dawn',
     };
 }
 
@@ -76,6 +81,18 @@ describe('buildRandomPhotoUrl', () => {
         const url = buildRandomPhotoUrl('test-key', undefined, 'landscape');
 
         expect(url).toContain('orientation=landscape');
+    });
+
+    it('includes count when provided', () => {
+        const url = buildRandomPhotoUrl('test-key', undefined, 'landscape', 4);
+
+        expect(url).toContain('count=4');
+    });
+
+    it('omits count when not provided', () => {
+        const url = buildRandomPhotoUrl('test-key');
+
+        expect(url).not.toContain('count=');
     });
 });
 
@@ -160,6 +177,31 @@ describe('parseUnsplashResponse', () => {
 
     it('throws on response with non-number dimensions', () => {
         const response = { ...makeUnsplashResponse(), width: 'not-a-number' };
+
+        expect(() => parseUnsplashResponse(response)).toThrow(
+            'Invalid Unsplash API response',
+        );
+    });
+
+    it('extracts thumb URL, download location and description', () => {
+        const result = parseUnsplashResponse(makeUnsplashResponse());
+
+        expect(result.thumbUrl).toBe('https://images.unsplash.com/photo-abc?w=400');
+        expect(result.downloadLocation).toBe(
+            'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
+        );
+        expect(result.description).toBe('a mountain lake at dawn');
+    });
+
+    it('omits description when alt_description is null', () => {
+        const response = { ...makeUnsplashResponse(), alt_description: null };
+
+        expect(parseUnsplashResponse(response).description).toBeUndefined();
+    });
+
+    it('throws on response missing download_location', () => {
+        const response = makeUnsplashResponse();
+        response.links = { html: response.links.html } as typeof response.links;
 
         expect(() => parseUnsplashResponse(response)).toThrow(
             'Invalid Unsplash API response',
@@ -268,5 +310,88 @@ describe('fetchRandomImage', () => {
 
         const calledUrl = mockFetch.mock.calls[0][0] as string;
         expect(calledUrl).toContain('orientation=portrait');
+    });
+});
+
+describe('fetchRandomImages', () => {
+    it('parses an array response into results', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve([makeUnsplashResponse(), makeUnsplashResponse()]),
+        });
+
+        const results = await fetchRandomImages('test-key', 2, mockFetch as unknown as typeof fetch);
+
+        expect(results).toHaveLength(2);
+        expect(results![0].imageUrl).toBe('https://images.unsplash.com/photo-abc?w=1080');
+        expect(results![0].thumbUrl).toBe('https://images.unsplash.com/photo-abc?w=400');
+    });
+
+    it('requests the given count and orientation', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve([makeUnsplashResponse()]),
+        });
+
+        await fetchRandomImages('test-key', 4, mockFetch as unknown as typeof fetch, 'nature', 'portrait');
+
+        const calledUrl = mockFetch.mock.calls[0][0] as string;
+        expect(calledUrl).toContain('count=4');
+        expect(calledUrl).toContain('orientation=portrait');
+        expect(calledUrl).toContain('query=nature');
+    });
+
+    it('returns undefined on HTTP error', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 429,
+            statusText: 'Too Many Requests',
+        });
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const results = await fetchRandomImages('test-key', 4, mockFetch as unknown as typeof fetch);
+
+        expect(results).toBeUndefined();
+        warnSpy.mockRestore();
+    });
+
+    it('throws when the body is not an array', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve(makeUnsplashResponse()),
+        });
+
+        await expect(
+            fetchRandomImages('test-key', 4, mockFetch as unknown as typeof fetch),
+        ).rejects.toThrow('Invalid Unsplash API response');
+    });
+});
+
+describe('triggerPhotoDownload', () => {
+    it('calls the download location with client_id appended', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+
+        await triggerPhotoDownload(
+            'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
+            'my-key',
+            mockFetch as unknown as typeof fetch,
+        );
+
+        expect(mockFetch).toHaveBeenCalledOnce();
+        const calledUrl = new URL(mockFetch.mock.calls[0][0] as string);
+        expect(calledUrl.searchParams.get('client_id')).toBe('my-key');
+        expect(calledUrl.searchParams.get('ixid')).toBe('xyz');
+        expect(calledUrl.pathname).toBe('/photos/abc123/download');
+    });
+
+    it('warns but does not throw on HTTP error', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 403, statusText: 'Forbidden' });
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        await expect(
+            triggerPhotoDownload('https://api.unsplash.com/x/download', 'k', mockFetch as unknown as typeof fetch),
+        ).resolves.toBeUndefined();
+        expect(warnSpy).toHaveBeenCalledOnce();
+        warnSpy.mockRestore();
     });
 });
