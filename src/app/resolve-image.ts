@@ -10,19 +10,10 @@ import { diagnostics } from '../diagnostics.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { fetchRandomImage } from '../images/index.js';
 import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
+import { toDisplayImage, type DisplayImage } from './unsplash-display-image.js';
 import type { Orientation } from '../model/types.js';
 
-export interface ResolvedImage {
-    imageUrl: string;
-    imageSize: { width: number; height: number };
-    attribution: {
-        photographerName: string;
-        photographerUrl: string;
-        photoUrl: string;
-    };
-    /** Unsplash download-reporting endpoint, triggered when the game starts. */
-    downloadLocation: string;
-}
+export type ResolvedImage = DisplayImage;
 
 export async function resolveUnsplashImage(
     accessKey: string,
@@ -40,24 +31,7 @@ export async function resolveUnsplashImage(
             return null;
         }
 
-        // The Unsplash "regular" URL delivers images scaled to 1080px wide.
-        // Compute the height from the original aspect ratio so the puzzle
-        // generator produces correctly proportioned pieces.
-        const aspectRatio = result.height / result.width;
-        const displayWidth = 1080;
-        return {
-            imageUrl: result.imageUrl,
-            imageSize: {
-                width: displayWidth,
-                height: Math.round(displayWidth * aspectRatio),
-            },
-            attribution: {
-                photographerName: result.photographerName,
-                photographerUrl: result.photographerUrl,
-                photoUrl: result.photoUrl,
-            },
-            downloadLocation: result.downloadLocation,
-        };
+        return toDisplayImage(result);
     } catch (error) {
         diagnostics.warn('Failed to fetch Unsplash image, using fallback:', error);
         track('image-fetch-failed', {
