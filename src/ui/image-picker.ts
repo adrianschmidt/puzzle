@@ -8,6 +8,8 @@
  * itself in response. There is no selected state.
  */
 
+import { isSafeHttpUrl } from '../sharing/safe-url.js';
+
 /** A candidate photo the player can pick, pre-scaled for the puzzle. */
 export interface CandidateImage {
     /** Full-quality URL used as the puzzle image (Unsplash `regular`). */
@@ -79,15 +81,36 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
 
     const grid = document.createElement('div');
     grid.className = 'image-picker-grid';
-    const tiles: HTMLButtonElement[] = [];
+    interface Slot {
+        cell: HTMLDivElement;
+        tile: HTMLButtonElement;
+        credit: HTMLAnchorElement;
+    }
+    const slots: Slot[] = [];
     for (let i = 0; i < CANDIDATE_COUNT; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'image-picker-cell';
+
         const tile = document.createElement('button');
         tile.type = 'button';
         tile.className = 'image-picker-tile';
         tile.dataset.testid = 'image-picker-tile';
         tile.disabled = true;
-        tiles.push(tile);
-        grid.appendChild(tile);
+        cell.appendChild(tile);
+
+        // A link inside a button is invalid HTML, so the credit is a sibling
+        // of the tile — outside its tap target, so clicking it never starts
+        // a game.
+        const credit = document.createElement('a');
+        credit.className = 'image-picker-credit';
+        credit.dataset.testid = 'image-picker-credit';
+        credit.target = '_blank';
+        credit.rel = 'noopener';
+        credit.hidden = true;
+        cell.appendChild(credit);
+
+        slots.push({ cell, tile, credit });
+        grid.appendChild(cell);
     }
     section.appendChild(grid);
 
@@ -95,6 +118,7 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
     error.className = 'image-picker-error';
     error.textContent = "Couldn't load images — tap ↻ to try again.";
     error.hidden = true;
+    error.setAttribute('aria-live', 'polite');
     section.appendChild(error);
 
     const actions = document.createElement('div');
@@ -123,32 +147,40 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
     // superseded fetch (earlier category, earlier refresh) is dropped.
     let fetchToken = 0;
 
+    function hideCredit(credit: HTMLAnchorElement): void {
+        credit.hidden = true;
+        credit.removeAttribute('href');
+        credit.textContent = '';
+    }
+
     function setLoading(): void {
         error.hidden = true;
-        for (const tile of tiles) {
+        for (const { cell, tile, credit } of slots) {
+            cell.hidden = false;
             tile.replaceChildren();
-            tile.hidden = false;
             tile.disabled = true;
             tile.classList.add('image-picker-tile--loading');
+            hideCredit(credit);
         }
     }
 
     function showCandidates(candidates: CandidateImage[]): void {
-        for (let i = 0; i < tiles.length; i++) {
-            const tile = tiles[i];
+        for (let i = 0; i < slots.length; i++) {
+            const { cell, tile, credit } = slots[i];
             const candidate = candidates[i];
             tile.replaceChildren();
             tile.classList.remove('image-picker-tile--loading');
 
             // Unsplash may return fewer photos than requested for narrow
-            // queries; hide the tiles that have nothing to show.
+            // queries; hide the slots that have nothing to show.
             if (!candidate) {
-                tile.hidden = true;
+                cell.hidden = true;
                 tile.disabled = true;
+                hideCredit(credit);
                 continue;
             }
 
-            tile.hidden = false;
+            cell.hidden = false;
             tile.disabled = false;
 
             const img = document.createElement('img');
@@ -161,15 +193,31 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
             // Property assignment (not addEventListener) so each refresh
             // replaces the previous candidate's handler.
             tile.onclick = () => options.onPick({ kind: 'photo', photo: candidate });
+
+            // The photographer URL already carries the utm_source=puzzle
+            // referral params from the API layer — don't append anything.
+            // Defense-in-depth parity with createAttributionElement: only
+            // assign the href when it's an http(s) URL, so a non-http(s)
+            // scheme (e.g. `javascript:`) can't be smuggled into the DOM. The
+            // name still renders as text when the URL is dropped.
+            credit.hidden = false;
+            if (isSafeHttpUrl(candidate.attribution.photographerUrl)) {
+                credit.href = candidate.attribution.photographerUrl;
+            } else {
+                credit.removeAttribute('href');
+            }
+            credit.textContent = candidate.attribution.photographerName;
+            credit.title = candidate.attribution.photographerName;
         }
     }
 
     function showError(): void {
         error.hidden = false;
-        for (const tile of tiles) {
+        for (const { tile, credit } of slots) {
             tile.replaceChildren();
             tile.classList.remove('image-picker-tile--loading');
             tile.disabled = true;
+            hideCredit(credit);
         }
     }
 

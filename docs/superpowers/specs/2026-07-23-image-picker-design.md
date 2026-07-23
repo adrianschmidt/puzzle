@@ -51,6 +51,9 @@ image controls:
     Unsplash `urls.small`, cropped uniformly with `object-fit: cover`,
     alt text from the photo description. The grid has a fixed aspect so
     dialog height stays stable while loading (skeleton tiles).
+    - Each thumbnail carries a photographer-credit overlay (linked,
+      UTM-tagged, per Unsplash attribution guidelines) on a bottom
+      gradient scrim; credits hide during loading and after an error.
   - A row with two labelled buttons: **🎲 Surprise me** and
     **Blank puzzle**.
 - **Picture Type** and **Vibrant colours** controls are unchanged;
@@ -89,7 +92,8 @@ image controls:
 
 - Fetch failure (offline, rate-limited): the grid shows a small inline
   error with the refresh button as retry; Surprise me and Blank still
-  work (Surprise already falls back to the bundled image).
+  work (Surprise already falls back to the bundled image). The error
+  message is announced politely to screen readers (`aria-live="polite"`).
 - No API key configured (dev builds): the thumbnail grid is hidden and
   the section degrades to Surprise me + Blank.
 - Share links and saves are untouched — they already store the resolved
@@ -124,3 +128,10 @@ Vitest, tests colocated with source:
 - picker state logic (fetch triggers, stale-response protection, error
   states, callback wiring) next to `image-picker.ts`;
 - `startNewGame` image-resolution branching where practical.
+
+## Analytics
+
+`new-game-started` gains `imagePicked` (boolean) for fresh unsplash
+games: `true` when the player tapped a specific candidate thumbnail,
+`false` for "Surprise me". Absent for shared/resumed games and
+non-photo sources.
