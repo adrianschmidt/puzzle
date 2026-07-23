@@ -130,7 +130,7 @@ function buildHowToPlaySection(): HTMLElement {
     appendInlineLi(buttons, [
         '🎮 ',
         ['strong', 'New Game'],
-        ' — Start fresh with a random image; pick puzzle size, cut style, image source and picture type in the dialog. Tick ',
+        ' — Pick puzzle size, cut style and picture type, then tap a suggested photo, Surprise me, or Blank puzzle to start. Tick ',
         ['strong', 'Vibrant colours'],
         ' for more saturated photos.',
     ]);

@@ -66,7 +66,7 @@ export {
     formatAttributionText,
 } from './attribution.js';
 
-export { createNewGameDialog, getSizeClass } from './new-game-dialog.js';
+export { createNewGameDialog } from './new-game-dialog.js';
 export type {
     NewGameDialogOptions,
     NewGameSelection,

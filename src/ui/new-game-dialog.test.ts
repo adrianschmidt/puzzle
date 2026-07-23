@@ -7,26 +7,15 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createNewGameDialog, getSizeClass, type ComposableSliderConfig } from './new-game-dialog.js';
+import { createNewGameDialog, type ComposableSliderConfig } from './new-game-dialog.js';
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 
-describe('getSizeClass', () => {
-    it('returns "small" for 24 pieces', () => {
-        expect(getSizeClass(24)).toBe('small');
-    });
-
-    it('returns "medium" for 48 pieces', () => {
-        expect(getSizeClass(48)).toBe('medium');
-    });
-
-    it('returns "large" for 96 pieces', () => {
-        expect(getSizeClass(96)).toBe('large');
-    });
-
-    it('returns "xlarge" for 192 pieces', () => {
-        expect(getSizeClass(192)).toBe('xlarge');
-    });
-});
+/** Start the game the way the new dialog does it: click "Surprise me". */
+function pickSurprise(container: HTMLElement): void {
+    container
+        .querySelector<HTMLButtonElement>('[data-testid="image-picker-surprise"]')!
+        .click();
+}
 
 describe('createNewGameDialog', () => {
     let container: HTMLElement;
@@ -46,27 +35,36 @@ describe('createNewGameDialog', () => {
         expect(container.querySelector('.size-picker-overlay')).not.toBeNull();
     });
 
-    it('shows the correct number of size options', () => {
+    it('renders one select option per puzzle size', () => {
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
+
+        const select = container.querySelector<HTMLSelectElement>('[data-testid="size-select"]')!;
+        expect(select.options).toHaveLength(PUZZLE_SIZE_OPTIONS.length);
+        expect(select.value).toBe('48');
+        expect(select.options[0].textContent).toBe('24 pieces');
+        expect(select.options[3].textContent).toBe('192 pieces');
+    });
+
+    it('shows approximate piece counts for triangles', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
+            selectedCutStyleId: 'triangles',
             onSelect: vi.fn(),
         });
 
-        const buttons = container.querySelectorAll('.size-picker-option');
-        expect(buttons).toHaveLength(PUZZLE_SIZE_OPTIONS.length);
+        const select = container.querySelector<HTMLSelectElement>('[data-testid="size-select"]')!;
+        expect(select.options[0].textContent).toBe('~24 pieces');
+        expect(select.options[3].textContent).toBe('~192 pieces');
     });
 
-    it('marks the selected option', () => {
-        createNewGameDialog({
-            container,
-            selectedSizeId: '96',
-            onSelect: vi.fn(),
-        });
+    it('switches size labels to approximate when the cut style changes to fractal', () => {
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
 
-        const buttons = container.querySelectorAll('.size-picker-option');
-        expect(buttons[2].classList.contains('size-picker-option--selected')).toBe(true);
-        expect(buttons[0].classList.contains('size-picker-option--selected')).toBe(false);
+        container.querySelector<HTMLButtonElement>('[data-cut-style-id="fractal"]')!.click();
+
+        const select = container.querySelector<HTMLSelectElement>('[data-testid="size-select"]')!;
+        expect(select.options[1].textContent).toBe('~48 pieces');
     });
 
     it('calls onSelect with the correct id when a size is clicked', () => {
@@ -77,8 +75,10 @@ describe('createNewGameDialog', () => {
             onSelect,
         });
 
-        const buttons = container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
-        buttons[3].click();
+        const select = container.querySelector<HTMLSelectElement>('[data-testid="size-select"]')!;
+        select.value = '192';
+        select.dispatchEvent(new Event('change'));
+        pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith({
             sizeId: '192',
@@ -86,7 +86,7 @@ describe('createNewGameDialog', () => {
             composableConfig: undefined,
             fractalConfig: undefined,
             rotationEnabled: false,
-            imageSource: 'random',
+            imageChoice: { kind: 'surprise' },
             imageCategory: 'any',
             vibrant: false,
         });
@@ -99,8 +99,7 @@ describe('createNewGameDialog', () => {
             onSelect: vi.fn(),
         });
 
-        const buttons = container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
-        buttons[0].click();
+        pickSurprise(container);
 
         expect(container.querySelector('.size-picker-overlay')).toBeNull();
     });
@@ -146,46 +145,6 @@ describe('createNewGameDialog', () => {
         expect(container.querySelector('.size-picker-overlay')).not.toBeNull();
         dismiss();
         expect(container.querySelector('.size-picker-overlay')).toBeNull();
-    });
-
-    it('displays piece count in each button', () => {
-        createNewGameDialog({
-            container,
-            selectedSizeId: '48',
-            onSelect: vi.fn(),
-        });
-
-        const counts = container.querySelectorAll('.size-picker-count');
-        expect(counts[0].textContent).toBe('24');
-        expect(counts[1].textContent).toBe('48');
-        expect(counts[2].textContent).toBe('96');
-        expect(counts[3].textContent).toBe('192');
-    });
-
-    it('shows approximate piece counts without grid dims for triangles', () => {
-        createNewGameDialog({
-            container,
-            selectedSizeId: '48',
-            selectedCutStyleId: 'triangles',
-            onSelect: vi.fn(),
-        });
-
-        const counts = container.querySelectorAll('.size-picker-count');
-        expect(counts[0].textContent).toBe('~24');
-        expect(counts[1].textContent).toBe('~48');
-        expect(counts[2].textContent).toBe('~96');
-        expect(counts[3].textContent).toBe('~192');
-        expect(container.querySelectorAll('.size-picker-dims')).toHaveLength(0);
-    });
-
-    it('never renders grid dimensions in size buttons', () => {
-        createNewGameDialog({
-            container,
-            selectedSizeId: '48',
-            onSelect: vi.fn(),
-        });
-
-        expect(container.querySelectorAll('.size-picker-dims')).toHaveLength(0);
     });
 
     it('fires onPreloadTracedTabs when opened with triangles selected', () => {
@@ -253,10 +212,11 @@ describe('createNewGameDialog', () => {
             onSelect,
         });
 
-        // Click the first size option
-        const sizeButtons =
-            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
-        sizeButtons[0].click();
+        // Pick the '24' size.
+        const select = container.querySelector<HTMLSelectElement>('[data-testid="size-select"]')!;
+        select.value = '24';
+        select.dispatchEvent(new Event('change'));
+        pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith({
             sizeId: '24',
@@ -264,7 +224,7 @@ describe('createNewGameDialog', () => {
             composableConfig: undefined,
             fractalConfig: { borderless: false },
             rotationEnabled: false,
-            imageSource: 'random',
+            imageChoice: { kind: 'surprise' },
             imageCategory: 'any',
             vibrant: false,
         });
@@ -285,10 +245,11 @@ describe('createNewGameDialog', () => {
         )!;
         fractalBtn.click();
 
-        // Then pick a size
-        const sizeButtons =
-            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
-        sizeButtons[0].click();
+        // Then pick the '24' size and start the game.
+        const select = container.querySelector<HTMLSelectElement>('[data-testid="size-select"]')!;
+        select.value = '24';
+        select.dispatchEvent(new Event('change'));
+        pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith({
             sizeId: '24',
@@ -296,7 +257,7 @@ describe('createNewGameDialog', () => {
             composableConfig: undefined,
             fractalConfig: { borderless: false },
             rotationEnabled: false,
-            imageSource: 'random',
+            imageChoice: { kind: 'surprise' },
             imageCategory: 'any',
             vibrant: false,
         });
@@ -360,9 +321,7 @@ describe('createNewGameDialog', () => {
         checkbox.checked = true;
         checkbox.dispatchEvent(new Event('change'));
 
-        const sizeButtons =
-            container.querySelectorAll<HTMLButtonElement>('.size-picker-option');
-        sizeButtons[0].click();
+        pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -384,6 +343,70 @@ describe('createNewGameDialog', () => {
             '.rotation-row input[type="checkbox"]',
         );
         expect(checkbox?.checked).toBe(true);
+    });
+
+    it('reports a picked photo through onSelect and dismisses', async () => {
+        const onSelect = vi.fn();
+        const candidate = {
+            imageUrl: 'https://images.unsplash.com/photo-1?w=1080',
+            thumbUrl: 'https://images.unsplash.com/photo-1?w=400',
+            imageSize: { width: 1080, height: 720 },
+            attribution: {
+                photographerName: 'P1',
+                photographerUrl: 'https://unsplash.com/@p1',
+                photoUrl: 'https://unsplash.com/photos/1',
+            },
+            downloadLocation: 'https://api.unsplash.com/photos/1/download',
+        };
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            onSelect,
+            fetchImageCandidates: vi.fn().mockResolvedValue([candidate]),
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        container.querySelector<HTMLButtonElement>('[data-testid="image-picker-tile"]')!.click();
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ imageChoice: { kind: 'photo', photo: candidate } }),
+        );
+        expect(container.querySelector('.size-picker-overlay')).toBeNull();
+    });
+
+    it('re-fetches candidates when the category or vibrant option changes', () => {
+        const fetchImageCandidates = vi.fn().mockResolvedValue(null);
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            onSelect: vi.fn(),
+            fetchImageCandidates,
+        });
+        expect(fetchImageCandidates).toHaveBeenCalledTimes(1);
+        expect(fetchImageCandidates).toHaveBeenLastCalledWith('any', false);
+
+        const categorySelect = container.querySelector<HTMLSelectElement>(
+            '.image-options-section select',
+        )!;
+        categorySelect.value = 'nature';
+        categorySelect.dispatchEvent(new Event('change'));
+        expect(fetchImageCandidates).toHaveBeenCalledTimes(2);
+        expect(fetchImageCandidates).toHaveBeenLastCalledWith('nature', false);
+
+        const vibrant = container.querySelector<HTMLInputElement>(
+            '.image-options-section input[type="checkbox"]',
+        )!;
+        vibrant.checked = true;
+        vibrant.dispatchEvent(new Event('change'));
+        expect(fetchImageCandidates).toHaveBeenCalledTimes(3);
+        expect(fetchImageCandidates).toHaveBeenLastCalledWith('nature', true);
+    });
+
+    it('hides the candidate grid when no fetchImageCandidates is provided', () => {
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
+
+        expect(container.querySelector<HTMLElement>('.image-picker-grid')!.hidden).toBe(true);
     });
 });
 
@@ -476,10 +499,8 @@ describe('createNewGameDialog — composable borderless toggle', () => {
         checkbox!.checked = true;
         checkbox!.dispatchEvent(new Event('change'));
 
-        // Trigger a size selection to fire onSelect (match how other tests do it).
-        container
-            .querySelectorAll<HTMLButtonElement>('.size-picker-option')[0]
-            .click();
+        // Trigger onSelect the same way the dialog does: pick "Surprise me".
+        pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -528,8 +549,8 @@ describe('createNewGameDialog — fractal borderless toggle', () => {
         toggle!.checked = true;
         toggle!.dispatchEvent(new Event('change'));
 
-        // Trigger selection the same way the existing dialog tests do (size click).
-        container.querySelectorAll<HTMLElement>('.size-picker-option')[0].click();
+        // Trigger selection the same way the existing dialog tests do (pick "Surprise me").
+        pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({ fractalConfig: { borderless: true } }),
@@ -563,8 +584,8 @@ describe('createNewGameDialog — wavy borderless toggle', () => {
         toggle!.checked = true;
         toggle!.dispatchEvent(new Event('change'));
 
-        // Trigger selection the same way the existing dialog tests do (size click).
-        container.querySelectorAll<HTMLElement>('.size-picker-option')[0].click();
+        // Trigger selection the same way the existing dialog tests do (pick "Surprise me").
+        pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({ wavyConfig: { borderless: true } }),
@@ -579,7 +600,7 @@ describe('createNewGameDialog — wavy borderless toggle', () => {
             selectedCutStyleId: 'classic',
             onSelect,
         });
-        container.querySelectorAll<HTMLElement>('.size-picker-option')[0].click();
+        pickSurprise(container);
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({ wavyConfig: undefined }),
         );
@@ -617,8 +638,8 @@ describe('createNewGameDialog — responsive layout structure', () => {
         for (const selector of [
             '.cut-style-section',
             '.rotation-row',
-            '.image-source-section',
-            '.size-picker-grid',
+            '.image-options-section',
+            '.image-picker',
             '.composable-sliders',
         ]) {
             expect(content.querySelector(selector), selector).not.toBeNull();
@@ -634,15 +655,17 @@ describe('createNewGameDialog — responsive layout structure', () => {
         // Fractal and wavy borderless sections share the .cut-style-options class.
         expect(settings.querySelectorAll('.cut-style-options')).toHaveLength(2);
         expect(settings.querySelector('.composable-sliders')).not.toBeNull();
-        expect(start.querySelector('.image-source-section')).not.toBeNull();
-        expect(start.querySelector('.size-picker-grid')).not.toBeNull();
+        expect(settings.querySelector('.image-options-section')).not.toBeNull();
+        expect(settings.querySelector('[data-testid="size-select"]')).not.toBeNull();
+        expect(start.querySelector('.image-picker')).not.toBeNull();
+        expect(start.querySelector('.image-options-section')).toBeNull();
     });
 
-    it('renders the "Puzzle Size" heading immediately above the size grid', () => {
+    it('renders the picker heading inside the start group', () => {
         openDialog();
-        const subtitle = container.querySelector('.size-picker-subtitle')!;
-        expect(subtitle.textContent).toBe('Puzzle Size');
-        expect(subtitle.nextElementSibling?.classList.contains('size-picker-grid')).toBe(true);
+        const start = container.querySelector('.dialog-group--start')!;
+        expect(start.querySelector('.size-picker-subtitle')?.textContent)
+            .toBe('Pick an image to start');
     });
 });
 
@@ -696,8 +719,8 @@ describe('composable base-cut picker', () => {
         const jitter = container.querySelector<HTMLInputElement>('[data-testid="composable-jitter-slider"]')!;
         jitter.value = '0.3';
         jitter.dispatchEvent(new Event('input'));
-        // Pick a size to fire onSelect.
-        container.querySelectorAll<HTMLButtonElement>('.size-picker-option')[0].click();
+        // Pick "Surprise me" to fire onSelect.
+        pickSurprise(container);
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({
                 cutStyleId: 'composable',
@@ -713,8 +736,8 @@ describe('composable base-cut picker', () => {
         expect(smooth).not.toBeNull();
         smooth.checked = true;
         smooth.dispatchEvent(new Event('change'));
-        // Pick a size to fire onSelect.
-        container.querySelectorAll<HTMLButtonElement>('.size-picker-option')[0].click();
+        // Pick "Surprise me" to fire onSelect.
+        pickSurprise(container);
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({
                 composableConfig: expect.objectContaining<Partial<ComposableSliderConfig>>({ baseCut: 'triangular', smooth: true }),
