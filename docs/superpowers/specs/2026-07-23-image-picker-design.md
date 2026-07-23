@@ -73,9 +73,10 @@ image controls:
   (URL, dimensions, attribution, download location), `'surprise'`, or
   `'blank'`, replacing the current `imageSource` string internally.
 - `startNewGame`:
-  - concrete photo → used directly, no second API call, flowing through
-    the existing image-load path so the bundled-image fallback still
-    applies if the URL fails to load;
+  - concrete photo → used directly, no second API call; the URL is
+    trusted once resolved, exactly like the existing random path (the
+    bundled-image fallback applies at fetch time — there is no
+    load-time fallback on either path);
   - `'surprise'` → the existing random-fetch path, unchanged;
   - `'blank'` → the existing blank-canvas path, unchanged.
 - Per Unsplash API guidelines, a used photo's `download_location` is
