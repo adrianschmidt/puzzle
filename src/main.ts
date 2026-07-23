@@ -70,7 +70,7 @@ import {
     signedAngularDelta,
 } from './model/helpers.js';
 import { reorderGroupsAfterDrop } from './game/z-order.js';
-import { getUnsplashAccessKey } from './images/index.js';
+import { getUnsplashAccessKey, triggerPhotoDownload } from './images/index.js';
 import {
     loadSizePreference,
     saveSizePreference,
@@ -123,6 +123,8 @@ import { runWithErrorReport } from './app/run-with-error-report.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
 import { pickBundledImage } from './app/bundled-image.js';
+import { fetchCandidateImages } from './app/fetch-candidate-images.js';
+import type { CandidateImage } from './ui/image-picker.js';
 import {
     orientationForViewport,
     orientGridSize,
@@ -883,8 +885,9 @@ function restorePersistedSelection(savedSelection: readonly number[]): void {
 }
 
 /**
- * Start a new game, fetching a random Unsplash image if available.
- * Falls back to the default image if the API key is missing or fetch fails.
+ * Start a new game. Uses the player-picked photo when one is given;
+ * otherwise fetches a random Unsplash image if available. Falls back to
+ * the default image if the API key is missing or fetch fails.
  *
  * @param gridSize - Grid dimensions (cols × rows) for the puzzle
  * @param cutStyle - Cut style to use for piece generation
@@ -900,6 +903,7 @@ async function startNewGame(
     vibrant: boolean = false,
     rotationEnabled: boolean = false,
     seed?: number,
+    pickedImage?: CandidateImage,
 ): Promise<void> {
     showLoadingOverlay();
     try {
@@ -949,21 +953,37 @@ async function startNewGame(
             attribution = undefined;
         }
 
-        // Try to fetch a random Unsplash image — unless the user picked a
-        // blank puzzle, or this is the deterministic first-run puzzle
-        // (which uses the bundled defaults set above).
+        // Unsplash access is needed for the random fetch and for the
+        // download trigger on a picked photo — but not for blank or the
+        // deterministic first-run puzzle (bundled defaults set above).
         const accessKey =
             imageSource !== 'blank' && imageSource !== 'first-run'
                 ? getUnsplashAccessKey()
                 : null;
 
-        if (accessKey) {
+        let downloadLocation: string | undefined;
+
+        if (imageSource !== 'blank' && pickedImage) {
+            // The player picked a concrete candidate in the dialog — use it
+            // directly, no second API call.
+            imageUrl = pickedImage.imageUrl;
+            imageSize = pickedImage.imageSize;
+            attribution = pickedImage.attribution;
+            downloadLocation = pickedImage.downloadLocation;
+        } else if (accessKey) {
             const resolved = await resolveUnsplashImage(accessKey, imageCategory ?? 'any', vibrant, orientation);
             if (resolved) {
                 imageUrl = resolved.imageUrl;
                 imageSize = resolved.imageSize;
                 attribution = resolved.attribution;
+                downloadLocation = resolved.downloadLocation;
             }
+        }
+
+        // Unsplash guidelines: report a "download" when a photo is actually
+        // used. Fire-and-forget — a failure must never block the game.
+        if (accessKey && downloadLocation) {
+            triggerPhotoDownload(downloadLocation, accessKey).catch(() => {});
         }
 
         const rotationMode = rotationModeForNewGame(cutStyle, rotationEnabled);
@@ -1052,7 +1072,6 @@ createNewGameButton({
         const savedComposableConfig = loadComposableConfigPreference();
         const savedFractalConfig = loadFractalConfigPreference();
         const savedRotationEnabled = loadRotationEnabledPreference();
-        const savedImageSource = loadImageSourcePreference();
         const savedImageCategory = loadImageCategoryPreference();
         const savedVibrant = loadVibrantPreference();
         createNewGameDialog({
@@ -1065,9 +1084,22 @@ createNewGameButton({
             savedRotationEnabled: savedRotationEnabled,
             composableSupportsBorderless:
                 getBaseCutGenerator('sine').supportsBorderless ?? false,
-            savedImageSource: savedImageSource,
             savedImageCategory: savedImageCategory,
             savedVibrant: savedVibrant,
+            fetchImageCandidates: (() => {
+                const accessKey = getUnsplashAccessKey();
+                if (!accessKey) return undefined;
+                return (imageCategory: string, vibrant: boolean) =>
+                    fetchCandidateImages(
+                        accessKey,
+                        imageCategory,
+                        vibrant,
+                        orientationForViewport({
+                            width: app.clientWidth || window.innerWidth,
+                            height: app.clientHeight || window.innerHeight,
+                        }),
+                    );
+            })(),
             onPreloadTracedTabs: () => {
                 // Fire-and-forget — preloadTracedTabGenerator is
                 // idempotent and clears its cached promise on failure,
@@ -1077,7 +1109,7 @@ createNewGameButton({
                 // surfacing as an unhandled-rejection warning.
                 preloadTracedTabGenerator().catch(() => {});
             },
-            onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, imageSource, imageCategory, vibrant }) => {
+            onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, imageChoice, imageCategory, vibrant }) => {
                 saveSizePreference(sizeId);
                 saveCutStylePreference(cutStyleId);
                 if (composableConfig) {
@@ -1090,7 +1122,10 @@ createNewGameButton({
                     saveWavyConfigPreference(wavyConfig);
                 }
                 saveRotationEnabledPreference(rotationEnabled);
-                saveImageSourcePreference(imageSource);
+                // No UI reads this preference anymore, but first-run
+                // detection depends on the key existing, and analytics
+                // still classifies by it.
+                saveImageSourcePreference(imageChoice.kind === 'blank' ? 'blank' : 'random');
                 saveImageCategoryPreference(imageCategory);
                 saveVibrantPreference(vibrant);
                 const option = getSizeOption(sizeId);
@@ -1102,12 +1137,14 @@ createNewGameButton({
                     composableConfig
                         ? composableSliderToGeneratorConfig(composableConfig)
                         : undefined,
-                    imageSource,
+                    imageChoice.kind === 'blank' ? 'blank' : 'random',
                     imageCategory,
                     fractalConfig,
                     wavyConfig,
                     vibrant,
                     rotationEnabled,
+                    undefined, // seed — fresh random for every dialog game
+                    imageChoice.kind === 'photo' ? imageChoice.photo : undefined,
                 );
                 void runWithErrorReport({
                     // The chunk-load path (traced tabs lazy import) is the most
