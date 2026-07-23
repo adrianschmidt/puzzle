@@ -54,6 +54,12 @@ export interface NewGameData {
     imageSource?: string;
     imageCategory?: string;
     vibrant?: boolean;
+    /**
+     * Fresh unsplash games only: true when the player tapped a specific
+     * candidate thumbnail, false for "Surprise me". Measures picker
+     * adoption. Absent for shared/resumed games and non-photo sources.
+     */
+    imagePicked?: boolean;
     includesProgress?: boolean;
     recipientHadSavedState?: boolean;
     /**
