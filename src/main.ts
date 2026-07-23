@@ -1052,6 +1052,7 @@ async function startNewGame(
         if (data.imageSource === 'unsplash') {
             data.imageCategory = imageCategory ?? 'any';
             data.vibrant = vibrant;
+            data.imagePicked = pickedImage !== undefined;
         }
         currentGameAnalytics = data;
         track('new-game-started', currentGameAnalytics);
