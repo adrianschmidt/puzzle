@@ -24,6 +24,8 @@ export interface UnsplashPhoto {
         regular: string;
         /** Full-size image URL. */
         full: string;
+        /** Small (400px) URL — used for picker thumbnails. */
+        small: string;
     };
     /** Original image dimensions. */
     width: number;
@@ -36,10 +38,13 @@ export interface UnsplashPhoto {
             html: string;
         };
     };
-    /** Links for the photo page (for attribution). */
+    /** Links for the photo page (attribution) and download reporting. */
     links: {
         html: string;
+        download_location: string;
     };
+    /** Accessibility description; null when the photographer set none. */
+    alt_description?: string | null;
 }
 
 /**
@@ -58,6 +63,12 @@ export interface UnsplashImageResult {
     photographerUrl: string;
     /** Link to the photo on Unsplash. */
     photoUrl: string;
+    /** Small (400px) URL for thumbnail display. */
+    thumbUrl: string;
+    /** Unsplash download-reporting endpoint for this photo. */
+    downloadLocation: string;
+    /** Alt text for the photo, when Unsplash provides one. */
+    description?: string;
 }
 
 /**
@@ -69,6 +80,7 @@ export function buildRandomPhotoUrl(
     accessKey: string,
     query?: string,
     orientation: Orientation = 'landscape',
+    count?: number,
 ): string {
     const params = new URLSearchParams({
         orientation,
@@ -77,6 +89,10 @@ export function buildRandomPhotoUrl(
 
     if (query) {
         params.set('query', query);
+    }
+
+    if (count !== undefined) {
+        params.set('count', String(count));
     }
 
     return `${UNSPLASH_RANDOM_URL}?${params.toString()}`;
@@ -105,6 +121,11 @@ export function parseUnsplashResponse(data: unknown): UnsplashImageResult {
         photographerName: data.user.name,
         photographerUrl: `${data.user.links.html}?utm_source=puzzle&utm_medium=referral`,
         photoUrl: `${data.links.html}?utm_source=puzzle&utm_medium=referral`,
+        thumbUrl: data.urls.small,
+        downloadLocation: data.links.download_location,
+        description: typeof data.alt_description === 'string' && data.alt_description.length > 0
+            ? data.alt_description
+            : undefined,
     };
 }
 
@@ -138,11 +159,13 @@ function isUnsplashPhoto(data: unknown): data is UnsplashPhoto {
     return (
         hasString(data, 'urls', 'regular') &&
         hasString(data, 'urls', 'full') &&
+        hasString(data, 'urls', 'small') &&
         hasNumber(data, 'width') &&
         hasNumber(data, 'height') &&
         hasString(data, 'user', 'name') &&
         hasString(data, 'user', 'links', 'html') &&
-        hasString(data, 'links', 'html')
+        hasString(data, 'links', 'html') &&
+        hasString(data, 'links', 'download_location')
     );
 }
 
@@ -189,4 +212,66 @@ export async function fetchRandomImage(
     const data: unknown = await response.json();
 
     return parseUnsplashResponse(data);
+}
+
+/**
+ * Fetch several random photos in a single API request.
+ *
+ * Uses `/photos/random?count=N`, which returns an array and costs one
+ * request against the (per-application) rate limit regardless of count.
+ *
+ * @returns The parsed results, or `undefined` if the fetch fails.
+ * @throws {Error} If the response body is not an array of photos.
+ */
+export async function fetchRandomImages(
+    accessKey: string,
+    count: number,
+    fetchFn: typeof fetch = fetch,
+    query?: string,
+    orientation: Orientation = 'landscape',
+): Promise<UnsplashImageResult[] | undefined> {
+    const url = buildRandomPhotoUrl(accessKey, query, orientation, count);
+
+    const response = await fetchFn(url);
+
+    if (!response.ok) {
+        diagnostics.warn(
+            `Unsplash API error: ${response.status} ${response.statusText}`,
+        );
+
+        return undefined;
+    }
+
+    const data: unknown = await response.json();
+
+    if (!Array.isArray(data)) {
+        throw new Error('Invalid Unsplash API response');
+    }
+
+    return data.map(parseUnsplashResponse);
+}
+
+/**
+ * Report a photo as used, per the Unsplash API guidelines: apps must hit
+ * the photo's `download_location` when the photo is actually used (here:
+ * when a puzzle starts with it), not when it is merely displayed.
+ *
+ * Fire-and-forget semantics — failures are logged, never thrown, and the
+ * response body is irrelevant.
+ */
+export async function triggerPhotoDownload(
+    downloadLocation: string,
+    accessKey: string,
+    fetchFn: typeof fetch = fetch,
+): Promise<void> {
+    const url = new URL(downloadLocation);
+    url.searchParams.set('client_id', accessKey);
+
+    const response = await fetchFn(url.toString());
+
+    if (!response.ok) {
+        diagnostics.warn(
+            `Unsplash download trigger failed: ${response.status} ${response.statusText}`,
+        );
+    }
 }
