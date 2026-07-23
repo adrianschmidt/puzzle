@@ -15,7 +15,8 @@ import { createCutStylePicker } from './cut-style-picker.js';
 import { DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOptions } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
-import { createImagePicker, type CandidateImage, type ImagePicker, type NewGameImageChoice } from './image-picker.js';
+import { createImagePicker, type ImagePicker, type NewGameImageChoice } from './image-picker.js';
+import type { CandidateImage } from '../app/unsplash-display-image.js';
 
 /** Composable generator config passed through from sliders. */
 export interface ComposableSliderConfig {

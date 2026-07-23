@@ -23,6 +23,22 @@ export interface DisplayImage {
     downloadLocation: string;
 }
 
+/**
+ * A candidate photo the player can pick in the new-game dialog's image picker.
+ * A `DisplayImage` plus the small thumbnail hotlinked into the grid and an
+ * optional alt text; `extends DisplayImage` keeps the superset relationship
+ * compiler-enforced, so the two shapes can't silently drift.
+ */
+export interface CandidateImage extends DisplayImage {
+    /** Small URL hotlinked as the grid thumbnail (Unsplash `small`). */
+    thumbUrl: string;
+    /** Alt text, when Unsplash provides one. */
+    description?: string;
+}
+
+/** Number of candidate photos requested and displayed in the picker. */
+export const CANDIDATE_COUNT = 4;
+
 /** Width the Unsplash "regular" URL scales images to. */
 const DISPLAY_WIDTH = 1080;
 
