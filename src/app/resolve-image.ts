@@ -20,6 +20,8 @@ export interface ResolvedImage {
         photographerUrl: string;
         photoUrl: string;
     };
+    /** Unsplash download-reporting endpoint, triggered when the game starts. */
+    downloadLocation: string;
 }
 
 export async function resolveUnsplashImage(
@@ -54,6 +56,7 @@ export async function resolveUnsplashImage(
                 photographerUrl: result.photographerUrl,
                 photoUrl: result.photoUrl,
             },
+            downloadLocation: result.downloadLocation,
         };
     } catch (error) {
         diagnostics.warn('Failed to fetch Unsplash image, using fallback:', error);

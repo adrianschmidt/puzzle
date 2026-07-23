@@ -32,6 +32,8 @@ describe('resolveUnsplashImage', () => {
             photographerName: 'Ada',
             photographerUrl: 'https://u.example/ada',
             photoUrl: 'https://p.example/1',
+            thumbUrl: 'https://images.unsplash.com/photo-abc?w=400',
+            downloadLocation: 'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
         });
 
         const resolved = await resolveUnsplashImage('key', 'any', false, 'landscape', vi.fn());
@@ -44,7 +46,11 @@ describe('resolveUnsplashImage', () => {
                 photographerUrl: 'https://u.example/ada',
                 photoUrl: 'https://p.example/1',
             },
+            downloadLocation: 'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
         });
+        expect(resolved!.downloadLocation).toBe(
+            'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
+        );
         expect(umamiTrack).not.toHaveBeenCalled();
     });
 
@@ -78,6 +84,8 @@ describe('resolveUnsplashImage', () => {
             photographerName: 'Ada',
             photographerUrl: 'https://u.example/ada',
             photoUrl: 'https://p.example/1',
+            thumbUrl: 'https://images.unsplash.com/photo-abc?w=400',
+            downloadLocation: 'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
         });
 
         const fetchFn = vi.fn();
