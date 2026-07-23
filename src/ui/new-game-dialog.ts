@@ -1,12 +1,13 @@
 /**
  * New-game dialog — modal that lets the player configure and start a new
  * puzzle. Despite the legacy `.size-picker-*` CSS classes, the dialog now
- * owns the cut-style picker, fractal/composable options, image-source
- * controls, and the size grid itself.
+ * owns the cut-style picker, fractal/composable options, image-options
+ * controls, the size select, and the image picker itself.
  *
- * The dialog is dismissed by picking a size, clicking the backdrop, or
- * pressing Escape. The latter two paths fire `onCancel`; size picks fire
- * `onSelect` with a {@link NewGameSelection}.
+ * The dialog is dismissed by picking an image (photo tile, Surprise me, or
+ * Blank puzzle), clicking the backdrop, or pressing Escape. The latter two
+ * paths fire `onCancel`; image picks fire `onSelect` with a
+ * {@link NewGameSelection}.
  */
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
@@ -14,6 +15,7 @@ import { createCutStylePicker } from './cut-style-picker.js';
 import { DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOptions } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
+import { createImagePicker, type CandidateImage, type ImagePicker, type NewGameImageChoice } from './image-picker.js';
 
 /** Composable generator config passed through from sliders. */
 export interface ComposableSliderConfig {
@@ -50,7 +52,7 @@ export interface NewGameSelection {
     wavyConfig?: WavyDialogConfig;
     /** Whether the player ticked the top-level "Enable rotation" checkbox. */
     rotationEnabled: boolean;
-    imageSource: string;
+    imageChoice: NewGameImageChoice;
     imageCategory: string;
     vibrant: boolean;
 }
@@ -72,13 +74,20 @@ export interface NewGameDialogOptions {
     savedRotationEnabled?: boolean;
     /** Whether the composable base cut generator supports borderless mode. */
     composableSupportsBorderless?: boolean;
-    /** Previously saved image source preference. */
-    savedImageSource?: string;
     /** Previously saved image category preference. */
     savedImageCategory?: string;
     /** Previously saved "vibrant images" preference. */
     savedVibrant?: boolean;
-    /** Called when the player selects a size. */
+    /**
+     * Fetch candidate photos for the image picker, given the currently
+     * selected category and vibrant values. Absent when no Unsplash
+     * access key is configured — the picker hides its grid.
+     */
+    fetchImageCandidates?: (
+        imageCategory: string,
+        vibrant: boolean,
+    ) => Promise<CandidateImage[] | null>;
+    /** Called when the player picks an image (photo tile, Surprise me, or Blank puzzle). */
     onSelect: (selection: NewGameSelection) => void;
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
@@ -94,21 +103,10 @@ export interface NewGameDialogOptions {
     onPreloadTracedTabs?: () => void;
 }
 
-/**
- * Determine the CSS class suffix for a size option based on its piece count.
- * Used for visual differentiation of the size buttons.
- */
-export function getSizeClass(pieceCount: number): string {
-    if (pieceCount <= 24) return 'small';
-    if (pieceCount <= 48) return 'medium';
-    if (pieceCount <= 96) return 'large';
-
-    return 'xlarge';
-}
-
-interface SizeSection {
+interface SizeSelectRow {
     element: HTMLElement;
-    /** Re-render button labels (e.g. when cut style changes between fractal and classic). */
+    getValue(): string;
+    /** Re-render option labels (approximate counts for fractal/triangles). */
     updateLabels(): void;
 }
 
@@ -133,36 +131,31 @@ interface ComposableSection {
     getSelectedTabGenerator(): ComposableSliderConfig['tabGenerator'];
 }
 
-interface ImageSourceSection {
+interface ImageOptionsSection {
     element: HTMLElement;
-    getValues(): { imageSource: string; imageCategory: string; vibrant: boolean };
+    getValues(): { imageCategory: string; vibrant: boolean };
 }
 
-function buildSizeSection(args: {
+function buildSizeSelectRow(args: {
     selectedSizeId: string;
     getCutStyleId: () => string;
-    onPick: (sizeId: string) => void;
-}): SizeSection {
-    const grid = document.createElement('div');
-    grid.className = 'size-picker-grid';
+}): SizeSelectRow {
+    const row = document.createElement('div');
+    row.className = 'dialog-row';
 
-    const buttons: HTMLButtonElement[] = [];
+    const label = document.createElement('label');
+    label.className = 'dialog-row-label';
+    label.textContent = 'Puzzle size';
 
+    const select = document.createElement('select');
+    select.className = 'dialog-row-input';
+    select.dataset.testid = 'size-select';
     for (const opt of PUZZLE_SIZE_OPTIONS) {
-        const btn = document.createElement('button');
-        btn.className = `size-picker-option size-picker-option--${getSizeClass(opt.pieceCount)}`;
-        btn.type = 'button';
-        btn.dataset.sizeId = opt.id;
-
-        if (opt.id === args.selectedSizeId) {
-            btn.classList.add('size-picker-option--selected');
-        }
-
-        btn.addEventListener('click', () => args.onPick(opt.id));
-
-        buttons.push(btn);
-        grid.appendChild(btn);
+        const el = document.createElement('option');
+        el.value = opt.id;
+        select.appendChild(el);
     }
+    select.value = args.selectedSizeId;
 
     function updateLabels(): void {
         // Fractal and Triangles piece counts are approximate: fractal scales
@@ -171,29 +164,20 @@ function buildSizeSection(args: {
         // Both therefore show ~N rather than an exact piece count.
         const cutStyleId = args.getCutStyleId();
         const isApproximate = cutStyleId === 'fractal' || cutStyleId === 'triangles';
-
-        for (let i = 0; i < buttons.length; i++) {
-            const btn = buttons[i];
-            const opt = PUZZLE_SIZE_OPTIONS[i];
-
-            btn.replaceChildren();
-
-            const count = document.createElement('span');
-            count.className = 'size-picker-count';
-            count.textContent = isApproximate ? `~${opt.pieceCount}` : String(opt.pieceCount);
-
-            const label = document.createElement('span');
-            label.className = 'size-picker-label';
-            label.textContent = 'pieces';
-
-            btn.appendChild(count);
-            btn.appendChild(label);
-        }
+        const optionEls = select.querySelectorAll('option');
+        PUZZLE_SIZE_OPTIONS.forEach((opt, i) => {
+            optionEls[i].textContent = isApproximate
+                ? `~${opt.pieceCount} pieces`
+                : `${opt.pieceCount} pieces`;
+        });
     }
 
     updateLabels();
 
-    return { element: grid, updateLabels };
+    row.appendChild(label);
+    row.appendChild(select);
+
+    return { element: row, getValue: () => select.value, updateLabels };
 }
 
 function buildBorderlessOptionsSection(args: {
@@ -217,33 +201,13 @@ function buildBorderlessOptionsSection(args: {
     };
 }
 
-function buildImageSourceSection(args: {
-    savedImageSource?: string;
+function buildImageOptionsSection(args: {
     savedImageCategory?: string;
     savedVibrant?: boolean;
-}): ImageSourceSection {
+    onChange: () => void;
+}): ImageOptionsSection {
     const section = document.createElement('div');
-    section.className = 'image-source-section';
-
-    const sourceRow = document.createElement('div');
-    sourceRow.className = 'dialog-row';
-    const sourceLabel = document.createElement('label');
-    sourceLabel.className = 'dialog-row-label';
-    sourceLabel.textContent = 'Image';
-    const sourceSelect = document.createElement('select');
-    sourceSelect.className = 'dialog-row-input';
-    for (const [value, label] of [['random', 'Random photo'], ['blank', 'Blank (white)']]) {
-        const opt = document.createElement('option');
-        opt.value = value;
-        opt.textContent = label;
-        sourceSelect.appendChild(opt);
-    }
-    if (args.savedImageSource) {
-        sourceSelect.value = args.savedImageSource;
-    }
-    sourceRow.appendChild(sourceLabel);
-    sourceRow.appendChild(sourceSelect);
-    section.appendChild(sourceRow);
+    section.className = 'image-options-section';
 
     const categoryRow = document.createElement('div');
     categoryRow.className = 'dialog-row';
@@ -280,19 +244,12 @@ function buildImageSourceSection(args: {
     vibrantRow.appendChild(vibrantCheckbox);
     section.appendChild(vibrantRow);
 
-    function updateCategoryVisibility(): void {
-        const hidden = sourceSelect.value === 'blank';
-        categoryRow.style.display = hidden ? 'none' : '';
-        vibrantRow.style.display = hidden ? 'none' : '';
-    }
-
-    sourceSelect.addEventListener('change', updateCategoryVisibility);
-    updateCategoryVisibility();
+    categorySelect.addEventListener('change', args.onChange);
+    vibrantCheckbox.addEventListener('change', args.onChange);
 
     return {
         element: section,
         getValues: () => ({
-            imageSource: sourceSelect.value,
             imageCategory: categorySelect.value,
             vibrant: vibrantCheckbox.checked,
         }),
@@ -590,8 +547,8 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     }
 
     // The helper owns Escape/backdrop dismissal and fires onCancel only on
-    // those paths — not when the caller invokes dismiss() after picking a
-    // size.
+    // those paths — not when the caller invokes dismiss() after picking an
+    // image.
     const { overlay, dismiss } = createDismissableOverlay({
         container,
         className: 'size-picker-overlay',
@@ -608,9 +565,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     title.textContent = 'New Game';
     dialog.appendChild(title);
 
-    const sizeSubtitle = document.createElement('h3');
-    sizeSubtitle.className = 'size-picker-subtitle';
-    sizeSubtitle.textContent = 'Puzzle Size';
+    let imagePicker: ImagePicker | undefined;
 
     const fractalSection = buildBorderlessOptionsSection({
         saved: options.savedFractalConfig,
@@ -627,10 +582,15 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             if (value === 'traced') options.onPreloadTracedTabs?.();
         },
     });
-    const imageSourceSection = buildImageSourceSection({
-        savedImageSource: options.savedImageSource,
+    const imageOptionsSection = buildImageOptionsSection({
         savedImageCategory: options.savedImageCategory,
         savedVibrant: options.savedVibrant,
+        onChange: () => imagePicker?.refresh(),
+    });
+
+    const sizeRow = buildSizeSelectRow({
+        selectedSizeId,
+        getCutStyleId: () => currentCutStyleId,
     });
 
     // Top-level "Enable rotation" row — applies to any cut style.
@@ -642,13 +602,17 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         options.savedRotationEnabled ?? false,
     );
 
-    const sizeSection = buildSizeSection({
-        selectedSizeId,
-        getCutStyleId: () => currentCutStyleId,
-        onPick: (sizeId) => {
+    imagePicker = createImagePicker({
+        fetchCandidates: options.fetchImageCandidates
+            ? () => {
+                const { imageCategory, vibrant } = imageOptionsSection.getValues();
+                return options.fetchImageCandidates!(imageCategory, vibrant);
+            }
+            : undefined,
+        onPick: (imageChoice) => {
             dismiss();
             onSelect({
-                sizeId,
+                sizeId: sizeRow.getValue(),
                 cutStyleId: currentCutStyleId,
                 composableConfig: currentCutStyleId === 'composable'
                     ? composableSection.getValues()
@@ -660,7 +624,8 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
                     ? wavySection.getValues()
                     : undefined,
                 rotationEnabled: rotationCheckbox.checked,
-                ...imageSourceSection.getValues(),
+                imageChoice,
+                ...imageOptionsSection.getValues(),
             });
         },
     });
@@ -670,7 +635,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         options: visibleOptions,
         onSelect: (id) => {
             currentCutStyleId = id;
-            sizeSection.updateLabels();
+            sizeRow.updateLabels();
             fractalSection.setVisible(id === 'fractal');
             wavySection.setVisible(id === 'wavy');
             composableSection.setVisible(id === 'composable');
@@ -695,8 +660,9 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
 
     // Scrollable body: the title stays pinned above; everything else lives in
     // two groups so the short-and-wide layout can place them side by side.
-    // Settings (cut style + its options) come first; the start group (image +
-    // size grid) last, since picking a size launches the game.
+    // Settings (cut style, its options, and the size select) come first; the
+    // start group holds only the image picker, since picking an image
+    // launches the game.
     const content = document.createElement('div');
     content.className = 'dialog-content';
 
@@ -707,12 +673,12 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     settingsGroup.appendChild(fractalSection.element);
     settingsGroup.appendChild(wavySection.element);
     settingsGroup.appendChild(composableSection.element);
+    settingsGroup.appendChild(sizeRow.element);
+    settingsGroup.appendChild(imageOptionsSection.element);
 
     const startGroup = document.createElement('div');
     startGroup.className = 'dialog-group dialog-group--start';
-    startGroup.appendChild(imageSourceSection.element);
-    startGroup.appendChild(sizeSubtitle);
-    startGroup.appendChild(sizeSection.element);
+    startGroup.appendChild(imagePicker.element);
 
     content.appendChild(settingsGroup);
     content.appendChild(startGroup);
