@@ -9,25 +9,7 @@
  */
 
 import { isSafeHttpUrl } from '../sharing/safe-url.js';
-
-/** A candidate photo the player can pick, pre-scaled for the puzzle. */
-export interface CandidateImage {
-    /** Full-quality URL used as the puzzle image (Unsplash `regular`). */
-    imageUrl: string;
-    /** Small URL hotlinked as the grid thumbnail (Unsplash `small`). */
-    thumbUrl: string;
-    /** Display size of the puzzle image (1080px wide, aspect-scaled). */
-    imageSize: { width: number; height: number };
-    attribution: {
-        photographerName: string;
-        photographerUrl: string;
-        photoUrl: string;
-    };
-    /** Unsplash download-reporting endpoint, triggered when the game starts. */
-    downloadLocation: string;
-    /** Alt text, when Unsplash provides one. */
-    description?: string;
-}
+import { CANDIDATE_COUNT, type CandidateImage } from '../app/unsplash-display-image.js';
 
 /** What the player clicked to start the game. */
 export type NewGameImageChoice =
@@ -51,9 +33,6 @@ export interface ImagePicker {
     /** Re-fetch the candidate set (used when category/vibrant change). */
     refresh(): void;
 }
-
-/** Number of candidate photos requested and displayed. */
-export const CANDIDATE_COUNT = 4;
 
 export function createImagePicker(options: ImagePickerOptions): ImagePicker {
     const section = document.createElement('div');

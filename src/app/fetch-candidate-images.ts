@@ -9,9 +9,8 @@
 import { diagnostics } from '../diagnostics.js';
 import { fetchRandomImages } from '../images/index.js';
 import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
-import { toDisplayImage } from './unsplash-display-image.js';
+import { CANDIDATE_COUNT, toDisplayImage, type CandidateImage } from './unsplash-display-image.js';
 import type { Orientation } from '../model/types.js';
-import { CANDIDATE_COUNT, type CandidateImage } from '../ui/image-picker.js';
 
 /**
  * How many candidates one picker fetch requests (a single API call) — one per

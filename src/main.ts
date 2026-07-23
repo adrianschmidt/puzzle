@@ -124,7 +124,7 @@ import { resolveUnsplashImage } from './app/resolve-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
 import { pickBundledImage } from './app/bundled-image.js';
 import { fetchCandidateImages } from './app/fetch-candidate-images.js';
-import type { CandidateImage } from './ui/image-picker.js';
+import type { CandidateImage } from './app/unsplash-display-image.js';
 import {
     orientationForViewport,
     orientGridSize,

@@ -7,7 +7,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createImagePicker, type CandidateImage } from './image-picker.js';
+import { createImagePicker } from './image-picker.js';
+import type { CandidateImage } from '../app/unsplash-display-image.js';
 
 function makeCandidate(n: number): CandidateImage {
     return {
