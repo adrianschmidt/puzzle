@@ -1,0 +1,50 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 10
+    # Initial onboarding produces a large batch of PRs; auto-rebasing them
+    # after each merge would trigger ~n²/2 CI runs. Rebase manually instead.
+    rebase-strategy: disabled
+    # Let new releases soak before we take them, so a malicious version is
+    # likely to be found and pulled before we ever open a PR for it. Security
+    # updates for known CVEs bypass the cooldown.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      bezier:
+        patterns:
+          - "bezier-js"
+          - "@types/bezier-js"
+      vite:
+        patterns:
+          - "vite"
+          - "vite-plugin-pwa"
+          - "@vitejs/*"
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+      workbox:
+        patterns:
+          - "workbox-*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 10
+    rebase-strategy: disabled
+    # Same soak rationale as the npm block; security updates bypass this too.
+    # No 14-day major hold here: the semver-*-days keys are only supported for
+    # semver ecosystems (npm etc.), not github-actions — default-days is the
+    # only knob available.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns:
+          - "actions/*"
