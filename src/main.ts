@@ -1467,6 +1467,19 @@ async function loadSharedPuzzle(
 let rescueReloadPending = false;
 
 /**
+ * After the awaited rescue, does our guard entry still name this exact link?
+ * True means no concurrent hashchange superseded us mid-rescue — a newer
+ * link's attempt would have overwritten the guard. This is the same predicate
+ * as {@link wasRescueAttempted}, named for its post-await meaning: before the
+ * await the identical call instead answers "is this load the post-reload
+ * re-check". Keeping the two readings behind distinct names stops the flipped
+ * intent from reading as a copy-paste.
+ */
+function rescueStillOwnsGuard(hashBody: string): boolean {
+    return wasRescueAttempted(hashBody);
+}
+
+/**
  * A `#p=` link that fails to decode may just be newer than this cached
  * build (the share format grows without bumping `v`). Run one
  * update-check-and-reload rescue per link: on success the page reloads
@@ -1478,6 +1491,9 @@ async function rescueUndecodableLink(hashBody: string): Promise<boolean> {
     if (wasRescueAttempted(hashBody)) {
         // This load IS the rescue reload for this exact link, and it still
         // doesn't decode: the latest build doesn't understand it either.
+        // A same-document hash round-trip back to this link during an
+        // in-flight rescue would also land here; that's accepted as a
+        // contrived edge case (a real re-paste navigates and gets fresh page).
         clearRescueAttempt();
         track('share-link-rescue-result', { decoded: false });
         return false;
@@ -1494,12 +1510,15 @@ async function rescueUndecodableLink(hashBody: string): Promise<boolean> {
         rescueReloadPending = true;
         return true;
     }
-    // Only clear our own guard entry — a hashchange during the rescue may
-    // have recorded a newer link's attempt, which must survive.
-    if (wasRescueAttempted(hashBody)) clearRescueAttempt();
-    // The boot path's finally would hide it, but the hashchange path has
-    // no such backstop — hide explicitly before the toast.
-    hideLoadingOverlay();
+    // A guard mismatch means a hashchange during our rescue started a
+    // newer link's attempt: its guard entry must survive, and the overlay
+    // now belongs to that in-flight rescue — leave both alone.
+    if (rescueStillOwnsGuard(hashBody)) {
+        clearRescueAttempt();
+        // The boot path's finally would hide it, but the hashchange path
+        // has no such backstop — hide explicitly before the toast.
+        hideLoadingOverlay();
+    }
     return false;
 }
 
