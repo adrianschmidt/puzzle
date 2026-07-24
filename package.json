@@ -17,8 +17,8 @@
     "vite": "^8.0.1",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.0",
-    "workbox-precaching": "^7.4.0",
-    "workbox-routing": "^7.4.0"
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1"
   },
   "dependencies": {
     "bezier-js": "^6.1.4",
