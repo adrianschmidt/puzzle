@@ -18,6 +18,7 @@
  */
 
 import type { ShareLinkRescueAttemptedData } from '../analytics/index.js';
+import type { UpdatableRegistration } from './update-controller.js';
 
 /** How a rescue attempt ended. Single source of truth: the analytics payload. */
 export type RescueOutcome = ShareLinkRescueAttemptedData['outcome'];
@@ -59,11 +60,13 @@ export function clearRescueAttempt(storage?: Storage): void {
 }
 
 /**
- * Minimal slice of ServiceWorkerRegistration the rescue depends on.
- * `installing` / `waiting` are only ever null-checked, hence `unknown`.
+ * Minimal slice of ServiceWorkerRegistration the rescue depends on. Extends
+ * the update-controller's {@link UpdatableRegistration} (the source of
+ * `update()`) with the `installing` / `waiting` fields the rescue null-checks
+ * to tell "already latest" from "an install is under way". Both are only ever
+ * null-checked, hence `unknown`.
  */
-export interface RescueRegistration {
-    update(): Promise<unknown> | void;
+export interface RescueRegistration extends UpdatableRegistration {
     readonly installing: unknown;
     readonly waiting: unknown;
 }
@@ -85,6 +88,15 @@ export interface ShareLinkRescueDeps {
     timeoutMs?: number;
     /** Injectable timer for tests; returns a cancel function. */
     schedule?: (handler: () => void, ms: number) => () => void;
+    /**
+     * Diagnostics breadcrumb for the reject paths (a `getRegistration()` or
+     * `update()` rejection collapses into `unavailable`, discarding the error).
+     * Injected — not imported — so `diagnostics` (and its DOM/console reach)
+     * stays out of this module's unit-test graph; `register.ts` wires the real
+     * `diagnostics.warn`. Optional: tests omit it. Mirrors the sibling
+     * update-controller path, which logs the same rejections.
+     */
+    warn?: (message: string, err: unknown) => void;
 }
 
 const DEFAULT_RESCUE_TIMEOUT_MS = 8000;
@@ -126,7 +138,14 @@ export function attemptShareLinkRescue(deps: ShareLinkRescueDeps): Promise<Rescu
         unsubscribe = deps.onUpdateReady(() => settle('updated'));
 
         void (async () => {
-            const registration = await deps.getRegistration();
+            let registration: RescueRegistration | null;
+            try {
+                registration = await deps.getRegistration();
+            } catch (err) {
+                deps.warn?.('[pwa] share-link rescue getRegistration() rejected', err);
+                settle('unavailable');
+                return;
+            }
             if (settled) return;
             if (!registration) {
                 settle('unavailable');
@@ -134,7 +153,8 @@ export function attemptShareLinkRescue(deps: ShareLinkRescueDeps): Promise<Rescu
             }
             try {
                 await Promise.resolve(registration.update());
-            } catch {
+            } catch (err) {
+                deps.warn?.('[pwa] share-link rescue registration.update() rejected', err);
                 settle('unavailable');
                 return;
             }
