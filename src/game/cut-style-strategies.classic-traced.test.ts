@@ -1,58 +1,102 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 
-// Pure mock (not passthrough, unlike the wavy/triangles sibling files) so we
-// can assert the exact sine config classicStrategy builds without running
-// real traced generation. See reference_vitest_spy_internal_module_call for
-// why vi.mock (not vi.spyOn) is needed to intercept the internal call, and
-// project_traced_tab_lazy_stub_forwarding for why classic-traced.test.ts is
-// split from cut-style-strategies.test.ts: vi.mock is file-scoped, and that
-// file's wavy/triangles tests rely on real composable generation.
-vi.mock('../puzzle/composable-generator.js', () => ({
-    generateComposablePuzzle: vi.fn(() => ({ pieces: [] })),
-}));
+// Passthrough mock so we can inspect the config the classic strategy builds
+// while still running real generation (needed to prove traced generation
+// actually runs for Classic). See reference_vitest_spy_internal_module_call.
+vi.mock('../puzzle/composable-generator.js', async (importActual) => {
+    const actual = await importActual<typeof import('../puzzle/composable-generator.js')>();
+    return { ...actual, generateComposablePuzzle: vi.fn(actual.generateComposablePuzzle) };
+});
 
-import { getCutStyleStrategy } from './cut-style-strategies.js';
 import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
+import { getCutStyleStrategy } from './cut-style-strategies.js';
+import { createNewGame } from './init.js';
 import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
+import { registerTabGenerator } from '../puzzle/topology/generator-registry.js';
+import { tracedTabGenerator } from '../puzzle/topology/traced-tab-generator.js';
 
-const mockComposable = vi.mocked(generateComposablePuzzle);
+// Swap the lazy-load stub for the real traced generator so traced generation
+// runs synchronously in tests (otherwise the stub throws "not loaded").
+beforeAll(() => {
+    registerTabGenerator(tracedTabGenerator);
+});
+
+// cols/3 and rows/3 are clean at this grid, matching classicStrategy's
+// baseCutConfig.hf/vf derivation.
+const grid = { cols: 6, rows: 3 };
+const size = { width: 600, height: 300 };
 
 describe('classicStrategy', () => {
     it('uses the sine pipeline with gentle params when classicConfig is set', () => {
-        mockComposable.mockClear();
+        vi.mocked(generateComposablePuzzle).mockClear();
         const strategy = getCutStyleStrategy('classic');
-        strategy.generatePieces(
-            { cols: 6, rows: 3 },
-            { width: 600, height: 300 },
-            123,
-            { classicConfig: { traceSetVersion: 1 } },
-        );
-        expect(mockComposable).toHaveBeenCalledWith(
-            6, 3, { width: 600, height: 300 }, 123,
+        strategy.generatePieces(grid, size, 123, {
+            classicConfig: { traceSetVersion: 1 },
+        });
+        const avgPieceArea = (size.width * size.height) / (grid.cols * grid.rows);
+        expect(generateComposablePuzzle).toHaveBeenCalledWith(
+            grid.cols, grid.rows, size, 123,
             expect.objectContaining({
                 baseCutGenerator: 'sine',
                 baseCutConfig: expect.objectContaining({
-                    cols: 6, rows: 3, ha: 0.11, hf: 2, va: 0.11, vf: 1,
+                    cols: grid.cols, rows: grid.rows, ha: 0.11, hf: 2, va: 0.11, vf: 1,
                 }),
                 tabGenerator: 'traced',
                 tabConfig: { traceSetVersion: 1 },
+                minPieceArea: avgPieceArea / 4,
                 borderless: false,
             }),
         );
     });
 
     it('falls back to the legacy generator when classicConfig is absent', () => {
-        mockComposable.mockClear();
+        vi.mocked(generateComposablePuzzle).mockClear();
         const strategy = getCutStyleStrategy('classic');
-        const result = strategy.generatePieces(
-            { cols: 3, rows: 2 }, { width: 300, height: 200 }, 7, {},
-        );
-        expect(mockComposable).not.toHaveBeenCalled();
-        const legacy = generateProceduralPuzzle(3, 2, { width: 300, height: 200 }, 7);
+        const result = strategy.generatePieces(grid, size, 7, {});
+        expect(generateComposablePuzzle).not.toHaveBeenCalled();
+        const legacy = generateProceduralPuzzle(grid.cols, grid.rows, size, 7);
         expect(result.pieces.map((p) => p.shape)).toEqual(legacy.map((p) => p.shape));
     });
 
     it('exposes classicConfig as its configKey', () => {
         expect(getCutStyleStrategy('classic').configKey).toBe('classicConfig');
+    });
+
+    it('traced classic is deterministic and differs from legacy classic for the same seed', () => {
+        const s = getCutStyleStrategy('classic');
+        const tracedA = s.generatePieces(grid, size, 999, { classicConfig: { traceSetVersion: 1 } });
+        const tracedB = s.generatePieces(grid, size, 999, { classicConfig: { traceSetVersion: 1 } });
+        const legacy = generateProceduralPuzzle(grid.cols, grid.rows, size, 999);
+        const shapes = (p: { pieces: { shape: string }[] }) => p.pieces.map((x) => x.shape);
+        expect(shapes(tracedB)).toEqual(shapes(tracedA));       // reproducible
+        expect(shapes(tracedA)).not.toEqual(legacy.map((x) => x.shape)); // traced actually ran
+    });
+
+    // Guards the init.ts plumbing that actually activates the feature: the
+    // `classicConfig` entry in the strategy context (without it every new
+    // Classic game silently generates legacy geometry) and the `configKey`
+    // write-back (without it the config never reaches the save or the share
+    // link, so the puzzle can't be reproduced).
+    it('createNewGame threads classicConfig into generation and onto the state', () => {
+        const viewport = { width: 800, height: 600 };
+        const state = createNewGame('img', size, viewport, grid, {
+            cutStyle: 'classic',
+            classicConfig: { traceSetVersion: 1 },
+            seed: 4242,
+        });
+        expect(state.classicConfig).toEqual({ traceSetVersion: 1 });
+        const legacy = generateProceduralPuzzle(grid.cols, grid.rows, size, 4242);
+        expect(state.pieces.map((p) => p.shape)).not.toEqual(legacy.map((p) => p.shape));
+    });
+
+    it('createNewGame without classicConfig produces legacy classic geometry', () => {
+        const viewport = { width: 800, height: 600 };
+        const state = createNewGame('img', size, viewport, grid, {
+            cutStyle: 'classic',
+            seed: 4242,
+        });
+        expect(state.classicConfig).toBeUndefined();
+        const legacy = generateProceduralPuzzle(grid.cols, grid.rows, size, 4242);
+        expect(state.pieces.map((p) => p.shape)).toEqual(legacy.map((p) => p.shape));
     });
 });
