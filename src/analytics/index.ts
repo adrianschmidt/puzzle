@@ -20,4 +20,6 @@ export type {
     PwaUpdateFallbackReloadData,
     PwaUpdateApplyFailedData,
     PwaRegisterFailedData,
+    ShareLinkRescueAttemptedData,
+    ShareLinkRescueResultData,
 } from './umami.js';
