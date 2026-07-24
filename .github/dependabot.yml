@@ -5,9 +5,6 @@ updates:
     schedule:
       interval: daily
     open-pull-requests-limit: 10
-    # Initial onboarding produces a large batch of PRs; auto-rebasing them
-    # after each merge would trigger ~n²/2 CI runs. Rebase manually instead.
-    rebase-strategy: disabled
     # Let new releases soak before we take them, so a malicious version is
     # likely to be found and pulled before we ever open a PR for it. Security
     # updates for known CVEs bypass the cooldown.
@@ -37,7 +34,6 @@ updates:
     schedule:
       interval: daily
     open-pull-requests-limit: 10
-    rebase-strategy: disabled
     # Same soak rationale as the npm block; security updates bypass this too.
     # No 14-day major hold here: the semver-*-days keys are only supported for
     # semver ecosystems (npm etc.), not github-actions — default-days is the
