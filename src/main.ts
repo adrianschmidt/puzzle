@@ -1494,7 +1494,9 @@ async function rescueUndecodableLink(hashBody: string): Promise<boolean> {
         rescueReloadPending = true;
         return true;
     }
-    clearRescueAttempt();
+    // Only clear our own guard entry — a hashchange during the rescue may
+    // have recorded a newer link's attempt, which must survive.
+    if (wasRescueAttempted(hashBody)) clearRescueAttempt();
     // The boot path's finally would hide it, but the hashchange path has
     // no such backstop — hide explicitly before the toast.
     hideLoadingOverlay();
@@ -1502,14 +1504,24 @@ async function rescueUndecodableLink(hashBody: string): Promise<boolean> {
 }
 
 async function tryLoadSharedPuzzle(): Promise<boolean> {
+    // Captured once at entry, before any await. `slice(3)` drops the `#p=`
+    // prefix and is only meaningful on a `#p=` hash — every use below is gated
+    // on that. The post-rescue change-detection check deliberately re-slices
+    // the *current* hash instead of reusing this, to spot a hashchange that
+    // landed during the await.
+    const hashBody = window.location.hash.slice(3);
     const payload = parseLocationHash(window.location.hash);
     if (!payload) {
         if (window.location.hash.startsWith('#p=')) {
-            if (await rescueUndecodableLink(window.location.hash.slice(3))) {
+            if (await rescueUndecodableLink(hashBody)) {
                 // Rescue reload imminent — report "handled" so the boot
                 // flow doesn't start a saved/fresh game underneath it.
                 return true;
             }
+            // A hashchange during the rescue means this invocation's link
+            // is no longer the one in the address bar; the newer
+            // invocation owns the toast/strip decision now.
+            if (window.location.hash.slice(3) !== hashBody) return false;
             showToast('Invalid share link');
             history.replaceState(null, '', window.location.pathname + window.location.search);
         }
@@ -1519,7 +1531,7 @@ async function tryLoadSharedPuzzle(): Promise<boolean> {
     // The link decoded. If this load is the back half of a rescue reload,
     // close the analytics funnel: the update fixed the link. Clearing
     // unconditionally also drops any stale guard from an abandoned rescue.
-    if (wasRescueAttempted(window.location.hash.slice(3))) {
+    if (wasRescueAttempted(hashBody)) {
         track('share-link-rescue-result', { decoded: true });
     }
     clearRescueAttempt();
