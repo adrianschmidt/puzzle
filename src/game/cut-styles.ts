@@ -21,8 +21,8 @@ export interface CutStyleOption {
     description: string;
     /**
      * How pieces rotate when the player enables rotation for a new game.
-     * Classic and Fractal use 90° steps; the rest rotate freely because
-     * quarter-turns don't match their irregular piece shapes.
+     * Fractal uses 90° steps; the rest rotate freely because quarter-turns
+     * don't match their irregular piece shapes.
      */
     rotation: 'quarter-turn' | 'free';
 }
@@ -38,8 +38,8 @@ export const CUT_STYLE_OPTIONS: readonly CutStyleOption[] = [
     {
         id: 'classic',
         label: 'Classic',
-        description: 'Traditional jigsaw tabs',
-        rotation: 'quarter-turn',
+        description: 'Traditional jigsaw pieces',
+        rotation: 'free',
     },
     {
         id: 'fractal',
@@ -120,7 +120,7 @@ export function getVisibleCutStyleOptions(): readonly CutStyleOption[] {
  * new cut style must declare its rotation behavior to compile.
  *
  * Only new-game creation goes through this mapping. Saves and share links
- * carry their own rotationMode, so older quarter-turn Wavy/Composable
+ * carry their own rotationMode, so older quarter-turn Classic/Wavy/Composable
  * puzzles keep loading unchanged.
  */
 export function rotationModeForNewGame(
