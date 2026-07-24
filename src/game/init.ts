@@ -56,6 +56,8 @@ export interface InitOptions {
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
     /** Configuration for the triangles preset (only used when cutStyle is 'triangles'). */
     trianglesConfig?: { traceSetVersion?: number };
+    /** Configuration for the sine-based Classic generator (only used when cutStyle is 'classic'). */
+    classicConfig?: { traceSetVersion?: number };
     /**
      * Rotation mode for this puzzle. Defaults to `'none'`.
      *
@@ -93,6 +95,7 @@ export function createNewGame(
         composableConfig: options.composableConfig,
         wavyConfig: options.wavyConfig,
         trianglesConfig: options.trianglesConfig,
+        classicConfig: options.classicConfig,
         tabDebug,
     };
 
@@ -131,6 +134,7 @@ export function createNewGame(
         fractalConfig: strategy.configKey === 'fractalConfig' ? options.fractalConfig : undefined,
         wavyConfig: strategy.configKey === 'wavyConfig' ? options.wavyConfig : undefined,
         trianglesConfig: strategy.configKey === 'trianglesConfig' ? options.trianglesConfig : undefined,
+        classicConfig: strategy.configKey === 'classicConfig' ? options.classicConfig : undefined,
     };
 }
 
@@ -138,11 +142,12 @@ export function createNewGame(
  * Create the starting `PieceGroup[]` for a new game.
  *
  * If `autoGroups` is omitted (or empty), each piece becomes its own
- * single-piece group — the legacy behavior, used by classic and
- * fractal cut styles.
+ * single-piece group — the legacy behavior, used by Fractal and by
+ * pre-upgrade (legacy-generator) Classic puzzles.
  *
- * If `autoGroups` is provided (composable cut style with `minPieceArea`
- * configured), it dictates the partition: each {@link AutoGroup}
+ * If `autoGroups` is provided — any style running the composable pipeline
+ * with `minPieceArea` configured, which is Wavy, Triangles, sine-based
+ * Classic and Composable — it dictates the partition: each {@link AutoGroup}
  * becomes one `PieceGroup` containing all its pieces. Within a multi-
  * piece group, the anchor is the lowest piece id and gets local offset
  * `(0,0)`; other pieces are offset so the source image lines up
@@ -159,7 +164,7 @@ export function createNewGame(
  * @param gridSize - Grid dimensions (cols × rows)
  * @param options - Optional configuration
  * @param autoGroups - Starting groups from the generator (composable
- *     cut style only). When omitted, every piece is its own group.
+ *     pipeline only). When omitted, every piece is its own group.
  */
 export function createInitialGroups(
     pieces: Piece[],
