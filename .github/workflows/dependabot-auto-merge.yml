@@ -22,11 +22,11 @@ name: Dependabot auto-merge
 #     | select(.type=="required_status_checks")
 #     | .parameters.required_status_checks[].context'
 #
-# Note: dependabot.yml sets `rebase-strategy: disabled`, so Dependabot does
-# not rebase its PRs on its own. With the ruleset's up-to-date gate, an armed
-# PR that falls behind main stays parked until someone comments
-# `@dependabot rebase`; the rebase then re-triggers this workflow and the
-# merge completes once checks pass. That is the intended onboarding flow.
+# Dependabot auto-rebases its PRs when they fall behind main (the default
+# rebase-strategy; the onboarding-era `disabled` setting has been removed).
+# Each rebase force-push triggers `synchronize` here, which re-approves after
+# the ruleset dismisses the stale review, and the merge completes once checks
+# pass.
 
 on:
   pull_request:
