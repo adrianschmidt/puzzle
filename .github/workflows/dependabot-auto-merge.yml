@@ -1,0 +1,140 @@
+name: Dependabot auto-merge
+
+# Flip-the-switch automation, ported from pocket-dragon: every green
+# Dependabot PR, major bumps included, approves and merges itself with no
+# human in the loop. What makes that safe: the "Protect main" ruleset's
+# required checks + up-to-date gate. GitHub holds the merge; a red or stale
+# PR simply never merges.
+#
+# SINGLE POINT OF FAILURE — required status checks. This workflow does no
+# gating of its own; it unconditionally approves and enables auto-merge, and
+# trusts the main-branch ruleset to hold the merge until CI is green. That
+# safety depends entirely on these jobs being configured as REQUIRED status
+# checks on the ruleset (they are NOT declared here — GitHub does not infer
+# them from workflow files):
+#   - `test`          (ci.yml job `test`)
+#   - `check-commits` (block-autosquash-commits.yml job `check-commits`)
+# The ruleset's `strict` / up-to-date flag alone does NOT gate on CI — only
+# the required-contexts list does. If a job is renamed, its required context
+# must be renamed in the ruleset to match, or this automation will merge with
+# that gate silently dropped. Verify with:
+#   gh api repos/OWNER/REPO/rulesets/RULESET_ID --jq '.rules[]
+#     | select(.type=="required_status_checks")
+#     | .parameters.required_status_checks[].context'
+#
+# Note: dependabot.yml sets `rebase-strategy: disabled`, so Dependabot does
+# not rebase its PRs on its own. With the ruleset's up-to-date gate, an armed
+# PR that falls behind main stays parked until someone comments
+# `@dependabot rebase`; the rebase then re-triggers this workflow and the
+# merge completes once checks pass. That is the intended onboarding flow.
+
+on:
+  pull_request:
+    # Dependabot targets the default branch (see .github/dependabot.yml).
+    branches: [main]
+    # `synchronize` is the important one: it fires on Dependabot's rebase
+    # force-push, which is what lets us re-approve after the ruleset dismisses
+    # the stale approval (see the approve step below).
+    types: [opened, synchronize, reopened]
+
+# Least privilege by default; the job below elevates only what it needs.
+permissions:
+  contents: read
+
+# On a rapid rebase the `synchronize` re-run supersedes any in-flight run for
+# the same PR; cancel the older one so only the latest approve/enable-auto-
+# merge applies. `pull_request.number` is an integer, so it's safe to
+# interpolate here. A cancelled run stops before its summary steps below, so
+# it writes neither the "armed" nor the "failure" line — intentional: the
+# superseding run leaves the authoritative summary, and cancellation is not
+# `failure()`.
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    # Only act on Dependabot's own PRs. Guarding on the PR author (not the
+    # actor) also covers a `reopened` triggered by a human.
+    if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    # Dependabot-triggered `pull_request` runs get a read-only GITHUB_TOKEN by
+    # default; grant only the write scopes the Actions bot needs.
+    #   - pull-requests: write — for `gh pr review --approve`.
+    #   - contents: write     — for `gh pr merge --auto`. This job never pushes
+    #     (GitHub performs the rebase/merge server-side once checks pass), but
+    #     the `enablePullRequestAutoMerge` GraphQL mutation that `--auto` calls
+    #     is gated behind `contents: write` regardless: arming auto-merge is
+    #     checked against the contents scope, not just the eventual merge.
+    #     With only `pull-requests: write`, approve succeeds but enabling
+    #     auto-merge fails with `Resource not accessible by integration
+    #     (enablePullRequestAutoMerge)`.
+    # The built-in GITHUB_TOKEN carries these scopes; no PAT or org/repo
+    # secret is exposed to Dependabot runs.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Feeds only the run summary below — the merge decision is unconditional
+      # by design and does NOT gate on any of this metadata (no update-type
+      # allowlist: the ruleset's required checks are the gate). Don't add
+      # `if:`/branching on these outputs expecting them to hold back a merge.
+      - name: Fetch Dependabot metadata
+        id: metadata
+        # Observability-only (see the block below), so a metadata hiccup must
+        # not fail the job and block an otherwise-armable merge. On failure the
+        # step's outputs are empty and the summary line just omits the names. A
+        # continue-on-error failure is not `failure()`, so the ❌ step below
+        # stays silent and approve + enable-auto-merge still run.
+        continue-on-error: true
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      # Purely observability: record in the run summary what got auto-merged.
+      # Values go through env (not inline `${{ }}` in run:) to avoid script
+      # injection from the dependency names.
+      - name: Record what is auto-merging
+        env:
+          NAMES: ${{ steps.metadata.outputs.dependency-names }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        # Fallbacks keep the line self-explanatory when fetch-metadata fails
+        # (continue-on-error above), leaving both outputs empty.
+        run: echo "Auto-merging **${NAMES:-(metadata unavailable)}** — ${UPDATE_TYPE:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+
+      # Re-approve on every trigger. The main-branch ruleset has
+      # `dismiss_stale_reviews_on_push: true`, so Dependabot's rebase dismisses
+      # the prior approval; the `synchronize` re-run restores it. A
+      # github-actions[bot] approval satisfies the single required review
+      # because no CODEOWNERS file exists (`require_code_owner_review` is
+      # vacuous). If a CODEOWNERS is ever added, move this to a PAT from a
+      # code-owner user.
+      #
+      # Note for maintainers: a "Request changes" review is NOT a reliable way
+      # to hold a Dependabot PR. dismiss_stale_reviews_on_push dismisses it on
+      # Dependabot's next rebase, and the `synchronize` re-run here re-approves.
+      # To actually hold one, fail a required check or close the PR.
+      - name: Approve the PR
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr review --approve "$PR_URL"
+
+      # Enable GitHub native auto-merge with rebase (the only merge method the
+      # ruleset permits). GitHub then waits for the required checks and the
+      # up-to-date gate before merging. Idempotent: re-enabling on a later push
+      # is a no-op.
+      - name: Enable auto-merge
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --rebase "$PR_URL"
+
+      # Make the summary reflect the outcome, not just the intent recorded at
+      # the top: this line only lands when approve + enable-auto-merge both
+      # succeeded. On failure the step below fires instead, so the summary and
+      # the job's red/green status can't disagree.
+      - name: Confirm auto-merge armed
+        run: echo "✅ Approved and auto-merge armed — GitHub will merge once the required checks pass." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record failure in summary
+        if: failure()
+        run: echo "❌ Auto-merge was NOT armed — a step above failed; this PR will not merge unattended. See the job log." >> "$GITHUB_STEP_SUMMARY"
