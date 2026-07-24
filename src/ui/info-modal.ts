@@ -75,6 +75,10 @@ function buildReproParams(state: GameState): Record<string, unknown> {
     if (state.fractalConfig) params.fractalConfig = state.fractalConfig;
     if (state.wavyConfig) params.wavyConfig = state.wavyConfig;
     if (state.trianglesConfig) params.trianglesConfig = state.trianglesConfig;
+    // Load-bearing for Classic: its presence is what selects the sine
+    // generator over the legacy one, so omitting it would make the block
+    // describe a different puzzle than the one on screen.
+    if (state.classicConfig) params.classicConfig = state.classicConfig;
     return params;
 }
 

@@ -81,6 +81,7 @@ import {
     loadCutStylePreference,
     saveCutStylePreference,
     rotationModeForNewGame,
+    cutStyleNeedsTracedTabs,
 } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
 import {
@@ -234,14 +235,18 @@ function buildPuzzleCompletedData(state: GameState): PuzzleCompletedData {
     };
 
     // The trace-set version survives in the per-style config on the saved
-    // state, so resumed-then-completed Wavy/Triangles games can report it
-    // just like fresh ones (where currentGameAnalytics carries it).
+    // state, so resumed-then-completed Wavy/Triangles/Classic games can report
+    // it just like fresh ones (where currentGameAnalytics carries it). For
+    // Classic it also separates sine-generated puzzles from legacy ones on the
+    // completion event — the metric that says whether the new cut works.
     const traceSetVersion =
         state.cutStyle === 'triangles'
             ? state.trianglesConfig?.traceSetVersion
             : state.cutStyle === 'wavy'
               ? state.wavyConfig?.traceSetVersion
-              : undefined;
+              : state.cutStyle === 'classic'
+                ? state.classicConfig?.traceSetVersion
+                : undefined;
     if (traceSetVersion !== undefined) {
         derived.traceSetVersion = traceSetVersion;
     }
@@ -916,15 +921,28 @@ async function startNewGame(
         viewportTransform.reset();
         applyViewportTransform();
 
-        // Traced tabs live in a lazy chunk; the dialog kicked off the
-        // preload when the user picked "Traced", so this await typically
-        // resolves instantly. The await is the safety net for paths that
-        // didn't go through the dialog (e.g. the __newComposableGame
-        // console hook).
-        if (composableConfig?.tabGenerator === 'traced' || cutStyle === 'wavy'
-            || cutStyle === 'triangles') {
-            await preloadTracedTabGenerator();
-        }
+        // Traced tabs live in a lazy chunk; the dialog kicked off the preload
+        // when the user picked a traced style, so this usually resolves
+        // instantly. Started here but awaited further down, so on the paths
+        // that didn't go through the dialog (the boot path, the
+        // __newComposableGame console hook) the chunk fetch overlaps the
+        // image request — where there is one — instead of running ahead of
+        // it. The first-run boot puzzle uses a bundled image and so has
+        // nothing to overlap with; it just pays the fetch under the overlay.
+        //
+        // The rejection is captured into a value rather than left floating:
+        // an unawaited rejected promise would surface as an unhandled
+        // rejection while the image loads. It's re-raised — or, for Classic,
+        // degraded — at the await site below. `null` is the success sentinel
+        // there, so a rejection reason that is itself falsy (`reject()`,
+        // `reject(null)`) has to be defaulted to a real Error — otherwise it
+        // would read as success and skip the re-raise.
+        const tracedTabsPreload = cutStyleNeedsTracedTabs(cutStyle, composableConfig?.tabGenerator)
+            ? preloadTracedTabGenerator().then(
+                () => null,
+                (error: unknown) => error ?? new Error('Traced tab chunk failed to load'),
+            )
+            : null;
 
         const viewport = {
             width: app.clientWidth || window.innerWidth,
@@ -985,6 +1003,31 @@ async function startNewGame(
             }
         }
 
+        // The traced-tab chunk fetch started before the image request; collect
+        // its outcome now that the image has resolved. Before the download
+        // report below, not after: a start that is about to throw must not
+        // report an Unsplash "download" for a photo it then discards.
+        const tracedTabsError = tracedTabsPreload ? await tracedTabsPreload : null;
+        if (tracedTabsError !== null) {
+            // Classic is the only traced style with a generator that needs no
+            // chunk, so a failed fetch degrades it to the legacy straight-grid
+            // cut instead of failing the whole start. That matters most on the
+            // boot path, which has no error handling of its own: without this,
+            // a chunk failure on the default cut style would leave `gameState`
+            // unassigned, the canvas empty, and the New Game button throwing on
+            // click. Every other style needs the chunk, so their failure
+            // propagates.
+            if (cutStyle !== 'classic') throw tracedTabsError;
+            // Degrading is quiet for the player by design, but not for us:
+            // warn like every other failure channel in this file, and flag the
+            // analytics event below so these games stay separable from genuine
+            // pre-upgrade Classic traffic.
+            diagnostics.warn(
+                'Traced tab chunk failed to load; Classic fell back to the legacy cut:',
+                tracedTabsError,
+            );
+        }
+
         // Unsplash guidelines: report a "download" when a photo is actually
         // used. Fire-and-forget — a failure must never block the game.
         if (accessKey && downloadLocation) {
@@ -1013,6 +1056,15 @@ async function startNewGame(
             ? { traceSetVersion: CURRENT_TRACE_SET_VERSION }
             : undefined;
 
+        // Every new Classic game uses the sine-based generator with traced tabs
+        // at the current trace-set version — same stamping rationale as
+        // generatorWavyConfig. A Classic game without this config falls back to
+        // the legacy generator, so stamping it is what activates the upgrade
+        // for fresh puzzles (and withholding it is the degraded path above).
+        const generatorClassicConfig = cutStyle === 'classic' && tracedTabsError === null
+            ? { traceSetVersion: CURRENT_TRACE_SET_VERSION }
+            : undefined;
+
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
 
@@ -1022,6 +1074,7 @@ async function startNewGame(
             fractalConfig: generatorFractalConfig,
             wavyConfig: generatorWavyConfig,
             trianglesConfig: generatorTrianglesConfig,
+            classicConfig: generatorClassicConfig,
             rotationMode,
             seed,
         });
@@ -1048,11 +1101,23 @@ async function startNewGame(
             // failed-fetch (both reuse the bundled URL).
             imageSource: resolveNewGameImageSource(imageSource, state.imageUrl),
         };
-        if (generatorWavyConfig) {
-            data.traceSetVersion = generatorWavyConfig.traceSetVersion;
+        // Same reader as the shared-link path, so the derivation has one
+        // spelling in this file. `createNewGame` stored whichever of the three
+        // generator configs above matches `cutStyle`, so reading it back off
+        // the state returns exactly what those configs stamped — including the
+        // degraded Classic case, where `generatorClassicConfig` was withheld
+        // and the state therefore carries no `classicConfig` either.
+        const traceSetVersion = traceSetVersionOf(state);
+        if (traceSetVersion !== undefined) {
+            data.traceSetVersion = traceSetVersion;
         }
-        if (generatorTrianglesConfig) {
-            data.traceSetVersion = generatorTrianglesConfig.traceSetVersion;
+        // Only Classic reaches here with a chunk error — every other style
+        // threw above. Without this flag a degraded game is indistinguishable
+        // from genuine pre-upgrade Classic traffic (both are `classic` with no
+        // `traceSetVersion`), which is the metric that decides when the legacy
+        // generator can be retired.
+        if (tracedTabsError !== null) {
+            data.tracedChunkDegraded = true;
         }
         if (data.imageSource === 'unsplash') {
             data.imageCategory = imageCategory ?? 'any';
@@ -1348,7 +1413,14 @@ async function loadSharedPuzzle(
         // inside the loading overlay the user already sees.
         if (payload.cf?.tg === 'traced'
             || (payload.c === 'wavy' && payload.wf?.tv !== undefined)
-            || payload.c === 'triangles') {
+            || payload.c === 'triangles'
+            // Narrower than the `payload.clf ?` truthiness check the config
+            // reconstruction below uses, deliberately: the two agree on every
+            // decoded payload (`decodePayload` deletes a `clf` whose `tv`
+            // doesn't clamp), but checking `tv` here also spares a crafted
+            // link with a falsy `clf` (null / 0 / "") a chunk fetch it will
+            // never use.
+            || (payload.c === 'classic' && payload.clf?.tv !== undefined)) {
             await preloadTracedTabGenerator();
         }
 
@@ -1384,6 +1456,9 @@ async function loadSharedPuzzle(
                 : undefined,
             trianglesConfig: payload.tf
                 ? { traceSetVersion: payload.tf.tv }
+                : undefined,
+            classicConfig: payload.clf
+                ? { traceSetVersion: payload.clf.tv }
                 : undefined,
             composableConfig: payload.cf
                 ? shareCfToComposableConfig(payload.cf)
@@ -1443,16 +1518,20 @@ async function loadSharedPuzzle(
             recipientHadSavedState,
             sharedColor,
         };
-        // Present for a traced-tab Wavy link or a Triangles link; a legacy
-        // (classic-tab) Wavy link carries no wf.tv, matching the fresh path's
-        // stamping conditions. Both branches check the cut style so a crafted
-        // link carrying a stray foreign config block can't mis-attribute the
-        // version.
+        // Present for a traced-tab Wavy link, a Triangles link, or a
+        // sine-based Classic link; a legacy (classic-tab) Wavy link — or a
+        // pre-upgrade Classic link — carries no version, matching the fresh
+        // path's stamping conditions. All three branches check the cut style
+        // so a crafted link carrying a stray foreign config block can't
+        // mis-attribute the version.
         if (payload.c === 'wavy' && payload.wf?.tv !== undefined) {
             data.traceSetVersion = payload.wf.tv;
         }
         if (payload.c === 'triangles' && payload.tf?.tv !== undefined) {
             data.traceSetVersion = payload.tf.tv;
+        }
+        if (payload.c === 'classic' && payload.clf?.tv !== undefined) {
+            data.traceSetVersion = payload.clf.tv;
         }
         currentGameAnalytics = data;
         track('new-game-started', currentGameAnalytics);
