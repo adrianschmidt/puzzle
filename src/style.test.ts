@@ -54,6 +54,17 @@ describe('new-game dialog responsive CSS', () => {
     it('lets dialog rows wrap instead of clipping wide controls', () => {
         expect(ruleBody(styleCss, '.dialog-row')).toMatch(/flex-wrap:\s*wrap/);
     });
+
+    it('caps the image-picker grid tracks so tiles align with sibling rows', () => {
+        // Load-bearing: bare `1fr` (= minmax(auto, 1fr)) lets the tiles'
+        // intrinsic minimum inflate both tracks and push the grid's right
+        // edge out of line with the sibling rows; minmax(0, 1fr) removes the
+        // auto floor. See the .image-picker-grid comment in style.css for the
+        // full mechanism.
+        expect(ruleBody(styleCss, '.image-picker-grid')).toMatch(
+            /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/,
+        );
+    });
 });
 
 describe('selection glow CSS', () => {

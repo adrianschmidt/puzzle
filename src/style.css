@@ -653,7 +653,14 @@ html, body {
 
 .image-picker-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /*
+   * minmax(0, 1fr), not bare 1fr: 1fr means minmax(auto, 1fr), and the
+   * cells' auto minimum is inflated by the tile's aspect-ratio +
+   * height:100% intrinsic-sizing feedback (the tile border leaks through
+   * the 16/10 ratio), which grows both tracks past the fair share and
+   * pushes the grid's right edge out of line with the dialog's other rows.
+   */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   margin-bottom: 10px;
 }
