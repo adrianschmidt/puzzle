@@ -51,7 +51,7 @@ jobs:
         with:
           script: |
             const url = 'https://adrianschmidt.github.io/puzzle/dev/';
-            const body = `🧩 **Preview deployed:** ${url}\n\n*(Last updated by PR #${{ github.event.pull_request.number }})*`;
+            const body = `🧩 **Preview deployed:** ${url}`;
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
