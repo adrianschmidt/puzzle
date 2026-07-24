@@ -57,8 +57,8 @@ export interface UpdateController {
     setUpdateSW(updateSW: (reload?: boolean) => Promise<void>): void;
     /** Apply the update only if one is pending (e.g. on focus regain). */
     requestReloadIfPending(): void;
-    /** Apply the update now (manual indicator tap). */
-    reloadNow(): void;
+    /** Apply the update now (manual indicator tap, or a share-link rescue). */
+    reloadNow(trigger?: UpdateApplyTrigger): void;
     /** Whether an update is currently waiting to be applied. */
     readonly pending: boolean;
 }
@@ -144,8 +144,8 @@ export function createUpdateController(
             // so progress is already persisted before the app is backgrounded.
             if (pending) apply('focus-regain');
         },
-        reloadNow() {
-            apply('manual');
+        reloadNow(trigger = 'manual') {
+            apply(trigger);
         },
         get pending() {
             return pending;

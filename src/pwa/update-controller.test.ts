@@ -227,6 +227,21 @@ describe('createUpdateController analytics', () => {
         await Promise.resolve();
         expect(track).toHaveBeenCalledWith('pwa-update-apply-failed', { reason: 'boom' });
     });
+
+    it('reloadNow reports a supplied trigger on the applied event', () => {
+        const controller = createUpdateController({
+            flush: vi.fn(),
+            showIndicator: vi.fn(),
+            scheduleFallback: vi.fn(),
+        });
+        controller.setUpdateSW(vi.fn(() => Promise.resolve()));
+
+        controller.reloadNow('share-link-rescue');
+
+        expect(track).toHaveBeenCalledWith('pwa-update-applied', {
+            trigger: 'share-link-rescue',
+        });
+    });
 });
 
 function fakeController(): UpdateController {
