@@ -1409,6 +1409,60 @@ describe('share-link triangles traceSetVersion (tf)', () => {
     });
 });
 
+describe('share-link classic traceSetVersion (clf)', () => {
+    function classicState(traceSetVersion?: number): GameState {
+        return buildState({
+            cutStyle: 'classic',
+            classicConfig: traceSetVersion === undefined ? {} : { traceSetVersion },
+        });
+    }
+
+    it('encodes clf.tv from the classic config', () => {
+        const payload = gameStateToPayload(classicState(1), { includeProgress: false });
+        expect(payload.c).toBe('classic');
+        expect(payload.clf).toEqual({ tv: 1 });
+    });
+
+    it('omits clf for a legacy classic puzzle', () => {
+        const payload = gameStateToPayload(classicState(undefined), { includeProgress: false });
+        expect(payload.clf).toBeUndefined();
+    });
+
+    it('round-trips clf.tv through encode/decode', () => {
+        const payload = gameStateToPayload(classicState(1), { includeProgress: false });
+        const decoded = decodePayload(encodePayload(payload));
+        expect(decoded!.c).toBe('classic');
+        expect(decoded!.clf).toEqual({ tv: 1 });
+    });
+
+    it('accepts a legacy classic payload without clf', () => {
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'classic', s: 1, r: 'none',
+        }));
+        expect(decoded).not.toBeNull();
+        expect(decoded!.clf).toBeUndefined();
+    });
+
+    it('clamps a future tv down to the newest known version', () => {
+        const decoded = decodePayload(encodeRaw({
+            v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'classic', s: 1, r: 'free',
+            clf: { tv: 999 },
+        }));
+        expect(decoded!.clf!.tv).toBe(CURRENT_TRACE_SET_VERSION);
+    });
+
+    it('drops the clf block entirely on an invalid tv (→ legacy generator)', () => {
+        for (const bad of [0, -3, 'x', null] as unknown[]) {
+            const decoded = decodePayload(encodeRaw({
+                v: 1, i: 'blank', is: [1080, 720], g: [8, 6], c: 'classic', s: 1, r: 'free',
+                clf: { tv: bad },
+            }));
+            expect(decoded).not.toBeNull();
+            expect(decoded!.clf).toBeUndefined();
+        }
+    });
+});
+
 describe('share-link background color (bgc)', () => {
     it('round-trips a payload with bgc', () => {
         const payload: SharePayload = {

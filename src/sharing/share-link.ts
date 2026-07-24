@@ -67,6 +67,15 @@ export interface SharePayload {
      * falls back to the current trace set on the receiver.
      */
     tf?: { tv: number };
+    /**
+     * Classic-cut config. `tv` = trace-set version. Its PRESENCE selects the
+     * sine-based Classic generator; ABSENCE (every pre-upgrade link) selects
+     * the legacy generateProceduralPuzzle. On decode an invalid `tv` drops the
+     * block (as it does for triangles' `tf`), but here that fallback lands on
+     * the legacy generator, whereas a dropped `tf` still reproduces via the
+     * composable pipeline at the current trace set.
+     */
+    clf?: { tv: number };
     /** Optional progress snapshot. */
     pr?: {
         m: number[][];
@@ -104,6 +113,9 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
     }
     if (payload.c === 'triangles' && payload.tf?.tv !== undefined) {
         check(payload.tf.tv, 'tf.tv');
+    }
+    if (payload.c === 'classic' && payload.clf?.tv !== undefined) {
+        check(payload.clf.tv, 'clf.tv');
     }
 }
 
@@ -231,6 +243,17 @@ export function decodePayload(encoded: string): SharePayload | null {
                 delete translated.tf;
             } else {
                 translated.tf.tv = clamped;
+            }
+        }
+        if (translated.c === 'classic' && translated.clf) {
+            const clamped = clampTraceSetVersion(translated.clf.tv);
+            // An invalid tv drops the block, so the puzzle reproduces with the
+            // legacy generator (contrast triangles, which keeps the composable
+            // pipeline and substitutes the current trace set).
+            if (clamped === undefined) {
+                delete translated.clf;
+            } else {
+                translated.clf.tv = clamped;
             }
         }
         return translated;
@@ -499,6 +522,10 @@ export function gameStateToPayload(
 
     if (cutStyle === 'triangles' && state.trianglesConfig?.traceSetVersion !== undefined) {
         payload.tf = { tv: state.trianglesConfig.traceSetVersion };
+    }
+
+    if (cutStyle === 'classic' && state.classicConfig?.traceSetVersion !== undefined) {
+        payload.clf = { tv: state.classicConfig.traceSetVersion };
     }
 
     if (options.includeProgress) {
