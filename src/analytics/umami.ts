@@ -345,9 +345,12 @@ export interface PwaUpdateCheckFailedData {
  *
  * `trigger` records what caused the apply, so an operator can see the split
  * between the three safe-moment paths:
- * - `focus-regain` — auto-applied when the app became visible again with an update pending.
+ * - `focus-regain` — auto-applied when the app became visible again with an
+ *   update pending.
  * - `manual` — the user tapped the persistent indicator.
- * - `share-link-rescue` — an undecodable `#p=` link forced an update check that found a newer build; applied automatically so the reload can re-parse the link.
+ * - `share-link-rescue` — an undecodable `#p=` link forced an update check
+ *   that found a newer build; applied automatically so the reload can
+ *   re-parse the link.
  * This is the numerator against `pwa-update-detected` — the gap between the two
  * is the stuck-indicator signal (detected but never applied).
  *
@@ -408,10 +411,9 @@ export interface PwaRegisterFailedData {
  * applied — a reload with the hash intact is imminent, and the follow-up
  * `share-link-rescue-result` event on the next page load closes the funnel),
  * `no-update` (the check completed and this client is already current), or
- * `unavailable` (no service-worker registration — e.g. dev server —, the
- * check rejected while offline, or the overall deadline expired). The
- * `no-update` / `unavailable` legs fall straight through to the
- * invalid-link toast.
+ * `unavailable` (no service-worker registration, e.g. the dev server; the
+ * check rejected while offline; or the deadline expired). The `no-update` /
+ * `unavailable` legs fall straight through to the invalid-link toast.
  *
  * The pwa share-link-rescue module derives its `RescueOutcome` union from
  * this payload, so the set of outcomes has a single source of truth here
