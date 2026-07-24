@@ -131,6 +131,11 @@ import {
     blankSizeForOrientation,
 } from './app/orientation.js';
 import { initPwaUpdates } from './pwa/register.js';
+import {
+    wasRescueAttempted,
+    recordRescueAttempt,
+    clearRescueAttempt,
+} from './pwa/share-link-rescue.js';
 import { initSwErrorReporting } from './pwa/sw-error-bridge.js';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -665,7 +670,7 @@ document.addEventListener('visibilitychange', () => {
 // reopen, and apply them at a safe moment (focus regain or a manual tap).
 // `debouncedSave.flush` runs first so progress within the debounce window
 // survives the reload.
-initPwaUpdates(() => debouncedSave.flush());
+const pwaUpdates = initPwaUpdates(() => debouncedSave.flush());
 
 /**
  * Project the visual bounds of the given group from world space into
@@ -1456,15 +1461,62 @@ async function loadSharedPuzzle(
     }
 }
 
+/**
+ * A `#p=` link that fails to decode may just be newer than this cached
+ * build (the share format grows without bumping `v`). Run one
+ * update-check-and-reload rescue per link: on success the page reloads
+ * with the hash intact and the updated build re-parses it. Returns true
+ * when that reload is imminent (the caller must halt the boot flow); on
+ * every other outcome the caller falls through to the invalid-link toast.
+ */
+async function rescueUndecodableLink(hashBody: string): Promise<boolean> {
+    if (wasRescueAttempted(hashBody)) {
+        // This load IS the rescue reload for this exact link, and it still
+        // doesn't decode: the latest build doesn't understand it either.
+        clearRescueAttempt();
+        track('share-link-rescue-result', { decoded: false });
+        return false;
+    }
+    // A guard that can't be persisted would let a still-invalid link
+    // reload forever; skip the rescue instead of risking the loop.
+    if (!recordRescueAttempt(hashBody)) return false;
+    showLoadingOverlay('Checking for app update…');
+    const outcome = await pwaUpdates.attemptShareLinkRescue();
+    track('share-link-rescue-attempted', { outcome });
+    if (outcome === 'updated') {
+        // The new worker is activating; the update-controller reloads the
+        // page (with a hard-reload fallback). Keep the overlay and hash up.
+        return true;
+    }
+    clearRescueAttempt();
+    // The boot path's finally would hide it, but the hashchange path has
+    // no such backstop — hide explicitly before the toast.
+    hideLoadingOverlay();
+    return false;
+}
+
 async function tryLoadSharedPuzzle(): Promise<boolean> {
     const payload = parseLocationHash(window.location.hash);
     if (!payload) {
         if (window.location.hash.startsWith('#p=')) {
+            if (await rescueUndecodableLink(window.location.hash.slice(3))) {
+                // Rescue reload imminent — report "handled" so the boot
+                // flow doesn't start a saved/fresh game underneath it.
+                return true;
+            }
             showToast('Invalid share link');
             history.replaceState(null, '', window.location.pathname + window.location.search);
         }
         return false;
     }
+
+    // The link decoded. If this load is the back half of a rescue reload,
+    // close the analytics funnel: the update fixed the link. Clearing
+    // unconditionally also drops any stale guard from an abandoned rescue.
+    if (wasRescueAttempted(window.location.hash.slice(3))) {
+        track('share-link-rescue-result', { decoded: true });
+    }
+    clearRescueAttempt();
 
     // An unreadable save reads as no progress here, so its recovery blobs are
     // not offered for download on this path — corrupt-save recovery is
