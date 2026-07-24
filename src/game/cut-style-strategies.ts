@@ -14,8 +14,9 @@
  *                             styles use the image as-is.
  *   3. `generatePieces`     — call the right generator with the right config.
  *   4. `configKey`          — which `GameState` field the generator's config
- *                             round-trips to (or `undefined` for styles
- *                             without a config).
+ *                             round-trips to. Every current style has one;
+ *                             it stays optional for a future style that
+ *                             takes no config at all.
  *
  * Adding a new cut style means adding a new strategy entry here, not editing
  * `init.ts`.
@@ -48,11 +49,13 @@ export interface StrategyContext {
     composableConfig?: ComposableConfig;
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
     trianglesConfig?: { traceSetVersion?: number };
+    classicConfig?: { traceSetVersion?: number };
     /**
      * Optional dev-time tab-debug session. When provided, strategies
-     * whose pipeline supports it (composable, wavy) thread it through
-     * to the topology generator. Classic / fractal ignore it. Set by
-     * `init.ts` based on the `tabDebug=1` URL flag.
+     * whose pipeline supports it (composable, wavy, sine-based classic)
+     * thread it through to the topology generator. Fractal — and legacy
+     * classic, which never reaches the composable pipeline — ignore it.
+     * Set by `init.ts` based on the `tabDebug=1` URL flag.
      */
     tabDebug?: TabDebugSession;
 }
@@ -94,18 +97,48 @@ export interface CutStyleStrategy {
         ctx: StrategyContext,
     ): StrategyPuzzle;
     /**
-     * Where the generator's config should be stored on `GameState`. Omit
-     * for styles that don't take a config (e.g. classic).
+     * Where the generator's config should be stored on `GameState`. Optional
+     * for a future style that takes no config at all; every current style
+     * has one.
      */
-    configKey?: 'fractalConfig' | 'composableConfig' | 'wavyConfig' | 'trianglesConfig';
+    configKey?: 'fractalConfig' | 'composableConfig' | 'wavyConfig' | 'trianglesConfig' | 'classicConfig';
 }
 
 const classicStrategy: CutStyleStrategy = {
     scaleGrid: (grid) => grid,
     inscribePuzzleSize: (imageSize) => imageSize,
-    generatePieces: (grid, puzzleSize, seed) => ({
-        pieces: generateProceduralPuzzle(grid.cols, grid.rows, puzzleSize, seed),
-    }),
+    generatePieces: (grid, puzzleSize, seed, ctx) => {
+        const traceSetVersion = ctx.classicConfig?.traceSetVersion;
+        if (traceSetVersion === undefined) {
+            // Legacy Classic: every pre-upgrade share link/save. The PRNG
+            // call count/order of generateProceduralPuzzle is a wire contract
+            // — do not touch it. See project_share_link_prng_contract.
+            return {
+                pieces: generateProceduralPuzzle(grid.cols, grid.rows, puzzleSize, seed),
+            };
+        }
+        // Sine-based Classic: a gentle Wavy. Params are fixed here (not on the
+        // wire), so Classic links carry no attacker-controllable sine config.
+        const avgPieceArea =
+            (puzzleSize.width * puzzleSize.height) / (grid.cols * grid.rows);
+        return generateComposablePuzzle(grid.cols, grid.rows, puzzleSize, seed, {
+            baseCutGenerator: 'sine',
+            baseCutConfig: {
+                cols: grid.cols,
+                rows: grid.rows,
+                ha: 0.11,
+                hf: grid.cols / 3,
+                va: 0.11,
+                vf: grid.rows / 3,
+            },
+            tabGenerator: 'traced',
+            tabConfig: { traceSetVersion },
+            minPieceArea: avgPieceArea / 4,
+            borderless: false,
+            tabDebug: ctx.tabDebug,
+        });
+    },
+    configKey: 'classicConfig',
 };
 
 const composableStrategy: CutStyleStrategy = {

@@ -234,4 +234,17 @@ export interface GameState {
          */
         traceSetVersion?: number;
     };
+    /**
+     * Classic-cut config (only set when cutStyle === 'classic' AND the
+     * puzzle was generated with the sine-based Classic generator).
+     *
+     * Its presence is the generator discriminator: a Classic puzzle WITH a
+     * traceSetVersion reproduces via the composable sine pipeline; a Classic
+     * puzzle WITHOUT one (every pre-upgrade share link/save) reproduces via
+     * the legacy generateProceduralPuzzle. See project_share_link_prng_contract.
+     */
+    classicConfig?: {
+        /** Trace-set version for the hand-traced tab shapes. */
+        traceSetVersion?: number;
+    };
 }
