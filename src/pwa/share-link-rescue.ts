@@ -57,3 +57,95 @@ export function clearRescueAttempt(storage?: Storage): void {
         // Nothing to clean up if storage is unavailable.
     }
 }
+
+/**
+ * Minimal slice of ServiceWorkerRegistration the rescue depends on.
+ * `installing` / `waiting` are only ever null-checked, hence `unknown`.
+ */
+export interface RescueRegistration {
+    update(): Promise<unknown> | void;
+    readonly installing: unknown;
+    readonly waiting: unknown;
+}
+
+export interface ShareLinkRescueDeps {
+    /**
+     * Resolves with the SW registration once known, or null when
+     * registration failed. May never resolve (no SW registered — e.g. the
+     * dev server); the deadline turns that into `unavailable`.
+     */
+    getRegistration: () => Promise<RescueRegistration | null>;
+    /** True when a new worker is already waiting (detected before the rescue). */
+    isUpdateReady: () => boolean;
+    /** Subscribe to "a new worker is waiting"; returns an unsubscribe. */
+    onUpdateReady: (handler: () => void) => () => void;
+    /** Activate the waiting update (flush + skip-waiting + reload). */
+    applyUpdate: () => void;
+    /** Overall deadline for the whole attempt. Defaults to 8000ms. */
+    timeoutMs?: number;
+    /** Injectable timer for tests; returns a cancel function. */
+    schedule?: (handler: () => void, ms: number) => () => void;
+}
+
+const DEFAULT_RESCUE_TIMEOUT_MS = 8000;
+
+/**
+ * Run one update-check rescue. Resolves `updated` after calling
+ * `applyUpdate` (a reload is then imminent — the caller should halt boot),
+ * `no-update` when the client is already current, or `unavailable` when
+ * the check can't run or the deadline expires. Never rejects.
+ */
+export function attemptShareLinkRescue(deps: ShareLinkRescueDeps): Promise<RescueOutcome> {
+    const timeoutMs = deps.timeoutMs ?? DEFAULT_RESCUE_TIMEOUT_MS;
+    const schedule =
+        deps.schedule ??
+        ((handler: () => void, ms: number) => {
+            const id = globalThis.setTimeout(handler, ms);
+            return () => globalThis.clearTimeout(id);
+        });
+
+    return new Promise((resolve) => {
+        let settled = false;
+        let unsubscribe: (() => void) | null = null;
+
+        const settle = (outcome: RescueOutcome): void => {
+            if (settled) return;
+            settled = true;
+            unsubscribe?.();
+            cancelDeadline();
+            if (outcome === 'updated') deps.applyUpdate();
+            resolve(outcome);
+        };
+
+        const cancelDeadline = schedule(() => settle('unavailable'), timeoutMs);
+
+        if (deps.isUpdateReady()) {
+            settle('updated');
+            return;
+        }
+        unsubscribe = deps.onUpdateReady(() => settle('updated'));
+
+        void (async () => {
+            const registration = await deps.getRegistration();
+            if (settled) return;
+            if (!registration) {
+                settle('unavailable');
+                return;
+            }
+            try {
+                await Promise.resolve(registration.update());
+            } catch {
+                settle('unavailable');
+                return;
+            }
+            if (settled) return;
+            // The check resolved without starting an install and nothing is
+            // waiting: this client is already the latest build. If a worker
+            // IS installing/waiting, the onUpdateReady subscription (or the
+            // deadline, if installation hangs) settles the attempt.
+            if (!registration.installing && !registration.waiting) {
+                settle('no-update');
+            }
+        })();
+    });
+}
