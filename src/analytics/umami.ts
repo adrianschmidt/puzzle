@@ -398,6 +398,40 @@ export interface PwaRegisterFailedData {
 }
 
 /**
+ * Data attached to `share-link-rescue-attempted` — a `#p=` share link failed
+ * to decode, and since the payload format has historically grown without
+ * bumping `v`, the client may simply be a stale cached build. The app ran the
+ * rescue: one forced service-worker update check, guarded per link.
+ *
+ * `outcome` records how it ended: `updated` (a newer build was found and
+ * applied — a reload with the hash intact is imminent, and the follow-up
+ * `share-link-rescue-result` event on the next page load closes the funnel),
+ * `no-update` (the check completed and this client is already current), or
+ * `unavailable` (no service-worker registration — e.g. dev server —, the
+ * check rejected while offline, or the overall deadline expired). The
+ * `no-update` / `unavailable` legs fall straight through to the
+ * invalid-link toast.
+ *
+ * The pwa share-link-rescue module derives its `RescueOutcome` union from
+ * this payload, so the set of outcomes has a single source of truth here
+ * (same pattern as `PwaUpdateAppliedData` / `UpdateApplyTrigger`).
+ */
+export interface ShareLinkRescueAttemptedData {
+    outcome: 'updated' | 'no-update' | 'unavailable';
+}
+
+/**
+ * Data attached to `share-link-rescue-result` — the page load after a rescue
+ * reload re-parsed the same link. `decoded` records whether the updated build
+ * understood it (`true`) or it still fell through to the invalid-link toast
+ * (`false`). Paired with `share-link-rescue-attempted` outcome `updated`,
+ * this measures whether the rescue actually fixes links in the wild.
+ */
+export interface ShareLinkRescueResultData {
+    decoded: boolean;
+}
+
+/**
  * Inject the Umami tracking script if a website ID is configured.
  *
  * Call exactly once, early in app startup, before any rendering.
@@ -456,6 +490,8 @@ export function track(name: 'pwa-update-applied', data: PwaUpdateAppliedData): v
 export function track(name: 'pwa-update-fallback-reload', data: PwaUpdateFallbackReloadData): void;
 export function track(name: 'pwa-update-apply-failed', data: PwaUpdateApplyFailedData): void;
 export function track(name: 'pwa-register-failed', data: PwaRegisterFailedData): void;
+export function track(name: 'share-link-rescue-attempted', data: ShareLinkRescueAttemptedData): void;
+export function track(name: 'share-link-rescue-result', data: ShareLinkRescueResultData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);

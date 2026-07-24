@@ -194,6 +194,24 @@ describe('track', () => {
         expect(umamiTrack).toHaveBeenCalledWith('shared-load-failed', { reason: 'topology unsupported' });
     });
 
+    it('forwards share-link-rescue-attempted with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('share-link-rescue-attempted', { outcome: 'no-update' });
+
+        expect(umamiTrack).toHaveBeenCalledWith('share-link-rescue-attempted', { outcome: 'no-update' });
+    });
+
+    it('forwards share-link-rescue-result with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('share-link-rescue-result', { decoded: true });
+
+        expect(umamiTrack).toHaveBeenCalledWith('share-link-rescue-result', { decoded: true });
+    });
+
     it('forwards image-fetch-failed with the typed payload', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
