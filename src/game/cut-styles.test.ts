@@ -161,12 +161,12 @@ describe('rotationModeForNewGame', () => {
         }
     });
 
-    it('returns quarter-turn for classic and fractal', () => {
-        expect(rotationModeForNewGame('classic', true)).toBe('quarter-turn');
+    it('returns quarter-turn for fractal', () => {
         expect(rotationModeForNewGame('fractal', true)).toBe('quarter-turn');
     });
 
-    it('returns free for wavy, triangles, and composable', () => {
+    it('returns free for classic, wavy, triangles, and composable', () => {
+        expect(rotationModeForNewGame('classic', true)).toBe('free');
         expect(rotationModeForNewGame('wavy', true)).toBe('free');
         expect(rotationModeForNewGame('triangles', true)).toBe('free');
         expect(rotationModeForNewGame('composable', true)).toBe('free');
