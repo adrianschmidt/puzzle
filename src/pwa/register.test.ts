@@ -1,4 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * @vitest-environment jsdom
+ *
+ * jsdom is needed because the share-link-rescue wiring tests below drive
+ * `onRegisteredSW` with a truthy registration, which runs the real
+ * `setupUpdateChecks` (touches `document`) and — via the rescue's
+ * `applyUpdate` — the update controller's fallback path (touches
+ * `location`).
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { RegisterSWOptions } from 'vite-plugin-pwa/types';
 
 // `register.ts` is otherwise untestable: it imports the build-time-only
@@ -37,6 +46,12 @@ beforeEach(() => {
     capturedOptions.current = undefined;
 });
 
+afterEach(() => {
+    // Safety net for the fake-timers test below: restores real timers even
+    // if an assertion throws before its own cleanup runs.
+    vi.useRealTimers();
+});
+
 describe('initPwaUpdates onRegisterError', () => {
     it('tracks pwa-register-failed with a sanitized reason when registration fails', () => {
         initPwaUpdates(() => {});
@@ -70,5 +85,69 @@ describe('initPwaUpdates onRegisterError', () => {
             'pwa-register-failed',
             expect.anything(),
         );
+    });
+});
+
+describe('initPwaUpdates share-link rescue wiring', () => {
+    it('resolves no-update when the registered SW checks clean', async () => {
+        const pwa = initPwaUpdates(() => {});
+        const registration = {
+            update: vi.fn(() => Promise.resolve()),
+            installing: null,
+            waiting: null,
+        };
+        capturedOptions.current?.onRegisteredSW?.(
+            'sw.js',
+            registration as unknown as ServiceWorkerRegistration,
+        );
+
+        await expect(pwa.attemptShareLinkRescue()).resolves.toBe('no-update');
+        expect(registration.update).toHaveBeenCalled();
+    });
+
+    it('resolves unavailable when registration failed', async () => {
+        const pwa = initPwaUpdates(() => {});
+        capturedOptions.current?.onRegisterError?.(new Error('boom'));
+
+        await expect(pwa.attemptShareLinkRescue()).resolves.toBe('unavailable');
+    });
+
+    it('applies and resolves updated when the check surfaces a waiting worker', async () => {
+        // Applying the update schedules a 3s fallback reload via the update
+        // controller's real (uninjected) `globalThis.setTimeout`, which
+        // would eventually call jsdom's unimplemented `location.reload` as
+        // an async uncaught error. Fake timers keep that fallback pending
+        // but never fired — the assertions below only depend on the
+        // microtask-driven `onNeedRefresh` resolution below, not on the
+        // fallback timer.
+        vi.useFakeTimers();
+        const updateSW = vi.fn(() => Promise.resolve());
+        registerSW.mockImplementationOnce((options?: RegisterSWOptions) => {
+            capturedOptions.current = options;
+            return updateSW;
+        });
+        const flush = vi.fn();
+        const pwa = initPwaUpdates(flush);
+        const registration = {
+            update: vi.fn(() => {
+                // The real update() kicks off an install that ends in
+                // onNeedRefresh; simulate that resolution order.
+                queueMicrotask(() => capturedOptions.current?.onNeedRefresh?.());
+                return Promise.resolve();
+            }),
+            installing: {},
+            waiting: null,
+        };
+        capturedOptions.current?.onRegisteredSW?.(
+            'sw.js',
+            registration as unknown as ServiceWorkerRegistration,
+        );
+
+        await expect(pwa.attemptShareLinkRescue()).resolves.toBe('updated');
+        expect(flush).toHaveBeenCalled();
+        expect(updateSW).toHaveBeenCalledWith(true);
+        expect(track).toHaveBeenCalledWith('pwa-update-applied', {
+            trigger: 'share-link-rescue',
+        });
     });
 });
