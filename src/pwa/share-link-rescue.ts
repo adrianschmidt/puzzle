@@ -162,7 +162,11 @@ export function attemptShareLinkRescue(deps: ShareLinkRescueDeps): Promise<Rescu
             // The check resolved without starting an install and nothing is
             // waiting: this client is already the latest build. If a worker
             // IS installing/waiting, the onUpdateReady subscription (or the
-            // deadline, if installation hangs) settles the attempt.
+            // deadline, if installation hangs) settles the attempt. Narrow
+            // multi-tab corner case: a stale page whose new worker was
+            // already activated by another tab (so this tab's own
+            // onNeedRefresh never fired) also lands here and reports
+            // no-update; it self-heals on the next manual reload.
             if (!registration.installing && !registration.waiting) {
                 settle('no-update');
             }
