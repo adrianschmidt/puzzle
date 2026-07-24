@@ -15,6 +15,12 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Dependabot PRs merge unattended (dependabot-auto-merge.yml) and nothing
+    # tests against the dev deploy, so a preview would only clobber the single
+    # shared /puzzle/dev/ destination a human PR may be using — and waste a
+    # full build per PR. Guard on the PR author, not the actor, so a human
+    # closing/reopening a Dependabot PR doesn't deploy either.
+    if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
