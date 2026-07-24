@@ -1461,6 +1461,11 @@ async function loadSharedPuzzle(
     }
 }
 
+// Set when a rescue update was applied and the page is about to reload:
+// the boot flow's blanket overlay teardown must not run, or the page
+// flashes blank for the up-to-3s gap before the reload lands.
+let rescueReloadPending = false;
+
 /**
  * A `#p=` link that fails to decode may just be newer than this cached
  * build (the share format grows without bumping `v`). Run one
@@ -1486,6 +1491,7 @@ async function rescueUndecodableLink(hashBody: string): Promise<boolean> {
     if (outcome === 'updated') {
         // The new worker is activating; the update-controller reloads the
         // page (with a hard-reload fallback). Keep the overlay and hash up.
+        rescueReloadPending = true;
         return true;
     }
     clearRescueAttempt();
@@ -1626,7 +1632,7 @@ void (async () => {
             preferredRotationEnabled,
         );
     } finally {
-        hideLoadingOverlay();
+        if (!rescueReloadPending) hideLoadingOverlay();
     }
 })();
 
