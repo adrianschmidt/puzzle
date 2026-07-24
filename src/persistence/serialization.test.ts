@@ -271,6 +271,30 @@ describe('serializeState', () => {
         const restored = recombine(serializeStatic(state), serializeProgress(state));
         expect(restored.trianglesConfig).toEqual({ traceSetVersion: 1 });
     });
+
+    it('round-trips classicConfig through serializeState/deserializeState', () => {
+        const restored = deserializeState(serializeState(makeGameState({
+            cutStyle: 'classic',
+            classicConfig: { traceSetVersion: 1 },
+        })));
+        expect(restored.classicConfig).toEqual({ traceSetVersion: 1 });
+    });
+
+    it('round-trips classicConfig through serializeStatic/recombine', () => {
+        const state = makeGameState({
+            cutStyle: 'classic',
+            classicConfig: { traceSetVersion: 1 },
+        });
+        const restored = recombine(serializeStatic(state), serializeProgress(state));
+        expect(restored.classicConfig).toEqual({ traceSetVersion: 1 });
+    });
+
+    it('leaves classicConfig undefined for a legacy classic save', () => {
+        const restored = deserializeState(serializeState(makeGameState({
+            cutStyle: 'classic',
+        })));
+        expect(restored.classicConfig).toBeUndefined();
+    });
 });
 
 describe('deserializeState', () => {
