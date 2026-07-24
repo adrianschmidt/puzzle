@@ -263,25 +263,24 @@ describe('createInfoModal — How to Play section', () => {
         expect(text).toContain('drag a box');
     });
 
-    it('mentions Wavy alongside Free rotation', () => {
+    it('mentions Wavy and Classic alongside Free rotation', () => {
         createInfoModal({ container });
         const text = howToPlaySection().textContent ?? '';
         const freeRotIdx = text.indexOf('Free rotation');
-        const wavyIdx = text.indexOf('Wavy');
         expect(freeRotIdx).toBeGreaterThan(-1);
-        expect(wavyIdx).toBeGreaterThan(-1);
-        // Wavy should be near (within ~60 chars of) the Free rotation phrase.
-        expect(Math.abs(wavyIdx - freeRotIdx)).toBeLessThan(60);
+        const context = text.slice(freeRotIdx, freeRotIdx + 60);
+        expect(context).toContain('Classic');
+        expect(context).toContain('Wavy');
     });
 
-    it('attributes 90° rotation to Classic and Fractal', () => {
+    it('attributes 90° rotation to Fractal only', () => {
         createInfoModal({ container });
         const text = howToPlaySection().textContent ?? '';
         const ninetyIdx = text.indexOf('90° rotation');
         expect(ninetyIdx).toBeGreaterThan(-1);
         const context = text.slice(ninetyIdx, ninetyIdx + 60);
-        expect(context).toContain('Classic');
         expect(context).toContain('Fractal');
+        expect(context).not.toContain('Classic');
     });
 });
 
