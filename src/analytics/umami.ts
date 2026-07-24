@@ -344,17 +344,18 @@ export interface PwaUpdateCheckFailedData {
  * applied (the page committed to reloading into the new version).
  *
  * `trigger` records what caused the apply, so an operator can see the split
- * between the two safe-moment paths: `focus-regain` (auto-applied when the app
- * became visible again with an update pending) and `manual` (the user tapped
- * the persistent indicator). This is the numerator against
- * `pwa-update-detected` — the gap between the two is the stuck-indicator
- * signal (detected but never applied).
+ * between the three safe-moment paths:
+ * - `focus-regain` — auto-applied when the app became visible again with an update pending.
+ * - `manual` — the user tapped the persistent indicator.
+ * - `share-link-rescue` — an undecodable `#p=` link forced an update check that found a newer build; applied automatically so the reload can re-parse the link.
+ * This is the numerator against `pwa-update-detected` — the gap between the two
+ * is the stuck-indicator signal (detected but never applied).
  *
  * The pwa update-controller derives its `UpdateApplyTrigger` union from this
  * payload, so the set of triggers has a single source of truth here.
  */
 export interface PwaUpdateAppliedData {
-    trigger: 'focus-regain' | 'manual';
+    trigger: 'focus-regain' | 'manual' | 'share-link-rescue';
 }
 
 /**
