@@ -12,7 +12,7 @@
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
-import { DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOptions } from '../game/cut-styles.js';
+import { cutStyleNeedsTracedTabs, DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOptions } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
 import { createImagePicker, type ImagePicker, type NewGameImageChoice } from './image-picker.js';
@@ -589,6 +589,16 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         onChange: () => imagePicker?.refresh(),
     });
 
+    /**
+     * Whether starting a game with `id` selected needs the lazy traced-tab
+     * chunk — the per-style answer from `cut-styles.ts`, bound to the tab
+     * generator currently picked in the Composable section. Kicking the
+     * preload off here is what keeps the fetch off the critical path in
+     * `startNewGame`.
+     */
+    const needsTracedTabs = (id: string): boolean =>
+        cutStyleNeedsTracedTabs(id, composableSection.getSelectedTabGenerator());
+
     const sizeRow = buildSizeSelectRow({
         selectedSizeId,
         getCutStyleId: () => currentCutStyleId,
@@ -640,10 +650,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
             fractalSection.setVisible(id === 'fractal');
             wavySection.setVisible(id === 'wavy');
             composableSection.setVisible(id === 'composable');
-            if (id === 'wavy' || id === 'triangles'
-                || (id === 'composable' && composableSection.getSelectedTabGenerator() === 'traced')) {
-                options.onPreloadTracedTabs?.();
-            }
+            if (needsTracedTabs(id)) options.onPreloadTracedTabs?.();
         },
     });
 
@@ -652,12 +659,9 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     composableSection.setVisible(currentCutStyleId === 'composable');
 
     // Cover the "open with traced tabs already selected" paths so the lazy
-    // chunk starts loading even if the user never touches a radio: Wavy (always
-    // traced) or Composable with the Traced tab generator saved.
-    if (currentCutStyleId === 'wavy' || currentCutStyleId === 'triangles'
-        || (currentCutStyleId === 'composable' && composableSection.getSelectedTabGenerator() === 'traced')) {
-        options.onPreloadTracedTabs?.();
-    }
+    // chunk starts loading even if the user never touches a radio — which is
+    // the common case now that the default style (Classic) is traced.
+    if (needsTracedTabs(currentCutStyleId)) options.onPreloadTracedTabs?.();
 
     // Scrollable body: the title stays pinned above; everything else lives in
     // two groups so the short-and-wide layout can place them side by side.

@@ -159,12 +159,28 @@ describe('createNewGameDialog', () => {
         expect(onPreloadTracedTabs).toHaveBeenCalled();
     });
 
-    it('fires onPreloadTracedTabs when switching the cut style to wavy', () => {
+    // Classic is traced now — and the default style, so this is the dominant
+    // new-game path and the one that most needs the head start.
+    it('fires onPreloadTracedTabs when opened with classic selected', () => {
         const onPreloadTracedTabs = vi.fn();
         createNewGameDialog({
             container,
             selectedSizeId: '48',
             selectedCutStyleId: 'classic',
+            onSelect: vi.fn(),
+            onPreloadTracedTabs,
+        });
+        expect(onPreloadTracedTabs).toHaveBeenCalled();
+    });
+
+    // Fractal is the only never-traced style left, so it's the "no preload
+    // yet" baseline for the switch-to-traced cases below.
+    it('fires onPreloadTracedTabs when switching the cut style to wavy', () => {
+        const onPreloadTracedTabs = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'fractal',
             onSelect: vi.fn(),
             onPreloadTracedTabs,
         });
@@ -181,7 +197,7 @@ describe('createNewGameDialog', () => {
         createNewGameDialog({
             container,
             selectedSizeId: '48',
-            selectedCutStyleId: 'classic',
+            selectedCutStyleId: 'fractal',
             onSelect: vi.fn(),
             onPreloadTracedTabs,
         });
@@ -189,6 +205,23 @@ describe('createNewGameDialog', () => {
 
         container
             .querySelector<HTMLButtonElement>('[data-cut-style-id="triangles"]')!
+            .click();
+        expect(onPreloadTracedTabs).toHaveBeenCalled();
+    });
+
+    it('fires onPreloadTracedTabs when switching the cut style to classic', () => {
+        const onPreloadTracedTabs = vi.fn();
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            selectedCutStyleId: 'fractal',
+            onSelect: vi.fn(),
+            onPreloadTracedTabs,
+        });
+        expect(onPreloadTracedTabs).not.toHaveBeenCalled();
+
+        container
+            .querySelector<HTMLButtonElement>('[data-cut-style-id="classic"]')!
             .click();
         expect(onPreloadTracedTabs).toHaveBeenCalled();
     });

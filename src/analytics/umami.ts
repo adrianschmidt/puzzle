@@ -33,13 +33,66 @@ export interface NewGameData {
     source: 'fresh' | 'shared';
     cutStyle: string;
     /**
-     * Trace-set version backing a Wavy or Triangles puzzle's tabs. Present
-     * for traced-tab Wavy games and all Triangles games (omitted for every
-     * other cut style and for legacy classic-tab Wavy links), so analytics
-     * can tell traced from legacy Wavy and follow trace-set versions once a
-     * v2 ships.
+     * Trace-set version backing a puzzle's hand-traced tabs, read off the
+     * per-style config the puzzle was generated with. Present for traced-tab
+     * Wavy games, Triangles games, and sine-based Classic games; omitted for
+     * Fractal, Composable, legacy (classic-tab) Wavy links, pre-upgrade
+     * Classic links/saves, Classic games degraded to the legacy generator by
+     * a failed chunk fetch (see `tracedChunkDegraded`), and any link whose
+     * per-style config the decoder dropped as invalid — a `tf`-less Triangles
+     * link still generates with traced tabs, but at a version substituted
+     * during generation that the state never records. Lets analytics follow
+     * trace-set versions once a v2 ships.
+     *
+     * For `cutStyle: 'classic'` it carries a SECOND meaning: presence is the
+     * generator discriminator (sine + traced tabs vs. the legacy
+     * straight-grid generator), so `cutStyle === 'classic'` + absent
+     * `traceSetVersion` approximates the pre-upgrade tail. Consequence for
+     * queries: "has traceSetVersion" is no longer a proxy for
+     * "Wavy/Triangles" — filter on `cutStyle` explicitly.
+     *
+     * Two confounds sit in that bucket, both separable:
+     * - degraded new games (a failed chunk fetch) land in it — exclude
+     *   `tracedChunkDegraded`;
+     * - during a rollout window, clients still on the pre-upgrade build
+     *   (PWA caches especially) start Classic games without the field too.
+     *   Those are `source: 'fresh'`; a genuine pre-upgrade Classic *link*
+     *   arrives as `source: 'shared'`.
+     *
+     * So the query on `new-game-started` is: `cutStyle: 'classic'`, no
+     * `traceSetVersion`, not `tracedChunkDegraded` — then split on `source`.
+     * Both halves count the same one thing: a Classic game that rendered
+     * legacy geometry. `'fresh'` is the stale-build population and falls to
+     * zero as the fleet turns over. `'shared'` is the link tail, and it is
+     * not only pre-upgrade links — anything that reaches a recipient without
+     * a usable `clf` lands here too. While the rollout lasts that includes
+     * stale builds opening a *new* link: `isValidPayload` checks known fields
+     * only, so an unknown `clf` passes validation and is then ignored.
+     * Permanently, it includes links shared from a game that had no sine
+     * config of its own to pass on (a degraded start, a resumed pre-upgrade
+     * save). All of them genuinely ran the legacy generator, so every extra
+     * population inflates the tail in the safe direction — toward keeping
+     * that generator, never toward retiring it early.
      */
     traceSetVersion?: number;
+    /**
+     * True when a new Classic game fell back to the legacy straight-grid
+     * generator because the traced-tab chunk failed to load. Only ever set
+     * for fresh Classic games — every other style fails the start outright,
+     * and the shared-link path never degrades. Absent otherwise, so on
+     * `new-game-started` the degraded volume is a single filter and can be
+     * subtracted from the "Classic without traceSetVersion" bucket above.
+     *
+     * On `puzzle-completed` that guarantee holds only within the session
+     * that started the game: the flag rides along in the cached new-game
+     * payload but is not persisted, so a degraded game completed after a
+     * reload reads as pre-upgrade traffic. Deliberate — the completion event
+     * is still correct about the *geometry regime* (it genuinely is legacy
+     * geometry), and `new-game-started` is the right denominator for the
+     * retire-the-legacy-generator question and stays clean. Not worth
+     * persisting a telemetry-only failure flag onto the saved state.
+     */
+    tracedChunkDegraded?: boolean;
     rotationMode: 'none' | 'quarter-turn' | 'free';
     /**
      * Puzzle orientation. Derivable from `rows > cols` (both paths store the

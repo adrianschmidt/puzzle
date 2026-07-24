@@ -110,6 +110,37 @@ describe('createInfoModal', () => {
         expect(parsed.wavyConfig).toEqual({ borderless: true });
     });
 
+    it('includes classicConfig in the repro block for a sine-based classic puzzle', () => {
+        createInfoModal({
+            container,
+            getState: () =>
+                makeState({
+                    cutStyle: 'classic',
+                    fractalConfig: undefined,
+                    classicConfig: { traceSetVersion: 1 },
+                }),
+        });
+
+        const parsed = JSON.parse(
+            container.querySelector<HTMLElement>('[data-testid="repro-params"]')!.textContent ?? '{}',
+        );
+        // Presence of classicConfig is the generator discriminator, so a repro
+        // block without it describes the legacy straight-grid puzzle instead.
+        expect(parsed.classicConfig).toEqual({ traceSetVersion: 1 });
+    });
+
+    it('omits classicConfig for a legacy classic puzzle', () => {
+        createInfoModal({
+            container,
+            getState: () => makeState({ cutStyle: 'classic', fractalConfig: undefined }),
+        });
+
+        const parsed = JSON.parse(
+            container.querySelector<HTMLElement>('[data-testid="repro-params"]')!.textContent ?? '{}',
+        );
+        expect(parsed.classicConfig).toBeUndefined();
+    });
+
     it('toggles show-debug-pieces on <html> when the debug-pieces checkbox changes', () => {
         createInfoModal({ container });
 
