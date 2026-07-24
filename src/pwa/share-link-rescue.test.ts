@@ -135,12 +135,38 @@ describe('attemptShareLinkRescue', () => {
         expect(h.applyUpdate).not.toHaveBeenCalled();
     });
 
+    it('resolves unavailable when getRegistration rejects', async () => {
+        const h = makeDeps({ getRegistration: () => Promise.reject(new Error('boom')) });
+        await expect(attemptShareLinkRescue(h.deps)).resolves.toBe('unavailable');
+        expect(h.applyUpdate).not.toHaveBeenCalled();
+    });
+
     it('resolves unavailable when the update check rejects (offline)', async () => {
         const h = makeDeps({
             getRegistration: () =>
                 Promise.resolve(registration({ update: () => Promise.reject(new Error('offline')) })),
         });
         await expect(attemptShareLinkRescue(h.deps)).resolves.toBe('unavailable');
+    });
+
+    it('reports a warn breadcrumb (with the error) on the getRegistration reject path', async () => {
+        const warn = vi.fn();
+        const err = new Error('boom');
+        const h = makeDeps({ getRegistration: () => Promise.reject(err), warn });
+        await expect(attemptShareLinkRescue(h.deps)).resolves.toBe('unavailable');
+        expect(warn).toHaveBeenCalledWith(expect.any(String), err);
+    });
+
+    it('reports a warn breadcrumb (with the error) on the update() reject path', async () => {
+        const warn = vi.fn();
+        const err = new Error('offline');
+        const h = makeDeps({
+            getRegistration: () =>
+                Promise.resolve(registration({ update: () => Promise.reject(err) })),
+            warn,
+        });
+        await expect(attemptShareLinkRescue(h.deps)).resolves.toBe('unavailable');
+        expect(warn).toHaveBeenCalledWith(expect.any(String), err);
     });
 
     it('resolves unavailable when the deadline fires first', async () => {
