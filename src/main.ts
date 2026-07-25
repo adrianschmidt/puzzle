@@ -627,8 +627,12 @@ function notifySaveFailed(op: 'progress' | 'new-puzzle', state: GameState): void
 
 /**
  * Persist a freshly created or loaded puzzle: geometry (once) + initial progress.
- * Surfaces a failed write as a toast, and records when the geometry write crossed
- * into the compression regime (near-quota — one growth step from total failure).
+ * Surfaces a failed write as a toast, and records when the save crossed into the
+ * compression regime (near-quota — one growth step from total failure).
+ *
+ * That signal covers the whole save, not the geometry write alone: `saveNewPuzzle`
+ * reports the worse of the two writes, so a compressed initial *progress* write
+ * emits the same event. See `SaveCompressedData` in `analytics/umami.ts`.
  */
 function persistNewPuzzle(): void {
     const result = saveNewPuzzle(

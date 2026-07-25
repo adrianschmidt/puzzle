@@ -328,9 +328,17 @@ export interface SaveFailedData {
 
 /**
  * Data attached to `save-compressed` — a write exceeded the plain-write quota
- * and fell back to the lz-string-compressed payload. Emitted for the one-time
- * geometry write so an operator can see a puzzle crossing into the near-quota
- * regime (one growth step from total failure) before it tips into `save-failed`.
+ * and fell back to the lz-string-compressed payload. Emitted once per created
+ * puzzle, so an operator can see a puzzle crossing into the near-quota regime
+ * (one growth step from total failure) before it tips into `save-failed`.
+ *
+ * Scope is the whole one-time new-puzzle save, not the geometry write alone:
+ * `saveNewPuzzle` writes geometry and the initial progress and reports the
+ * worse of the two, so an initial *progress* write that compressed produces
+ * the same event. Geometry dominates the payload by orders of magnitude, so in
+ * practice this reads as a geometry signal — but unlike its `save-failed`
+ * sibling there is no `op` dimension to prove it, and adding one means
+ * widening `saveNewPuzzle`'s return type to report per-key outcomes.
  */
 export interface SaveCompressedData {
     cutStyle: string;
