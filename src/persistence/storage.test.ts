@@ -791,6 +791,28 @@ describe('createDebouncedSave', () => {
         warnSpy.mockRestore();
     });
 
+    it('passes the flushed state to onSaveFailed, not whatever is current at flush time', () => {
+        const onSaveFailed = vi.fn();
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const setItemSpy = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(() => {
+                throw new DOMException('quota', 'QuotaExceededError');
+            });
+
+        // The puzzle queued for saving. In the app a new game can start inside
+        // the debounce window, so the failure must be attributed to this state
+        // rather than to whichever puzzle is current when the timer fires.
+        const queued = makeGameState({ seed: 7 });
+        const { save } = createDebouncedSave({ onSaveFailed });
+        save(queued);
+        vi.advanceTimersByTime(500);
+
+        expect(onSaveFailed).toHaveBeenCalledWith(queued);
+        setItemSpy.mockRestore();
+        warnSpy.mockRestore();
+    });
+
     it('does not invoke onSaveFailed on a successful save', () => {
         const onSaveFailed = vi.fn();
         const { save } = createDebouncedSave({ onSaveFailed });
@@ -810,11 +832,14 @@ describe('createDebouncedSave', () => {
         saveGeometry(makeGameState({ seed: 1 }));
         const { save } = createDebouncedSave({ onSaveFailed, onSaveSkipped });
 
-        save(makeGameState({ seed: 2 }));
+        const queued = makeGameState({ seed: 2 });
+        save(queued);
         vi.advanceTimersByTime(500);
         warnSpy.mockRestore();
 
         expect(onSaveSkipped).toHaveBeenCalledOnce();
+        // Attributed to the flushed state, for the same reason as onSaveFailed.
+        expect(onSaveSkipped).toHaveBeenCalledWith(queued);
         expect(onSaveFailed).not.toHaveBeenCalled();
     });
 

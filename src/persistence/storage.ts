@@ -340,9 +340,20 @@ export function clearSavedState(): void {
  * - `onSaveSkipped` — the write was intentionally refused because the stored
  *   geometry belongs to a different puzzle (a cross-tab takeover; see
  *   {@link saveProgress}). Not a failure — the caller can record it for telemetry.
+ *
+ * Each callback receives the state whose save failed or was skipped. Callers
+ * must attribute telemetry to *that* state rather than to whatever puzzle is
+ * current at flush time: the debounce window can straddle a new game, so the
+ * two are not always the same puzzle.
  */
 export function createDebouncedSave(
-    { onSaveFailed, onSaveSkipped }: { onSaveFailed?: () => void; onSaveSkipped?: () => void } = {},
+    {
+        onSaveFailed,
+        onSaveSkipped,
+    }: {
+        onSaveFailed?: (state: GameState) => void;
+        onSaveSkipped?: (state: GameState) => void;
+    } = {},
 ): {
     save: (state: GameState, selection?: Iterable<number>, viewport?: SerializedViewport) => void;
     flush: () => void;
@@ -359,14 +370,17 @@ export function createDebouncedSave(
 
     function flushPending(): void {
         if (pendingState !== null) {
+            // Captured before the reset below so the callbacks can attribute the
+            // outcome to the puzzle that was actually being saved.
+            const savedState = pendingState;
             const result = saveProgress(pendingState, pendingSelection ?? [], pendingViewport);
             pendingState = null;
             pendingSelection = null;
             pendingViewport = undefined;
             if (result === 'failed') {
-                onSaveFailed?.();
+                onSaveFailed?.(savedState);
             } else if (result === 'skipped') {
-                onSaveSkipped?.();
+                onSaveSkipped?.(savedState);
             }
         }
     }
