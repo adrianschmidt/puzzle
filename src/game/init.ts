@@ -13,6 +13,7 @@ import type { FractalConfig } from '../puzzle/fractal/index.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
+import { quantizePieceGeometry } from '../model/quantize-geometry.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
@@ -101,8 +102,15 @@ export function createNewGame(
 
     const generationGrid = strategy.scaleGrid(gridSize, imageSize, ctx);
     const puzzleSize = strategy.inscribePuzzleSize(imageSize, generationGrid, ctx);
-    const { pieces, autoGroups, tabDebugReport } =
+    const { pieces: rawPieces, autoGroups, tabDebugReport } =
         strategy.generatePieces(generationGrid, puzzleSize, seed, ctx);
+
+    // Round generated coordinates to the precision the app actually uses, so
+    // the geometry we play, save, and regenerate from a share link is one set
+    // of numbers — and so the persisted blob stays on the plain-write
+    // localStorage path at the largest supported puzzle (#487). Runs before
+    // the groups are built so they describe the geometry we keep.
+    const pieces = quantizePieceGeometry(rawPieces);
 
     if (tabDebugReport) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
