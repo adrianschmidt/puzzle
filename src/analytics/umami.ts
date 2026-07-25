@@ -310,9 +310,20 @@ export interface ShareFailedData {
  * `op` distinguishes the per-move progress write from the one-time new-puzzle
  * (geometry) write, so an operator can tell whether a save failed at creation
  * (nothing persisted) or mid-play (only the latest moves were dropped).
+ *
+ * `cutStyle`/`pieceCount`/`traceSetVersion` match its `save-compressed` and
+ * `progress-save-skipped` siblings, so a failure can be attributed to the
+ * geometry regime that caused it instead of arriving as an unattributable
+ * count. `cutStyle: 'classic'` alone no longer identifies a regime — it spans
+ * both the light legacy straight-grid geometry and the ~14×-larger sine
+ * geometry — so `traceSetVersion` presence is what separates them.
  */
 export interface SaveFailedData {
     op: 'progress' | 'new-puzzle';
+    cutStyle: string;
+    pieceCount: number;
+    /** See {@link NewGameData.traceSetVersion} — same derivation, from the saved state. */
+    traceSetVersion?: number;
 }
 
 /**
@@ -324,6 +335,8 @@ export interface SaveFailedData {
 export interface SaveCompressedData {
     cutStyle: string;
     pieceCount: number;
+    /** See {@link SaveFailedData.traceSetVersion} — separates the two Classic regimes. */
+    traceSetVersion?: number;
 }
 
 /**
@@ -351,6 +364,8 @@ export interface SaveUnreadableData {
 export interface ProgressSaveSkippedData {
     cutStyle: string;
     pieceCount: number;
+    /** See {@link SaveFailedData.traceSetVersion} — separates the two Classic regimes. */
+    traceSetVersion?: number;
 }
 
 /**

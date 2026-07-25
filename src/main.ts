@@ -123,6 +123,7 @@ import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
+import { traceSetVersionOf } from './app/trace-set-version.js';
 import { pickBundledImage } from './app/bundled-image.js';
 import { fetchCandidateImages } from './app/fetch-candidate-images.js';
 import type { CandidateImage } from './app/unsplash-display-image.js';
@@ -234,19 +235,9 @@ function buildPuzzleCompletedData(state: GameState): PuzzleCompletedData {
         imageSource: classifyImageSource(state.imageUrl),
     };
 
-    // The trace-set version survives in the per-style config on the saved
-    // state, so resumed-then-completed Wavy/Triangles/Classic games can report
-    // it just like fresh ones (where currentGameAnalytics carries it). For
-    // Classic it also separates sine-generated puzzles from legacy ones on the
-    // completion event — the metric that says whether the new cut works.
-    const traceSetVersion =
-        state.cutStyle === 'triangles'
-            ? state.trianglesConfig?.traceSetVersion
-            : state.cutStyle === 'wavy'
-              ? state.wavyConfig?.traceSetVersion
-              : state.cutStyle === 'classic'
-                ? state.classicConfig?.traceSetVersion
-                : undefined;
+    // For Classic this also separates sine-generated puzzles from legacy ones
+    // on the completion event — the metric that says whether the new cut works.
+    const traceSetVersion = traceSetVersionOf(state);
     if (traceSetVersion !== undefined) {
         derived.traceSetVersion = traceSetVersion;
     }
@@ -616,8 +607,15 @@ function onViewportChanged(): void {
 // rate-limited so a fast debounced save loop can't spam it — and a suppressed
 // repeat still leaves a diagnostic trail rather than vanishing silently.
 let lastSaveFailedToastAt = 0;
-function notifySaveFailed(op: 'progress' | 'new-puzzle'): void {
-    track('save-failed', { op });
+// `state` is the puzzle whose save failed, which is not always the current
+// `gameState`: a debounced progress save can flush after a new game has started.
+function notifySaveFailed(op: 'progress' | 'new-puzzle', state: GameState): void {
+    track('save-failed', {
+        op,
+        cutStyle: state.cutStyle ?? 'classic',
+        pieceCount: state.pieces.length,
+        traceSetVersion: traceSetVersionOf(state),
+    });
     const now = Date.now();
     if (now - lastSaveFailedToastAt < 10_000) {
         diagnostics.warn(`Save failed (${op}) within the toast-dedup window; toast suppressed.`);
@@ -639,24 +637,31 @@ function persistNewPuzzle(): void {
         viewportTransform.getState(),
     );
     if (result === 'failed') {
-        notifySaveFailed('new-puzzle');
+        // Synchronous with the write, so the current state is the saved state.
+        notifySaveFailed('new-puzzle', gameState);
     } else if (result === 'ok-compressed') {
         track('save-compressed', {
             cutStyle: gameState.cutStyle ?? 'classic',
             pieceCount: gameState.pieces.length,
+            traceSetVersion: traceSetVersionOf(gameState),
         });
     }
 }
 
+// Both callbacks attribute to the flushed state, not to module-global
+// `gameState`: a save queued for the previous puzzle can flush inside the
+// debounce window after a new game starts, which would otherwise report the
+// new puzzle's cut style and piece count for the old puzzle's failure.
 const debouncedSave = createDebouncedSave({
-    onSaveFailed: () => notifySaveFailed('progress'),
+    onSaveFailed: (state) => notifySaveFailed('progress', state),
     // A cross-tab takeover refused this autosave (another tab started a new
     // puzzle on the same origin). Not a failure to warn the user about, but
     // worth measuring — this is the race that used to produce a torn save.
-    onSaveSkipped: () =>
+    onSaveSkipped: (state) =>
         track('progress-save-skipped', {
-            cutStyle: gameState.cutStyle ?? 'classic',
-            pieceCount: gameState.pieces.length,
+            cutStyle: state.cutStyle ?? 'classic',
+            pieceCount: state.pieces.length,
+            traceSetVersion: traceSetVersionOf(state),
         }),
 });
 
@@ -1518,20 +1523,16 @@ async function loadSharedPuzzle(
             recipientHadSavedState,
             sharedColor,
         };
-        // Present for a traced-tab Wavy link, a Triangles link, or a
-        // sine-based Classic link; a legacy (classic-tab) Wavy link — or a
-        // pre-upgrade Classic link — carries no version, matching the fresh
-        // path's stamping conditions. All three branches check the cut style
-        // so a crafted link carrying a stray foreign config block can't
-        // mis-attribute the version.
-        if (payload.c === 'wavy' && payload.wf?.tv !== undefined) {
-            data.traceSetVersion = payload.wf.tv;
-        }
-        if (payload.c === 'triangles' && payload.tf?.tv !== undefined) {
-            data.traceSetVersion = payload.tf.tv;
-        }
-        if (payload.c === 'classic' && payload.clf?.tv !== undefined) {
-            data.traceSetVersion = payload.clf.tv;
+        // Read off the generated state rather than off the payload: the link's
+        // config blocks have already been through `createNewGame`, which keeps
+        // only the one matching the selected cut style, so the crafted-link
+        // guard is structural instead of restated per style. Present for a
+        // traced-tab Wavy link, a Triangles link, or a sine-based Classic
+        // link; a legacy (classic-tab) Wavy link — or a pre-upgrade Classic
+        // link — carries no version, matching the fresh path.
+        const traceSetVersion = traceSetVersionOf(state);
+        if (traceSetVersion !== undefined) {
+            data.traceSetVersion = traceSetVersion;
         }
         currentGameAnalytics = data;
         track('new-game-started', currentGameAnalytics);
