@@ -7,21 +7,26 @@
  */
 
 import type {
+    Edge,
     GameState,
     GridSize,
     ImageAttribution,
+    Piece,
+    PieceBounds,
     PieceGroup,
     Point,
     Size,
 } from '../model/types.js';
 import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { getImageDimensions } from '../model/derive.js';
+import { buildShape } from '../model/build-shape.js';
+import { sealPieceGeometry } from '../model/seal-geometry.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 import type { ViewportState } from '../interaction/viewport-transform.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 11;
+export const STATE_VERSION = 12;
 
 /**
  * Supported schema versions.
@@ -42,8 +47,38 @@ export const STATE_VERSION = 11;
  *        migrated on load (see `migrateLegacyComposableConfig`).
  * - v11: split storage — STATIC blob omits groups/selection/completed (those live in
  *        the separate progress blob); v≤10 full blobs still load via deserializeState.
+ * - v12: pieces store `bounds` and no longer store `curvePoints` (bounds are
+ *        precomputed at generation); `shape` is omitted per piece when it is
+ *        byte-identically rebuildable from the edge paths (`buildShape`).
+ *        v≤11 pieces are migrated on load: bounds computed from their stored
+ *        curvePoints, which are then dropped.
+ *
+ *        Omitting `shape` makes `model/build-shape.ts` part of this format:
+ *        for those pieces the rendered geometry is whatever the *reading*
+ *        build's `buildShape` emits, so changing its output bytes (spacing,
+ *        `Z` placement, `CHAIN_EPSILON`, `fmt`) retroactively re-renders every
+ *        stored v12 puzzle and requires a new version here — not just an
+ *        updated unit test. `serialization.test.ts` pins the rebuilt bytes.
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/** An edge as stored in a blob: v≤11 blobs may carry curve samples. */
+export interface SerializedEdge extends Edge {
+    curvePoints?: Point[];
+}
+
+/**
+ * A piece as stored in a blob. `shape` is omitted (v12+) when
+ * `buildShape(edges)` reproduces it byte-identically; `bounds` is required
+ * on v12+ pieces and absent on v≤11 pieces (computed during migration).
+ */
+export interface SerializedPiece {
+    id: number;
+    edges: SerializedEdge[];
+    shape?: string;
+    imageOffset: Point;
+    bounds?: PieceBounds;
+}
 
 /** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
@@ -61,7 +96,7 @@ export interface SerializedPieceGroup {
 /** JSON-safe representation of a full game state, with a version tag. */
 export interface SerializedGameState {
     version: number;
-    pieces: GameState['pieces'];
+    pieces: SerializedPiece[];
     groups: SerializedPieceGroup[];
     imageUrl: string;
     imageSize?: Size;
@@ -121,7 +156,7 @@ export interface SerializedGameState {
 /** Static portion: geometry + immutable metadata. No groups/selection/completed. */
 export interface SerializedStaticState {
     version: number;
-    pieces: GameState['pieces'];
+    pieces: SerializedPiece[];
     imageUrl: string;
     imageSize?: Size;
     gridSize?: GridSize;
@@ -202,7 +237,7 @@ export function serializeState(
 ): SerializedGameState {
     const serialized: SerializedGameState = {
         version: STATE_VERSION,
-        pieces: state.pieces,
+        pieces: state.pieces.map(serializePiece),
         groups: state.groups.map(serializeGroup),
         imageUrl: state.imageUrl,
         imageSize: state.imageSize,
@@ -260,7 +295,7 @@ export function serializeState(
 export function serializeStatic(state: GameState): SerializedStaticState {
     const s: SerializedStaticState = {
         version: STATE_VERSION,
-        pieces: state.pieces,
+        pieces: state.pieces.map(serializePiece),
         imageUrl: state.imageUrl,
         imageSize: state.imageSize,
         gridSize: state.gridSize,
@@ -298,6 +333,110 @@ export function serializeProgress(
 }
 
 /**
+ * Serialize one piece, omitting `shape` when the loader can rebuild it
+ * byte-identically from the edge paths. Verified per piece — never assumed
+ * per generator: two generators build `shape` themselves rather than calling
+ * the shared builder (`puzzle/procedural-generator.ts` and
+ * `puzzle/fractal/convert.ts` — see `model/build-shape.ts`), and whether their
+ * bytes match is a per-piece fact, not a per-style one — the same style keeps
+ * different pieces at different grids. `game/init-geometry-precision.test.ts`
+ * pins the counts and explains the cause: at the grids it measures, the
+ * styles keeping a `shape` are classic (sine + traced tabs) and composable,
+ * on a small minority of pieces whose `M`-anchor `fmt`s differently once
+ * quantized — while wavy, which keeps none there, keeps some at the 16×12
+ * production ceiling that file also records.
+ * Pieces that keep their shape pass through by reference; no deep copy happens
+ * on the save path.
+ */
+function serializePiece(piece: Piece): SerializedPiece {
+    if (buildShape(piece.edges) !== piece.shape) return piece;
+    const { shape: _omitted, ...rest } = piece;
+    return rest;
+}
+
+/**
+ * Is this a bounding box the renderer can work with?
+ *
+ * Finite on all four sides and not inverted: `getPieceBounds` derives
+ * width/height by subtraction, and a `maxX < minX` box would propagate a
+ * negative dimension into `deriveImageSize`. Nothing this repo writes can
+ * produce one, so a blob carrying it is corrupt — reject it here rather than
+ * let it surface as unexplained rendering later.
+ */
+function isUsableBounds(bounds: PieceBounds | undefined): bounds is PieceBounds {
+    if (bounds == null) return false;
+    const { minX, minY, maxX, maxY } = bounds;
+    if (![minX, minY, maxX, maxY].every(Number.isFinite)) return false;
+    return maxX >= minX && maxY >= minY;
+}
+
+/**
+ * Restore blob pieces to full model `Piece`s.
+ *
+ * - v12+: `bounds` must be present and usable (throw otherwise — a piece
+ *   without bounds is an invalid blob, not a guessable one); a missing
+ *   `shape` is rebuilt from the edge paths.
+ * - v≤11: `shape` is always present; `bounds` is computed from the stored
+ *   edge endpoints + curve samples (same walk the app used at runtime when
+ *   these saves were written), and the samples are dropped.
+ *
+ * Both branches finish through `sealPieceGeometry`, the same pass generation
+ * runs, so "every model piece carries bounds and no edge carries curve
+ * samples" is enforced in one place for every way a `Piece` can come into
+ * existence — including a v12 blob that (from some future writer) still
+ * carried samples.
+ *
+ * Only the v12+ branch runs `isUsableBounds`, and that asymmetry is
+ * deliberate: a v12 box is untrusted data read off disk, while the v≤11 box
+ * is computed here by the same walk the app ran on demand before v12 —
+ * rejecting one would make a save unreadable that every build to date,
+ * including this one, loads. `computePieceBounds` only ever assigns on a
+ * successful `<`/`>`, so it returns the degenerate `{±Infinity}` box for any
+ * piece whose endpoints never clear one: no edges at all (which no generator
+ * emits), and equally coordinates whose numeric coercion is `NaN` (a missing
+ * coordinate, a non-numeric string). Coordinates that do coerce are assigned
+ * unconverted, so a blob storing them as strings can come back inverted:
+ * `"10"` then `"9"` on one axis compare lexicographically, leaving
+ * `minX: "10", maxX: "9"` — the shape `isUsableBounds` exists to reject.
+ * Either box is bit-for-bit what the on-demand walk returned for the same
+ * blob, so accepting it here changes nothing.
+ */
+function restorePieces(pieces: SerializedPiece[], version: number): Piece[] {
+    if (version >= 12) {
+        return sealPieceGeometry(pieces.map((piece, i) => {
+            const { bounds } = piece;
+            if (!isUsableBounds(bounds)) {
+                throw new Error(`Invalid state: piece ${i} has no usable bounds`);
+            }
+            if (!Array.isArray(piece.edges)) {
+                throw new Error(`Invalid state: piece ${i} has no edges`);
+            }
+            if (piece.shape !== undefined && typeof piece.shape !== 'string') {
+                throw new Error(`Invalid state: piece ${i} has a non-string shape`);
+            }
+            return {
+                ...piece,
+                bounds,
+                shape: piece.shape ?? buildShape(piece.edges),
+            };
+        }));
+    }
+    return sealPieceGeometry(pieces.map((piece, i) => {
+        if (typeof piece.shape !== 'string') {
+            throw new Error(`Invalid state: piece ${i} has no shape`);
+        }
+        if (!Array.isArray(piece.edges)) {
+            throw new Error(`Invalid state: piece ${i} has no edges`);
+        }
+        // Drop any `bounds` rather than letting sealing keep it: no writer of
+        // a v≤11 blob ever produced the field, so one appearing here is not
+        // trustworthy — these saves' bounds come from their curve samples.
+        const { bounds: _ignored, ...rest } = piece;
+        return { ...rest, shape: piece.shape };
+    }));
+}
+
+/**
  * Restore a GameState from its serialized form.
  *
  * Validates the version tag and reconstructs Maps from entries arrays.
@@ -313,6 +452,8 @@ export function deserializeState(data: SerializedGameState): GameState {
 
     validateSerializedState(data);
 
+    const pieces = restorePieces(data.pieces, data.version);
+
     const groups = data.groups.map(deserializeGroup);
 
     // v8 and earlier stored rotation as quarter-turn count {0,1,2,3}; v9+
@@ -326,15 +467,15 @@ export function deserializeState(data: SerializedGameState): GameState {
     const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
 
     // For v1 saves (no imageSize), derive it from piece data
-    const imageSize = data.imageSize ?? deriveImageSize(data.pieces);
+    const imageSize = data.imageSize ?? deriveImageSize(pieces);
 
     // For v1/v2 saves (no gridSize), assume the original 8×6 default
     const gridSize = data.gridSize ?? { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
 
     const state: GameState = {
-        pieces: data.pieces,
+        pieces,
         groups,
-        piecesById: buildPiecesById(data.pieces),
+        piecesById: buildPiecesById(pieces),
         groupsById,
         pieceToGroup,
         imageUrl: data.imageUrl,
@@ -412,17 +553,18 @@ export function recombine(
     if (typeof staticData.imageUrl !== 'string' || staticData.imageUrl.length === 0) {
         throw new Error('Invalid state: imageUrl must be a non-empty string');
     }
+    const pieces = restorePieces(staticData.pieces, staticData.version);
     validateGroups(progress.groups);
 
     const groups = progress.groups.map(deserializeGroup);
     const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
-    const imageSize = staticData.imageSize ?? deriveImageSize(staticData.pieces);
+    const imageSize = staticData.imageSize ?? deriveImageSize(pieces);
     const gridSize = staticData.gridSize ?? { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
 
     const state: GameState = {
-        pieces: staticData.pieces,
+        pieces,
         groups,
-        piecesById: buildPiecesById(staticData.pieces),
+        piecesById: buildPiecesById(pieces),
         groupsById,
         pieceToGroup,
         imageUrl: staticData.imageUrl,
@@ -583,8 +725,12 @@ function resolveRotationMode(
  * Uses `getImageDimensions` on a temporary partial state synthesised
  * from the pieces array. The other fields are inert padding — `getImageDimensions`
  * only reads `pieces`.
+ *
+ * Takes restored `Piece[]` only — callers must run blob pieces through
+ * `restorePieces` first, since `getImageDimensions` reads `piece.bounds`,
+ * which is only guaranteed to exist on restored pieces.
  */
-function deriveImageSize(pieces: GameState['pieces']): Size {
+function deriveImageSize(pieces: Piece[]): Size {
     const tempState: GameState = {
         pieces,
         groups: [],

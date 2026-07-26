@@ -41,9 +41,12 @@ export interface Edge {
 }
 
 /**
- * Piece-local axis-aligned bounding box, computed once at generation time
+ * Piece-local axis-aligned bounding box, frozen when the piece is sealed
  * (see `model/seal-geometry.ts`) from edge endpoints and the generator's
- * dense curve samples, which are not retained after sealing.
+ * dense curve samples, which are not retained after sealing. Computed at
+ * generation time; on load it comes back verbatim from a v12+ blob, and is
+ * recomputed only when migrating an older save whose edges still carry the
+ * samples.
  */
 export interface PieceBounds {
     minX: number;
