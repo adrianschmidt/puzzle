@@ -20,7 +20,7 @@ import type { InitOptions } from './init.js';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
 import type { CutStyle } from './cut-styles.js';
 import { GEOMETRY_PRECISION_DECIMALS } from '../model/quantize-geometry.js';
-import { serializeStatic } from '../persistence/serialization.js';
+import { recombine, serializeProgress, serializeStatic } from '../persistence/serialization.js';
 import { registerTabGenerator } from '../puzzle/topology/generator-registry.js';
 import { tracedTabGenerator } from '../puzzle/topology/traced-tab-generator.js';
 import { worstPrecision } from '../test-helpers/precision.js';
@@ -88,6 +88,43 @@ const styles: StyleCase[] = [
         },
     },
 ];
+
+/**
+ * How many pieces of each style's blob still carry `shape` after the v12
+ * dedup (`serializeStatic` omits `piece.shape` when `buildShape(piece.edges)`
+ * reproduces it byte-for-byte — see the design doc referenced below). Keyed by
+ * the style-case `name` above rather than `cutStyle`: the two `classic` cases
+ * share a `cutStyle` but measure differently, so `cutStyle` alone can't hold
+ * both expectations.
+ *
+ * Exact counts, not "some" — the grids and `SEED` above are fixed, so these
+ * are deterministic, and a style degrading from 2 kept pieces to all of them
+ * has to fail here rather than pass as "still stored". They are measured
+ * values, so a *drop* is fine news that just needs the number updated; a rise
+ * means the dedup is losing ground and wants explaining.
+ *
+ * `classic (sine + traced tabs)` and `composable` are the only two styles that
+ * keep any. Root cause, confirmed by direct inspection: a subpath's `M`-anchor
+ * coordinate was a near-integer float pre-quantization, so generation-time
+ * `fmt` printed e.g. `"229.00"`; quantization's round-to-2dp then folded that
+ * float to the exact integer `229`, so rebuilding from the (now-quantized)
+ * edge prints `"229"` instead. Numerically identical, byte-different — exactly
+ * the case the dedup's per-piece byte check exists to catch safely: those
+ * specific pieces just keep their `shape` stored verbatim, per the design's
+ * "correctness never depends on the dedup firing." Not a bug.
+ *
+ * The counts are per grid, not per style: the same `fmt` edge puts 3 of 192
+ * wavy pieces in the stored column at the 16×12 production ceiling, where the
+ * 6×4 grid below keeps none.
+ */
+const piecesKeepingShape: Record<string, number> = {
+    'classic (sine + traced tabs)': 1,  // of 18
+    'classic (legacy generator)': 0,    // of 18
+    wavy: 0,                            // of 24
+    triangles: 0,                       // of 14
+    fractal: 0,                         // of 22
+    composable: 2,                      // of 24
+};
 
 /**
  * The pieces the generator hands `createNewGame`, before quantization.
@@ -161,32 +198,75 @@ describe('generated geometry precision', () => {
                     }
                 }
             });
+
+            // Pins how much of the v12 size win each style actually gets, per
+            // `piecesKeepingShape` above, so a style silently losing its dedup
+            // fails loudly with that style's name and by how much. The message
+            // names the pieces, so a 2 → 3 drift points at the new one instead
+            // of leaving a count to bisect.
+            it('omits shape from the blob for every rebuildable piece', () => {
+                const blob = serializeStatic(state);
+                const withShape = blob.pieces.filter((p) => 'shape' in p);
+                const ids = withShape.map((p) => p.id).join(', ') || 'none';
+                expect(withShape.length, `pieces keeping shape: ${ids}`)
+                    .toBe(piecesKeepingShape[style.name]);
+            });
+
+            // The end-to-end check the dedup rests on. `serializePiece`
+            // verifies rebuildability against the *in-memory* edges at save
+            // time; the loader rebuilds from *JSON-parsed* ones. Anything that
+            // differs across that boundary — number formatting, a dropped
+            // field — would silently change the rendered clip-path of every
+            // piece whose `shape` was omitted, and nothing else would notice.
+            it('restores byte-identical shapes through save → JSON → load', () => {
+                const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+                const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+
+                const restored = recombine(blob, progress);
+
+                expect(restored.pieces.map((p) => p.shape))
+                    .toEqual(state.pieces.map((p) => p.shape));
+                expect(restored.pieces.map((p) => p.bounds))
+                    .toEqual(state.pieces.map((p) => p.bounds));
+            });
         });
     }
 });
 
 /**
- * The plain-write budget, as a tested invariant rather than something we
- * rediscover when `writeWithOverflow` starts falling back to lz-string.
+ * Size guard for the persisted geometry blob (#487/#493 → the v12
+ * derived-data removal, `docs/superpowers/specs/2026-07-26-geometry-blob-
+ * derived-data-design.md`). Its job has changed: v12 dropped `curvePoints`
+ * (stored `bounds` instead) and omits rebuildable `piece.shape`, taking the
+ * largest blob from 3,983,820 to 1,207,729 code units (3.80 → 1.15 MiB,
+ * re-measured here) — nowhere near the ~4.75 MiB practical `localStorage`
+ * ceiling (#399) any more. This guard no longer polices "fits the quota"; it
+ * polices "the dedup keeps working." If it ever fails, the
+ * right response is to find out why the blob grew back toward its pre-dedup
+ * size, not to raise the number.
  *
  * Measured in UTF-16 code units — `String.length`, the unit browsers meter
- * `localStorage` in and the unit #399's ceiling was established in. ~4.75 M is
- * the practical ceiling; 4.5 M leaves a deliberate margin. Wavy at 16×12 is
- * the largest blob any production style produces: 5.70 M before quantization,
- * 3.80 M after, measured on a 1080×720 image — the size Unsplash always
+ * `localStorage` in. Wavy at 16×12 is the largest blob any production style
+ * produces, measured on a 1080×720 image — the size Unsplash always
  * delivers.
  *
- * The blob is mildly seed-dependent (essentially-straight edges emit no
- * `curvePoints`, and traced tabs vary in segment count), so the single seed
- * below is a sample rather than the distribution. Measured at seeds 1 / 42 /
- * 4242 / 999999: 3.748 M / 3.729 M / 3.799 M / 3.695 M — a ~2.8% spread, with
- * 4242 the widest of the four and ~0.7 M of margin left under the budget.
+ * The blob is still mildly seed-dependent, now through the path strings
+ * rather than through samples: an edge whose cut curve was sampled emits a
+ * per-sample polyline into `edge.path`, while an essentially-straight one
+ * emits a single `L` (`composable/compose.ts`'s `fallbackPath`), and traced
+ * tabs vary in segment count, which also shifts how often the shape dedup's
+ * per-piece byte check verifies. So the single seed below is a sample rather
+ * than the distribution. Re-measured at the same
+ * seeds #493 used — 1 / 42 / 4242 / 999999: 1.202 M / 1.198 M / 1.208 M /
+ * 1.176 M — a ~2.7% spread, with 4242 (the seed used below) the widest of the
+ * four. The guard sits ~16% above that measured max: comfortably clear of
+ * seed noise, tight enough to catch a real regression.
  */
-const PLAIN_WRITE_BUDGET_CHARS = 4.5 * 1024 * 1024;
+const SIZE_GUARD_CHARS = 1_400_000;
 
 describe('persisted geometry size', () => {
     it(
-        'keeps the largest supported puzzle under the plain-write budget',
+        "keeps the largest supported puzzle's blob within the shape-dedup size guard",
         { timeout: 20_000 },
         () => {
             const state = createNewGame('img', imageSize, viewport, { cols: 16, rows: 12 }, {
@@ -198,7 +278,7 @@ describe('persisted geometry size', () => {
             const chars = JSON.stringify(serializeStatic(state)).length;
 
             expect(state.pieces.length).toBe(192);
-            expect(chars).toBeLessThan(PLAIN_WRITE_BUDGET_CHARS);
+            expect(chars).toBeLessThan(SIZE_GUARD_CHARS);
         },
     );
 });
