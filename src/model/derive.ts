@@ -5,7 +5,7 @@
  * (or a single `Piece`) without any DOM, SVG, or rendering involvement.
  */
 
-import type { GameState, Piece } from './types.js';
+import type { Edge, GameState, Piece, PieceBounds } from './types.js';
 
 /**
  * Derive image dimensions from the puzzle pieces.
@@ -39,23 +39,12 @@ export function getImageDimensions(
 }
 
 /**
- * Get the piece-local bounding box from its edges.
- *
- * Samples both endpoints and `curvePoints` (when present) so curve-
- * bounded pieces (e.g. lens / crescent shapes whose endpoints share
- * an axis) get a meaningful bbox instead of a degenerate line. Tab
- * protrusions are not separately accounted for, but their geometry
- * is captured implicitly via `curvePoints` once tabs have been
- * baked into the edge curves.
+ * Compute the piece-local bounding box by scanning edge endpoints and
+ * `curvePoints` (when present). Used at generation time (sealing) and
+ * when migrating v≤11 saves whose edges still carry curve samples —
+ * after sealing, read `piece.bounds` (via `getPieceBounds`) instead.
  */
-export function getPieceBounds(piece: Piece): {
-    minX: number;
-    minY: number;
-    maxX: number;
-    maxY: number;
-    width: number;
-    height: number;
-} {
+export function computePieceBounds(piece: { edges: Edge[] }): PieceBounds {
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -76,14 +65,31 @@ export function getPieceBounds(piece: Piece): {
         }
     }
 
-    return {
-        minX,
-        minY,
-        maxX,
-        maxY,
-        width: maxX - minX,
-        height: maxY - minY,
-    };
+    return { minX, minY, maxX, maxY };
+}
+
+/**
+ * Get the piece-local bounding box from its edges.
+ *
+ * Prefers the bounds stored on the piece (set once at generation time by
+ * `model/seal-geometry.ts`); falls back to walking the edges — endpoints
+ * plus `curvePoints` when present, so curve-bounded pieces (e.g. lens /
+ * crescent shapes whose endpoints share an axis) get a meaningful bbox
+ * instead of a degenerate line — for pieces that predate sealing (e.g.
+ * legacy save migrations). Tab protrusions are not separately accounted
+ * for, but their geometry is captured implicitly via `curvePoints` once
+ * tabs have been baked into the edge curves.
+ */
+export function getPieceBounds(piece: Piece): {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+    width: number;
+    height: number;
+} {
+    const b = piece.bounds ?? computePieceBounds(piece);
+    return { ...b, width: b.maxX - b.minX, height: b.maxY - b.minY };
 }
 
 /**

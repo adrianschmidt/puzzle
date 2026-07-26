@@ -7,7 +7,7 @@ import {
     getGridRows,
 } from './derive.js';
 import type { Edge, GameState, Piece } from './types.js';
-import { makeGameState } from '../test-helpers/fixtures.js';
+import { makeGameState, makePiece } from '../test-helpers/fixtures.js';
 
 /** Create a minimal edge with start/end points. */
 function edge(
@@ -100,6 +100,14 @@ describe('getPieceBounds', () => {
             maxY: 8,
             width: 4,
             height: 7,
+        });
+    });
+
+    it('prefers stored bounds over walking edges', () => {
+        const piece = makePiece({ edges: [] });
+        piece.bounds = { minX: 1, minY: 2, maxX: 11, maxY: 22 };
+        expect(getPieceBounds(piece)).toEqual({
+            minX: 1, minY: 2, maxX: 11, maxY: 22, width: 10, height: 20,
         });
     });
 });

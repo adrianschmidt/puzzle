@@ -14,6 +14,7 @@ import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { quantizePieceGeometry } from '../model/quantize-geometry.js';
+import { sealPieceGeometry } from '../model/seal-geometry.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
@@ -108,9 +109,12 @@ export function createNewGame(
     // Round generated coordinates to the precision the app actually uses, so
     // the geometry we play, save, and regenerate from a share link is one set
     // of numbers — and so the persisted blob stays on the plain-write
-    // localStorage path at the largest supported puzzle (#487). Runs before
-    // the groups are built so they describe the geometry we keep.
-    const pieces = quantizePieceGeometry(rawPieces);
+    // localStorage path at the largest supported puzzle (#487). Sealing then
+    // freezes each piece's bounds and drops the dense curve samples those
+    // bounds were computed from — post-composition nothing else reads them,
+    // and they dominated the persisted blob. Both run before the groups are
+    // built so the groups describe the geometry we keep.
+    const pieces = sealPieceGeometry(quantizePieceGeometry(rawPieces));
 
     if (tabDebugReport) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
