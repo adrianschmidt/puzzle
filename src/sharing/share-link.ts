@@ -21,7 +21,11 @@ import { isSafeHttpUrl } from './safe-url.js';
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
     v: 1;
-    /** Image URL, or the sentinel "blank" for the locally-regenerated white canvas. */
+    /**
+     * Image URL, or the sentinel "blank" for the locally-regenerated white
+     * canvas. See {@link collapseBlankImageUrl} for which producers map a
+     * painted-canvas `data:` URL onto the sentinel and which don't.
+     */
     i: string;
     /** Image size [width, height]. */
     is: [number, number];
@@ -82,6 +86,73 @@ export interface SharePayload {
         mr?: number[];
         sr?: number[];
     };
+}
+
+/**
+ * The cut styles and rotation modes the wire format accepts, as own-key
+ * sets. Declared as total `Record`s over the `SharePayload` unions, so a
+ * sixth cut style (or a fourth rotation mode) fails to compile here instead
+ * of being silently rejected at decode.
+ *
+ * Membership is tested with `hasOwnProperty` rather than `in` or a bare
+ * lookup: `'toString'` is a truthy *inherited* member of any object literal,
+ * so the cheaper checks would accept it as a cut style.
+ */
+const CUT_STYLES: Record<SharePayload['c'], true> = {
+    classic: true,
+    fractal: true,
+    composable: true,
+    wavy: true,
+    triangles: true,
+};
+
+const ROTATION_MODES: Record<SharePayload['r'], true> = {
+    none: true,
+    'quarter-turn': true,
+    free: true,
+};
+
+/**
+ * Both predicates take `unknown`, not `string`: every caller passes a value
+ * that is only *typed* as a string — a `JSON.parse`d payload field, or a
+ * console object hand-typed from a screenshot — so the runtime type check
+ * belongs inside, once, rather than at each call site. It is load-bearing:
+ * `hasOwnProperty` coerces its key, so `['classic']` or a `{ toString() }`
+ * object would otherwise pass membership and then read as an unknown style
+ * everywhere downstream, where every comparison is against a string literal.
+ */
+export function isCutStyle(value: unknown): value is SharePayload['c'] {
+    return typeof value === 'string'
+        && Object.prototype.hasOwnProperty.call(CUT_STYLES, value);
+}
+
+export function isRotationMode(value: unknown): value is SharePayload['r'] {
+    return typeof value === 'string'
+        && Object.prototype.hasOwnProperty.call(ROTATION_MODES, value);
+}
+
+/**
+ * Collapse a `GameState.imageUrl` onto the `'blank'` sentinel that the wire's
+ * `i` field defines. Its caller writes the result to `ReproParams.imageUrl` —
+ * a field the info modal prints — which reaches `i` only via
+ * `reproParamsToPayload`'s `params.imageUrl ?? 'blank'`.
+ *
+ * A blank-canvas puzzle keeps the *painted canvas* in `state.imageUrl` — a
+ * multi-KB base64 `data:` PNG from `canvas.toDataURL` — and those are the
+ * only `data:`/`blob:` image URLs the app produces. `'blank'` says the same
+ * thing in five characters and replays identically, because the load path
+ * repaints the canvas from `is`. Sniffing the prefix is the workaround for
+ * `GameState` carrying no "this is the blank canvas" flag (#496).
+ *
+ * `gameStateToPayload` deliberately does NOT call this. Doing so would
+ * change the payload a blank puzzle's share link emits, which is a
+ * wire-format change on the share path rather than the debug-surface
+ * cleanup this is; the decoder has always accepted both forms, so the
+ * divergence breaks nothing. Converging the two producers is a separate,
+ * deliberate change.
+ */
+export function collapseBlankImageUrl(imageUrl: string): string {
+    return imageUrl.startsWith('data:') ? 'blank' : imageUrl;
 }
 
 export function encodePayload(payload: SharePayload): string {
@@ -313,10 +384,9 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (typeof p.i !== 'string') return false;
     if (!isTuple2Number(p.is)) return false;
     if (!isTuple2Number(p.g)) return false;
-    if (p.c !== 'classic' && p.c !== 'fractal'
-        && p.c !== 'composable' && p.c !== 'wavy' && p.c !== 'triangles') return false;
+    if (!isCutStyle(p.c)) return false;
     if (typeof p.s !== 'number') return false;
-    if (p.r !== 'none' && p.r !== 'quarter-turn' && p.r !== 'free') return false;
+    if (!isRotationMode(p.r)) return false;
     if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
     if (p.pr !== undefined && !isValidProgress(p.pr)) return false;
     if (p.bgc !== undefined && typeof p.bgc !== 'string') return false;
@@ -459,6 +529,74 @@ export interface EncodeOptions {
     backgroundColorId?: string;
 }
 
+/**
+ * The five per-style config fields a repro-params object shares with
+ * GameState. `applyStyleConfigs` reads whichever one matches the
+ * payload's cut style; the rest are ignored.
+ */
+export interface StyleConfigSource {
+    composableConfig?: GameState['composableConfig'];
+    fractalConfig?: GameState['fractalConfig'];
+    wavyConfig?: GameState['wavyConfig'];
+    trianglesConfig?: GameState['trianglesConfig'];
+    classicConfig?: GameState['classicConfig'];
+}
+
+/**
+ * Copy the config block matching `payload.c` from `source` onto the
+ * payload. Shared between `gameStateToPayload` (share links) and
+ * `reproParamsToPayload` (the `__reproPuzzle` console helper) so the
+ * style-block wire mapping exists once.
+ *
+ * Precondition: `payload.c` must already hold its final value. Reading
+ * the cut style off the payload rather than off `source` is deliberate —
+ * it cannot disagree with the `c` that actually ships — but it means a
+ * caller that assembles the payload incrementally and calls this before
+ * assigning `c` gets a silent no-op, not a type error. Both current
+ * callers pass a fully-initialized object literal.
+ */
+export function applyStyleConfigs(payload: SharePayload, source: StyleConfigSource): void {
+    if (payload.c === 'composable' && source.composableConfig) {
+        // Write the opaque generator/config shape directly to the wire.
+        // Defaults: sine base-cut generator and classic tab generator
+        // (matching src/puzzle/topology/generator.ts) so recipients reproduce
+        // the same cuts when the sender omitted sub-fields.
+        const c = source.composableConfig;
+        const cf: NonNullable<SharePayload['cf']> = {
+            bg: c.baseCutGenerator ?? 'sine',
+            bgc: (c.baseCutConfig ?? {}) as Record<string, unknown>,
+            tg: c.tabGenerator ?? 'classic',
+            tgc: (c.tabConfig ?? {}) as Record<string, unknown>,
+        };
+        // Only emit `mpa` when the sender explicitly set it; recipients
+        // fall back to the generator's own default when it's absent.
+        if (c.minPieceArea !== undefined) {
+            cf.mpa = c.minPieceArea;
+        }
+        if (c.borderless !== undefined) cf.bl = c.borderless;
+        payload.cf = cf;
+    }
+
+    if (payload.c === 'fractal' && source.fractalConfig) {
+        payload.ff = { bl: source.fractalConfig.borderless ?? false };
+    }
+
+    if (payload.c === 'wavy' && source.wavyConfig) {
+        payload.wf = { bl: source.wavyConfig.borderless ?? false };
+        if (source.wavyConfig.traceSetVersion !== undefined) {
+            payload.wf.tv = source.wavyConfig.traceSetVersion;
+        }
+    }
+
+    if (payload.c === 'triangles' && source.trianglesConfig?.traceSetVersion !== undefined) {
+        payload.tf = { tv: source.trianglesConfig.traceSetVersion };
+    }
+
+    if (payload.c === 'classic' && source.classicConfig?.traceSetVersion !== undefined) {
+        payload.clf = { tv: source.classicConfig.traceSetVersion };
+    }
+}
+
 export function gameStateToPayload(
     state: GameState,
     options: EncodeOptions,
@@ -468,6 +606,8 @@ export function gameStateToPayload(
 
     const payload: SharePayload = {
         v: 1,
+        // Verbatim, including a blank puzzle's multi-KB `data:` canvas: see
+        // `collapseBlankImageUrl` for why the share path doesn't collapse it.
         i: state.imageUrl,
         is: [state.imageSize.width, state.imageSize.height],
         g: [state.gridSize.cols, state.gridSize.rows],
@@ -488,45 +628,7 @@ export function gameStateToPayload(
         };
     }
 
-    if (cutStyle === 'composable' && state.composableConfig) {
-        // Write the opaque generator/config shape directly to the wire.
-        // Defaults: sine base-cut generator and classic tab generator
-        // (matching src/puzzle/topology/generator.ts) so recipients reproduce
-        // the same cuts when the sender omitted sub-fields.
-        const c = state.composableConfig;
-        const cf: NonNullable<SharePayload['cf']> = {
-            bg: c.baseCutGenerator ?? 'sine',
-            bgc: (c.baseCutConfig ?? {}) as Record<string, unknown>,
-            tg: c.tabGenerator ?? 'classic',
-            tgc: (c.tabConfig ?? {}) as Record<string, unknown>,
-        };
-        // Only emit `mpa` when the sender explicitly set it; recipients
-        // fall back to the generator's own default when it's absent.
-        if (c.minPieceArea !== undefined) {
-            cf.mpa = c.minPieceArea;
-        }
-        if (c.borderless !== undefined) cf.bl = c.borderless;
-        payload.cf = cf;
-    }
-
-    if (cutStyle === 'fractal' && state.fractalConfig) {
-        payload.ff = { bl: state.fractalConfig.borderless ?? false };
-    }
-
-    if (cutStyle === 'wavy' && state.wavyConfig) {
-        payload.wf = { bl: state.wavyConfig.borderless ?? false };
-        if (state.wavyConfig.traceSetVersion !== undefined) {
-            payload.wf.tv = state.wavyConfig.traceSetVersion;
-        }
-    }
-
-    if (cutStyle === 'triangles' && state.trianglesConfig?.traceSetVersion !== undefined) {
-        payload.tf = { tv: state.trianglesConfig.traceSetVersion };
-    }
-
-    if (cutStyle === 'classic' && state.classicConfig?.traceSetVersion !== undefined) {
-        payload.clf = { tv: state.classicConfig.traceSetVersion };
-    }
+    applyStyleConfigs(payload, state);
 
     if (options.includeProgress) {
         const progress = extractProgress(state);

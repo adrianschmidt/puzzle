@@ -55,6 +55,8 @@ describe('createInfoModal', () => {
         expect(parsed).toEqual({
             seed: 12345,
             cutStyle: 'fractal',
+            imageUrl: 'test.jpg',
+            imageSize: { width: 800, height: 600 },
             gridSize: { cols: 8, rows: 6 },
             rotationMode: 'quarter-turn',
             fractalConfig: { borderless: true },
