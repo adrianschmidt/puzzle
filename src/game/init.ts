@@ -108,12 +108,12 @@ export function createNewGame(
 
     // Round generated coordinates to the precision the app actually uses, so
     // the geometry we play, save, and regenerate from a share link is one set
-    // of numbers — and so the persisted blob stays on the plain-write
-    // localStorage path at the largest supported puzzle (#487). Sealing then
-    // freezes each piece's bounds and drops the dense curve samples those
-    // bounds were computed from — post-composition nothing else reads them,
-    // and they dominated the persisted blob. Both run before the groups are
-    // built so the groups describe the geometry we keep.
+    // of numbers — and so the coordinates the blob still stores cost two
+    // decimals rather than ~17 (`model/quantize-geometry.ts` carries the size
+    // history). Sealing then freezes each piece's bounds and drops the dense
+    // curve samples those bounds were computed from — post-composition nothing
+    // else reads them, and they dominated the persisted blob. Both run before
+    // the groups are built so the groups describe the geometry we keep.
     const pieces = sealPieceGeometry(quantizePieceGeometry(rawPieces));
 
     if (tabDebugReport) {

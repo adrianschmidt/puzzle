@@ -71,8 +71,10 @@ export function computePieceBounds(piece: { edges: GeneratedEdge[] }): PieceBoun
 /**
  * Get the piece-local bounding box stored on the piece.
  *
- * Reads the bounds stored on the piece (set once at generation time by
- * `model/seal-geometry.ts`); every `Piece` carries them.
+ * Reads the bounds stored on the piece; every `Piece` carries them, set by
+ * `model/seal-geometry.ts` — at generation time, or on load (restored as
+ * stored for a v12+ save, recomputed from curve samples when migrating an
+ * older one).
  */
 export function getPieceBounds(piece: Piece): {
     minX: number;

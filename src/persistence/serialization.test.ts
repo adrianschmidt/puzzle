@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { GameState, PieceGroup } from '../model/types.js';
+import type { GameState, Piece, PieceGroup } from '../model/types.js';
+import { buildShape } from '../model/build-shape.js';
 import {
     serializeState,
     deserializeState,
@@ -14,11 +15,29 @@ import {
     recombine,
     STATE_VERSION,
     type SerializedGameState,
+    type SerializedStaticState,
+    type SerializedProgress,
 } from './serialization.js';
 import {
     makeRectPiece,
     makeGameState as makeBaseGameState,
 } from '../test-helpers/fixtures.js';
+
+/** A GameState wrapping hand-built pieces in a single group. */
+function makeStateWith(pieces: Piece[]): GameState {
+    return makeBaseGameState({
+        pieces,
+        groups: [
+            {
+                id: 0,
+                pieces: new Map(pieces.map((p) => [p.id, { x: 0, y: 0 }])),
+                position: { x: 0, y: 0 },
+                rotation: 0,
+            },
+        ],
+        imageUrl: 'test-image.jpg',
+    });
+}
 
 function makeGameState(overrides?: Partial<GameState>): GameState {
     const pieces = [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 }), makeRectPiece({ id: 2 })];
@@ -356,10 +375,18 @@ describe('deserializeState', () => {
     });
 
     it('migrates v1 state by deriving imageSize from pieces', () => {
-        // Simulate a v1 saved state (no imageSize field)
+        // Simulate a v1 saved state: no imageSize field, and — like every
+        // real legacy blob — no `bounds` on the pieces either (that field
+        // didn't exist before v12). Stripping it here pins the
+        // migrate-before-derive ordering: `deriveImageSize` reads
+        // `piece.bounds`, so if it ever ran on un-migrated pieces instead of
+        // the ones `restorePieces` returns, this would throw instead of
+        // computing a size.
+        const pieces = [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 }), makeRectPiece({ id: 2 })]
+            .map(({ bounds: _bounds, ...rest }) => rest);
         const v1Serialized: SerializedGameState = {
             version: 1,
-            pieces: [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 }), makeRectPiece({ id: 2 })],
+            pieces,
             groups: [
                 { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
             ],
@@ -912,10 +939,10 @@ describe('readSelection', () => {
 });
 
 describe('static/progress split (v11)', () => {
-    it('serializeStatic omits groups/selection/completed and tags v11', () => {
+    it('serializeStatic omits groups/selection/completed and tags the current version', () => {
         const state = makeGameState();
         const s = serializeStatic(state);
-        expect(s.version).toBe(11);
+        expect(s.version).toBe(STATE_VERSION);
         expect('groups' in s).toBe(false);
         expect('completed' in s).toBe(false);
         expect(s.pieces).toEqual(state.pieces);
@@ -925,7 +952,7 @@ describe('static/progress split (v11)', () => {
     it('serializeProgress carries groups, completed, selection and seed', () => {
         const state = makeGameState({ completed: true, seed: 42 });
         const p = serializeProgress(state, [1, 0]);
-        expect(p.version).toBe(11);
+        expect(p.version).toBe(STATE_VERSION);
         expect(p.completed).toBe(true);
         expect(p.seed).toBe(42);
         expect(p.selection).toEqual([1, 0]);
@@ -972,6 +999,248 @@ describe('static/progress split (v11)', () => {
         const restored = recombine(s, serializeProgress(state, []));
         expect(restored.imageSize.width).toBeGreaterThan(0);
         expect(restored.imageSize.height).toBeGreaterThan(0);
+    });
+});
+
+describe('v12 geometry dedup', () => {
+    // A piece whose shape IS the edge concatenation (chain-aware M..Z form).
+    function rebuildablePiece(): Piece {
+        const edges = [
+            { id: 0, mateEdgeId: -1, matePieceId: -1, path: 'L 10 0', start: { x: 0, y: 0 }, end: { x: 10, y: 0 } },
+            { id: 1, mateEdgeId: -1, matePieceId: -1, path: 'L 10 10', start: { x: 10, y: 0 }, end: { x: 10, y: 10 } },
+            { id: 2, mateEdgeId: -1, matePieceId: -1, path: 'L 0 0', start: { x: 10, y: 10 }, end: { x: 0, y: 0 } },
+        ];
+        return {
+            id: 0, edges, imageOffset: { x: 0, y: 0 },
+            shape: buildShape(edges),
+            bounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+        };
+    }
+
+    // Same edges, but a shape string the edges do NOT concatenate to. No
+    // production generator emits this today — every style's shapes are
+    // reproducible except for a handful of pieces whose `M` anchor formats
+    // differently after quantization (see `game/init-geometry-precision.test.ts`)
+    // — so the divergence is exaggerated here to exercise the fallback.
+    function bespokeShapePiece(): Piece {
+        return { ...rebuildablePiece(), shape: 'M 0 0 L 10 0 L 10 10 L 0 0 Z  ' };
+    }
+
+    it('omits shape from the blob when it is rebuildable', () => {
+        const state = makeStateWith([rebuildablePiece()]);
+        const blob = serializeStatic(state);
+        expect('shape' in blob.pieces[0]).toBe(false);
+        expect(blob.pieces[0].bounds).toEqual({ minX: 0, minY: 0, maxX: 10, maxY: 10 });
+    });
+
+    it('also dedupes shape in the legacy full-blob writer (serializeState)', () => {
+        const state = makeStateWith([rebuildablePiece()]);
+        const blob = serializeState(state);
+        expect('shape' in blob.pieces[0]).toBe(false);
+    });
+
+    it('keeps a shape the edges do not reproduce, verbatim', () => {
+        const state = makeStateWith([bespokeShapePiece()]);
+        const blob = serializeStatic(state);
+        expect(blob.pieces[0].shape).toBe(bespokeShapePiece().shape);
+    });
+
+    it('round-trips shape byte-identically through recombine', () => {
+        const state = makeStateWith([rebuildablePiece(), bespokeShapePiece()]);
+        const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+        const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+        const restored = recombine(blob, progress);
+        expect(restored.pieces.map((p) => p.shape)).toEqual(state.pieces.map((p) => p.shape));
+        expect(restored.pieces.map((p) => p.bounds)).toEqual(state.pieces.map((p) => p.bounds));
+    });
+
+    it('rejects a v12 piece with no bounds', () => {
+        const state = makeStateWith([rebuildablePiece()]);
+        const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+        delete blob.pieces[0].bounds;
+        const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+        expect(() => recombine(blob, progress)).toThrow(/bounds/);
+    });
+
+    it('rejects a v12 piece with non-finite bounds', () => {
+        const state = makeStateWith([rebuildablePiece()]);
+        const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+        // Not run through JSON here — Infinity would collapse to `null`
+        // through JSON.stringify, which is really the "missing" case above.
+        // A hand-edited or corrupted save could carry a literal non-finite
+        // number in memory before ever hitting storage, so exercise that
+        // shape directly.
+        blob.pieces[0].bounds = { minX: 0, minY: 0, maxX: Infinity, maxY: 10 };
+        const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+        expect(() => recombine(blob, progress)).toThrow(/bounds/);
+    });
+
+    it('rejects a v12 piece with bounds: null', () => {
+        // Distinct from "missing" — `JSON.parse('{"bounds":null}')` yields a
+        // `bounds` key present with value `null`, not an absent key. A loose
+        // `== null` check is needed to catch this without dereferencing it.
+        const state = makeStateWith([rebuildablePiece()]);
+        const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+        blob.pieces[0].bounds = null;
+        const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+        expect(() => recombine(blob, progress)).toThrow(/bounds/);
+    });
+
+    it('rejects a v12 piece with an inverted bounding box', () => {
+        // Finite but backwards: `getPieceBounds` subtracts, so this would hand
+        // the renderer a negative width via `deriveImageSize`.
+        const state = makeStateWith([rebuildablePiece()]);
+        const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+        blob.pieces[0].bounds = { minX: 10, minY: 0, maxX: 0, maxY: 10 };
+        const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+        expect(() => recombine(blob, progress)).toThrow(/bounds/);
+    });
+
+    it('rejects a v12 piece whose stored shape is not a string', () => {
+        const state = makeStateWith([bespokeShapePiece()]);
+        const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+        blob.pieces[0].shape = 42;
+        const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+        expect(() => recombine(blob, progress)).toThrow(/shape/);
+    });
+
+    it('rejects a v12 piece with no edges array', () => {
+        // Without the guard this reaches `buildShape(undefined)` and throws a
+        // bare TypeError instead of a descriptive `Invalid state:`.
+        const state = makeStateWith([rebuildablePiece()]);
+        const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+        delete blob.pieces[0].edges;
+        const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+        expect(() => recombine(blob, progress)).toThrow(/Invalid state/);
+    });
+
+    it('drops curve samples a v12 blob should not be carrying', () => {
+        // No writer produces this — `SerializedEdge` merely allows it, and
+        // sealed model edges must never have `curvePoints`.
+        const state = makeStateWith([rebuildablePiece()]);
+        const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
+        blob.pieces[0].edges[0].curvePoints = [{ x: 0, y: 0 }, { x: 5, y: -5 }];
+        const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
+        const restored = recombine(blob, progress);
+        expect('curvePoints' in restored.pieces[0].edges[0]).toBe(false);
+        // Stored bounds win: the stray samples do not widen the box.
+        expect(restored.pieces[0].bounds).toEqual({ minX: 0, minY: 0, maxX: 10, maxY: 10 });
+    });
+
+    /**
+     * The one assertion here that would fail if `buildShape`'s emitted bytes
+     * changed.
+     *
+     * Every other shape check in this file compares generated output against
+     * generated output, so both sides move together when `buildShape` changes.
+     * This blob is hand-written v12 with `shape` omitted, which is exactly the
+     * position a save on a user's disk is in: the expected string below is the
+     * on-disk contract. If a `buildShape` edit makes this fail, the fix is a
+     * `STATE_VERSION` bump — every stored v12 puzzle just re-rendered — not a
+     * new expectation here.
+     */
+    it('rebuilds an omitted shape to a pinned byte string', () => {
+        const e = (
+            id: number,
+            path: string,
+            start: { x: number; y: number },
+            end: { x: number; y: number },
+        ): SerializedStaticState['pieces'][number]['edges'][number] =>
+            ({ id, mateEdgeId: -1, matePieceId: -1, path, start, end });
+        const blob: SerializedStaticState = {
+            version: 12,
+            imageUrl: 'img',
+            imageSize: { width: 100, height: 100 },
+            gridSize: { cols: 1, rows: 1 },
+            pieces: [{
+                id: 0,
+                imageOffset: { x: 0, y: 0 },
+                bounds: { minX: 0, minY: 0, maxX: 12, maxY: 10 },
+                edges: [
+                    // Outer loop: chained end→start, so one M..Z subpath. The
+                    // last edge starts 0.2 px off the previous end — inside
+                    // `CHAIN_EPSILON`, so it must still chain, which pins the
+                    // tolerance from the tight side as the hole does from the
+                    // loose one.
+                    e(0, 'L 10 0', { x: 0, y: 0 }, { x: 10, y: 0 }),
+                    e(1, 'C 12 3 12 7 10 10', { x: 10, y: 0 }, { x: 10, y: 10 }),
+                    e(2, 'L 0 0', { x: 10.2, y: 10.1 }, { x: 0, y: 0 }),
+                    // Hole: the chain breaks, so a second subpath opens — with
+                    // a non-integer anchor, which pins `fmt`'s formatting too.
+                    e(3, 'L 4 2.25', { x: 2.5, y: 2.25 }, { x: 4, y: 2.25 }),
+                    e(4, 'L 2.5 2.25', { x: 4, y: 2.25 }, { x: 2.5, y: 2.25 }),
+                ],
+            }],
+        };
+        const progress: SerializedProgress = {
+            version: 12,
+            groups: [{ id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } }],
+            completed: false,
+        };
+
+        expect(recombine(blob, progress).pieces[0].shape).toBe(
+            'M 0 0 L 10 0 C 12 3 12 7 10 10 L 0 0 Z M 2.50 2.25 L 4 2.25 L 2.5 2.25 Z',
+        );
+    });
+});
+
+describe('v≤11 piece migration', () => {
+    it('computes bounds from stored curvePoints and drops them (recombine)', () => {
+        // Hand-built v11 static blob: shape always present, curve samples on the edge.
+        const v11Blob: SerializedStaticState = {
+            version: 11,
+            imageUrl: 'img',
+            imageSize: { width: 100, height: 100 },
+            gridSize: { cols: 2, rows: 1 },
+            pieces: [{
+                id: 0,
+                imageOffset: { x: 0, y: 0 },
+                shape: 'M 0 0 L 10 0 L 10 10 L 0 0 Z',
+                edges: [{
+                    id: 0, mateEdgeId: -1, matePieceId: -1,
+                    path: 'L 10 0', start: { x: 0, y: 0 }, end: { x: 10, y: 0 },
+                    curvePoints: [{ x: 0, y: 0 }, { x: 5, y: -2.5 }, { x: 10, y: 0 }],
+                }],
+            }],
+        };
+        const progress: SerializedProgress = {
+            version: 12,
+            groups: [{ id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } }],
+            completed: false,
+        };
+        const state = recombine(v11Blob, progress);
+        expect(state.pieces[0].bounds).toEqual({ minX: 0, minY: -2.5, maxX: 10, maxY: 0 });
+        expect('curvePoints' in state.pieces[0].edges[0]).toBe(false);
+        expect(state.pieces[0].shape).toBe(v11Blob.pieces[0].shape);
+    });
+
+    it('computes bounds from stored curvePoints and drops them (deserializeState, legacy full blob)', () => {
+        // Hand-built legacy (pre-split) full blob, as `deserializeState` still
+        // loads: shape always present, curve samples on the edge, no bounds.
+        const legacyBlob: SerializedGameState = {
+            version: 9,
+            imageUrl: 'img',
+            imageSize: { width: 100, height: 100 },
+            gridSize: { cols: 2, rows: 1 },
+            completed: false,
+            groups: [
+                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 }, rotation: 0 },
+            ],
+            pieces: [{
+                id: 0,
+                imageOffset: { x: 0, y: 0 },
+                shape: 'M 0 0 L 10 0 L 10 10 L 0 0 Z',
+                edges: [{
+                    id: 0, mateEdgeId: -1, matePieceId: -1,
+                    path: 'L 10 0', start: { x: 0, y: 0 }, end: { x: 10, y: 0 },
+                    curvePoints: [{ x: 0, y: 0 }, { x: 5, y: -2.5 }, { x: 10, y: 0 }],
+                }],
+            }],
+        };
+        const state = deserializeState(legacyBlob);
+        expect(state.pieces[0].bounds).toEqual({ minX: 0, minY: -2.5, maxX: 10, maxY: 0 });
+        expect('curvePoints' in state.pieces[0].edges[0]).toBe(false);
+        expect(state.pieces[0].shape).toBe(legacyBlob.pieces[0].shape);
     });
 });
 
