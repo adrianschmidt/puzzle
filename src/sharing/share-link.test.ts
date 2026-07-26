@@ -7,6 +7,7 @@ import {
     gameStateToPayload,
     hasShareableProgress,
     shareCfToComposableConfig,
+    collapseBlankImageUrl,
     type SharePayload,
 } from './share-link.js';
 import type { GameState } from '../model/types.js';
@@ -605,6 +606,26 @@ describe('share-link codec — rejection paths', () => {
         expect(decodePayload(encodeRaw(bad))).toBeNull();
     });
 
+    it('rejects invalid rotation mode', () => {
+        const bad = { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 0, r: 'quarter turn' };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+
+    it('rejects a non-string cut style that stringifies to a known one', () => {
+        // `isCutStyle` is an own-key lookup and `hasOwnProperty` coerces its
+        // key, so `['classic']` would pass membership without the predicate's
+        // internal `typeof` check — and then read as an unknown style
+        // everywhere downstream, where the comparisons are against string
+        // literals.
+        const bad = { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: ['classic'], s: 0, r: 'none' };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+
+    it('rejects a non-string rotation mode that stringifies to a known one', () => {
+        const bad = { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 0, r: ['none'] };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+
     it('throws when tuple values are non-finite', () => {
         const bad: SharePayload = {
             v: 1, i: 'x', is: [NaN, 1], g: [2, 2], c: 'classic', s: 0, r: 'none',
@@ -761,6 +782,29 @@ function buildState(partial: Partial<GameState>): GameState {
     });
 }
 
+describe('collapseBlankImageUrl', () => {
+    it('collapses a blank canvas data: URL to the sentinel', () => {
+        expect(collapseBlankImageUrl('data:image/png;base64,AAAA')).toBe('blank');
+    });
+
+    it('passes the sentinel and real image URLs through unchanged', () => {
+        expect(collapseBlankImageUrl('blank')).toBe('blank');
+        const unsplash = 'https://images.unsplash.com/photo-x?w=1080';
+        expect(collapseBlankImageUrl(unsplash)).toBe(unsplash);
+        expect(collapseBlankImageUrl('/img/bundled.jpg')).toBe('/img/bundled.jpg');
+    });
+
+    it('collapses only what the app itself produces, not blob: or DATA:', () => {
+        // `toDataURL` is the sole producer and always emits lowercase `data:`.
+        // Anything else reaching here came from a crafted link or a
+        // hand-edited save, where printing the value verbatim tells a bug
+        // report more than a sentinel that would misdescribe it.
+        expect(collapseBlankImageUrl('blob:https://x/1')).toBe('blob:https://x/1');
+        const upper = 'DATA:image/png;base64,AAAA';
+        expect(collapseBlankImageUrl(upper)).toBe(upper);
+    });
+});
+
 describe('gameStateToPayload', () => {
     it('maps a starting classic puzzle to a minimal payload', () => {
         const state = buildState({});
@@ -769,6 +813,17 @@ describe('gameStateToPayload', () => {
             v: 1, i: 'blank', is: [1080, 720], g: [4, 3],
             c: 'classic', s: 42, r: 'none',
         });
+    });
+
+    it('emits a blank puzzle data: URL verbatim, without collapsing it', () => {
+        // The repro block collapses this via `collapseBlankImageUrl`; the
+        // share path deliberately must not, because that would change the
+        // payload every blank puzzle's existing link encodes.
+        const dataUrl = 'data:image/png;base64,' + 'A'.repeat(64);
+        const payload = gameStateToPayload(buildState({ imageUrl: dataUrl }), {
+            includeProgress: false,
+        });
+        expect(payload.i).toBe(dataUrl);
     });
 
     it('includes attribution when present', () => {

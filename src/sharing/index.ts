@@ -9,3 +9,8 @@ export {
     hasShareableProgress,
     shareCfToComposableConfig,
 } from './share-link.js';
+export {
+    type ReproParams,
+    buildReproParams,
+    reproParamsToPayload,
+} from './repro-params.js';

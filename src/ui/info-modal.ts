@@ -38,6 +38,7 @@ import {
 } from './piece-outline-color.js';
 import { createPieceOutlineColorPicker } from './piece-outline-color-picker.js';
 import { attachShareSection } from './share-section.js';
+import { buildReproParams } from '../sharing/index.js';
 
 export interface InfoModalOptions {
     /** Container to append the modal to. */
@@ -60,27 +61,6 @@ export interface InfoModalOptions {
 
 /** HTML class toggled on <html> to switch pieces into debug (white) view. */
 const DEBUG_PIECES_CLASS = 'show-debug-pieces';
-
-/**
- * Fields required to reproduce a puzzle from its seed.
- * Kept minimal so a screenshot of the block is easy to read.
- */
-function buildReproParams(state: GameState): Record<string, unknown> {
-    const params: Record<string, unknown> = {};
-    if (state.seed !== undefined) params.seed = state.seed;
-    if (state.cutStyle) params.cutStyle = state.cutStyle;
-    if (state.gridSize) params.gridSize = state.gridSize;
-    if (state.rotationMode) params.rotationMode = state.rotationMode;
-    if (state.composableConfig) params.composableConfig = state.composableConfig;
-    if (state.fractalConfig) params.fractalConfig = state.fractalConfig;
-    if (state.wavyConfig) params.wavyConfig = state.wavyConfig;
-    if (state.trianglesConfig) params.trianglesConfig = state.trianglesConfig;
-    // Load-bearing for Classic: its presence is what selects the sine
-    // generator over the legacy one, so omitting it would make the block
-    // describe a different puzzle than the one on screen.
-    if (state.classicConfig) params.classicConfig = state.classicConfig;
-    return params;
-}
 
 /**
  * Append a list `<li>` to `parent`, where the contents are an alternating
@@ -542,7 +522,9 @@ function buildReproSetting(state: GameState | null | undefined): HTMLElement {
     const desc = document.createElement('p');
     desc.className = 'info-setting-description';
     desc.textContent =
-        'Parameters needed to regenerate this exact puzzle. Include in bug reports.';
+        'Parameters needed to regenerate this exact puzzle. Include in bug '
+        + 'reports, or paste into __reproPuzzle(...) in the browser console '
+        + 'to replay it.';
     setting.appendChild(desc);
 
     const block = document.createElement('pre');
