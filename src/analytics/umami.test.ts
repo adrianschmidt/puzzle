@@ -189,9 +189,12 @@ describe('track', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
 
-        track('shared-load-failed', { reason: 'topology unsupported' });
+        track('shared-load-failed', { reason: 'topology unsupported', source: 'shared' });
 
-        expect(umamiTrack).toHaveBeenCalledWith('shared-load-failed', { reason: 'topology unsupported' });
+        expect(umamiTrack).toHaveBeenCalledWith('shared-load-failed', {
+            reason: 'topology unsupported',
+            source: 'shared',
+        });
     });
 
     it('forwards share-link-rescue-attempted with the typed payload', () => {

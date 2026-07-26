@@ -113,6 +113,10 @@ import {
     parseLocationHash,
     shareCfToComposableConfig,
     type SharePayload,
+    encodePayload,
+    decodePayload,
+    reproParamsToPayload,
+    type ReproParams,
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
 import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
@@ -579,6 +583,91 @@ function zoomToFitCompletedPuzzle(
         rotation !== 'none',
         overrides?.seed,
     );
+};
+
+/**
+ * Dev-console hook: regenerate a puzzle from the info modal's
+ * "Reproduction parameters" block. Paste the block's JSON verbatim:
+ *
+ *   __reproPuzzle({
+ *       seed: 1534700170,
+ *       cutStyle: 'classic',
+ *       imageUrl: 'https://images.unsplash.com/...',
+ *       imageSize: { width: 1080, height: 1440 },
+ *       gridSize: { cols: 12, rows: 16 },
+ *       rotationMode: 'free',
+ *       classicConfig: { traceSetVersion: 1 },
+ *   })
+ *
+ * The params run through the share codec's validation and clamps and
+ * then the share-link load path, so reproduction semantics match a
+ * share link exactly. `imageUrl: 'blank'` — or no `imageUrl` at all —
+ * renders on the blank canvas at the recorded dimensions; geometry
+ * depends on the image's dimensions, not its pixels. Fractional
+ * `imageSize` values are floored by the codec's clamps, and attribution
+ * and background color are not part of the params, so a replayed
+ * Unsplash puzzle loses its credit. Replaces the current game and save
+ * without confirmation, but leaves the address bar alone: a `#p=` link
+ * stays put — as declining its confirm dialog does — so the original
+ * link remains reloadable, and a reload re-offers it. Decline the prompt
+ * and the replay survives.
+ *
+ * Resolves `true` once the puzzle is on screen and `false` on any
+ * failure (matching `tryLoadSharedPuzzle`), so `await __reproPuzzle(...)`
+ * reports the outcome instead of resolving before generation starts.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(window as any).__reproPuzzle = async (params: ReproParams): Promise<boolean> => {
+    let payload: SharePayload;
+    let decoded: SharePayload | null;
+    try {
+        payload = reproParamsToPayload(params);
+        decoded = decodePayload(encodePayload(payload));
+    } catch (err) {
+        // The error object rather than its message, so the console keeps the
+        // stack and renders it expandable (as `diagnostics.warn` does).
+        // eslint-disable-next-line no-console
+        console.error('[__reproPuzzle]', err);
+        return false;
+    }
+    if (!decoded) {
+        // `decodePayload` returns a bare `null` from any of its shape checks,
+        // so which field failed is structurally unavailable here. Echoing the
+        // mapped payload is the only way the caller sees the rejected value.
+        // The two throwing steps above name the field for every hand-typing
+        // mistake they can see (unknown cutStyle/rotationMode; a non-numeric
+        // imageSize/gridSize/seed throws from assertPayloadNumbersFinite), so
+        // what still reaches this branch is a non-string `imageUrl` or a
+        // `composableConfig` the decoder rejects.
+        // eslint-disable-next-line no-console
+        console.error('[__reproPuzzle] params did not survive share-codec validation', payload);
+        return false;
+    }
+    // Narrowing captured in a const: the async closure below would silently
+    // un-narrow if `decoded` ever gained a second assignment.
+    const validated = decoded;
+    // `!!loadState()` rather than a cheaper key probe, for parity with the
+    // share path: `recipientHadSavedState` means "had a *readable* save".
+    // The decompress is affordable for a one-shot manual dev action.
+    const hadSavedState = !!loadState();
+    clearSavedState();
+    return runWithErrorReport({
+        run: async () => {
+            await loadSharedPuzzle(validated, hadSavedState);
+            return true;
+        },
+        warnMessage: 'Failed to load repro puzzle:',
+        // A generation failure is the thing this helper exists to
+        // investigate, so it has to be readable on a deployed build —
+        // `runWithErrorReport`'s default diagnostic is DEV-gated.
+        logInProduction: true,
+        event: 'shared-load-failed',
+        // Not a user-facing share-link failure: a generator failure is often
+        // the reason this helper was called at all.
+        source: 'repro',
+        toastMessage: "Couldn't load repro puzzle",
+        fallback: false,
+    });
 };
 
 // Viewport transform for zoom & pan
@@ -1666,6 +1755,7 @@ async function tryLoadSharedPuzzle(): Promise<boolean> {
         },
         warnMessage: 'Failed to load shared puzzle:',
         event: 'shared-load-failed',
+        source: 'shared',
         toastMessage: "Couldn't load shared puzzle",
         fallback: false,
     });

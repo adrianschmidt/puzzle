@@ -28,6 +28,13 @@ const DEFAULT_SCRIPT_URL = 'https://cloud.umami.is/script.js';
  * `source` records how the puzzle started (fresh new-game vs. opening a
  * shared link). The image-related fields and the share-recipient fields
  * are conditionally populated — see the spec for details.
+ *
+ * `'shared'` also covers a `__reproPuzzle` console replay, which runs the
+ * same `loadSharedPuzzle` path. Only the failure event separates the two
+ * ({@link SharedLoadFailedData}'s `source`), so a share-link success rate
+ * computed from `new-game-started[source=shared]` against
+ * `shared-load-failed[source=shared]` has dev-console traffic in the
+ * numerator only and reads slightly high. Dev-console volume, accepted.
  */
 export interface NewGameData {
     source: 'fresh' | 'shared';
@@ -248,14 +255,35 @@ export interface UnhandledErrorData {
 }
 
 /**
- * Data attached to `shared-load-failed` — a shared puzzle link satisfied
+ * Data attached to `shared-load-failed` — a puzzle payload satisfied
  * surface-shape validation but failed while building the puzzle (e.g. a
  * config combination the current build's topology pipeline doesn't support).
- * The user saw a "Couldn't load shared puzzle" toast. `reason` is the
- * sanitized error message.
+ * `reason` is the sanitized error message.
+ *
+ * `source` separates the two producers, whose base rates differ sharply.
+ * `'shared'` is a real recipient opening a `#p=` link and seeing a
+ * "Couldn't load shared puzzle" toast — the signal that watches for
+ * share-format regressions. `'repro'` is a developer replaying an info-modal
+ * repro block through `__reproPuzzle` in the console, where a generation
+ * failure is often the very thing being investigated, so it is an expected
+ * outcome rather than user-facing breakage. Without the discriminator the
+ * two are indistinguishable, since the differing warn/toast messages never
+ * reach analytics. (Named `source` to match {@link ShareFailedData} and
+ * {@link UnhandledErrorData}.)
+ *
+ * Read an ABSENT `source` as `'shared'`: every row predating the
+ * discriminator is a real share link, and during the rollout window
+ * PWA-cached clients on the previous build keep emitting source-less real
+ * failures (the same stale-client confound the `traceSetVersion` note above
+ * describes). No property filter can express that, negated or not: event
+ * properties are key/value rows, so `source != 'repro'` still joins on the
+ * key and matches exactly the rows `source = 'shared'` does. The
+ * share-format signal is arithmetic — total `shared-load-failed` minus
+ * `source = 'repro'`.
  */
 export interface SharedLoadFailedData {
     reason: string;
+    source: 'shared' | 'repro';
 }
 
 /**
