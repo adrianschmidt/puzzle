@@ -658,6 +658,15 @@ function buildFlatEdgePath(end: Point): string {
 
 /**
  * Build the full SVG `d` attribute from the four edge paths.
+ *
+ * Deliberately not `model/build-shape.ts`: that one starts a fresh subpath
+ * where consecutive edges don't chain, this one always emits a single
+ * `M …/Z`. The two agree on every piece this generator emits today, and the
+ * save path depends on it — `serializePiece` omits `shape` from the v12 blob
+ * only for pieces where the shared builder reproduces this string byte for
+ * byte. Changing what this emits therefore changes rendered geometry on
+ * existing share links *and* moves pieces out of the dedup, which
+ * `game/init-geometry-precision.test.ts` pins per style.
  */
 function buildShape(edges: Edge[]): string {
     if (edges.length === 0) return '';

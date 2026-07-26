@@ -437,9 +437,17 @@ function allocateEdgeIds(pieceSubPaths: Op[][][]): {
 }
 
 /**
- * Assemble a single Piece from its sub-paths: compute the bounding box
- * over every op, emit one Edge per op (with its mate ids resolved via
+ * Assemble a single GeneratedPiece from its sub-paths: compute the bounding
+ * box over every op, emit one Edge per op (with its mate ids resolved via
  * the arc index), and concatenate the SVG path string.
+ *
+ * That `shape` string is built inline here rather than by the shared
+ * `model/build-shape.ts` (one `M …/Z` per sub-path, emitted alongside the
+ * edges). The two agree on every piece this converter emits today, and the
+ * save path depends on it — `serializePiece` omits `shape` from the v12 blob
+ * only for pieces where the shared builder reproduces this string byte for
+ * byte, and `game/init-geometry-precision.test.ts` pins how many pieces per
+ * style still have to store one.
  *
  * Returns null when the piece has no sub-paths (fully trimmed away in
  * non-borderless mode).
