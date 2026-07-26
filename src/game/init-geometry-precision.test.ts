@@ -148,6 +148,19 @@ describe('generated geometry precision', () => {
                     raw.flatMap((p) => p.edges.map((e) => e.path)),
                 );
             });
+
+            // Sealing (model/seal-geometry.ts) runs right after quantization, so
+            // every style's generated pieces carry stored bounds and no dangling
+            // curve samples. The precision walk above already covers `bounds`
+            // itself: min/max of 2 dp values is 2 dp.
+            it('seals pieces: bounds present, curve samples dropped', () => {
+                for (const piece of state.pieces) {
+                    expect(piece.bounds).toBeDefined();
+                    for (const edge of piece.edges) {
+                        expect('curvePoints' in edge).toBe(false);
+                    }
+                }
+            });
         });
     }
 });

@@ -49,6 +49,18 @@ export interface Edge {
 }
 
 /**
+ * Piece-local axis-aligned bounding box, computed once at generation time
+ * (see `model/seal-geometry.ts`) from edge endpoints and the generator's
+ * dense curve samples, which are not retained after sealing.
+ */
+export interface PieceBounds {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+}
+
+/**
  * A single puzzle piece.
  *
  * Knows its shape and connectivity, but nothing about
@@ -72,6 +84,13 @@ export interface Piece {
     shape: string;
     /** Offset to position the source image behind the clip-path (piece-local coords). */
     imageOffset: Point;
+    /**
+     * Piece-local bounding box. Stored rather than derived because the
+     * dense curve samples it was computed from are dropped after
+     * generation. Optional only during the incremental migration of the
+     * codebase; treat as always present on sealed pieces.
+     */
+    bounds?: PieceBounds;
 }
 
 /**
