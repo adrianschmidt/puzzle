@@ -15,6 +15,7 @@
  */
 
 import type { Point } from '../../model/types.js';
+import { fmt } from '../../model/build-shape.js';
 
 /**
  * A series of cubic Bézier segments represented as points.
@@ -23,21 +24,7 @@ import type { Point } from '../../model/types.js';
  */
 export type BezierPath = Point[];
 
-/**
- * Format a coordinate, dropping trailing zeros for integer values.
- *
- * The 2-decimal cap is app-wide: every rendered path — `piece.shape`,
- * `edge.path` — comes through here, from the legacy procedural generator, the
- * composable pipeline and the fractal converter alike. It is therefore also
- * the anchor for `GEOMETRY_PRECISION_DECIMALS` (`model/quantize-geometry.ts`),
- * which rounds *stored* coordinates to the precision that can actually reach
- * the screen. Raising the cap here without raising that constant would
- * silently make storage the binding constraint on rendered geometry, so the
- * coupling is pinned by a test in `bezier-path.test.ts`.
- */
-export function fmt(n: number): string {
-    return Number.isInteger(n) ? String(n) : n.toFixed(2);
-}
+export { fmt } from '../../model/build-shape.js';
 
 /**
  * Convert a Bézier path to SVG path commands.

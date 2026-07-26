@@ -25,6 +25,7 @@ import {
     reverseBezierPath,
 } from './bezier-path.js';
 import { clampTabToCurve } from './curve-clamp.js';
+import { buildShape } from '../../model/build-shape.js';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -236,32 +237,4 @@ function transformToEdge(
 // ---------------------------------------------------------------------------
 // SVG path helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Build the SVG `d` string from a flat list of edges. Loop boundaries
- * are detected implicitly: each edge that does not pick up where the
- * previous one ended starts a new `M..Z` subpath.
- */
-function buildShape(edges: Edge[]): string {
-    if (edges.length === 0) return '';
-    const parts: string[] = [];
-    let prevEnd: Point | null = null;
-    for (const edge of edges) {
-        const continuesChain =
-            prevEnd !== null
-            && Math.abs(prevEnd.x - edge.start.x) < CHAIN_EPSILON
-            && Math.abs(prevEnd.y - edge.start.y) < CHAIN_EPSILON;
-        if (!continuesChain) {
-            if (parts.length > 0) parts.push('Z');
-            parts.push(`M ${fmt(edge.start.x)} ${fmt(edge.start.y)}`);
-        }
-        parts.push(edge.path);
-        prevEnd = edge.end;
-    }
-    parts.push('Z');
-    return parts.join(' ');
-}
-
-/** Tolerance for matching consecutive edges' end→start in piece-local px. */
-const CHAIN_EPSILON = 0.5;
 
