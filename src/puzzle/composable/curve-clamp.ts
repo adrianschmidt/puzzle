@@ -12,8 +12,9 @@
  */
 
 import type { Point } from '../../model/types.js';
+import { fmt } from '../../model/build-shape.js';
 import type { BezierPath } from './bezier-path.js';
-import { bezierPathToSvg, fmt } from './bezier-path.js';
+import { bezierPathToSvg } from './bezier-path.js';
 
 // ---------------------------------------------------------------------------
 // Types

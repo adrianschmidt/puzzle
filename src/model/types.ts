@@ -38,14 +38,6 @@ export interface Edge {
     start: Point;
     /** Where this edge ends on the piece (piece-local coords). */
     end: Point;
-    /**
-     * Sampled points along this edge's underlying cut curve (piece-local
-     * coords). Forwarded from `EdgeDefinition.curvePoints`. Present for
-     * non-straight cut edges; absent for straight edges. Tab protrusions
-     * are NOT included here — they live only in `path`. Used by bbox
-     * helpers to approximate curved-edge silhouette.
-     */
-    curvePoints?: Point[];
 }
 
 /**
@@ -58,6 +50,30 @@ export interface PieceBounds {
     minY: number;
     maxX: number;
     maxY: number;
+}
+
+/**
+ * An edge as emitted by the generators, before sealing: may still carry
+ * the dense samples of its underlying cut curve (piece-local coords; present
+ * for non-straight cut edges, absent for straight ones; tab protrusions
+ * live only in `path`). `sealPieceGeometry` folds the samples into the
+ * piece's `bounds` and drops them — sealed model edges never have them, and
+ * the persisted blob stores them only in v≤11 legacy saves.
+ */
+export interface GeneratedEdge extends Edge {
+    curvePoints?: Point[];
+}
+
+/**
+ * A piece as emitted by `strategy.generatePieces`, before sealing: edges may
+ * carry `curvePoints`, and `bounds` does not exist yet. `sealPieceGeometry`
+ * (via `createNewGame`) turns this into a `Piece`.
+ */
+export interface GeneratedPiece {
+    id: number;
+    edges: GeneratedEdge[];
+    shape: string;
+    imageOffset: Point;
 }
 
 /**
@@ -87,10 +103,9 @@ export interface Piece {
     /**
      * Piece-local bounding box. Stored rather than derived because the
      * dense curve samples it was computed from are dropped after
-     * generation. Optional only during the incremental migration of the
-     * codebase; treat as always present on sealed pieces.
+     * generation.
      */
-    bounds?: PieceBounds;
+    bounds: PieceBounds;
 }
 
 /**

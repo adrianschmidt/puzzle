@@ -9,6 +9,7 @@ import {
     applyGatheredPositions,
 } from './gather.js';
 import { buildPiecesById, makeRectPiece } from '../test-helpers/fixtures.js';
+import { computePieceBounds } from '../model/derive.js';
 
 function makeGroup(id: number, x: number, y: number): PieceGroup {
     return { id, pieces: new Map([[id, { x: 0, y: 0 }]]), position: { x, y }, rotation: 0 };
@@ -95,28 +96,32 @@ describe('computeGatheredPositions', () => {
 describe('computeGatheredPositions with tab paths', () => {
     it('should account for tab geometry in layout spacing', () => {
         // Create pieces with tabs that extend 30px beyond the edge
+        const edgesWithTab = [
+            { id: 100, mateEdgeId: -1, matePieceId: -1, path: 'L 30 0 C 35 -30, 65 -30, 70 0 L 100 0', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
+            { id: 101, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
+            { id: 102, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
+            { id: 103, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
+        ];
         const pieceWithTab: Piece = {
             id: 1,
-            edges: [
-                { id: 100, mateEdgeId: -1, matePieceId: -1, path: 'L 30 0 C 35 -30, 65 -30, 70 0 L 100 0', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
-                { id: 101, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
-                { id: 102, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
-                { id: 103, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
-            ],
+            edges: edgesWithTab,
             shape: '',
             imageOffset: { x: 0, y: 0 },
+            bounds: computePieceBounds({ edges: edgesWithTab }),
         };
 
+        const plainEdges = [
+            { id: 200, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
+            { id: 201, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
+            { id: 202, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
+            { id: 203, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
+        ];
         const plainPiece: Piece = {
             id: 2,
-            edges: [
-                { id: 200, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
-                { id: 201, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
-                { id: 202, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
-                { id: 203, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
-            ],
+            edges: plainEdges,
             shape: '',
             imageOffset: { x: 0, y: 0 },
+            bounds: computePieceBounds({ edges: plainEdges }),
         };
 
         const groups: PieceGroup[] = [

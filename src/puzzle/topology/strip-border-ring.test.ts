@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { stripBorderRing } from './strip-border-ring.js';
-import type { Piece, Edge } from '../../model/types.js';
+import type { GeneratedEdge, GeneratedPiece } from '../../model/types.js';
 
 // Minimal edge/piece factories for topology-level assertions.
-function edge(id: number, matePieceId: number, mateEdgeId: number, path = 'L1,0'): Edge {
+function edge(id: number, matePieceId: number, mateEdgeId: number, path = 'L1,0'): GeneratedEdge {
     return { id, matePieceId, mateEdgeId, path, start: { x: 0, y: 0 }, end: { x: 1, y: 0 } };
 }
-function piece(id: number, edges: Edge[]): Piece {
+function piece(id: number, edges: GeneratedEdge[]): GeneratedPiece {
     return { id, edges, shape: `shape-${id}`, imageOffset: { x: 0, y: 0 } };
 }
 

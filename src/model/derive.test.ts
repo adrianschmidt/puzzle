@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    computePieceBounds,
     getImageDimensions,
     getPieceBaseDimension,
     getPieceBounds,
@@ -32,16 +33,18 @@ function rectPiece(
     offsetX = 0,
     offsetY = 0,
 ): Piece {
+    const edges = [
+        edge({ x: 0, y: 0 }, { x: width, y: 0 }),       // top
+        edge({ x: width, y: 0 }, { x: width, y: height }), // right
+        edge({ x: width, y: height }, { x: 0, y: height }), // bottom
+        edge({ x: 0, y: height }, { x: 0, y: 0 }),         // left
+    ];
     return {
         id,
-        edges: [
-            edge({ x: 0, y: 0 }, { x: width, y: 0 }),       // top
-            edge({ x: width, y: 0 }, { x: width, y: height }), // right
-            edge({ x: width, y: height }, { x: 0, y: height }), // bottom
-            edge({ x: 0, y: height }, { x: 0, y: 0 }),         // left
-        ],
+        edges,
         shape: `M 0 0 L ${width} 0 L ${width} ${height} L 0 ${height} Z`,
         imageOffset: { x: offsetX, y: offsetY },
+        bounds: computePieceBounds({ edges }),
     };
 }
 
@@ -50,8 +53,50 @@ function gameState(pieces: Piece[]): GameState {
     return makeGameState({ pieces });
 }
 
+// The generation-time walk: the only place bounds are derived from geometry
+// (sealing, and the v≤11 save migration that stands in for it).
+describe('computePieceBounds', () => {
+    it('returns the full bbox for a rectangular piece at the origin', () => {
+        const edges = rectPiece(0, 100, 75).edges;
+        expect(computePieceBounds({ edges })).toEqual({
+            minX: 0, minY: 0, maxX: 100, maxY: 75,
+        });
+    });
+
+    it('handles pieces whose edges extend into negative coords', () => {
+        const edges = [
+            edge({ x: -10, y: -20 }, { x: 30, y: -20 }),
+            edge({ x: 30, y: -20 }, { x: 30, y: 50 }),
+            edge({ x: 30, y: 50 }, { x: -10, y: 50 }),
+            edge({ x: -10, y: 50 }, { x: -10, y: -20 }),
+        ];
+        expect(computePieceBounds({ edges })).toEqual({
+            minX: -10, minY: -20, maxX: 30, maxY: 50,
+        });
+    });
+
+    it('considers both endpoints of every edge', () => {
+        // Single diagonal edge whose start/end define the bbox extremes.
+        const edges = [edge({ x: 5, y: 1 }, { x: 9, y: 8 })];
+        expect(computePieceBounds({ edges })).toEqual({
+            minX: 5, minY: 1, maxX: 9, maxY: 8,
+        });
+    });
+
+    it('includes curve samples, which extend past the endpoints', () => {
+        const straight = edge({ x: 0, y: 0 }, { x: 10, y: 0 });
+        const edges = [{
+            ...straight,
+            curvePoints: [{ x: 0, y: 0 }, { x: 5, y: -4 }, { x: 10, y: 0 }],
+        }];
+        expect(computePieceBounds({ edges })).toEqual({
+            minX: 0, minY: -4, maxX: 10, maxY: 0,
+        });
+    });
+});
+
 describe('getPieceBounds', () => {
-    it('returns full bbox for a rectangular piece at the origin', () => {
+    it('returns the stored bounds with width and height derived', () => {
         const piece = rectPiece(0, 100, 75);
         expect(getPieceBounds(piece)).toEqual({
             minX: 0,
@@ -63,47 +108,9 @@ describe('getPieceBounds', () => {
         });
     });
 
-    it('handles pieces whose edges extend into negative coords', () => {
-        const piece: Piece = {
-            id: 1,
-            edges: [
-                edge({ x: -10, y: -20 }, { x: 30, y: -20 }),
-                edge({ x: 30, y: -20 }, { x: 30, y: 50 }),
-                edge({ x: 30, y: 50 }, { x: -10, y: 50 }),
-                edge({ x: -10, y: 50 }, { x: -10, y: -20 }),
-            ],
-            shape: '',
-            imageOffset: { x: 0, y: 0 },
-        };
-        expect(getPieceBounds(piece)).toEqual({
-            minX: -10,
-            minY: -20,
-            maxX: 30,
-            maxY: 50,
-            width: 40,
-            height: 70,
-        });
-    });
-
-    it('considers both endpoints of every edge', () => {
-        // Single diagonal edge whose start/end define the bbox extremes.
-        const piece: Piece = {
-            id: 2,
-            edges: [edge({ x: 5, y: 1 }, { x: 9, y: 8 })],
-            shape: '',
-            imageOffset: { x: 0, y: 0 },
-        };
-        expect(getPieceBounds(piece)).toEqual({
-            minX: 5,
-            minY: 1,
-            maxX: 9,
-            maxY: 8,
-            width: 4,
-            height: 7,
-        });
-    });
-
-    it('prefers stored bounds over walking edges', () => {
+    // Post-seal, `bounds` is the only source: edges no longer carry the curve
+    // samples the box was computed from, so re-walking them would shrink it.
+    it('reads the stored bounds without consulting the edges', () => {
         const piece = makePiece({ edges: [] });
         piece.bounds = { minX: 1, minY: 2, maxX: 11, maxY: 22 };
         expect(getPieceBounds(piece)).toEqual({

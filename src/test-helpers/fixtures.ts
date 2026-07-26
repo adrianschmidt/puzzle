@@ -8,8 +8,9 @@
  * still tune the shape they need.
  */
 
-import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
+import type { Edge, GameState, Piece, PieceBounds, PieceGroup, Point } from '../model/types.js';
 import { buildGroupIndexes, buildPiecesById, rotatePoint } from '../model/helpers.js';
+import { computePieceBounds } from '../model/derive.js';
 
 /**
  * Re-export `buildPiecesById` for tests that call helpers expecting the
@@ -23,6 +24,7 @@ export interface MakePieceOpts {
     edges?: Edge[];
     shape?: string;
     imageOffset?: Point;
+    bounds?: PieceBounds;
 }
 
 /**
@@ -33,11 +35,16 @@ export interface MakePieceOpts {
  * use makeRectPiece instead.
  */
 export function makePiece(opts: MakePieceOpts = {}): Piece {
+    const edges = opts.edges ?? [];
     return {
         id: opts.id ?? 0,
-        edges: opts.edges ?? [],
+        edges,
         shape: opts.shape ?? '',
         imageOffset: opts.imageOffset ?? { x: 0, y: 0 },
+        // Note: infinite for the default empty-edge piece, matching what the
+        // old on-demand walk produced for it. Tests that read bounds pass
+        // real edges or an explicit override.
+        bounds: opts.bounds ?? computePieceBounds({ edges }),
     };
 }
 
@@ -51,6 +58,7 @@ export interface MakeRectPieceOpts {
     row?: number;
     /** Override the derived imageOffset. */
     imageOffset?: Point;
+    bounds?: PieceBounds;
 }
 
 /**
@@ -69,42 +77,44 @@ export function makeRectPiece(opts: MakeRectPieceOpts = {}): Piece {
     const row = opts.row ?? 0;
     const base = id * 4;
 
+    const edges: Edge[] = [
+        {
+            id: base,
+            mateEdgeId: -1,
+            matePieceId: -1,
+            path: `L${width},0`,
+            start: { x: 0, y: 0 },
+            end: { x: width, y: 0 },
+        },
+        {
+            id: base + 1,
+            mateEdgeId: -1,
+            matePieceId: -1,
+            path: `L${width},${height}`,
+            start: { x: width, y: 0 },
+            end: { x: width, y: height },
+        },
+        {
+            id: base + 2,
+            mateEdgeId: -1,
+            matePieceId: -1,
+            path: `L0,${height}`,
+            start: { x: width, y: height },
+            end: { x: 0, y: height },
+        },
+        {
+            id: base + 3,
+            mateEdgeId: -1,
+            matePieceId: -1,
+            path: 'L0,0',
+            start: { x: 0, y: height },
+            end: { x: 0, y: 0 },
+        },
+    ];
+
     return {
         id,
-        edges: [
-            {
-                id: base,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: `L${width},0`,
-                start: { x: 0, y: 0 },
-                end: { x: width, y: 0 },
-            },
-            {
-                id: base + 1,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: `L${width},${height}`,
-                start: { x: width, y: 0 },
-                end: { x: width, y: height },
-            },
-            {
-                id: base + 2,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: `L0,${height}`,
-                start: { x: width, y: height },
-                end: { x: 0, y: height },
-            },
-            {
-                id: base + 3,
-                mateEdgeId: -1,
-                matePieceId: -1,
-                path: 'L0,0',
-                start: { x: 0, y: height },
-                end: { x: 0, y: 0 },
-            },
-        ],
+        edges,
         shape: `M0,0 L${width},0 L${width},${height} L0,${height} Z`,
         // `|| 0` normalizes `-0` (from `-0 * width`) to `0` so values survive
         // JSON round-trips unchanged in serialization tests.
@@ -112,6 +122,7 @@ export function makeRectPiece(opts: MakeRectPieceOpts = {}): Piece {
             x: -col * width || 0,
             y: -row * height || 0,
         },
+        bounds: opts.bounds ?? computePieceBounds({ edges }),
     };
 }
 

@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import type { Edge, Piece } from './types.js';
+import type { GeneratedEdge, GeneratedPiece, Point } from './types.js';
 import { GEOMETRY_PRECISION_DECIMALS, quantizePieceGeometry } from './quantize-geometry.js';
-import { makePiece } from '../test-helpers/fixtures.js';
 import { worstPrecision } from '../test-helpers/precision.js';
 
-function makeEdge(overrides: Partial<Edge> = {}): Edge {
+function makeEdge(overrides: Partial<GeneratedEdge> = {}): GeneratedEdge {
     return {
         id: 0,
         mateEdgeId: -1,
@@ -13,6 +12,27 @@ function makeEdge(overrides: Partial<Edge> = {}): Edge {
         start: { x: 1.234567, y: 2.345678 },
         end: { x: 10.123456, y: 20.345678 },
         ...overrides,
+    };
+}
+
+interface MakeGenPieceOpts {
+    id?: number;
+    edges?: GeneratedEdge[];
+    shape?: string;
+    imageOffset?: Point;
+}
+
+/**
+ * Build a pre-seal `GeneratedPiece` (edges may carry `curvePoints`, no
+ * `bounds`) — this pass runs before sealing, so tests exercise the
+ * generator-side shape rather than the sealed `Piece`.
+ */
+function makePiece(opts: MakeGenPieceOpts = {}): GeneratedPiece {
+    return {
+        id: opts.id ?? 0,
+        edges: opts.edges ?? [],
+        shape: opts.shape ?? '',
+        imageOffset: opts.imageOffset ?? { x: 0, y: 0 },
     };
 }
 
@@ -49,7 +69,7 @@ describe('quantizePieceGeometry', () => {
         const edge = makeEdge({ start: { x: -0.001, y: -0.001 } });
 
         const [piece] = quantizePieceGeometry([makePiece({ edges: [edge] })]);
-        const roundTripped = JSON.parse(JSON.stringify(piece)) as Piece;
+        const roundTripped = JSON.parse(JSON.stringify(piece)) as GeneratedPiece;
 
         expect(Object.is(piece.edges[0].start.x, -0)).toBe(false);
         expect(piece.edges[0].start).toEqual(roundTripped.edges[0].start);

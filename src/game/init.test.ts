@@ -9,6 +9,7 @@ import {
 } from './init.js';
 import type { GridSize, Piece, Size } from '../model/types.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
+import { computePieceBounds } from '../model/derive.js';
 
 /** A deterministic RNG for reproducible tests: cycles through provided values. */
 function seededRandom(values: number[]): () => number {
@@ -179,7 +180,7 @@ describe('createInitialGroups', () => {
         // computation actually reads (id + imageOffset). The shape/edges
         // fields are unused by createInitialGroups, so we leave them empty.
         function makePiece(id: number, imageOffset: { x: number; y: number }): Piece {
-            return { id, edges: [], shape: '', imageOffset };
+            return { id, edges: [], shape: '', imageOffset, bounds: computePieceBounds({ edges: [] }) };
         }
 
         it('computes within-group offsets as anchor.imageOffset - piece.imageOffset', () => {

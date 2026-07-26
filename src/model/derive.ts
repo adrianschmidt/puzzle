@@ -5,7 +5,7 @@
  * (or a single `Piece`) without any DOM, SVG, or rendering involvement.
  */
 
-import type { Edge, GameState, Piece, PieceBounds } from './types.js';
+import type { GameState, GeneratedEdge, Piece, PieceBounds } from './types.js';
 
 /**
  * Derive image dimensions from the puzzle pieces.
@@ -44,7 +44,7 @@ export function getImageDimensions(
  * when migrating v≤11 saves whose edges still carry curve samples —
  * after sealing, read `piece.bounds` (via `getPieceBounds`) instead.
  */
-export function computePieceBounds(piece: { edges: Edge[] }): PieceBounds {
+export function computePieceBounds(piece: { edges: GeneratedEdge[] }): PieceBounds {
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -69,16 +69,10 @@ export function computePieceBounds(piece: { edges: Edge[] }): PieceBounds {
 }
 
 /**
- * Get the piece-local bounding box from its edges.
+ * Get the piece-local bounding box stored on the piece.
  *
- * Prefers the bounds stored on the piece (set once at generation time by
- * `model/seal-geometry.ts`); falls back to walking the edges — endpoints
- * plus `curvePoints` when present, so curve-bounded pieces (e.g. lens /
- * crescent shapes whose endpoints share an axis) get a meaningful bbox
- * instead of a degenerate line — for pieces that predate sealing (e.g.
- * legacy save migrations). Tab protrusions are not separately accounted
- * for, but their geometry is captured implicitly via `curvePoints` once
- * tabs have been baked into the edge curves.
+ * Reads the bounds stored on the piece (set once at generation time by
+ * `model/seal-geometry.ts`); every `Piece` carries them.
  */
 export function getPieceBounds(piece: Piece): {
     minX: number;
@@ -88,7 +82,7 @@ export function getPieceBounds(piece: Piece): {
     width: number;
     height: number;
 } {
-    const b = piece.bounds ?? computePieceBounds(piece);
+    const b = piece.bounds;
     return { ...b, width: b.maxX - b.minX, height: b.maxY - b.minY };
 }
 

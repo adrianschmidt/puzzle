@@ -24,7 +24,7 @@ import { serializeStatic } from '../persistence/serialization.js';
 import { registerTabGenerator } from '../puzzle/topology/generator-registry.js';
 import { tracedTabGenerator } from '../puzzle/topology/traced-tab-generator.js';
 import { worstPrecision } from '../test-helpers/precision.js';
-import type { GameState, GridSize, Piece } from '../model/types.js';
+import type { GameState, GeneratedPiece, GridSize } from '../model/types.js';
 
 // Swap the lazy-load stub for the real traced generator so traced generation
 // runs synchronously (otherwise the stub throws "not loaded"). Same setup as
@@ -97,7 +97,7 @@ const styles: StyleCase[] = [
  * rectangle are both derived) — passing the raw grid would compare against a
  * different puzzle.
  */
-function generateRaw(style: StyleCase): Piece[] {
+function generateRaw(style: StyleCase): GeneratedPiece[] {
     const strategy = getCutStyleStrategy(style.options.cutStyle);
     const grid = strategy.scaleGrid(style.grid, imageSize, style.options);
     const puzzleSize = strategy.inscribePuzzleSize(imageSize, grid, style.options);
@@ -108,7 +108,7 @@ describe('generated geometry precision', () => {
     for (const style of styles) {
         describe(style.name, () => {
             let state: GameState;
-            let raw: Piece[];
+            let raw: GeneratedPiece[];
 
             beforeAll(() => {
                 state = createNewGame('img', imageSize, viewport, style.grid, {
@@ -137,11 +137,11 @@ describe('generated geometry precision', () => {
                     .toBeLessThanOrEqual(GEOMETRY_PRECISION_DECIMALS);
             });
 
-            // The reason quantization runs on the finished Piece[] rather than
-            // where curvePoints are produced: `fmt` already emits toFixed(2),
-            // so rounding after composition leaves every rendered path
-            // untouched. If this breaks, existing share links render different
-            // geometry than they did before.
+            // The reason quantization runs on the generator's finished
+            // GeneratedPiece[] rather than where curvePoints are produced:
+            // `fmt` already emits toFixed(2), so rounding after composition
+            // leaves every rendered path untouched. If this breaks, existing
+            // share links render different geometry than they did before.
             it('leaves shape and path strings byte-identical to the raw generator output', () => {
                 expect(state.pieces.map((p) => p.shape)).toEqual(raw.map((p) => p.shape));
                 expect(state.pieces.flatMap((p) => p.edges.map((e) => e.path))).toEqual(

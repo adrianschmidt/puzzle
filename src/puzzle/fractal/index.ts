@@ -10,7 +10,7 @@
  * shapes that interlock without traditional tabs/blanks.
  *
  * Public API:
- *   - generateFractalPuzzle — produce Piece[] from grid + image size + seed.
+ *   - generateFractalPuzzle — produce GeneratedPiece[] from grid + image size + seed.
  *   - scaleFractalGrid     — pick a tile-grid shape that yields ~N pieces
  *                            while matching the image aspect ratio.
  *
@@ -20,10 +20,10 @@
  *   - cell-grid.ts    — visited-tile / occupied-cell bookkeeping
  *   - arcs.ts         — quarter-circle arc construction
  *   - piece-growth.ts — flood-fill, hole filling, orphan adoption
- *   - convert.ts      — abstract pieces → standard Piece[] with mates
+ *   - convert.ts      — abstract pieces → standard GeneratedPiece[] with mates
  */
 
-import type { Piece, Size } from '../../model/types.js';
+import type { GeneratedPiece, Size } from '../../model/types.js';
 import { diagnostics } from '../../diagnostics.js';
 import { createSeededRandom } from '../seeded-random.js';
 import { CellGrid } from './cell-grid.js';
@@ -142,7 +142,7 @@ export function generateFractalPuzzle(
     imageSize: Size,
     seed: number,
     config?: FractalConfig,
-): Piece[] {
+): GeneratedPiece[] {
     const random = createSeededRandom(seed);
     const minPieceSize = config?.minPieceSize ?? 2;
     const maxPieceSize = config?.maxPieceSize ?? 8;
@@ -219,7 +219,7 @@ export function generateFractalPuzzle(
         }
     }
 
-    // Convert to standard Piece[] format
+    // Convert to standard GeneratedPiece[] format
     return convertToStandardPieces(
         pieces, orphanDiscs, rad, frameOffset, imageSize, cols, rows, borderless,
     );

@@ -3,22 +3,25 @@ import type { Edge, Piece, PieceGroup } from '../model/types.js';
 import { rotateGroup } from './rotate-group.js';
 import { getGroupLocalBounds } from './group-bounds.js';
 import { buildPiecesById } from '../test-helpers/fixtures.js';
+import { computePieceBounds } from '../model/derive.js';
 
 function makeEdge(id: number, sx: number, sy: number, ex: number, ey: number): Edge {
     return { id, mateEdgeId: -1, matePieceId: -1, path: '', start: { x: sx, y: sy }, end: { x: ex, y: ey } };
 }
 
 function makeSquarePiece(id: number): Piece {
+    const edges = [
+        makeEdge(id * 10, 0, 0, 100, 0),
+        makeEdge(id * 10 + 1, 100, 0, 100, 100),
+        makeEdge(id * 10 + 2, 100, 100, 0, 100),
+        makeEdge(id * 10 + 3, 0, 100, 0, 0),
+    ];
     return {
         id,
-        edges: [
-            makeEdge(id * 10, 0, 0, 100, 0),
-            makeEdge(id * 10 + 1, 100, 0, 100, 100),
-            makeEdge(id * 10 + 2, 100, 100, 0, 100),
-            makeEdge(id * 10 + 3, 0, 100, 0, 0),
-        ],
+        edges,
         shape: '',
         imageOffset: { x: 0, y: 0 },
+        bounds: computePieceBounds({ edges }),
     };
 }
 

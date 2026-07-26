@@ -1,22 +1,31 @@
 /**
  * Quantize generated piece geometry to a fixed decimal precision.
  *
- * Runs once on the finished `Piece[]`, immediately after generation. Every
- * coordinate the puzzle carries — edge endpoints, sampled curve points, the
- * image offset — is rounded to {@link GEOMETRY_PRECISION_DECIMALS} decimals,
- * so a *generated* puzzle's geometry is one set of numbers whether it is held
- * in memory, written to `localStorage`, or regenerated from a share link.
+ * Runs once on the finished `GeneratedPiece[]`, immediately after generation.
+ * Every coordinate the puzzle carries — edge endpoints, sampled curve points,
+ * the image offset — is rounded to {@link GEOMETRY_PRECISION_DECIMALS}
+ * decimals, so a *generated* puzzle's geometry is one set of numbers whether
+ * it is held in memory, written to `localStorage`, or regenerated from a
+ * share link.
  *
  * The scope is generated geometry. Saves written before this pass existed are
  * deliberately not re-rounded on load, so a `Piece[]` restored from one still
  * carries full-precision coordinates.
  *
- * The point is size: `edge.curvePoints` is ~61% of the persisted geometry blob
- * (`curve.sample(8)` emits ~100 points per curved edge, ~77k points at the
- * 16×12 maximum), and each full-precision double costs ~17 significant digits
- * in JSON. Rounding takes the largest supported puzzle from ~5.7 MB to ~3.8 MB,
- * back under the plain-write `localStorage` budget and off the synchronous
- * lz-string fallback in `writeWithOverflow`.
+ * The point is size: each full-precision double costs ~17 significant digits
+ * in JSON, and what the blob keeps — two coordinates per edge, one per piece
+ * (`imageOffset`) — all comes through here. Historically the pass earned its
+ * keep on `edge.curvePoints`, ~61% of the blob while they were still
+ * persisted, taking the largest supported puzzle from ~5.7 MB to ~3.8 MB
+ * (#487). v12 stopped persisting them altogether, so the endpoints and offsets
+ * are what is left to round directly.
+ *
+ * Rounding the samples still pays, indirectly: sealing
+ * (`model/seal-geometry.ts`) runs immediately after this pass and folds them
+ * into each piece's `bounds`, the one derived field the blob does store. Those
+ * bounds are therefore a min/max over already-rounded coordinates and inherit
+ * the same precision. Running the two passes in the other order would put
+ * full-precision numbers back into the blob.
  *
  * Path strings (`piece.shape`, `edge.path`) are deliberately untouched: they
  * are built earlier in the pipeline by `fmt`, which already emits `toFixed(2)`.
@@ -25,14 +34,14 @@
  * existing share links reproduce the same rendered geometry as before.
  */
 
-import type { Edge, Piece, Point } from './types.js';
+import type { GeneratedEdge, GeneratedPiece, Point } from './types.js';
 
 /**
  * Decimals retained on every stored coordinate.
  *
  * Two independent limits agree on 2:
  *
- * - `fmt` (`puzzle/composable/bezier-path.ts`) already truncates every rendered
+ * - `fmt` (`model/build-shape.ts`) already truncates every rendered
  *   path to `toFixed(2)`, so precision finer than this cannot reach the screen.
  * - The strictest merge tolerance is `0.133` of the reference piece width
  *   (`ui/merge-tolerance.ts`) — 8.98 px at 16 columns on a 1080 px image. The
@@ -72,8 +81,8 @@ function quantizePoint(point: Point): Point {
     return { x: quantize(point.x), y: quantize(point.y) };
 }
 
-function quantizeEdge(edge: Edge): Edge {
-    const quantized: Edge = {
+function quantizeEdge(edge: GeneratedEdge): GeneratedEdge {
+    const quantized: GeneratedEdge = {
         ...edge,
         start: quantizePoint(edge.start),
         end: quantizePoint(edge.end),
@@ -91,7 +100,7 @@ function quantizeEdge(edge: Edge): Edge {
  * Pure: the input pieces, edges, and points are left untouched, matching the
  * treat-pieces-as-immutable convention the rest of the model follows.
  */
-export function quantizePieceGeometry(pieces: Piece[]): Piece[] {
+export function quantizePieceGeometry(pieces: GeneratedPiece[]): GeneratedPiece[] {
     return pieces.map((piece) => ({
         ...piece,
         edges: piece.edges.map(quantizeEdge),

@@ -12,6 +12,7 @@ import {
 } from './helpers.js';
 import type { Piece, PieceGroup, Edge } from './types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
+import { computePieceBounds } from './derive.js';
 
 /** Create a minimal edge for testing. */
 function edge(
@@ -36,6 +37,7 @@ function piece(id: number, edges: Edge[]): Piece {
         edges,
         shape: 'M 0 0 L 10 0 L 10 10 L 0 10 Z',
         imageOffset: { x: 0, y: 0 },
+        bounds: computePieceBounds({ edges }),
     };
 }
 
