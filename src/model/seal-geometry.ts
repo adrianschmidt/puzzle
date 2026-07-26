@@ -19,16 +19,18 @@
  * call harmless instead of quietly corrupting bounds.
  */
 
-import type { Edge, Piece } from './types.js';
+import type { Edge, GeneratedEdge, GeneratedPiece, Piece, PieceBounds } from './types.js';
 import { computePieceBounds } from './derive.js';
 
-function stripCurvePoints(edge: Edge): Edge {
+function stripCurvePoints(edge: GeneratedEdge): Edge {
     if (!edge.curvePoints) return edge;
     const { curvePoints: _dropped, ...rest } = edge;
     return rest;
 }
 
-export function sealPieceGeometry(pieces: Piece[]): Piece[] {
+export function sealPieceGeometry(
+    pieces: (GeneratedPiece & { bounds?: PieceBounds })[],
+): Piece[] {
     return pieces.map((piece) => ({
         ...piece,
         bounds: piece.bounds ?? computePieceBounds(piece),

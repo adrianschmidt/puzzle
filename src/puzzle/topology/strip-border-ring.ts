@@ -13,16 +13,16 @@
  * the generator without perturbing the seeded PRNG stream.
  */
 
-import type { Piece } from '../../model/types.js';
+import type { GeneratedPiece } from '../../model/types.js';
 import type { AutoGroup } from './auto-group.js';
 
 export interface StripResult {
-    pieces: Piece[];
+    pieces: GeneratedPiece[];
     autoGroups: AutoGroup[];
 }
 
 /** A piece is on the border ring iff any of its edges has no mate. */
-function hasBorderEdge(piece: Piece): boolean {
+function hasBorderEdge(piece: GeneratedPiece): boolean {
     return piece.edges.some((e) => e.matePieceId === -1);
 }
 
@@ -35,7 +35,7 @@ function hasBorderEdge(piece: Piece): boolean {
  *   dropped (a one-piece group is just a solo piece)
  */
 export function stripBorderRing(
-    pieces: Piece[],
+    pieces: GeneratedPiece[],
     autoGroups: AutoGroup[],
 ): StripResult {
     const removedIds = new Set<number>();
@@ -43,7 +43,7 @@ export function stripBorderRing(
         if (hasBorderEdge(piece)) removedIds.add(piece.id);
     }
 
-    const survivors: Piece[] = [];
+    const survivors: GeneratedPiece[] = [];
     for (const piece of pieces) {
         if (removedIds.has(piece.id)) continue;
         const edges = piece.edges.map((e) =>

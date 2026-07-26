@@ -22,7 +22,7 @@
  * `init.ts`.
  */
 
-import type { GridSize, Piece, Size } from '../model/types.js';
+import type { GeneratedPiece, GridSize, Size } from '../model/types.js';
 import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
 import {
     generateFractalPuzzle,
@@ -68,7 +68,7 @@ export interface StrategyContext {
  * absent or empty, `init.ts` falls back to one-piece-per-group.
  */
 export interface StrategyPuzzle {
-    pieces: Piece[];
+    pieces: GeneratedPiece[];
     autoGroups?: AutoGroup[];
     /** Tab-debug report produced when `ctx.tabDebug` was set. */
     tabDebugReport?: TabDebugReport;

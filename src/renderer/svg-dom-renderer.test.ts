@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SvgDomRenderer } from './svg-dom-renderer.js';
 import type { GameState, PieceGroup } from '../model/types.js';
 import { makeGameState, makeRectPiece } from '../test-helpers/fixtures.js';
+import { computePieceBounds } from '../model/derive.js';
 
 function makeGroup(id: number, pieceIds: number[], x = 0, y = 0): PieceGroup {
     return {
@@ -362,6 +363,7 @@ describe('SvgDomRenderer', () => {
                 edges: [],
                 shape: 'M 0 0 L 100 0 L 100 100 L 0 100 Z M 40 40 L 60 40 L 50 60 Z',
                 imageOffset: { x: 0, y: 0 },
+                bounds: computePieceBounds({ edges: [] }),
             };
 
             const state = makeGameState({

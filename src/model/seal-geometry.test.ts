@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { sealPieceGeometry } from './seal-geometry.js';
 import { computePieceBounds } from './derive.js';
-import type { Piece } from './types.js';
+import type { GeneratedPiece, Piece } from './types.js';
 
-function curvedPiece(): Piece {
+function curvedPiece(): GeneratedPiece {
     return {
         id: 7,
         imageOffset: { x: -10, y: -20 },
@@ -54,7 +54,7 @@ describe('sealPieceGeometry', () => {
         const input = curvedPiece();
         sealPieceGeometry([input]);
         expect(input.edges[0].curvePoints).toHaveLength(3);
-        expect(input.bounds).toBeUndefined();
+        expect((input as Partial<Piece>).bounds).toBeUndefined();
     });
 
     it('reuses edge objects that carry no curvePoints', () => {

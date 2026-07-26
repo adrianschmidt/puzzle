@@ -10,7 +10,7 @@
  *   2. Build the topology graph in a single intersection pass.
  *   3. Apply the TabGenerator per shared internal edge with
  *      framework-owned collision rejection.
- *   4. Convert faces → PieceDefinitions → final Piece[] via
+ *   4. Convert faces → PieceDefinitions → GeneratedPiece[] via
  *      composePuzzle (with disableTabs:true since tabs are already
  *      in the edge geometry).
  *

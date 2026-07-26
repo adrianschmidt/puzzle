@@ -6,14 +6,14 @@
  *   2. buildDCEL → topology graph (single intersection pass)
  *   3. applyTabs → per-edge tab application with collision rejection
  *   4. facesToPieceDefinitions → PieceDefinition[]
- *   5. composePuzzle → final Piece[]
+ *   5. composePuzzle → final GeneratedPiece[]
  *
  * The base-cut and tab generators are looked up from the registry by
  * id, so the same code path serves the sine grid, Venn diagrams, and
  * any future plug-ins. See issue #166 for the architecture.
  */
 
-import type { Piece, Point, Size } from '../../model/types.js';
+import type { GeneratedPiece, Point, Size } from '../../model/types.js';
 import { buildDCEL, getFaceEdges } from './dcel.js';
 import type { Face, HalfEdge } from './dcel.js';
 import { facesToPieceDefinitions } from './faces-to-pieces.js';
@@ -98,7 +98,7 @@ export interface TopologyGeneratorConfig {
  * caller's normal one-group-per-piece initialization.
  */
 export interface TopologyPuzzle {
-    pieces: Piece[];
+    pieces: GeneratedPiece[];
     autoGroups: AutoGroup[];
     /**
      * Populated only when {@link TopologyGeneratorConfig.tabDebug} was

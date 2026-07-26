@@ -2,11 +2,11 @@
  * Composition layer for the composable puzzle generator.
  *
  * Takes PieceDefinitions (abstract edges with mate relationships)
- * and a TabTemplate, and produces the final Piece[] by:
+ * and a TabTemplate, and produces the GeneratedPiece[] by:
  * 1. For each shared edge's first side: generate a tab in normalized space
  * 2. For each shared edge's second side: reverse the stored tab
  * 3. Transform tab paths onto actual edge endpoints using tangent/normal frame
- * 4. Build SVG paths and assemble Piece objects
+ * 4. Build SVG paths and assemble GeneratedPiece objects
  *
  * No grid-specific concepts (rows, columns, directions) — just edges.
  *
@@ -14,18 +14,17 @@
  * for the coordinate frame approach.
  */
 
-import type { Edge, Piece, Point } from '../../model/types.js';
+import type { GeneratedEdge, GeneratedPiece, Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from './types.js';
 import type { TabTemplate } from './tab-shapes.js';
 import type { BezierPath } from './bezier-path.js';
 import {
     bezierPathToSvg,
-    fmt,
     mirrorBezierPathY,
     reverseBezierPath,
 } from './bezier-path.js';
 import { clampTabToCurve } from './curve-clamp.js';
-import { buildShape } from '../../model/build-shape.js';
+import { buildShape, fmt } from '../../model/build-shape.js';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -48,14 +47,14 @@ export interface ComposeOptions {
  *   that bring their own tab geometry — e.g. the topology pipeline,
  *   which writes tabs directly into edge curves before calling here.
  * @param random - Seeded PRNG for tab assignment and shape variation
- * @returns Complete Piece[] ready for the game engine
+ * @returns Complete GeneratedPiece[] ready for sealing
  */
 export function composePuzzle(
     pieceDefs: PieceDefinition[],
     template: TabTemplate | null,
     random: () => number,
     options?: ComposeOptions,
-): Piece[] {
+): GeneratedPiece[] {
     const disableTabs = options?.disableTabs ?? false;
     // Step 1: Generate tab shapes for all shared edges.
     // Store in normalized space by shared edge key.
@@ -86,7 +85,7 @@ export function composePuzzle(
 
     // Step 2: Build pieces
     return pieceDefs.map(pieceDef => {
-        const edges: Edge[] = pieceDef.edges.map(edgeDef =>
+        const edges: GeneratedEdge[] = pieceDef.edges.map(edgeDef =>
             buildEdge(edgeDef, tabPaths),
         );
         const shape = buildShape(edges);
@@ -124,7 +123,7 @@ function fallbackPath(edgeDef: EdgeDefinition): string {
 function buildEdge(
     edgeDef: EdgeDefinition,
     tabPaths: Map<string, BezierPath>,
-): Edge {
+): GeneratedEdge {
     const { id, start, end, mateEdgeId, matePieceId, sharedEdgeKey, isFirstSide, curvePoints } = edgeDef;
     const carryCurvePoints = curvePoints ? { curvePoints } : {};
 

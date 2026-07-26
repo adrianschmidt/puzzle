@@ -10,7 +10,7 @@
  *   - Tab position along the edge (offset from center)
  *   - Neck width
  *
- * The generator still outputs Piece[] conforming to the generic
+ * The generator still outputs GeneratedPiece[] conforming to the generic
  * model — the engine never sees grids or procedural parameters.
  *
  * Using the same seed reproduces the exact same cut pattern,
@@ -25,10 +25,10 @@
  * points produce exact mirror curves.
  */
 
-import type { Edge, Piece, Point, Size } from '../model/types.js';
+import type { Edge, GeneratedPiece, Point, Size } from '../model/types.js';
+import { fmt } from '../model/build-shape.js';
 import {
     bezierPathToSvg,
-    fmt,
     reverseBezierPath,
 } from './composable/bezier-path.js';
 import type { BezierPath } from './composable/bezier-path.js';
@@ -68,7 +68,7 @@ export function generateProceduralPuzzle(
     rows: number,
     imageSize: Size,
     seed: number,
-): Piece[] {
+): GeneratedPiece[] {
     const random = createSeededRandom(seed);
     const pieceWidth = imageSize.width / cols;
     const pieceHeight = imageSize.height / rows;
@@ -127,7 +127,7 @@ export function generateProceduralPuzzle(
     }
 
     // Build pieces
-    const pieces: Piece[] = [];
+    const pieces: GeneratedPiece[] = [];
 
     for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {

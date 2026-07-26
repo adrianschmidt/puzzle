@@ -1,6 +1,6 @@
 /**
- * Convert fractal pieces (DiagonalConnection lists) to standard Piece[]
- * with full Edge mate relationships for merge detection.
+ * Convert fractal pieces (DiagonalConnection lists) to standard
+ * GeneratedPiece[] with full Edge mate relationships for merge detection.
  *
  * The top-level `convertToStandardPieces` orchestrates a fixed pipeline of
  * helpers, each owning one concern:
@@ -13,11 +13,11 @@
  *   7. scaleArcsToImage         — scale + translate into image coordinates.
  *   8. buildSubPaths            — emit drawable ops, collapsing mateless runs.
  *   9. allocateEdgeIds          — assign edge IDs and record arc → id map.
- *  10. buildPiece               — assemble each Piece (bbox, edges, shape).
+ *  10. buildPiece               — assemble each GeneratedPiece (bbox, edges, shape).
  */
 
-import type { Edge, Piece, Size } from '../../model/types.js';
-import { fmt } from '../composable/bezier-path.js';
+import type { Edge, GeneratedPiece, Size } from '../../model/types.js';
+import { fmt } from '../../model/build-shape.js';
 import type { ArcData, DiagonalConnection, Tile } from './types.js';
 import { connectionKey, makeTile } from './tile.js';
 import { addArcs, makeArc } from './arcs.js';
@@ -47,7 +47,7 @@ export function convertToStandardPieces(
     gridCols: number,
     gridRows: number,
     borderless: boolean,
-): Piece[] {
+): GeneratedPiece[] {
     const allPieceArcs = buildMainContourArcs(fractalPieces, rad, frameOffset);
     const gapFills = computeGapFills(allPieceArcs, fractalPieces, rad, frameOffset);
 
@@ -90,7 +90,7 @@ export function convertToStandardPieces(
 
     const { subPathEdgeIds, arcToEdgeId } = allocateEdgeIds(pieceSubPaths);
 
-    const pieces: Piece[] = [];
+    const pieces: GeneratedPiece[] = [];
     for (let pi = 0; pi < pieceSubPaths.length; pi++) {
         const piece = buildPiece(
             pi,
@@ -462,7 +462,7 @@ function buildPiece(
     arcToEdgeId: Map<string, number>,
     scaleX: number,
     scaleY: number,
-): Piece | null {
+): GeneratedPiece | null {
     if (subPaths.length === 0) return null;
 
     let minX = Infinity, minY = Infinity;

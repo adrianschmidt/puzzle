@@ -24,8 +24,6 @@ import { fmt } from '../../model/build-shape.js';
  */
 export type BezierPath = Point[];
 
-export { fmt } from '../../model/build-shape.js';
-
 /**
  * Convert a Bézier path to SVG path commands.
  *

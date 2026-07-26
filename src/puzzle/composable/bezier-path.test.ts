@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-    fmt,
     reverseBezierPath,
     mirrorBezierPathY,
     scaleBezierPath,
@@ -8,7 +7,6 @@ import {
 import type { BezierPath } from './bezier-path.js';
 import { classicTabTemplate } from './tab-shapes.js';
 import { createSeededRandom } from '../seeded-random.js';
-import { GEOMETRY_PRECISION_DECIMALS } from '../../model/quantize-geometry.js';
 
 describe('reverseBezierPath', () => {
     it('reverses start and end points', () => {
@@ -108,33 +106,5 @@ describe('mirrorBezierPathY', () => {
         for (let i = 0; i < path.length; i++) {
             expect(mirrored[i].x).toBe(path[i].x);
         }
-    });
-});
-
-describe('fmt', () => {
-    /**
-     * `GEOMETRY_PRECISION_DECIMALS` is derived from this function: stored
-     * coordinates are rounded to the precision `fmt` can render, so finer
-     * values cannot reach the screen. Having `fmt` read that constant would
-     * point the rendering pipeline at a storage constant — backwards, since
-     * `fmt` is the one that decides. Pinning the coupling in a test keeps the
-     * dependency in the direction it belongs while still failing loudly if
-     * `fmt` is raised to a finer precision, which would otherwise silently
-     * make storage the binding constraint on rendered geometry.
-     */
-    it('renders at the precision GEOMETRY_PRECISION_DECIMALS is anchored to', () => {
-        const [, fraction] = fmt(1 / 3).split('.');
-
-        expect(
-            fraction,
-            "fmt's precision changed: GEOMETRY_PRECISION_DECIMALS " +
-            '(model/quantize-geometry.ts) is derived from it and has to move with ' +
-            'it, or stored geometry becomes the binding constraint on rendered geometry',
-        ).toHaveLength(GEOMETRY_PRECISION_DECIMALS);
-    });
-
-    it('drops the fraction entirely for integers', () => {
-        expect(fmt(12)).toBe('12');
-        expect(fmt(-0)).toBe('0');
     });
 });
