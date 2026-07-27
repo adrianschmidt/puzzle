@@ -116,12 +116,12 @@ import {
 } from './sharing/index.js';
 import { applyProgress } from './game/reconstruct-groups.js';
 import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
-import { CURRENT_TRACE_SET_VERSION } from './puzzle/composable/traces/trace-set-version.js';
 import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { startWithBootFallback } from './app/start-with-boot-fallback.js';
+import { generatorConfigsForNewGame } from './app/generator-configs.js';
 import { planTracedTabs, resolveTracedTabOutcome } from './app/traced-tab-plan.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
@@ -1149,35 +1149,12 @@ async function startNewGame(
 
         const rotationMode = rotationModeForNewGame(cutStyle, rotationEnabled);
 
-        const generatorFractalConfig = fractalConfig
-            ? { borderless: fractalConfig.borderless }
-            : undefined;
-        // Every new Wavy game uses traced tabs at the current trace-set
-        // version. Older saves/links carry their own (or no) version and are
-        // reproduced verbatim elsewhere; this path only ever creates fresh
-        // puzzles, so stamping the current version is always correct.
-        const generatorWavyConfig = cutStyle === 'wavy'
-            ? {
-                borderless: wavyConfig?.borderless ?? false,
-                traceSetVersion: CURRENT_TRACE_SET_VERSION,
-            }
-            : undefined;
-
-        // Every new Triangles game uses traced tabs at the current trace-set
-        // version — same stamping rationale as generatorWavyConfig above.
-        const generatorTrianglesConfig = cutStyle === 'triangles'
-            ? { traceSetVersion: CURRENT_TRACE_SET_VERSION }
-            : undefined;
-
-        // Every new Classic game uses the sine-based generator with traced
-        // tabs at the current trace-set version — same stamping rationale as
-        // generatorWavyConfig. A Classic game without this config falls back
-        // to the legacy generator, so stamping it is what activates the
-        // upgrade for fresh puzzles, and withholding it is what the
-        // `legacy-classic` outcome means.
-        const generatorClassicConfig = cutStyle === 'classic' && tracedTabs.kind === 'ok'
-            ? { traceSetVersion: CURRENT_TRACE_SET_VERSION }
-            : undefined;
+        const generatorConfigs = generatorConfigsForNewGame({
+            cutStyle,
+            fractalConfig,
+            wavyConfig,
+            tracedTabsOk: tracedTabs.kind === 'ok',
+        });
 
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
@@ -1185,10 +1162,7 @@ async function startNewGame(
         const state = createNewGame(imageUrl, imageSize, viewport, oriented, {
             cutStyle,
             composableConfig,
-            fractalConfig: generatorFractalConfig,
-            wavyConfig: generatorWavyConfig,
-            trianglesConfig: generatorTrianglesConfig,
-            classicConfig: generatorClassicConfig,
+            ...generatorConfigs,
             rotationMode,
             seed,
         });
