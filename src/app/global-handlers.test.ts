@@ -1,0 +1,116 @@
+/**
+ * @vitest-environment jsdom
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.mock('../analytics/index.js', () => ({
+    initAnalytics: vi.fn(),
+    initErrorTracking: vi.fn(),
+    track: vi.fn(),
+}));
+vi.mock('../pwa/sw-error-bridge.js', () => ({ initSwErrorReporting: vi.fn() }));
+
+import { initAnalytics, initErrorTracking } from '../analytics/index.js';
+import { initSwErrorReporting } from '../pwa/sw-error-bridge.js';
+import { installGlobalHandlers } from './global-handlers.js';
+
+describe('installGlobalHandlers', () => {
+    let container: HTMLElement;
+    /** jsdom doesn't implement this method, so the "original" is `undefined`. */
+    let originalSetResourceTimingBufferSize: Performance['setResourceTimingBufferSize'] | undefined;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        container = document.createElement('div');
+        document.body.replaceChildren(container);
+        originalSetResourceTimingBufferSize = performance.setResourceTimingBufferSize;
+    });
+
+    afterEach(() => {
+        // Tests below overwrite (or delete) this method on the shared global
+        // `performance` object; leaving it changed would make later tests
+        // (in this file or, under `--sequence.shuffle`, in whatever order
+        // they land) silently run against a leftover spy or a deleted
+        // method instead of the real starting state.
+        if (originalSetResourceTimingBufferSize === undefined) {
+            delete (performance as unknown as { setResourceTimingBufferSize?: unknown })
+                .setResourceTimingBufferSize;
+        } else {
+            performance.setResourceTimingBufferSize = originalSetResourceTimingBufferSize;
+        }
+        vi.unstubAllEnvs();
+    });
+
+    it('initializes analytics before error tracking and the worker bridge', () => {
+        // Error reporting must not run before the tracker it reports through.
+        installGlobalHandlers(container);
+        const order = [
+            vi.mocked(initAnalytics).mock.invocationCallOrder[0],
+            vi.mocked(initErrorTracking).mock.invocationCallOrder[0],
+            vi.mocked(initSwErrorReporting).mock.invocationCallOrder[0],
+        ];
+        expect(order).toEqual([...order].sort((a, b) => a - b));
+        // `sort` parks `undefined` last regardless of comparator, so a
+        // dropped call (an `undefined` entry) wouldn't perturb the order
+        // assertion above — pin that every one of the three actually ran.
+        expect(initAnalytics).toHaveBeenCalledTimes(1);
+        expect(initErrorTracking).toHaveBeenCalledTimes(1);
+        expect(initSwErrorReporting).toHaveBeenCalledTimes(1);
+    });
+
+    it('enlarges the resource-timing buffer', () => {
+        // Backs the traced-chunk cacheState dimension on long PWA sessions.
+        const spy = vi.fn();
+        performance.setResourceTimingBufferSize = spy;
+        installGlobalHandlers(container);
+        expect(spy).toHaveBeenCalledWith(500);
+    });
+
+    it('does not throw when setResourceTimingBufferSize is unavailable', () => {
+        // Defensive against real environments that don't implement the
+        // Resource Timing Level 2 API, even though the DOM lib types claim
+        // the method is always present — the `?.` at global-handlers.ts is
+        // what this pins.
+        delete (performance as unknown as { setResourceTimingBufferSize?: unknown })
+            .setResourceTimingBufferSize;
+        expect(() => installGlobalHandlers(container)).not.toThrow();
+    });
+
+    it('suppresses the context menu on the puzzle table', () => {
+        installGlobalHandlers(container);
+        const table = document.createElement('div');
+        table.dataset.puzzleTable = 'true';
+        container.appendChild(table);
+
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        table.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('leaves the context menu alone outside the table', () => {
+        // Long-press copy of share links and repro params inside the info
+        // modal has to keep working.
+        installGlobalHandlers(container);
+        const modal = document.createElement('div');
+        container.appendChild(modal);
+
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+        modal.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('shows the version badge when VITE_APP_VERSION is set', () => {
+        vi.stubEnv('VITE_APP_VERSION', '1.2.3');
+        installGlobalHandlers(container);
+        expect(container.querySelector('.app-version')?.textContent).toBe('1.2.3');
+    });
+
+    it('omits the version badge when VITE_APP_VERSION is unset', () => {
+        // Unset under Vitest by default (not defined in .env/.env.local) —
+        // if the `if (appVersion)` guard were ever dropped, an empty badge
+        // div would be appended instead of nothing.
+        installGlobalHandlers(container);
+        expect(container.querySelector('.app-version')).toBeNull();
+    });
+});

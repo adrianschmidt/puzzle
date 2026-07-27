@@ -1,37 +1,14 @@
 import './palette.css';
 import './style.css';
-import type { GameState } from './model/types.js';
+import type { GameState, PieceGroup } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { ViewportTransform, RotationFocus } from './interaction/index.js';
-import { loadState, clearSavedState } from './persistence/index.js';
 import {
-    createNewGameButton,
-    createGatherPiecesButton,
-    createInfoButton,
-    createInfoModal,
-    createSelectToolButton,
-    createMarqueeToolButton,
-    createDeselectButton,
     createAttributionElement,
     removeAttribution,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
-import { buildGroupIndexes } from './model/helpers.js';
-import { loadImageSourcePreference } from './game/image-source.js';
-import {
-    loadImageCategoryPreference,
-    loadVibrantPreference,
-} from './game/image-categories.js';
-import {
-    type SharePayload,
-    encodePayload,
-    decodePayload,
-    reproParamsToPayload,
-    type ReproParams,
-} from './sharing/index.js';
-import { initAnalytics, initErrorTracking } from './analytics/index.js';
 import type { NewGameData } from './analytics/index.js';
-import { runWithErrorReport } from './app/run-with-error-report.js';
 import { startNewGame, type StartNewGameDeps } from './app/start-new-game.js';
 import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './app/load-shared-puzzle.js';
 import { createShareLinkLoader } from './app/share-link-loader.js';
@@ -43,54 +20,15 @@ import { createSaveCoordinator } from './app/save-coordinator.js';
 import { applyMergeResult } from './app/merge-result.js';
 import { createGameSession } from './app/game-session.js';
 import { createRotationUi } from './app/rotation-ui.js';
-import { installBackgroundColor } from './app/install-background-color.js';
+import { installBackgroundColor, type BackgroundColorControl } from './app/install-background-color.js';
+import { installGlobalHandlers } from './app/global-handlers.js';
+import { installToolbar } from './app/install-toolbar.js';
+import { installDevHooks, solvePuzzle } from './app/dev-hooks.js';
 import { initPwaUpdates } from './pwa/register.js';
-import { initSwErrorReporting } from './pwa/sw-error-bridge.js';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
-// Suppress the browser context menu on the puzzle table only.
-// On touch devices (especially iPad), long-pressing a piece would
-// otherwise trigger the context menu, interfering with drag. We
-// can't target the table directly here because it's created later
-// by renderer.init; delegate from #app and check the event target
-// so context menus inside the info modal / debug panels still
-// reach the browser (otherwise the user can't copy share links
-// or reproduction parameters via long-press).
-app.addEventListener('contextmenu', (e) => {
-    const target = e.target as Element | null;
-    if (target?.closest('[data-puzzle-table]')) {
-        e.preventDefault();
-    }
-});
-
-initAnalytics();
-
-// Global backstop: report unhandled rejections / uncaught errors that
-// no local try/catch handled. Observe-only; never swallows them.
-initErrorTracking();
-
-// Companion backstop for the service worker's own scope (#430): the
-// `window` listeners above run in the page realm and never see exceptions
-// thrown inside the worker, so the worker posts those here for reporting.
-initSwErrorReporting();
-
-// Resource Timing entries back the traced-chunk `cacheState` dimension
-// (see detectCacheState in traced-tab-loader.ts). The 250-entry default
-// buffer can evict the chunk's entry on long-lived PWA sessions, which
-// would degrade the signal to `unknown`; a larger buffer keeps it
-// reliable at negligible memory cost.
-performance.setResourceTimingBufferSize?.(500);
-
-// Display app version in bottom-right corner.
-// Injected at build time by the deploy workflow via VITE_APP_VERSION.
-const appVersion = import.meta.env.VITE_APP_VERSION as string | undefined;
-if (appVersion) {
-    const versionEl = document.createElement('div');
-    versionEl.className = 'app-version';
-    versionEl.textContent = appVersion;
-    app.appendChild(versionEl);
-}
+installGlobalHandlers(app);
 
 /**
  * Analytics metadata for the currently-playing puzzle.
@@ -125,226 +63,6 @@ selectionManager.onChange((selectedIds) => {
     }
     if (state) saveCoordinator.autoSave(state);
 });
-
-// Debug helper: solve the puzzle by placing all pieces in their correct positions.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).__solvePuzzle = () => {
-    const state = session.current();
-    if (!state) return;
-
-    const solvedGroup: import('./model/types.js').PieceGroup = {
-        id: 0,
-        pieces: new Map(),
-        position: { x: 0, y: 0 },
-        rotation: 0,
-    };
-
-    for (const piece of state.pieces) {
-        solvedGroup.pieces.set(piece.id, {
-            x: -piece.imageOffset.x,
-            y: -piece.imageOffset.y,
-        });
-    }
-
-    state.groups = [solvedGroup];
-    const solvedIndexes = buildGroupIndexes(state.groups);
-    state.groupsById = solvedIndexes.groupsById;
-    state.pieceToGroup = solvedIndexes.pieceToGroup;
-    state.completed = true;
-    renderer.renderState(state);
-
-    // Use the same animated zoom as normal completion
-    zoomToFitCompletedPuzzle(state, solvedGroup, viewportFitDeps, () => {
-        // Read late, as the module global did: the overlay lands ~800ms
-        // later, by which time a new game may have replaced this one.
-        const settled = session.current();
-        if (settled) completionPresenter.show(settled);
-    });
-};
-
-/**
- * Dev-console hook for visual smoke-testing the experimental two-circle
- * Venn cut style. Not exposed in any UI. Removed before Plan 2 merges
- * if the cut style isn't promoted to a user-facing option.
- *
- * Usage (in browser dev console):
- *   __startVennPuzzle()
- *   __startVennPuzzle({ leftRadius: 200, rightCenter: { x: 700, y: 360 } })
- *   __startVennPuzzle({ tabs: true })   // classic tabs on the shared arcs
- *
- * Caveat: share-links and reloads don't yet preserve the venn config —
- * only the in-memory render is meaningful. After the page reloads, the
- * autosaved state falls back to sine defaults.
- */
-(window as any).__startVennPuzzle = (overrides?: {
-    leftCenter?: { x: number; y: number };
-    leftRadius?: number;
-    rightCenter?: { x: number; y: number };
-    rightRadius?: number;
-    tabs?: boolean;
-}) => {
-    const baseCutConfig = {
-        leftCenter: overrides?.leftCenter ?? { x: 432, y: 360 },
-        leftRadius: overrides?.leftRadius ?? 240,
-        rightCenter: overrides?.rightCenter ?? { x: 648, y: 360 },
-        rightRadius: overrides?.rightRadius ?? 240,
-    };
-    void startNewGame({ cols: 1, rows: 1 }, {
-        cutStyle: 'composable',
-        composableConfig: {
-            baseCutGenerator: 'venn',
-            baseCutConfig,
-            tabGenerator: overrides?.tabs ? 'classic' : 'none',
-            tabConfig: {},
-        },
-        imageSource: 'blank',
-    }, startNewGameDeps);
-};
-
-/**
- * Dev-console hook for launching a Composable puzzle with arbitrary
- * generator parameters. Exposed because Composable is hidden from the
- * production new-game dialog; power users can still reach the full
- * surface via this helper.
- *
- * Usage (browser console):
- *   __newComposableGame()
- *   __newComposableGame({ cols: 12, rows: 8 })
- *   __newComposableGame({
- *       baseCutConfig: { cols: 8, rows: 6, ha: 0.3, hf: 2, va: 0.3, vf: 1.5 },
- *       tabGenerator: 'none',
- *   })
- *   __newComposableGame({ rotation: 'free' })
- *   __newComposableGame({ seed: 1086655870 })   // reproduce a specific puzzle
- *
- * Defaults: 8×6 grid, sine base-cut generator with composable's stock
- * defaults, classic tabs, no rotation, current saved image-source
- * preference. Seed defaults to a fresh random value each call.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).__newComposableGame = (overrides?: {
-    cols?: number;
-    rows?: number;
-    baseCutGenerator?: string;
-    baseCutConfig?: Record<string, unknown>;
-    tabGenerator?: string;
-    tabConfig?: Record<string, unknown>;
-    minPieceArea?: number;
-    rotation?: 'none' | 'free';
-    imageSource?: 'random' | 'blank';
-    seed?: number;
-}) => {
-    const cols = overrides?.cols ?? 8;
-    const rows = overrides?.rows ?? 6;
-    const baseCutConfig = overrides?.baseCutConfig ?? {
-        cols, rows, ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5,
-    };
-    const config: import('./puzzle/composable-generator.js').ComposableConfig = {
-        baseCutGenerator: overrides?.baseCutGenerator ?? 'sine',
-        baseCutConfig,
-        tabGenerator: overrides?.tabGenerator ?? 'classic',
-        tabConfig: overrides?.tabConfig ?? {},
-    };
-    if (overrides?.minPieceArea !== undefined) {
-        config.minPieceArea = overrides.minPieceArea;
-    }
-    const rotation = overrides?.rotation ?? 'none';
-    void startNewGame({ cols, rows }, {
-        cutStyle: 'composable',
-        composableConfig: config,
-        imageSource: overrides?.imageSource ?? loadImageSourcePreference(),
-        imageCategory: loadImageCategoryPreference(),
-        vibrant: loadVibrantPreference(),
-        rotationEnabled: rotation !== 'none',
-        seed: overrides?.seed,
-    }, startNewGameDeps);
-};
-
-/**
- * Dev-console hook: regenerate a puzzle from the info modal's
- * "Reproduction parameters" block. Paste the block's JSON verbatim:
- *
- *   __reproPuzzle({
- *       seed: 1534700170,
- *       cutStyle: 'classic',
- *       imageUrl: 'https://images.unsplash.com/...',
- *       imageSize: { width: 1080, height: 1440 },
- *       gridSize: { cols: 12, rows: 16 },
- *       rotationMode: 'free',
- *       classicConfig: { traceSetVersion: 1 },
- *   })
- *
- * The params run through the share codec's validation and clamps and
- * then the share-link load path, so reproduction semantics match a
- * share link exactly. `imageUrl: 'blank'` — or no `imageUrl` at all —
- * renders on the blank canvas at the recorded dimensions; geometry
- * depends on the image's dimensions, not its pixels. Fractional
- * `imageSize` values are floored by the codec's clamps, and attribution
- * and background color are not part of the params, so a replayed
- * Unsplash puzzle loses its credit. Replaces the current game and save
- * without confirmation, but leaves the address bar alone: a `#p=` link
- * stays put — as declining its confirm dialog does — so the original
- * link remains reloadable, and a reload re-offers it. Decline the prompt
- * and the replay survives.
- *
- * Resolves `true` once the puzzle is on screen and `false` on any
- * failure (matching the share-link loader's `tryLoad`), so
- * `await __reproPuzzle(...)` reports the outcome instead of resolving
- * before generation starts.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(window as any).__reproPuzzle = async (params: ReproParams): Promise<boolean> => {
-    let payload: SharePayload;
-    let decoded: SharePayload | null;
-    try {
-        payload = reproParamsToPayload(params);
-        decoded = decodePayload(encodePayload(payload));
-    } catch (err) {
-        // The error object rather than its message, so the console keeps the
-        // stack and renders it expandable (as `diagnostics.warn` does).
-        // eslint-disable-next-line no-console
-        console.error('[__reproPuzzle]', err);
-        return false;
-    }
-    if (!decoded) {
-        // `decodePayload` returns a bare `null` from any of its shape checks,
-        // so which field failed is structurally unavailable here. Echoing the
-        // mapped payload is the only way the caller sees the rejected value.
-        // The two throwing steps above name the field for every hand-typing
-        // mistake they can see (unknown cutStyle/rotationMode; a non-numeric
-        // imageSize/gridSize/seed throws from assertPayloadNumbersFinite), so
-        // what still reaches this branch is a non-string `imageUrl` or a
-        // `composableConfig` the decoder rejects.
-        // eslint-disable-next-line no-console
-        console.error('[__reproPuzzle] params did not survive share-codec validation', payload);
-        return false;
-    }
-    // Narrowing captured in a const: the async closure below would silently
-    // un-narrow if `decoded` ever gained a second assignment.
-    const validated = decoded;
-    // `!!loadState()` rather than a cheaper key probe, for parity with the
-    // share path: `recipientHadSavedState` means "had a *readable* save".
-    // The decompress is affordable for a one-shot manual dev action.
-    const hadSavedState = !!loadState();
-    clearSavedState();
-    return runWithErrorReport({
-        run: async () => {
-            await loadSharedPuzzle(validated, hadSavedState, sharedDeps);
-            return true;
-        },
-        warnMessage: 'Failed to load repro puzzle:',
-        // A generation failure is the thing this helper exists to
-        // investigate, so it has to be readable on a deployed build —
-        // `runWithErrorReport`'s default diagnostic is DEV-gated.
-        logInProduction: true,
-        event: 'shared-load-failed',
-        // Not a user-facing share-link failure: a generator failure is often
-        // the reason this helper was called at all.
-        source: 'repro',
-        toastMessage: "Couldn't load repro puzzle",
-        fallback: false,
-    });
-};
 
 // Viewport transform for zoom & pan
 const viewportTransform = new ViewportTransform();
@@ -511,80 +229,63 @@ const startNewGameDeps: StartNewGameDeps = {
     },
 };
 
-// Set up the New Game button
-createNewGameButton({
+/**
+ * Frame and celebrate a puzzle solved via the debug Solve action — the same
+ * completion zoom a normal merge-to-one-group win uses. Shared by
+ * `installDevHooks` (for `window.__solvePuzzle`) and `installToolbar`'s
+ * `solve` (for the info modal's Solve button), which both call `solvePuzzle`
+ * with this same callback.
+ */
+const onSolved = (state: GameState, group: PieceGroup): void => {
+    zoomToFitCompletedPuzzle(state, group, viewportFitDeps, () => {
+        // Read late, as the module global did: the overlay lands ~800ms
+        // later, by which time a new game may have replaced this one.
+        const settled = session.current();
+        if (settled) completionPresenter.show(settled);
+    });
+};
+
+installDevHooks({
+    session,
+    renderer,
+    start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps),
+    loadShared: (payload, recipientHadSavedState) =>
+        loadSharedPuzzle(payload, recipientHadSavedState, sharedDeps),
+    onSolved,
+});
+
+/**
+ * Background-color control handle. Assigned inside
+ * `installBackgroundColorControl` below, which `installToolbar` invokes
+ * between the deselect and Info buttons (see `install-toolbar.ts`'s module
+ * doc) so DOM order matches the visual top-to-bottom control stack. The
+ * `installBackgroundColor` call itself stays here, rather than moving into
+ * `install-toolbar.ts`, because the handle it returns is also needed below
+ * for `sharedDeps` — the toolbar module only owns *when* the picker's DOM
+ * lands, not the picker itself.
+ */
+let backgroundColor!: BackgroundColorControl;
+
+installToolbar({
     container: app,
-    // Guarded like the other interaction entry points that read the
-    // session: these three run synchronously on click, so an unguarded read
-    // threw and swallowed the click whenever boot left no game behind —
-    // making the New Game dialog, the one place a player can pick a
-    // smaller grid or a blank image and escape a failure rooted in their
-    // inputs, the one thing they couldn't reach (#488). Reloading just
-    // replays the same inputs. Zero counts read as "no progress to lose",
-    // so the dialog opens without a confirm, which is correct with nothing
-    // on screen.
-    isCompleted: () => session.current()?.completed ?? false,
-    getGroupCount: () => session.current()?.groups.length ?? 0,
-    getPieceCount: () => session.current()?.pieces.length ?? 0,
+    session,
+    selectionManager,
+    fitView: startNewGameDeps.fitView,
+    save: (state) => saveCoordinator.autoSave(state),
     onNewGame: () => {
         openNewGameDialog({
             container: app,
             start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps),
         });
     },
-});
-
-// Set up the Gather Pieces button
-createGatherPiecesButton({
-    container: app,
-    onGatherPieces: () => {
-        // The last sibling of the New Game read above: all three of these
-        // touch the session synchronously, so the click threw whenever boot
-        // left no game behind. There is nothing to gather in that state,
-        // so doing nothing is the whole correct behavior.
-        const state = session.current();
-        if (!state) return;
-        gatherAndZoomToFit(state, viewportFitDeps);
-        renderer.renderState(state);
-        saveCoordinator.autoSave(state);
+    installBackgroundColorControl: () => {
+        backgroundColor = installBackgroundColor({ container: app });
     },
-});
-
-// Set up the multi-select tool button (top-left)
-createSelectToolButton({
-    container: app,
-    selectionManager,
-});
-
-// Set up the marquee tool button, directly below the multi-select button
-createMarqueeToolButton({
-    container: app,
-    selectionManager,
-});
-
-// Set up the deselect-all button (bottom-center, hidden until selection exists)
-createDeselectButton({
-    container: app,
-    selectionManager,
-});
-
-// Set up the background color picker and the piece-outline style/color.
-const backgroundColor = installBackgroundColor({ container: app });
-
-// Set up the Info button
-createInfoButton({
-    container: app,
-    onShowInfo: () => {
-        createInfoModal({
-            container: app,
-            getState: () => session.current(),
-            state: session.current(),
-            onSolve: () => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (window as any).__solvePuzzle?.();
-            },
-        });
-    },
+    // Same implementation `installDevHooks` exposes on `window.__solvePuzzle`
+    // — the one sanctioned behavior change in this refactor (see the plan's
+    // Global Constraints). The info modal's Solve button receives it as a
+    // dependency rather than looking `window.__solvePuzzle` up at click time.
+    solve: () => solvePuzzle({ session, renderer, onSolved }),
 });
 
 /**
