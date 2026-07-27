@@ -43,8 +43,6 @@ import {
     createDeselectButton,
     createRotateButtons,
     createRotateHandle,
-    getActiveTolerance,
-    getActiveRotationTolerance,
     createAttributionElement,
     removeAttribution,
     createNewGameDialog,
@@ -62,7 +60,6 @@ import {
 import { SelectionManager } from './interaction/selection-manager.js';
 import { SnapProximityPositionController } from './interaction/snap-proximity-position-controller.js';
 import { rotateGroup } from './game/rotate-group.js';
-import type { SnapTolerances } from './game/snap-proximity-rotation.js';
 import {
     buildGroupIndexes,
     rotatePoint,
@@ -137,6 +134,8 @@ import {
     orientGridSize,
     blankSizeForOrientation,
 } from './app/orientation.js';
+import { activeSnapTolerances } from './app/snap-tolerances.js';
+import { createBlankImageDataUrl } from './app/blank-canvas.js';
 import { initPwaUpdates } from './pwa/register.js';
 import {
     wasRescueAttempted,
@@ -873,22 +872,6 @@ function updateAttribution(): void {
 }
 
 /**
- * The active snap tolerances for `state` — the single definition of "would
- * a drop merge?" thresholds, shared by drop/commit merge detection and
- * snap proximity rotation so they can never drift apart.
- */
-function activeSnapTolerances(state: GameState): SnapTolerances {
-    return {
-        tolerancePx: getActiveTolerance(
-            state.imageSize.width,
-            state.gridSize.cols,
-            state.cutStyle,
-        ),
-        rotationToleranceDeg: getActiveRotationTolerance(),
-    };
-}
-
-/**
  * Set up the game with a given state: render it and wire up interaction.
  */
 function initGame(state: GameState): void {
@@ -1102,13 +1085,7 @@ async function startNewGame(
         // a portrait screen gets a portrait blank canvas.
         if (imageSource === 'blank') {
             const blankSize = blankSizeForOrientation(orientation);
-            const canvas = document.createElement('canvas');
-            canvas.width = blankSize.width;
-            canvas.height = blankSize.height;
-            const ctx = canvas.getContext('2d')!;
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, blankSize.width, blankSize.height);
-            imageUrl = canvas.toDataURL('image/png');
+            imageUrl = createBlankImageDataUrl(blankSize);
             imageSize = blankSize;
             attribution = undefined;
         }
@@ -1586,13 +1563,7 @@ async function loadSharedPuzzle(
         // If the sentinel is the blank canvas, regenerate it locally.
         let imageUrl = payload.i;
         if (imageUrl === 'blank') {
-            const canvas = document.createElement('canvas');
-            canvas.width = imageSize.width;
-            canvas.height = imageSize.height;
-            const ctx = canvas.getContext('2d')!;
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, imageSize.width, imageSize.height);
-            imageUrl = canvas.toDataURL('image/png');
+            imageUrl = createBlankImageDataUrl(imageSize);
         }
 
         const viewport = {
