@@ -12,13 +12,7 @@ import {
     getGroupVisualBounds,
     type MergeResult,
 } from './game/index.js';
-import {
-    loadState,
-    loadSavedGame,
-    clearSavedState,
-    createDebouncedSave,
-    saveNewPuzzle,
-} from './persistence/index.js';
+import { loadState, loadSavedGame, clearSavedState } from './persistence/index.js';
 import {
     createNewGameButton,
     createGatherPiecesButton,
@@ -120,7 +114,6 @@ import { needsTracedTabChunk, shareInitOptions } from './app/share-payload-to-in
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { buildPuzzleCompletedData } from './app/completed-payload.js';
 import { buildFreshGameData, buildSharedGameData } from './app/new-game-payload.js';
-import { traceSetVersionOf } from './app/trace-set-version.js';
 import { pickBundledImage } from './app/bundled-image.js';
 import { fetchCandidateImages } from './app/fetch-candidate-images.js';
 import type { CandidateImage } from './app/unsplash-display-image.js';
@@ -133,6 +126,7 @@ import { activeSnapTolerances } from './app/snap-tolerances.js';
 import { createBlankImageDataUrl } from './app/blank-canvas.js';
 import { createCompletionPresenter } from './app/completion-presenter.js';
 import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
+import { createSaveCoordinator } from './app/save-coordinator.js';
 import { initPwaUpdates } from './pwa/register.js';
 import {
     wasRescueAttempted,
@@ -219,7 +213,7 @@ selectionManager.onChange((selectedIds) => {
     for (const group of gameState?.groups ?? []) {
         renderer.setGroupSelected(group.id, selectedIds.has(group.id));
     }
-    if (gameState) autoSave();
+    if (gameState) saveCoordinator.autoSave(gameState);
 });
 
 // Debug helper: solve the puzzle by placing all pieces in their correct positions.
@@ -466,92 +460,19 @@ const viewportFitDeps: ViewportFitDeps = {
  */
 function onViewportChanged(): void {
     applyViewportTransform();
-    autoSave();
+    saveCoordinator.autoSave(gameState);
 }
 
-// Surface a save failure (quota exceeded even after compression). Every failure
-// emits telemetry so the regression is observable; the user-facing toast is
-// rate-limited so a fast debounced save loop can't spam it — and a suppressed
-// repeat still leaves a diagnostic trail rather than vanishing silently.
-let lastSaveFailedToastAt = 0;
-// `state` is the puzzle whose save failed, which is not always the current
-// `gameState`: a debounced progress save can flush after a new game has started.
-function notifySaveFailed(op: 'progress' | 'new-puzzle', state: GameState): void {
-    track('save-failed', {
-        op,
-        cutStyle: state.cutStyle ?? 'classic',
-        pieceCount: state.pieces.length,
-        traceSetVersion: traceSetVersionOf(state),
-    });
-    const now = Date.now();
-    if (now - lastSaveFailedToastAt < 10_000) {
-        diagnostics.warn(`Save failed (${op}) within the toast-dedup window; toast suppressed.`);
-        return;
-    }
-    lastSaveFailedToastAt = now;
-    showToast("This puzzle is too large to save — your progress won't be kept across reloads.");
-}
-
-/**
- * Persist a freshly created or loaded puzzle: geometry (once) + initial progress.
- * Surfaces a failed write as a toast, and records when the save crossed into the
- * compression regime (near-quota — one growth step from total failure).
- *
- * That signal covers the whole save, not the geometry write alone: `saveNewPuzzle`
- * reports the worse of the two writes, so a compressed initial *progress* write
- * emits the same event. See `SaveCompressedData` in `analytics/umami.ts`.
- */
-function persistNewPuzzle(): void {
-    const result = saveNewPuzzle(
-        gameState,
-        selectionManager.selectedGroupIds,
-        viewportTransform.getState(),
-    );
-    if (result === 'failed') {
-        // Synchronous with the write, so the current state is the saved state.
-        notifySaveFailed('new-puzzle', gameState);
-    } else if (result === 'ok-compressed') {
-        track('save-compressed', {
-            cutStyle: gameState.cutStyle ?? 'classic',
-            pieceCount: gameState.pieces.length,
-            traceSetVersion: traceSetVersionOf(gameState),
-        });
-    }
-}
-
-// Both callbacks attribute to the flushed state, not to module-global
-// `gameState`: a save queued for the previous puzzle can flush inside the
-// debounce window after a new game starts, which would otherwise report the
-// new puzzle's cut style and piece count for the old puzzle's failure.
-const debouncedSave = createDebouncedSave({
-    onSaveFailed: (state) => notifySaveFailed('progress', state),
-    // A cross-tab takeover refused this autosave (another tab started a new
-    // puzzle on the same origin). Not a failure to warn the user about, but
-    // worth measuring — this is the race that used to produce a torn save.
-    onSaveSkipped: (state) =>
-        track('progress-save-skipped', {
-            cutStyle: state.cutStyle ?? 'classic',
-            pieceCount: state.pieces.length,
-            traceSetVersion: traceSetVersionOf(state),
-        }),
-});
-
-// Persist any pending debounced save before the page goes away, so a change
-// made within the 500ms debounce window (e.g. a just-tapped selection) is not
-// lost on a fast reload or tab close. `pagehide` covers reloads, navigations
-// and closes; `visibilitychange` → hidden additionally covers mobile
-// app-switch / background-kill, where `pagehide` is not guaranteed to fire.
-// `flush()` is a no-op when nothing is pending, so firing on both is safe.
-window.addEventListener('pagehide', () => debouncedSave.flush());
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') debouncedSave.flush();
-});
+// Owns debounced progress saves, the new-puzzle geometry+progress write, and
+// flushing before the page can be torn down (installs its own pagehide /
+// visibilitychange listeners as a side effect of construction).
+const saveCoordinator = createSaveCoordinator({ selectionManager, viewportTransform });
 
 // Keep the installed PWA current: detect new versions while open and on
 // reopen, and apply them at a safe moment (focus regain or a manual tap).
-// `debouncedSave.flush` runs first so progress within the debounce window
+// The save coordinator flushes first so progress within the debounce window
 // survives the reload.
-const pwaUpdates = initPwaUpdates(() => debouncedSave.flush());
+const pwaUpdates = initPwaUpdates(() => saveCoordinator.flush());
 
 /**
  * Project the visual bounds of the given group from world space into
@@ -571,14 +492,6 @@ function getFocusedGroupScreenBounds(
     const tl = viewportTransform.worldToScreen({ x: worldLeft, y: worldTop });
     const br = viewportTransform.worldToScreen({ x: worldRight, y: worldBottom });
     return { left: tl.x, top: tl.y, right: br.x, bottom: br.y };
-}
-
-/**
- * Trigger a debounced auto-save of the current game state, including the
- * current multi-select selection so it survives a reload.
- */
-function autoSave(): void {
-    debouncedSave.save(gameState, selectionManager.selectedGroupIds, viewportTransform.getState());
 }
 
 /**
@@ -695,7 +608,7 @@ function initGame(state: GameState): void {
                     renderer.setGroupSelected(selectedId, true);
                 }
             }
-            autoSave();
+            saveCoordinator.autoSave(gameState);
         },
         onDrop: (groupId: number) => {
             const { tolerancePx, rotationToleranceDeg } = activeSnapTolerances(gameState);
@@ -706,7 +619,7 @@ function initGame(state: GameState): void {
             const result = processDrop(groupId, gameState, tolerancePx, rotationToleranceDeg);
             if (result) {
                 applyMergeResult(result, droppedGroupIds);
-                autoSave();
+                saveCoordinator.autoSave(gameState);
             } else {
                 // No merge: z-reorder the original dropped groups as-is.
                 reorderGroupsAfterDrop(droppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
@@ -956,7 +869,7 @@ async function startNewGame(
         initGame(state);
         gatherAndZoomToFit(gameState, viewportFitDeps);
         renderer.renderState(gameState);
-        persistNewPuzzle();
+        saveCoordinator.persistNewPuzzle(gameState);
 
         const data = buildFreshGameData({
             state,
@@ -1100,7 +1013,7 @@ createGatherPiecesButton({
         if (!gameState) return;
         gatherAndZoomToFit(gameState, viewportFitDeps);
         renderer.renderState(gameState);
-        autoSave();
+        saveCoordinator.autoSave(gameState);
     },
 });
 
@@ -1140,7 +1053,7 @@ const rotateButtons = createRotateButtons({
         for (const selectedId of selectionManager.selectedGroupIds) {
             renderer.setGroupSelected(selectedId, true);
         }
-        autoSave();
+        saveCoordinator.autoSave(gameState);
     },
     getFocusedGroupScreenBounds,
 });
@@ -1179,7 +1092,7 @@ const rotateHandle = createRotateHandle({
         if (result) {
             applyMergeResult(result, [result.group.id]);
         }
-        autoSave();
+        saveCoordinator.autoSave(gameState);
     },
     onRotateEnd: () => {
         snapPosition.stop();
@@ -1318,7 +1231,7 @@ async function loadSharedPuzzle(
         initGame(state);
         gatherAndZoomToFit(gameState, viewportFitDeps);
         renderer.renderState(gameState);
-        persistNewPuzzle();
+        saveCoordinator.persistNewPuzzle(gameState);
 
         // Offer the sharer's background color to a recipient who has
         // never picked one. Adoption persists it as their preference and
