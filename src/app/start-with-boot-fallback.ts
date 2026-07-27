@@ -3,10 +3,14 @@
  *
  * The boot flow has no user standing in front of it: if its
  * `startNewGame` rejects there is no previous puzzle to fall back to and
- * no dialog to retry from, so the app is left with an unassigned
- * `gameState`, an empty canvas, and a New Game button that throws on
- * click (#488). This runs the preferred start, reports a failure, and
- * then starts a last-resort puzzle that cannot depend on the lazy chunk.
+ * no dialog to retry from, so the session installs nothing — `hasGame()`
+ * stays false — and the player is left staring at an empty canvas, with no
+ * puzzle and nothing said about why (#488). The New Game button itself
+ * still works — `install-toolbar.ts` reads the counts it needs through
+ * `session.current()?.… ?? 0`, so the dialog opens with no confirm — but
+ * it is the only way out and nothing points the player at it. This runs
+ * the preferred start, reports a failure, and then starts a last-resort
+ * puzzle that cannot depend on the lazy chunk.
  *
  * What this does not cover: the fallback keeps the failed attempt's grid
  * size and image-source preferences, so a failure rooted in those inputs
@@ -20,7 +24,7 @@
 
 import { runWithErrorReport } from './run-with-error-report.js';
 import { BOOT_FALLBACK_CUT_STYLE } from './traced-tab-plan.js';
-import { showToast } from '../ui/toast.js';
+import { showToast } from '../ui/index.js';
 
 /** Shown once the last-resort puzzle is actually on screen. */
 export const FALLBACK_STARTED_TOAST = "Couldn't start your usual puzzle — started a Classic one";
@@ -69,7 +73,7 @@ export async function startWithBootFallback(opts: {
     });
     if (started) return;
 
-    // A rejection *after* `initGame` — say a throw while fitting the
+    // A rejection *after* the game was installed — say a throw while fitting the
     // view — leaves the player with the puzzle they asked for. Replacing
     // it with a Classic one would be the regression, not the fix. The
     // failure is still reported above.

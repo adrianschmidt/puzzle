@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { GameState, Point } from '../model/types.js';
 import { makeCenteredGroup, makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
 import { getGroup, rotatePoint } from '../model/helpers.js';
@@ -83,6 +83,52 @@ describe('SnapProximityPositionController', () => {
         const startX = getGroup(state, 11).position.x;
 
         controller.start(11);
+        controller.onGroupRotated();
+
+        expect(getGroup(state, 11).position.x).toBeCloseTo(startX);
+    });
+
+    // `getState` is `GameState | undefined` because boot can fail and install
+    // no game at all (#488). That widening is what lets callers stop proving a
+    // game exists before touching the controller, so the two branches it added
+    // are exercised here even though the app never reaches them today.
+    it('builds no context when there is no game', () => {
+        const state = makePairState({ x: 170, y: 50 }, 5);
+        let live: GameState | undefined;
+        const getTolerances = vi.fn(() => ({ tolerancePx: D, rotationToleranceDeg: T }));
+        const controller = new SnapProximityPositionController({
+            getState: () => live,
+            getTolerances,
+            scheduleFrame: () => {},
+        });
+        const startX = getGroup(state, 11).position.x;
+
+        controller.start(11);
+
+        // Nothing to derive tolerances from, so they are never read.
+        expect(getTolerances).not.toHaveBeenCalled();
+
+        // A game arriving after the gesture began does not retroactively arm
+        // it: the context is null, so the controller stays inert.
+        live = state;
+        controller.onGroupRotated();
+        expect(getGroup(state, 11).position.x).toBeCloseTo(startX);
+    });
+
+    it('stops moving the group if the game goes away mid-gesture', () => {
+        const state = makePairState({ x: 170, y: 50 }, 5);
+        let live: GameState | undefined = state;
+        const controller = new SnapProximityPositionController({
+            getState: () => live,
+            getTolerances: () => ({ tolerancePx: D, rotationToleranceDeg: T }),
+            scheduleFrame: () => {},
+        });
+        const startX = getGroup(state, 11).position.x;
+
+        // A real context is built first, so this test fails for the right
+        // reason: the guard in onGroupRotated, not a missing context.
+        controller.start(11);
+        live = undefined;
         controller.onGroupRotated();
 
         expect(getGroup(state, 11).position.x).toBeCloseTo(startX);

@@ -137,7 +137,7 @@ describe('startWithBootFallback', () => {
     });
 
     it('does not tell the player to reload when the fallback rendered before it threw', async () => {
-        // The fallback runs the same `initGame` the preferred start does, so
+        // The fallback runs the same install the preferred start does, so
         // it too can reject after its puzzle is on screen. BOOT_FAILED_TOAST
         // would be untrue there, and its "try reloading" advice destructive.
         let onScreen = false;
