@@ -1,7 +1,6 @@
 import './palette.css';
 import './style.css';
-import { diagnostics } from './diagnostics.js';
-import type { GameState, GridSize } from './model/types.js';
+import type { GameState } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { ViewportTransform, RotationFocus } from './interaction/index.js';
 import { createNewGame } from './game/index.js';
@@ -24,12 +23,10 @@ import {
     yieldForPaint,
     loadRotationEnabledPreference,
     saveRotationEnabledPreference,
-    type FractalDialogConfig,
-    type WavyDialogConfig,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
 import { buildGroupIndexes } from './model/helpers.js';
-import { getUnsplashAccessKey, triggerPhotoDownload } from './images/index.js';
+import { getUnsplashAccessKey } from './images/index.js';
 import {
     loadSizePreference,
     saveSizePreference,
@@ -39,7 +36,6 @@ import {
 import {
     loadCutStylePreference,
     saveCutStylePreference,
-    rotationModeForNewGame,
 } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
 import {
@@ -82,19 +78,11 @@ import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { startWithBootFallback } from './app/start-with-boot-fallback.js';
-import { generatorConfigsForNewGame } from './app/generator-configs.js';
-import { planTracedTabs, resolveTracedTabOutcome } from './app/traced-tab-plan.js';
+import { startNewGame, type StartNewGameDeps } from './app/start-new-game.js';
 import { needsTracedTabChunk, shareInitOptions } from './app/share-payload-to-init.js';
-import { resolveUnsplashImage } from './app/resolve-image.js';
-import { buildFreshGameData, buildSharedGameData } from './app/new-game-payload.js';
-import { pickBundledImage } from './app/bundled-image.js';
+import { buildSharedGameData } from './app/new-game-payload.js';
 import { fetchCandidateImages } from './app/fetch-candidate-images.js';
-import type { CandidateImage } from './app/unsplash-display-image.js';
-import {
-    orientationForViewport,
-    orientGridSize,
-    blankSizeForOrientation,
-} from './app/orientation.js';
+import { orientationForViewport } from './app/orientation.js';
 import { createBlankImageDataUrl } from './app/blank-canvas.js';
 import { createCompletionPresenter } from './app/completion-presenter.js';
 import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
@@ -262,7 +250,7 @@ selectionManager.onChange((selectedIds) => {
             tabConfig: {},
         },
         imageSource: 'blank',
-    });
+    }, startNewGameDeps);
 };
 
 /**
@@ -321,7 +309,7 @@ selectionManager.onChange((selectedIds) => {
         vibrant: loadVibrantPreference(),
         rotationEnabled: rotation !== 'none',
         seed: overrides?.seed,
-    });
+    }, startNewGameDeps);
 };
 
 /**
@@ -550,222 +538,29 @@ function updateAttribution(state: GameState): void {
     }
 }
 
-interface StartNewGameOptions {
-    /** Cut style for piece generation. Defaults to Classic. */
-    cutStyle?: CutStyle;
-    composableConfig?: import('./puzzle/composable-generator.js').ComposableConfig;
-    imageSource?: string;
-    imageCategory?: string;
-    fractalConfig?: FractalDialogConfig;
-    wavyConfig?: WavyDialogConfig;
-    vibrant?: boolean;
-    rotationEnabled?: boolean;
-    seed?: number;
-    pickedImage?: CandidateImage;
-    /**
-     * Start the last-resort boot puzzle (#488): legacy Classic cut, lazy
-     * traced-tab chunk never fetched, flagged in analytics. Overrides
-     * `cutStyle` — see `planTracedTabs`.
-     */
-    bootFallback?: boolean;
-}
-
 /**
- * Start a new game. Uses the player-picked photo when one is given;
- * otherwise fetches a random Unsplash image if available. Falls back to
- * the default image if the API key is missing or fetch fails.
- *
- * @param gridSize - Grid dimensions (cols × rows) for the puzzle
- * @param options - Per-game choices; see {@link StartNewGameOptions}
+ * Dependencies for `startNewGame`, built once so every call site spells the
+ * argument the same way. `fitView` folds the gather-and-zoom-to-fit step and
+ * the follow-up render together: `session.install` already renders the state
+ * at its pre-gather positions, so the view-fit's repositioning needs a
+ * second render to reach the screen.
  */
-async function startNewGame(
-    gridSize: GridSize,
-    options: StartNewGameOptions = {},
-): Promise<void> {
-    const {
-        cutStyle: requestedCutStyle = 'classic',
-        composableConfig,
-        imageSource,
-        imageCategory,
-        fractalConfig,
-        wavyConfig,
-        vibrant = false,
-        rotationEnabled = false,
-        seed,
-        pickedImage,
-        bootFallback = false,
-    } = options;
-    showLoadingOverlay();
-    try {
-        // Reset viewport transform so pieces are randomized in unzoomed coordinates
+const startNewGameDeps: StartNewGameDeps = {
+    container: app,
+    session,
+    resetViewport: () => {
         viewportTransform.reset();
         applyViewportTransform();
-
-        // Traced tabs live in a lazy chunk. `planTracedTabs` decides
-        // whether this start needs it and which cut style is actually
-        // generated; the boot fallback forces legacy Classic and skips the
-        // fetch entirely, so the recovery path cannot fail the same way the
-        // start it is recovering from did.
-        const tracedTabPlan = planTracedTabs({
-            cutStyle: requestedCutStyle,
-            tabGenerator: composableConfig?.tabGenerator,
-            bootFallback,
-        });
-        const { cutStyle, preloadChunk } = tracedTabPlan;
-
-        // The dialog kicked off the preload when the user picked a traced
-        // style, so this usually resolves instantly. Started here but
-        // awaited further down, so on the paths that didn't go through the
-        // dialog (the boot path, the __newComposableGame console hook) the
-        // chunk fetch overlaps the image request — where there is one —
-        // instead of running ahead of it. The first-run boot puzzle uses a
-        // bundled image and so has nothing to overlap with; it just pays the
-        // fetch under the overlay.
-        //
-        // The rejection is captured into a value rather than left floating:
-        // an unawaited rejected promise would surface as an unhandled
-        // rejection while the image loads. It is interpreted at the await
-        // site below. `null` is the success sentinel there, so a rejection
-        // reason that is itself falsy (`reject()`, `reject(null)`) has to be
-        // defaulted to a real Error — otherwise it would read as success.
-        const tracedTabsPreload = preloadChunk
-            ? preloadTracedTabGenerator().then(
-                () => null,
-                (error: unknown) => error ?? new Error('Traced tab chunk failed to load'),
-            )
-            : null;
-
-        const viewport = {
-            width: app.clientWidth || window.innerWidth,
-            height: app.clientHeight || window.innerHeight,
-        };
-
-        // Match the puzzle to the shape of the screen it's created on. This is
-        // the only place orientation is decided; the resulting grid and image
-        // size flow into the save/share payload, so replay reproduces it
-        // without re-reading the viewport.
-        const orientation = orientationForViewport(viewport);
-        const oriented = orientGridSize(gridSize, orientation);
-
-        const bundled = pickBundledImage(orientation);
-        let imageUrl: string = bundled.url;
-        let imageSize = bundled.size;
-        let attribution: GameState['attribution'] = bundled.attribution;
-
-        // Blank puzzle: white image, no photo. Match the puzzle orientation so
-        // a portrait screen gets a portrait blank canvas.
-        if (imageSource === 'blank') {
-            const blankSize = blankSizeForOrientation(orientation);
-            imageUrl = createBlankImageDataUrl(blankSize);
-            imageSize = blankSize;
-            attribution = undefined;
-        }
-
-        // Unsplash access is needed for the random fetch and for the
-        // download trigger on a picked photo — but not for blank or the
-        // deterministic first-run puzzle (bundled defaults set above).
-        const accessKey =
-            imageSource !== 'blank' && imageSource !== 'first-run'
-                ? getUnsplashAccessKey()
-                : null;
-
-        let downloadLocation: string | undefined;
-
-        if (imageSource !== 'blank' && pickedImage) {
-            // The player picked a concrete candidate in the dialog — use it
-            // directly, no second API call.
-            imageUrl = pickedImage.imageUrl;
-            imageSize = pickedImage.imageSize;
-            attribution = pickedImage.attribution;
-            downloadLocation = pickedImage.downloadLocation;
-        } else if (accessKey) {
-            const resolved = await resolveUnsplashImage(accessKey, imageCategory ?? 'any', vibrant, orientation);
-            if (resolved) {
-                imageUrl = resolved.imageUrl;
-                imageSize = resolved.imageSize;
-                attribution = resolved.attribution;
-                downloadLocation = resolved.downloadLocation;
-            }
-        }
-
-        // The traced-tab chunk fetch started before the image request;
-        // collect its outcome now that the image has resolved. Before the
-        // download report below, not after: a start that is about to throw
-        // must not report an Unsplash "download" for a photo it discards.
-        const tracedTabs = resolveTracedTabOutcome({
-            plan: tracedTabPlan,
-            chunkError: tracedTabsPreload ? await tracedTabsPreload : null,
-        });
-        if (tracedTabs.kind === 'fail') throw tracedTabs.error;
-        // Read twice, ~100 lines apart (warn here, flag the analytics event
-        // below), so it gets one spelling. Aliasing the discriminant check
-        // keeps `tracedTabs.error` narrowed at the first use.
-        const chunkDegraded = tracedTabs.kind === 'legacy-classic' && tracedTabs.degraded;
-        if (chunkDegraded) {
-            // Degrading is quiet for the player by design, but not for us:
-            // warn like every other failure channel in this file, and flag
-            // the analytics event below so these games stay separable from
-            // genuine pre-upgrade Classic traffic.
-            diagnostics.warn(
-                'Traced tab chunk failed to load; Classic fell back to the legacy cut:',
-                tracedTabs.error,
-            );
-        }
-
-        // Unsplash guidelines: report a "download" when a photo is actually
-        // used. Fire-and-forget — a failure must never block the game.
-        if (accessKey && downloadLocation) {
-            triggerPhotoDownload(downloadLocation, accessKey).catch(() => {});
-        }
-
-        const rotationMode = rotationModeForNewGame(cutStyle, rotationEnabled);
-
-        const generatorConfigs = generatorConfigsForNewGame({
-            cutStyle,
-            fractalConfig,
-            wavyConfig,
-            tracedTabsOk: tracedTabs.kind === 'ok',
-        });
-
-        // Let the overlay paint before the synchronous piece-generation burst.
-        await yieldForPaint();
-
-        const state = createNewGame(imageUrl, imageSize, viewport, oriented, {
-            cutStyle,
-            composableConfig,
-            ...generatorConfigs,
-            rotationMode,
-            seed,
-        });
-
-        if (attribution) {
-            state.attribution = attribution;
-        }
-
-        session.install(state);
+    },
+    fitView: (state) => {
         gatherAndZoomToFit(state, viewportFitDeps);
         renderer.renderState(state);
-        saveCoordinator.persistNewPuzzle(state);
-
-        const data = buildFreshGameData({
-            state,
-            cutStyle,
-            rotationMode,
-            orientation,
-            oriented,
-            imageSource,
-            imageCategory,
-            vibrant,
-            pickedImage,
-            chunkDegraded,
-            bootFallback,
-        });
+    },
+    persistNewPuzzle: (state) => saveCoordinator.persistNewPuzzle(state),
+    onGameAnalytics: (data) => {
         currentGameAnalytics = data;
-        track('new-game-started', currentGameAnalytics);
-    } finally {
-        hideLoadingOverlay();
-    }
-}
+    },
+};
 
 // Set up the New Game button
 createNewGameButton({
@@ -860,7 +655,7 @@ createNewGameButton({
                     rotationEnabled,
                     // seed omitted — fresh random for every dialog game
                     pickedImage: imageChoice.kind === 'photo' ? imageChoice.photo : undefined,
-                });
+                }, startNewGameDeps);
                 void runWithErrorReport({
                     // The chunk-load path (traced tabs lazy import) is the most
                     // likely source of a rejection here — a network blip or
@@ -1217,7 +1012,7 @@ void (async () => {
                 wavyConfig: preferredWavyConfig,
                 vibrant,
                 rotationEnabled: preferredRotationEnabled,
-            }),
+            }, startNewGameDeps),
             // Everything except the cut is kept: same size, image source,
             // category, vibrancy, rotation. The per-style configs are
             // deliberately dropped — with the style forced to Classic they
@@ -1229,7 +1024,7 @@ void (async () => {
                 imageCategory,
                 vibrant,
                 rotationEnabled: preferredRotationEnabled,
-            }),
+            }, startNewGameDeps),
             // Deliberately not `session.current() !== undefined`: `install`
             // makes the state current before it renders and wires
             // interaction, so a throw inside that window would report "a
