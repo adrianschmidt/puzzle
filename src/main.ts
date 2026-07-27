@@ -3,7 +3,7 @@ import './style.css';
 import { diagnostics } from './diagnostics.js';
 import type { GameState, GridSize } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
-import { setupInteraction, ViewportTransform, RotationFocus } from './interaction/index.js';
+import { ViewportTransform, RotationFocus } from './interaction/index.js';
 import {
     createNewGame,
     processDrop,
@@ -52,7 +52,6 @@ import {
     buildGroupIndexes,
     localToWorld,
 } from './model/helpers.js';
-import { reorderGroupsAfterDrop } from './game/z-order.js';
 import { getUnsplashAccessKey, triggerPhotoDownload } from './images/index.js';
 import {
     loadSizePreference,
@@ -125,6 +124,7 @@ import { createCompletionPresenter } from './app/completion-presenter.js';
 import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
 import { createSaveCoordinator } from './app/save-coordinator.js';
 import { applyMergeResult } from './app/merge-result.js';
+import { createGameSession } from './app/game-session.js';
 import { initPwaUpdates } from './pwa/register.js';
 import {
     wasRescueAttempted,
@@ -183,13 +183,10 @@ if (appVersion) {
  *
  * Populated when a puzzle starts (fresh or shared). Stays null when
  * the user resumes a previous session from localStorage — in that
- * case `puzzle-completed` falls back to deriving fields from
- * gameState alone.
+ * case `puzzle-completed` falls back to deriving fields from the
+ * installed game state alone.
  */
 let currentGameAnalytics: NewGameData | null = null;
-
-let gameState: GameState;
-let cleanupDrag: (() => void) | null = null;
 
 const renderer = new SvgDomRenderer();
 renderer.init(app);
@@ -207,17 +204,19 @@ const completionPresenter = createCompletionPresenter({ container: app, rotation
 // game state, so it is cleared automatically when the user deselects all or
 // starts a new game, and never leaks into share links.
 selectionManager.onChange((selectedIds) => {
+    const state = session.current();
     // Remove highlight from all groups, then re-apply to selected
-    for (const group of gameState?.groups ?? []) {
+    for (const group of state?.groups ?? []) {
         renderer.setGroupSelected(group.id, selectedIds.has(group.id));
     }
-    if (gameState) saveCoordinator.autoSave(gameState);
+    if (state) saveCoordinator.autoSave(state);
 });
 
 // Debug helper: solve the puzzle by placing all pieces in their correct positions.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).__solvePuzzle = () => {
-    if (!gameState) return;
+    const state = session.current();
+    if (!state) return;
 
     const solvedGroup: import('./model/types.js').PieceGroup = {
         id: 0,
@@ -226,23 +225,26 @@ selectionManager.onChange((selectedIds) => {
         rotation: 0,
     };
 
-    for (const piece of gameState.pieces) {
+    for (const piece of state.pieces) {
         solvedGroup.pieces.set(piece.id, {
             x: -piece.imageOffset.x,
             y: -piece.imageOffset.y,
         });
     }
 
-    gameState.groups = [solvedGroup];
-    const solvedIndexes = buildGroupIndexes(gameState.groups);
-    gameState.groupsById = solvedIndexes.groupsById;
-    gameState.pieceToGroup = solvedIndexes.pieceToGroup;
-    gameState.completed = true;
-    renderer.renderState(gameState);
+    state.groups = [solvedGroup];
+    const solvedIndexes = buildGroupIndexes(state.groups);
+    state.groupsById = solvedIndexes.groupsById;
+    state.pieceToGroup = solvedIndexes.pieceToGroup;
+    state.completed = true;
+    renderer.renderState(state);
 
     // Use the same animated zoom as normal completion
-    zoomToFitCompletedPuzzle(gameState, solvedGroup, viewportFitDeps, () => {
-        completionPresenter.show(gameState);
+    zoomToFitCompletedPuzzle(state, solvedGroup, viewportFitDeps, () => {
+        // Read late, as the module global did: the overlay lands ~800ms
+        // later, by which time a new game may have replaced this one.
+        const settled = session.current();
+        if (settled) completionPresenter.show(settled);
     });
 };
 
@@ -447,8 +449,14 @@ const viewportFitDeps: ViewportFitDeps = {
     viewportTransform,
     applyTransform: applyViewportTransform,
     // Late-bound: the completion cleanup can fire up to 800ms after the
-    // triggering call, by which time a new game may have started.
-    renderCurrent: () => renderer.renderState(gameState),
+    // triggering call, by which time a new game may have started — or, if
+    // boot failed, none may be installed at all. Nothing installed means
+    // nothing to re-render, so the settle step is simply skipped; throwing
+    // here would abort the cleanup before the completion overlay is shown.
+    renderCurrent: () => {
+        const state = session.current();
+        if (state) renderer.renderState(state);
+    },
 };
 
 /**
@@ -458,13 +466,48 @@ const viewportFitDeps: ViewportFitDeps = {
  */
 function onViewportChanged(): void {
     applyViewportTransform();
-    saveCoordinator.autoSave(gameState);
+    const state = session.current();
+    if (state) saveCoordinator.autoSave(state);
 }
 
 // Owns debounced progress saves, the new-puzzle geometry+progress write, and
 // flushing before the page can be torn down (installs its own pagehide /
 // visibilitychange listeners as a side effect of construction).
 const saveCoordinator = createSaveCoordinator({ selectionManager, viewportTransform });
+
+// Owns the installed game and the interaction wiring bound to it. Everything
+// above reads it through `session.current()`, which is `GameState |
+// undefined` — boot can fail and install nothing (#488), and the compiler
+// now makes each reader say what it does about that.
+const session = createGameSession({
+    container: app,
+    renderer,
+    viewportTransform,
+    selectionManager,
+    rotationFocus,
+    onInstalled: (state) => {
+        // Any overlay from the previous game goes before this one's can be
+        // shown — `completionPresenter.show` no-ops while one is already up.
+        completionPresenter.remove();
+        updateAttribution(state);
+        updateRotationUiVisibility();
+        if (state.completed) {
+            completionPresenter.show(state);
+        }
+    },
+    save: (state) => saveCoordinator.autoSave(state),
+    applyMerge: (state, result, droppedGroupIds) => {
+        applyMergeResult(state, result, droppedGroupIds, {
+            renderer,
+            selectionManager,
+            rotationFocus,
+            currentGameAnalytics: () => currentGameAnalytics,
+            onCompleted: onPuzzleCompleted,
+        });
+    },
+    onViewportChanged,
+    applyTransform: applyViewportTransform,
+});
 
 // Keep the installed PWA current: detect new versions while open and on
 // reopen, and apply them at a safe moment (focus regain or a manual tap).
@@ -480,9 +523,11 @@ const pwaUpdates = initPwaUpdates(() => saveCoordinator.flush());
 function getFocusedGroupScreenBounds(
     groupId: number,
 ): { left: number; right: number; top: number; bottom: number } | null {
-    const group = gameState?.groupsById.get(groupId);
+    const state = session.current();
+    if (!state) return null;
+    const group = state.groupsById.get(groupId);
     if (!group) return null;
-    const local = getGroupVisualBounds(group, gameState.piecesById);
+    const local = getGroupVisualBounds(group, state.piecesById);
     const worldLeft = group.position.x + local.minX;
     const worldTop = group.position.y + local.minY;
     const worldRight = worldLeft + local.width;
@@ -511,128 +556,14 @@ function onPuzzleCompleted(state: GameState): void {
 }
 
 /**
- * Update the attribution display based on the current game state.
+ * Update the attribution display for the game being installed.
  */
-function updateAttribution(): void {
+function updateAttribution(state: GameState): void {
     removeAttribution(app);
 
-    if (gameState.attribution) {
-        const el = createAttributionElement(gameState.attribution);
+    if (state.attribution) {
+        const el = createAttributionElement(state.attribution);
         app.appendChild(el);
-    }
-}
-
-/**
- * Set up the game with a given state: render it and wire up interaction.
- */
-function initGame(state: GameState): void {
-    completionPresenter.remove();
-    selectionManager.clearAll();
-    rotationFocus.clearFocus();
-
-    if (cleanupDrag) {
-        cleanupDrag();
-        cleanupDrag = null;
-    }
-
-    gameState = state;
-    renderer.renderState(gameState);
-    updateAttribution();
-    updateRotationUiVisibility();
-
-    if (gameState.completed) {
-        completionPresenter.show(gameState);
-    }
-
-    // Keep this last, and keep it unconditional: the boot fallback's
-    // `hasGame` predicate reads `cleanupDrag !== null` as "a puzzle is
-    // rendered and interactive" (see the call site at the bottom of this
-    // file). Moving the assignment earlier, wiring interaction only for
-    // some states, or nulling `cleanupDrag` from anywhere but the teardown
-    // above silently restores #488's dead-and-silent app, and `main.ts` is
-    // not importable under test so nothing would catch it.
-    cleanupDrag = setupInteraction({
-        container: app,
-        renderer,
-        viewportTransform,
-        getState: () => gameState,
-        onStateChanged: () => {
-            renderer.renderState(gameState);
-            // Re-apply selection visuals after re-render (renderState may recreate elements)
-            if (selectionManager.hasSelection) {
-                for (const selectedId of selectionManager.selectedGroupIds) {
-                    renderer.setGroupSelected(selectedId, true);
-                }
-            }
-            saveCoordinator.autoSave(gameState);
-        },
-        onDrop: (groupId: number) => {
-            const { tolerancePx, rotationToleranceDeg } = activeSnapTolerances(gameState);
-
-            // Primary dragged group + any selected groups (multi-select mode).
-            const droppedGroupIds = [...selectionManager.expandToSelectionIfActive(groupId)];
-
-            const result = processDrop(groupId, gameState, tolerancePx, rotationToleranceDeg);
-            if (result) {
-                applyMergeResult(gameState, result, droppedGroupIds, {
-                    renderer,
-                    selectionManager,
-                    rotationFocus,
-                    currentGameAnalytics: () => currentGameAnalytics,
-                    onCompleted: onPuzzleCompleted,
-                });
-                saveCoordinator.autoSave(gameState);
-            } else {
-                // No merge: z-reorder the original dropped groups as-is.
-                reorderGroupsAfterDrop(droppedGroupIds, gameState, (gId) => renderer.bringGroupToFront(gId));
-            }
-        },
-        getSnapTolerances: () => activeSnapTolerances(gameState),
-        onViewportChanged,
-        screenDeltaToWorld: (delta) => viewportTransform.screenDeltaToWorld(delta),
-        panViewport: (screenDelta) => {
-            viewportTransform.pan(screenDelta);
-            applyViewportTransform();
-        },
-        selectionManager,
-        rotationFocus,
-    });
-}
-
-/**
- * Re-apply a multi-select selection persisted from a previous session.
- *
- * Called only on the saved-game restore path, after {@link initGame} has
- * installed the restored `gameState` (and cleared any in-memory selection).
- * Group ids are stable across a reload, so the saved ids map back to the
- * same groups; any id that no longer exists (defensive — shouldn't happen
- * on a pure reload) is dropped. When a non-empty selection is restored the
- * multi-select tool is switched on so the selection is visible and
- * draggable, mirroring the state the user left.
- */
-function restorePersistedSelection(savedSelection: readonly number[]): void {
-    if (savedSelection.length === 0) return;
-
-    const validIds = new Set(gameState.groups.map((g) => g.id));
-    const toSelect = savedSelection.filter((id) => validIds.has(id));
-
-    if (toSelect.length < savedSelection.length) {
-        // The saved selection comes from the same blob as the restored game,
-        // so on a pure reload every id should still exist. A mismatch points
-        // at a genuine inconsistency (id-allocation drift, a save/restore
-        // ordering bug) worth surfacing in dev rather than dropping silently.
-        const dropped = savedSelection.filter((id) => !validIds.has(id));
-        diagnostics.warn(
-            'restorePersistedSelection: dropped saved selection id(s) with no matching group',
-            { dropped, liveGroupCount: validIds.size },
-        );
-    }
-
-    if (toSelect.length === 0) return;
-
-    selectionManager.toolActive = true;
-    for (const id of toSelect) {
-        selectionManager.select(id);
     }
 }
 
@@ -828,10 +759,10 @@ async function startNewGame(
             state.attribution = attribution;
         }
 
-        initGame(state);
-        gatherAndZoomToFit(gameState, viewportFitDeps);
-        renderer.renderState(gameState);
-        saveCoordinator.persistNewPuzzle(gameState);
+        session.install(state);
+        gatherAndZoomToFit(state, viewportFitDeps);
+        renderer.renderState(state);
+        saveCoordinator.persistNewPuzzle(state);
 
         const data = buildFreshGameData({
             state,
@@ -857,7 +788,7 @@ async function startNewGame(
 createNewGameButton({
     container: app,
     // Guarded like the other interaction entry points that read the
-    // global: these three run synchronously on click, so an unguarded read
+    // session: these three run synchronously on click, so an unguarded read
     // threw and swallowed the click whenever boot left no game behind —
     // making the New Game dialog, the one place a player can pick a
     // smaller grid or a blank image and escape a failure rooted in their
@@ -865,9 +796,9 @@ createNewGameButton({
     // replays the same inputs. Zero counts read as "no progress to lose",
     // so the dialog opens without a confirm, which is correct with nothing
     // on screen.
-    isCompleted: () => gameState?.completed ?? false,
-    getGroupCount: () => gameState?.groups.length ?? 0,
-    getPieceCount: () => gameState?.pieces.length ?? 0,
+    isCompleted: () => session.current()?.completed ?? false,
+    getGroupCount: () => session.current()?.groups.length ?? 0,
+    getPieceCount: () => session.current()?.pieces.length ?? 0,
     onNewGame: () => {
         const preferredSizeId = loadSizePreference();
         const preferredCutStyleId = loadCutStylePreference();
@@ -969,13 +900,14 @@ createGatherPiecesButton({
     container: app,
     onGatherPieces: () => {
         // The last sibling of the New Game read above: all three of these
-        // touch the global synchronously, so the click threw whenever boot
+        // touch the session synchronously, so the click threw whenever boot
         // left no game behind. There is nothing to gather in that state,
         // so doing nothing is the whole correct behavior.
-        if (!gameState) return;
-        gatherAndZoomToFit(gameState, viewportFitDeps);
-        renderer.renderState(gameState);
-        saveCoordinator.autoSave(gameState);
+        const state = session.current();
+        if (!state) return;
+        gatherAndZoomToFit(state, viewportFitDeps);
+        renderer.renderState(state);
+        saveCoordinator.autoSave(state);
     },
 });
 
@@ -998,47 +930,49 @@ createDeselectButton({
 });
 
 // Set up the rotate buttons (bottom-left, fractal-only).
-// Visibility is updated whenever initGame() runs.
+// Visibility is updated whenever a game is installed.
 const rotateButtons = createRotateButtons({
     container: app,
     rotationFocus,
     onRotate: (groupId, direction) => {
-        if (!gameState) return;
-        const group = gameState.groupsById.get(groupId);
+        const state = session.current();
+        if (!state) return;
+        const group = state.groupsById.get(groupId);
         if (!group) return;
 
         const deltaDeg = direction === 'cw' ? 90 : -90;
-        rotateGroup(group, gameState.piecesById, deltaDeg);
+        rotateGroup(group, state.piecesById, deltaDeg);
 
-        renderer.renderState(gameState);
+        renderer.renderState(state);
         // Re-apply selection visuals after re-render (rotation re-renders the group).
         for (const selectedId of selectionManager.selectedGroupIds) {
             renderer.setGroupSelected(selectedId, true);
         }
-        saveCoordinator.autoSave(gameState);
+        saveCoordinator.autoSave(state);
     },
     getFocusedGroupScreenBounds,
 });
 
 const snapPosition = new SnapProximityPositionController({
-    getState: () => gameState,
-    getTolerances: () => activeSnapTolerances(gameState),
+    getState: () => session.current(),
+    getTolerances: activeSnapTolerances,
 });
 
 const rotateHandle = createRotateHandle({
     container: app,
     rotationFocus,
     onRotateStart: (groupId) => {
-        if (!gameState) return;
+        if (!session.current()) return;
         snapPosition.start(groupId);
     },
     onRotate: (groupId, deltaDegrees) => {
-        if (!gameState) return;
-        const group = gameState.groupsById.get(groupId);
+        const state = session.current();
+        if (!state) return;
+        const group = state.groupsById.get(groupId);
         if (!group) return;
-        rotateGroup(group, gameState.piecesById, deltaDegrees);
+        rotateGroup(group, state.piecesById, deltaDegrees);
         snapPosition.onGroupRotated();
-        renderer.renderState(gameState);
+        renderer.renderState(state);
         // Re-apply selection visuals after re-render.
         for (const selectedId of selectionManager.selectedGroupIds) {
             renderer.setGroupSelected(selectedId, true);
@@ -1046,13 +980,14 @@ const rotateHandle = createRotateHandle({
         // Don't autoSave on every drag tick — autoSave fires on commit.
     },
     onCommit: (groupId) => {
-        if (!gameState) return;
+        const state = session.current();
+        if (!state) return;
 
-        const { tolerancePx, rotationToleranceDeg } = activeSnapTolerances(gameState);
+        const { tolerancePx, rotationToleranceDeg } = activeSnapTolerances(state);
 
-        const result = processDrop(groupId, gameState, tolerancePx, rotationToleranceDeg);
+        const result = processDrop(groupId, state, tolerancePx, rotationToleranceDeg);
         if (result) {
-            applyMergeResult(gameState, result, [result.group.id], {
+            applyMergeResult(state, result, [result.group.id], {
                 renderer,
                 selectionManager,
                 rotationFocus,
@@ -1060,22 +995,23 @@ const rotateHandle = createRotateHandle({
                 onCompleted: onPuzzleCompleted,
             });
         }
-        saveCoordinator.autoSave(gameState);
+        saveCoordinator.autoSave(state);
     },
     onRotateEnd: () => {
         snapPosition.stop();
     },
     getFocusedGroupScreenBounds,
-    getGroupRotation: (groupId) => gameState?.groupsById.get(groupId)?.rotation ?? null,
+    getGroupRotation: (groupId) => session.current()?.groupsById.get(groupId)?.rotation ?? null,
     getGroupPivotWorld: (groupId) => {
-        const group = gameState?.groupsById.get(groupId);
-        if (!group || !gameState) return null;
+        const state = session.current();
+        const group = state?.groupsById.get(groupId);
+        if (!group || !state) return null;
         // Interactive rotation pivots about the tab-inclusive bounds center so
         // the handle tracks the visible footprint of a mid-assembly group with
         // exposed tabs/blanks. (The completion spin instead pivots about the
         // corner-only image center via getGroupImageCenter — a deliberately
         // different point, since a solved puzzle has a flat border.)
-        const bounds = getGroupLocalBounds(group, gameState.piecesById);
+        const bounds = getGroupLocalBounds(group, state.piecesById);
         const centerLocal = {
             x: bounds.minX + bounds.width / 2,
             y: bounds.minY + bounds.height / 2,
@@ -1086,10 +1022,11 @@ const rotateHandle = createRotateHandle({
 });
 
 function updateRotationUiVisibility(): void {
-    if (gameState?.rotationMode === 'quarter-turn') {
+    const state = session.current();
+    if (state?.rotationMode === 'quarter-turn') {
         rotateButtons.show();
         rotateHandle.hide();
-    } else if (gameState?.rotationMode === 'free') {
+    } else if (state?.rotationMode === 'free') {
         rotateButtons.hide();
         rotateHandle.show();
     } else {
@@ -1134,8 +1071,8 @@ createInfoButton({
     onShowInfo: () => {
         createInfoModal({
             container: app,
-            getState: () => gameState,
-            state: gameState,
+            getState: () => session.current(),
+            state: session.current(),
             onSolve: () => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (window as any).__solvePuzzle?.();
@@ -1196,10 +1133,10 @@ async function loadSharedPuzzle(
             }
         }
 
-        initGame(state);
-        gatherAndZoomToFit(gameState, viewportFitDeps);
-        renderer.renderState(gameState);
-        saveCoordinator.persistNewPuzzle(gameState);
+        session.install(state);
+        gatherAndZoomToFit(state, viewportFitDeps);
+        renderer.renderState(state);
+        saveCoordinator.persistNewPuzzle(state);
 
         // Offer the sharer's background color to a recipient who has
         // never picked one. Adoption persists it as their preference and
@@ -1368,8 +1305,8 @@ void (async () => {
 
         const saved = loadSavedGame();
         if (saved.status === 'ok') {
-            initGame(saved.state);
-            restorePersistedSelection(saved.selection);
+            session.install(saved.state);
+            session.restoreSelection(saved.selection);
             if (saved.viewport) {
                 // Restore the zoom/pan the player last had (#420). Absent on
                 // pre-feature saves — those keep the default view, as before.
@@ -1450,17 +1387,18 @@ void (async () => {
                 vibrant,
                 rotationEnabled: preferredRotationEnabled,
             }),
-            // Deliberately not `gameState !== undefined`: `initGame`
-            // assigns the global before it renders and wires interaction,
-            // so a throw inside that window would report "a puzzle reached
-            // the screen" over a blank or undraggable canvas — the fallback
-            // skipped and no toast shown, which is the #488 symptom again.
-            // `cleanupDrag` is assigned by `initGame`'s last statement and
-            // is null until the first game completes it, so it means
-            // exactly what this predicate has to mean. (A throw in that
-            // window makes the fallback re-run `initGame` and most likely
-            // fail the same way — but then the player gets told.)
-            hasGame: () => cleanupDrag !== null,
+            // Deliberately not `session.current() !== undefined`: `install`
+            // makes the state current before it renders and wires
+            // interaction, so a throw inside that window would report "a
+            // puzzle reached the screen" over a blank or undraggable canvas
+            // — the fallback skipped and no toast shown, which is the #488
+            // symptom again. `hasGame()` is false until the interaction
+            // teardown handle is assigned, which is `install`'s last
+            // statement, so it means exactly what this predicate has to
+            // mean. (A throw in that window makes the fallback re-run
+            // `install` and most likely fail the same way — but then the
+            // player gets told.)
+            hasGame: () => session.hasGame(),
         });
     } finally {
         if (!rescueReloadPending) hideLoadingOverlay();

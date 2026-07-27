@@ -23,9 +23,15 @@ import {
 import { computeSnapProximityPosition } from '../game/snap-proximity-position.js';
 
 export interface SnapProximityPositionOptions {
-    getState: () => GameState;
-    /** Active snap tolerances; read once per gesture, at start(). */
-    getTolerances: () => SnapTolerances;
+    /**
+     * The installed game, or `undefined` when there is none. Boot can fail
+     * and leave nothing installed (#488); with no game there is no gesture
+     * to track, so the controller stays inert rather than making its caller
+     * prove otherwise.
+     */
+    getState: () => GameState | undefined;
+    /** Active snap tolerances for `state`; read once per gesture, at start(). */
+    getTolerances: (state: GameState) => SnapTolerances;
     /** Injectable frame scheduler for tests. Defaults to requestAnimationFrame. */
     scheduleFrame?: (cb: () => void) => void;
 }
@@ -33,7 +39,7 @@ export interface SnapProximityPositionOptions {
 export class SnapProximityPositionController {
     private ctx: ProximityContext | null = null;
     private gated = false;
-    private readonly getState: () => GameState;
+    private readonly getState: SnapProximityPositionOptions['getState'];
     private readonly getTolerances: SnapProximityPositionOptions['getTolerances'];
     private readonly scheduleFrame: (cb: () => void) => void;
 
@@ -50,19 +56,20 @@ export class SnapProximityPositionController {
      * mates.
      */
     start(groupId: number): void {
-        this.ctx = buildProximityContext(
-            this.getState(), groupId, this.getTolerances(),
-        );
+        const state = this.getState();
+        this.ctx = state
+            ? buildProximityContext(state, groupId, this.getTolerances(state))
+            : null;
         this.gated = false;
     }
 
     /** Evaluate after the group rotated; at most once per frame. */
     onGroupRotated(): void {
-        if (!this.ctx || this.gated) return;
+        const state = this.getState();
+        if (!state || !this.ctx || this.gated) return;
         this.gated = true;
         this.scheduleFrame(() => { this.gated = false; });
 
-        const state = this.getState();
         const delta = computeSnapProximityPosition(state, this.ctx);
         if (delta === null) return;
 
