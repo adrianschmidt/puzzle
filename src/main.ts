@@ -117,14 +117,15 @@ import { applyProgress } from './game/reconstruct-groups.js';
 import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
 import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
-import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
+import type { NewGameData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { startWithBootFallback } from './app/start-with-boot-fallback.js';
 import { generatorConfigsForNewGame } from './app/generator-configs.js';
 import { planTracedTabs, resolveTracedTabOutcome } from './app/traced-tab-plan.js';
 import { needsTracedTabChunk, shareInitOptions } from './app/share-payload-to-init.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
-import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
+import { buildPuzzleCompletedData } from './app/completed-payload.js';
+import { buildFreshGameData, buildSharedGameData } from './app/new-game-payload.js';
 import { traceSetVersionOf } from './app/trace-set-version.js';
 import { pickBundledImage } from './app/bundled-image.js';
 import { fetchCandidateImages } from './app/fetch-candidate-images.js';
@@ -220,38 +221,6 @@ function removeCompletionOverlay(): void {
  * gameState alone.
  */
 let currentGameAnalytics: NewGameData | null = null;
-
-/**
- * Build the analytics payload for a puzzle completion.
- *
- * Always derives geometry/style fields from gameState (so resumed
- * games still get a useful event), then merges in any cached
- * NewGameData fields the user wouldn't be able to recover otherwise
- * (source, imageCategory, vibrant, etc.).
- */
-function buildPuzzleCompletedData(state: GameState): PuzzleCompletedData {
-    const derived: PuzzleCompletedData = {
-        cutStyle: state.cutStyle ?? 'classic',
-        rotationMode: state.rotationMode ?? 'none',
-        cols: state.gridSize.cols,
-        rows: state.gridSize.rows,
-        pieceCount: state.pieces.length,
-        imageSource: classifyImageSource(state.imageUrl),
-    };
-
-    // For Classic this also separates sine-generated puzzles from legacy ones
-    // on the completion event — the metric that says whether the new cut works.
-    const traceSetVersion = traceSetVersionOf(state);
-    if (traceSetVersion !== undefined) {
-        derived.traceSetVersion = traceSetVersion;
-    }
-
-    if (currentGameAnalytics) {
-        return { ...derived, ...currentGameAnalytics };
-    }
-
-    return derived;
-}
 
 let gameState: GameState;
 let cleanupDrag: (() => void) | null = null;
@@ -847,7 +816,7 @@ function applyMergeResult(
     reorderGroupsAfterDrop(unique, gameState, (gId) => renderer.bringGroupToFront(gId));
 
     if (checkAndMarkWin(gameState)) {
-        track('puzzle-completed', buildPuzzleCompletedData(gameState));
+        track('puzzle-completed', buildPuzzleCompletedData(gameState, currentGameAnalytics));
         if (gameState.groups.length === 1) {
             zoomToFitCompletedPuzzle(gameState.groups[0], () => {
                 showCompletionOverlay();
@@ -1176,48 +1145,19 @@ async function startNewGame(
         renderer.renderState(gameState);
         persistNewPuzzle();
 
-        const data: NewGameData = {
-            source: 'fresh',
+        const data = buildFreshGameData({
+            state,
             cutStyle,
             rotationMode,
             orientation,
-            cols: oriented.cols,
-            rows: oriented.rows,
-            pieceCount: state.pieces.length,
-            // resolveNewGameImageSource honors the 'first-run' sentinel, which
-            // classifyImageSource can't distinguish from a fallback-after-
-            // failed-fetch (both reuse the bundled URL).
-            imageSource: resolveNewGameImageSource(imageSource, state.imageUrl),
-        };
-        // Same reader as the shared-link path, so the derivation has one
-        // spelling in this file. `createNewGame` stored whichever of the three
-        // generator configs above matches `cutStyle`, so reading it back off
-        // the state returns exactly what those configs stamped — including the
-        // degraded Classic case, where `generatorClassicConfig` was withheld
-        // and the state therefore carries no `classicConfig` either.
-        const traceSetVersion = traceSetVersionOf(state);
-        if (traceSetVersion !== undefined) {
-            data.traceSetVersion = traceSetVersion;
-        }
-        // Only Classic reaches here with a chunk error — every other style
-        // threw above. Without this flag a degraded game is
-        // indistinguishable from genuine pre-upgrade Classic traffic (both
-        // are `classic` with no `traceSetVersion`), which is the metric that
-        // decides when the legacy generator can be retired.
-        if (chunkDegraded) {
-            data.tracedChunkDegraded = true;
-        }
-        // Same bucket, different cause: the boot fallback never fetched the
-        // chunk, so it has no failure to record — but its game is legacy
-        // geometry too and has to be excludable from that same query.
-        if (bootFallback) {
-            data.bootFallback = true;
-        }
-        if (data.imageSource === 'unsplash') {
-            data.imageCategory = imageCategory ?? 'any';
-            data.vibrant = vibrant;
-            data.imagePicked = pickedImage !== undefined;
-        }
+            oriented,
+            imageSource,
+            imageCategory,
+            vibrant,
+            pickedImage,
+            chunkDegraded,
+            bootFallback,
+        });
         currentGameAnalytics = data;
         track('new-game-started', currentGameAnalytics);
     } finally {
@@ -1583,34 +1523,12 @@ async function loadSharedPuzzle(
             sharedColor = outcome;
         }
 
-        const data: NewGameData = {
-            source: 'shared',
-            cutStyle: state.cutStyle ?? 'classic',
-            rotationMode: state.rotationMode ?? 'none',
-            // The link stores the post-transpose grid, so orientation is the
-            // taller-than-wide test on it (square grids read as landscape,
-            // matching orientGridSize's normalization).
-            orientation:
-                state.gridSize.rows > state.gridSize.cols ? 'portrait' : 'landscape',
-            cols: state.gridSize.cols,
-            rows: state.gridSize.rows,
-            pieceCount: state.pieces.length,
-            imageSource: classifyImageSource(state.imageUrl),
+        const data = buildSharedGameData({
+            state,
             includesProgress: payload.pr !== undefined,
             recipientHadSavedState,
             sharedColor,
-        };
-        // Read off the generated state rather than off the payload: the link's
-        // config blocks have already been through `createNewGame`, which keeps
-        // only the one matching the selected cut style, so the crafted-link
-        // guard is structural instead of restated per style. Present for a
-        // traced-tab Wavy link, a Triangles link, or a sine-based Classic
-        // link; a legacy (classic-tab) Wavy link — or a pre-upgrade Classic
-        // link — carries no version, matching the fresh path.
-        const traceSetVersion = traceSetVersionOf(state);
-        if (traceSetVersion !== undefined) {
-            data.traceSetVersion = traceSetVersion;
-        }
+        });
         currentGameAnalytics = data;
         track('new-game-started', currentGameAnalytics);
     } finally {
