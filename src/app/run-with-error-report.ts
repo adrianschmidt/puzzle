@@ -1,7 +1,9 @@
 /**
  * Run an async application operation and, if it rejects, report the failure
- * uniformly: a dev diagnostic, a typed Umami event, and a user-facing toast —
- * then resolve to a caller-supplied fallback instead of propagating.
+ * uniformly: a console diagnostic (DEV-gated by default, see
+ * `logInProduction`), a typed Umami event, and — for the callers that ask
+ * for one, see `toastMessage` — a user-facing toast; then resolve to a
+ * caller-supplied fallback instead of propagating.
  *
  * Used by the entry-point flows whose failures were previously caught and
  * swallowed without analytics (shared-link load, new-game start). Extracted

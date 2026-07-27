@@ -71,7 +71,12 @@ export interface NewGameData {
      *
      * So the query on `new-game-started` is: `cutStyle: 'classic'`, no
      * `traceSetVersion`, neither `tracedChunkDegraded` nor `bootFallback` —
-     * then split on `source`.
+     * then split on `source`. None of the three exclusions is a negated
+     * filter; all are subtractions. For the two flags that is the absence
+     * reason each flag's own doc spells out; `traceSetVersion` is likewise
+     * omitted rather than null on `new-game-started`, so
+     * `traceSetVersion != <n>` joins on the key and matches only rows that
+     * have one.
      * Both halves count the same one thing: a Classic game that rendered
      * legacy geometry. `'fresh'` is the stale-build population and falls to
      * zero as the fleet turns over. `'shared'` is the link tail, and it is
@@ -122,13 +127,33 @@ export interface NewGameData {
      * Never set on the dialog path: there a rejection leaves the previous
      * puzzle on screen and the player retries, so there is nothing to
      * substitute. The matching `new-game-failed { phase: 'boot' }` carries
-     * why the preferred start failed; this flag counts the recoveries that
-     * worked.
+     * why the preferred start failed. That event has three possible
+     * outcomes, not one: recovery succeeded (this flag follows), recovery
+     * was attempted and also failed (a second `new-game-failed
+     * { phase: 'boot-fallback' }` follows), or recovery was skipped because
+     * a puzzle had already reached the screen before the failure (nothing
+     * follows at all — see `phase`'s doc).
+     *
+     * Nor is the flag a clean stand-in for outcome 1 even when recovery
+     * did work: it rides on `new-game-started`, which the fallback tracks
+     * last, after its puzzle has rendered and persisted. A fallback that
+     * throws in that tail emits the `phase: 'boot-fallback'` event with no
+     * flag behind it, yet leaves the player a playable puzzle — the same
+     * rare case `phase`'s doc bounds from the other side. So flag-absence
+     * does not imply recovery failed. Don't treat this flag's count as the
+     * numerator over `new-game-failed[phase='boot']`'s count for a recovery
+     * rate: the skipped-recovery outcome and that tail both deflate it.
      *
      * Like `tracedChunkDegraded`, these games ran legacy geometry with no
-     * `traceSetVersion`, so they must be excluded from the pre-upgrade-tail
-     * query described above. Unlike it, the cause need not be the chunk at
-     * all — a saved config the build cannot generate lands here too.
+     * `traceSetVersion`, so they have to come out of the pre-upgrade-tail
+     * query described above — by subtracting this flag's own count, not by
+     * negating a filter: the flag is absent rather than `false` when it
+     * doesn't apply, so `bootFallback = true` is the only filter that
+     * expresses it. The two flags never co-occur (a boot fallback never
+     * starts the chunk fetch, so it cannot also be degraded), so
+     * subtracting both double-counts nothing. Unlike `tracedChunkDegraded`,
+     * the cause need not be the chunk at all — a saved config the build
+     * cannot generate lands here too.
      *
      * Also like `tracedChunkDegraded`, it isn't persisted onto the saved
      * puzzle, so the same `puzzle-completed`-after-reload caveat documented
@@ -339,13 +364,29 @@ export interface ImageFetchFailedData {
 }
 
 /**
- * Data attached to `new-game-failed` — starting a fresh puzzle rejected and
- * the user saw a "Couldn't start new game" toast. The most likely cause (the
- * traced-tab lazy chunk import) ALSO emits `traced-chunk-load-failed` one
- * layer down, so a single failure can produce both events; there is no
- * guaranteed 1-to-1 correlation (topology and other errors reach this catch
- * without a chunk event). This event captures the user-facing outcome that
- * the inner event does not. `reason` is the sanitized error message.
+ * Data attached to `new-game-failed` — starting a fresh puzzle rejected. The
+ * most likely cause (the traced-tab lazy chunk import) ALSO emits
+ * `traced-chunk-load-failed` one layer down, so a single failure can produce
+ * both events; there is no guaranteed 1-to-1 correlation (topology and other
+ * errors reach this catch without a chunk event). This event captures the
+ * outcome that the inner event does not. `reason` is the sanitized error
+ * message.
+ *
+ * What the player saw depends on `phase`, and only the dialog path shows the
+ * "Couldn't start new game" toast this event used to be synonymous with. A
+ * `phase: 'boot'` event shows nothing at all — the boot path stays quiet
+ * until its recovery attempt has settled — and its most common visible
+ * outcome is a substitution notice over a working puzzle. So a pre-existing
+ * `count(new-game-failed)` dashboard stopped counting user-facing new-game
+ * failures when #488 landed: it now also counts boot failures that mostly
+ * ended in a playable puzzle.
+ *
+ * Recovering the old metric — or any dialog-path-only figure — is
+ * arithmetic, not a filter. Same absence problem {@link SharedLoadFailedData}'s
+ * `source` has, for the same reason: event properties are key/value rows, so
+ * `phase != 'boot'` still joins on the key and matches only rows that HAVE a
+ * `phase`. Dialog-path failures are total `new-game-failed` minus
+ * `phase = 'boot'` minus `phase = 'boot-fallback'`.
  */
 export interface NewGameFailedData {
     reason: string;
@@ -357,8 +398,21 @@ export interface NewGameFailedData {
      *
      * `'boot'` is the boot path's preferred start, the failure that used
      * to leave a dead app (#488); `'boot-fallback'` is the last-resort
-     * Classic puzzle that recovers from it failing too. A single boot can
-     * emit both, in that order — they are one incident, not two.
+     * Classic puzzle that recovers from it failing too. A `phase: 'boot'`
+     * event has three possible follow-ups, not a guaranteed one: a
+     * `bootFallback` game (recovery succeeded, see its doc above), a
+     * `phase: 'boot-fallback'` event (recovery attempted and also failed —
+     * that pair is one incident, not two), or nothing at all (recovery
+     * skipped because a puzzle had already reached the screen before the
+     * failure). Reading "no boot-fallback event" as "it recovered" collapses
+     * the last two cases, which are opposites.
+     *
+     * Nor is a `'boot-fallback'` event quite "the player was left with
+     * nothing": the fallback runs the same setup the preferred start does,
+     * so it can reject *after* its puzzle rendered, and that player keeps
+     * the puzzle and reads the substitution notice. Rare, but it makes this
+     * event an upper bound on the dead-app population rather than a
+     * measurement of it.
      */
     phase?: 'boot' | 'boot-fallback';
 }
