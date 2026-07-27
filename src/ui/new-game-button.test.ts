@@ -22,6 +22,13 @@ describe('shouldConfirmNewGame', () => {
         expect(shouldConfirmNewGame(false, 48, 48)).toBe(false);
     });
 
+    it('should not confirm when there is no game at all (zero counts)', () => {
+        // main.ts reports 0/0 when boot left no `gameState`. The #488 guard
+        // depends on `0 < 0` being false, so the dialog opens straight away
+        // with nothing on screen to lose.
+        expect(shouldConfirmNewGame(false, 0, 0)).toBe(false);
+    });
+
     it('should confirm when some pieces have been merged', () => {
         // 47 groups, 48 pieces — at least one merge happened
         expect(shouldConfirmNewGame(false, 47, 48)).toBe(true);
