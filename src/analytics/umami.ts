@@ -314,6 +314,18 @@ export interface ImageFetchFailedData {
  */
 export interface NewGameFailedData {
     reason: string;
+    /**
+     * Which start attempt failed. Absent on the new-game dialog path,
+     * where a rejection leaves the previous puzzle on screen and the
+     * player can simply retry — so absence is also every event recorded
+     * before this field existed.
+     *
+     * `'boot'` is the boot path's preferred start, the failure that used
+     * to leave a dead app (#488); `'boot-fallback'` is the last-resort
+     * Classic puzzle that recovers from it failing too. A single boot can
+     * emit both, in that order — they are one incident, not two.
+     */
+    phase?: 'boot' | 'boot-fallback';
 }
 
 /**
