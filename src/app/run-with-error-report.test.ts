@@ -124,6 +124,7 @@ describe('runWithErrorReport', () => {
             },
             warnMessage: 'Failed to start new game:',
             event: 'new-game-failed',
+            cutStyle: 'wavy',
             toastMessage: "Couldn't start new game",
             fallback: undefined,
         });
@@ -131,7 +132,10 @@ describe('runWithErrorReport', () => {
         // Strict, not `toHaveBeenCalledWith`: that matcher treats an
         // explicit `phase: undefined` as equal to an absent `phase`, so it
         // would pass even if the implementation always assigned the key.
-        expect(umamiTrack.mock.calls[0]).toStrictEqual(['new-game-failed', { reason: 'chunk load failed' }]);
+        expect(umamiTrack.mock.calls[0]).toStrictEqual([
+            'new-game-failed',
+            { reason: 'chunk load failed', cutStyle: 'wavy' },
+        ]);
     });
 
     it('skips the toast when no toastMessage is given', async () => {
@@ -141,11 +145,15 @@ describe('runWithErrorReport', () => {
             },
             warnMessage: 'Failed to start new game:',
             event: 'new-game-failed',
+            cutStyle: 'classic',
             fallback: undefined,
         });
 
         // See the strictness note above: `phase` must be absent, not undefined.
-        expect(umamiTrack.mock.calls[0]).toStrictEqual(['new-game-failed', { reason: 'boom' }]);
+        expect(umamiTrack.mock.calls[0]).toStrictEqual([
+            'new-game-failed',
+            { reason: 'boom', cutStyle: 'classic' },
+        ]);
         expect(showToast).not.toHaveBeenCalled();
     });
 
@@ -156,6 +164,7 @@ describe('runWithErrorReport', () => {
             },
             warnMessage: 'Boot fallback puzzle also failed to start:',
             event: 'new-game-failed',
+            cutStyle: 'classic',
             phase: 'boot-fallback',
             toastMessage: "Couldn't start a puzzle",
             fallback: undefined,
@@ -163,6 +172,7 @@ describe('runWithErrorReport', () => {
 
         expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', {
             reason: 'boom',
+            cutStyle: 'classic',
             phase: 'boot-fallback',
         });
     });
