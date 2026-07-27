@@ -107,7 +107,6 @@ import {
 } from './game/image-categories.js';
 import {
     parseLocationHash,
-    shareCfToComposableConfig,
     type SharePayload,
     encodePayload,
     decodePayload,
@@ -123,6 +122,7 @@ import { runWithErrorReport } from './app/run-with-error-report.js';
 import { startWithBootFallback } from './app/start-with-boot-fallback.js';
 import { generatorConfigsForNewGame } from './app/generator-configs.js';
 import { planTracedTabs, resolveTracedTabOutcome } from './app/traced-tab-plan.js';
+import { needsTracedTabChunk, shareInitOptions } from './app/share-payload-to-init.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
 import { traceSetVersionOf } from './app/trace-set-version.js';
@@ -1519,16 +1519,7 @@ async function loadSharedPuzzle(
         // A share link with `cf.tg: "traced"` needs the lazy chunk before
         // generation runs. The await is short on warm caches and fits
         // inside the loading overlay the user already sees.
-        if (payload.cf?.tg === 'traced'
-            || (payload.c === 'wavy' && payload.wf?.tv !== undefined)
-            || payload.c === 'triangles'
-            // Narrower than the `payload.clf ?` truthiness check the config
-            // reconstruction below uses, deliberately: the two agree on every
-            // decoded payload (`decodePayload` deletes a `clf` whose `tv`
-            // doesn't clamp), but checking `tv` here also spares a crafted
-            // link with a falsy `clf` (null / 0 / "") a chunk fetch it will
-            // never use.
-            || (payload.c === 'classic' && payload.clf?.tv !== undefined)) {
+        if (needsTracedTabChunk(payload)) {
             await preloadTracedTabGenerator();
         }
 
@@ -1548,24 +1539,13 @@ async function loadSharedPuzzle(
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
 
-        const state = createNewGame(imageUrl, imageSize, viewport, { cols: payload.g[0], rows: payload.g[1] }, {
-            cutStyle: payload.c,
-            seed: payload.s,
-            rotationMode: payload.r,
-            fractalConfig: payload.ff ? { borderless: payload.ff.bl } : undefined,
-            wavyConfig: payload.wf
-                ? { borderless: payload.wf.bl, traceSetVersion: payload.wf.tv }
-                : undefined,
-            trianglesConfig: payload.tf
-                ? { traceSetVersion: payload.tf.tv }
-                : undefined,
-            classicConfig: payload.clf
-                ? { traceSetVersion: payload.clf.tv }
-                : undefined,
-            composableConfig: payload.cf
-                ? shareCfToComposableConfig(payload.cf)
-                : undefined,
-        });
+        const state = createNewGame(
+            imageUrl,
+            imageSize,
+            viewport,
+            { cols: payload.g[0], rows: payload.g[1] },
+            shareInitOptions(payload),
+        );
 
         if (payload.a) {
             state.attribution = {
