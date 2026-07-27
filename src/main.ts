@@ -7,10 +7,8 @@ import { setupInteraction, ViewportTransform, RotationFocus } from './interactio
 import {
     createNewGame,
     processDrop,
-    checkAndMarkWin,
     getGroupLocalBounds,
     getGroupVisualBounds,
-    type MergeResult,
 } from './game/index.js';
 import { loadState, loadSavedGame, clearSavedState } from './persistence/index.js';
 import {
@@ -112,7 +110,6 @@ import { generatorConfigsForNewGame } from './app/generator-configs.js';
 import { planTracedTabs, resolveTracedTabOutcome } from './app/traced-tab-plan.js';
 import { needsTracedTabChunk, shareInitOptions } from './app/share-payload-to-init.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
-import { buildPuzzleCompletedData } from './app/completed-payload.js';
 import { buildFreshGameData, buildSharedGameData } from './app/new-game-payload.js';
 import { pickBundledImage } from './app/bundled-image.js';
 import { fetchCandidateImages } from './app/fetch-candidate-images.js';
@@ -127,6 +124,7 @@ import { createBlankImageDataUrl } from './app/blank-canvas.js';
 import { createCompletionPresenter } from './app/completion-presenter.js';
 import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
 import { createSaveCoordinator } from './app/save-coordinator.js';
+import { applyMergeResult } from './app/merge-result.js';
 import { initPwaUpdates } from './pwa/register.js';
 import {
     wasRescueAttempted,
@@ -495,62 +493,20 @@ function getFocusedGroupScreenBounds(
 }
 
 /**
- * Post-commit handling shared by piece-drag drops and rotate-handle commits.
- * Both flows produce a `MergeResult`, then need the same selection prune,
- * re-render, z-reorder, and win-detection sequence.
+ * Frame and celebrate a just-completed puzzle: zoom to fit the single
+ * surviving group, then show the completion overlay once the zoom settles.
  *
- * `droppedGroupIds` is the caller-supplied list of groups whose z-order
- * should be refreshed; absorbed IDs are remapped to the surviving merged
- * group. Drag flows pass the multi-select expansion; rotate-handle
- * commits pass just the result group.
+ * Passed to `applyMergeResult` as `onCompleted`, which owns detecting the
+ * win but not the viewport — that stays here.
  */
-function applyMergeResult(
-    result: MergeResult,
-    droppedGroupIds: readonly number[],
-): void {
-    // Prune absorbed groups from selection. The surviving merged group
-    // inherits selection if any absorbed group was selected.
-    const validIds = new Set(gameState.groups.map(g => g.id));
-    const hadSelectedAbsorbed = [...selectionManager.selectedGroupIds]
-        .some(id => !validIds.has(id));
-    selectionManager.pruneStale(validIds);
-    if (hadSelectedAbsorbed) {
-        selectionManager.select(result.group.id);
-    }
-
-    // If the rotate-handle's anchor group was absorbed (free-rotation
-    // commit-merge), retarget focus to the survivor — otherwise the
-    // handle stays anchored to a now-deleted group until the idle timer
-    // expires, and the next pointerdown silently no-ops.
-    const focused = rotationFocus.focusedGroupId;
-    if (focused !== null && !validIds.has(focused)) {
-        rotationFocus.setFocus(result.group.id);
-    }
-
-    renderer.renderState(gameState);
-    renderer.flashMergePulse(result.group.id);
-    for (const selectedId of selectionManager.selectedGroupIds) {
-        renderer.setGroupSelected(selectedId, true);
-    }
-
-    // Remap absorbed IDs from the caller-supplied list to the surviving
-    // merged group so every entry still names a real group.
-    const remapped = droppedGroupIds.map(id =>
-        gameState.groups.some(g => g.id === id) ? id : result.group.id,
-    );
-    const unique = [...new Set(remapped)];
-    reorderGroupsAfterDrop(unique, gameState, (gId) => renderer.bringGroupToFront(gId));
-
-    if (checkAndMarkWin(gameState)) {
-        track('puzzle-completed', buildPuzzleCompletedData(gameState, currentGameAnalytics));
-        if (gameState.groups.length === 1) {
-            zoomToFitCompletedPuzzle(gameState, gameState.groups[0], viewportFitDeps, () => {
-                completionPresenter.show(gameState);
-            });
-        } else {
-            // Fallback: shouldn't happen if the puzzle just completed.
-            completionPresenter.show(gameState);
-        }
+function onPuzzleCompleted(state: GameState): void {
+    if (state.groups.length === 1) {
+        zoomToFitCompletedPuzzle(state, state.groups[0], viewportFitDeps, () => {
+            completionPresenter.show(state);
+        });
+    } else {
+        // Fallback: shouldn't happen if the puzzle just completed.
+        completionPresenter.show(state);
     }
 }
 
@@ -618,7 +574,13 @@ function initGame(state: GameState): void {
 
             const result = processDrop(groupId, gameState, tolerancePx, rotationToleranceDeg);
             if (result) {
-                applyMergeResult(result, droppedGroupIds);
+                applyMergeResult(gameState, result, droppedGroupIds, {
+                    renderer,
+                    selectionManager,
+                    rotationFocus,
+                    currentGameAnalytics: () => currentGameAnalytics,
+                    onCompleted: onPuzzleCompleted,
+                });
                 saveCoordinator.autoSave(gameState);
             } else {
                 // No merge: z-reorder the original dropped groups as-is.
@@ -1090,7 +1052,13 @@ const rotateHandle = createRotateHandle({
 
         const result = processDrop(groupId, gameState, tolerancePx, rotationToleranceDeg);
         if (result) {
-            applyMergeResult(result, [result.group.id]);
+            applyMergeResult(gameState, result, [result.group.id], {
+                renderer,
+                selectionManager,
+                rotationFocus,
+                currentGameAnalytics: () => currentGameAnalytics,
+                onCompleted: onPuzzleCompleted,
+            });
         }
         saveCoordinator.autoSave(gameState);
     },
