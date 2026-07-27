@@ -1389,6 +1389,11 @@ createNewGameButton({
 createGatherPiecesButton({
     container: app,
     onGatherPieces: () => {
+        // The last sibling of the New Game read above: all three of these
+        // touch the global synchronously, so the click threw whenever boot
+        // left no game behind. There is nothing to gather in that state,
+        // so doing nothing is the whole correct behavior.
+        if (!gameState) return;
         gatherAndZoomToFit();
         renderer.renderState(gameState);
         autoSave();
