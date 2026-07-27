@@ -405,8 +405,8 @@ function buildCreditsSection(): HTMLElement {
         ' — inspired by ',
         [
             'a',
-            "Dillo's CodePen",
-            { href: 'https://codepen.io/dillo/pen/MQVBpN', target: '_blank', rel: 'noopener' },
+            "Dillon's CodePen",
+            { href: 'https://codepen.io/Dillo/pen/QWKLYab', target: '_blank', rel: 'noopener' },
         ],
     ]);
     appendInlineLi(list, [
