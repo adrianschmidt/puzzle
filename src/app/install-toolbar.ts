@@ -1,6 +1,6 @@
 /**
  * The toolbar: New Game, Gather Pieces, multi-select, marquee, deselect,
- * the 🎨 background-colour control, and Info/Help — the floating controls
+ * the 🎨 background-color control, and Info/Help — the floating controls
  * that sit outside any single feature flow, wired to the session and the
  * collaborators the composition root already owns.
  *
@@ -12,10 +12,11 @@
  * The info modal's Solve button receives `solve` as a dependency instead of
  * looking `window.__solvePuzzle` up at click time — the one sanctioned
  * behavior change in this refactor (see the plan's Global Constraints).
- * `bootstrap` builds its own `solve` closure around `dev-hooks.ts`'s
- * exported `solvePuzzle`, the same function `installDevHooks` calls to
- * build `window.__solvePuzzle` — both call sites run the same code, even
- * though nothing is passed between the two `install*` calls directly.
+ * `bootstrap` binds `dev-hooks.ts`'s exported `solvePuzzle` once and passes
+ * that single reference to both this module and `installDevHooks`, which
+ * assigns it straight to `window.__solvePuzzle`. The button and the console
+ * hook are therefore the same function, not two call sites that happen to
+ * agree.
  */
 
 import type { GameState } from '../model/types.js';
@@ -29,6 +30,7 @@ import {
     createInfoModal,
 } from '../ui/index.js';
 import type { SelectionManager } from '../interaction/selection-manager.js';
+import type { BackgroundColorControl } from './install-background-color.js';
 import type { GameSession } from './game-session.js';
 
 /** Collaborators {@link installToolbar} cannot own itself. */
@@ -48,30 +50,39 @@ export interface InstallToolbarDeps {
     /** Open the New Game dialog. */
     onNewGame: () => void;
     /**
-     * Install the 🎨 background-colour control (`installBackgroundColor`,
-     * bound by the caller — its handle is needed elsewhere in the
-     * composition root, so this module doesn't own or return it). Invoked
-     * between the deselect and Info buttons: the on-screen right-hand
-     * column stacks New Game → Gather → 🎨 → Info top to bottom
-     * (`src/style.css`: 12px/52px/92px/135px), and DOM order has to match
-     * that so Tab visits the controls in the same order a sighted user
-     * would reach for them.
+     * Install the 🎨 background-color control (`installBackgroundColor`,
+     * bound by the caller — this module owns *when* the picker's DOM lands,
+     * not the picker itself). Invoked between the deselect and Info buttons:
+     * the on-screen right-hand column stacks New Game → Gather → 🎨 → Info
+     * top to bottom (`src/style.css`: 12px/52px/92px/135px), and DOM order
+     * has to match that so Tab visits the controls in the same order a
+     * sighted user would reach for them.
+     *
+     * Its handle is returned from {@link installToolbar} rather than left
+     * for the caller to capture out of the callback: the composition root
+     * needs it for the share path, and a captured-by-side-effect binding
+     * there could only be typed with a definite-assignment assertion —
+     * "assigned, trust me" — where a return value is checked.
      */
-    installBackgroundColorControl: () => void;
+    installBackgroundColorControl: () => BackgroundColorControl;
     /**
-     * Solve the puzzle — the exact same implementation `installDevHooks`
-     * exposes on `window.__solvePuzzle`. Received as a dependency rather
-     * than looked up on `window` at click time; see the module doc.
+     * Solve the puzzle — the exact same reference `installDevHooks` assigns
+     * to `window.__solvePuzzle`. Received as a dependency rather than looked
+     * up on `window` at click time; see the module doc.
      */
     solve: () => void;
 }
 
 /**
  * Install the toolbar: New Game, Gather Pieces, multi-select, marquee,
- * deselect, the background-colour control, and Info/Help — in that DOM
+ * deselect, the background-color control, and Info/Help — in that DOM
  * order (see the module doc and `installBackgroundColorControl`).
+ *
+ * Returns the background-color handle its `installBackgroundColorControl`
+ * dependency produced, so the caller gets it as a value rather than having
+ * to declare an assigned-by-callback binding.
  */
-export function installToolbar(deps: InstallToolbarDeps): void {
+export function installToolbar(deps: InstallToolbarDeps): BackgroundColorControl {
     const {
         container,
         session,
@@ -121,7 +132,7 @@ export function installToolbar(deps: InstallToolbarDeps): void {
 
     createDeselectButton({ container, selectionManager });
 
-    installBackgroundColorControl();
+    const backgroundColor = installBackgroundColorControl();
 
     createInfoButton({
         container,
@@ -134,4 +145,6 @@ export function installToolbar(deps: InstallToolbarDeps): void {
             });
         },
     });
+
+    return backgroundColor;
 }

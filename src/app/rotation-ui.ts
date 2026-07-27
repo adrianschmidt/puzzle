@@ -24,17 +24,15 @@ import { localToWorld } from '../model/helpers.js';
 import { activeSnapTolerances } from './snap-tolerances.js';
 
 /**
- * The rotation UI's public surface: syncing which control is visible, and
- * projecting a group's bounds into screen space (also handed to the two
- * controls themselves, so `main.ts` needs neither).
+ * The rotation UI's public surface: syncing which control is visible.
+ *
+ * That is the whole of it. Everything else the module builds — the screen-
+ * space bounds projection, the rotate/commit handlers — is handed to the two
+ * controls themselves, so the composition root needs none of it.
  */
 export interface RotationUi {
     /** Show the controls matching `state.rotationMode`, hiding the others. */
     syncVisibility: (state: GameState | undefined) => void;
-    /** Project the focused group's visual bounds into screen space. */
-    getFocusedGroupScreenBounds: (
-        groupId: number,
-    ) => { left: number; right: number; top: number; bottom: number } | null;
 }
 
 /**
@@ -196,8 +194,5 @@ export function createRotationUi(deps: {
         }
     }
 
-    return {
-        syncVisibility,
-        getFocusedGroupScreenBounds,
-    };
+    return { syncVisibility };
 }

@@ -106,21 +106,17 @@ describe('solvePuzzle', () => {
 });
 
 describe('installDevHooks', () => {
-    let session: GameSession;
-    let renderer: FakeRenderer;
     let start: Mock<(gridSize: GridSize, options: StartNewGameOptions) => Promise<void>>;
     let loadShared: Mock<(payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>>;
-    let onSolved: Mock<(state: GameState, group: PieceGroup) => void>;
+    let solve: Mock<() => void>;
     let consoleErrorSpy: MockInstance<typeof console.error>;
     let umamiTrack: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
         localStorage.clear();
-        session = makeSession(undefined);
-        renderer = createFakeRenderer();
         start = vi.fn(async () => {});
         loadShared = vi.fn(async () => {});
-        onSolved = vi.fn();
+        solve = vi.fn();
         history.replaceState(null, '', '/');
         consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         umamiTrack = vi.fn();
@@ -138,7 +134,7 @@ describe('installDevHooks', () => {
     });
 
     function deps(): DevHooksDeps {
-        return { session, renderer, start, loadShared, onSolved };
+        return { start, loadShared, solve };
     }
 
     it('installs all four hooks', () => {
@@ -148,11 +144,15 @@ describe('installDevHooks', () => {
         }
     });
 
-    it('__solvePuzzle is a no-op with no game', () => {
+    it('exposes the injected solve as __solvePuzzle, not a second binding', () => {
+        // The console hook and the info modal's Solve button have to stay the
+        // same action; the composition root binds it once and passes that one
+        // reference here, so there is nothing left to desynchronize.
         installDevHooks(deps());
+        expect(hooks().__solvePuzzle).toBe(solve);
+
         hooks().__solvePuzzle();
-        expect(renderer.renderState).not.toHaveBeenCalled();
-        expect(onSolved).not.toHaveBeenCalled();
+        expect(solve).toHaveBeenCalledTimes(1);
     });
 
     it('__reproPuzzle resolves false for params the share codec rejects', async () => {

@@ -2,37 +2,60 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import type { GameState, PieceGroup } from '../model/types.js';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock, type MockInstance } from 'vitest';
+import type { GameState, Piece, PieceGroup } from '../model/types.js';
 import type { MergeResult } from '../game/group-merging.js';
 import { SelectionManager } from '../interaction/selection-manager.js';
 import { RotationFocus, ViewportTransform } from '../interaction/index.js';
+import { SnapProximityPositionController } from '../interaction/snap-proximity-position-controller.js';
 import { createFakeRenderer, type FakeRenderer } from '../test-helpers/fake-renderer.js';
-import { makeGameState, makeCenteredGroup, makeRectPiece } from '../test-helpers/fixtures.js';
-import type { RotateButtonsHandle } from '../ui/rotate-buttons.js';
-import type { RotateHandleHandle } from '../ui/rotate-handle.js';
-import { createRotateButtons, createRotateHandle } from '../ui/index.js';
+import {
+    makeGameState,
+    makeCenteredGroup,
+    makeMatedPiecePair,
+    makePiece,
+    makeRectPiece,
+} from '../test-helpers/fixtures.js';
+import {
+    createRotateButtons,
+    createRotateHandle,
+    type RotateButtonsHandle,
+    type RotateButtonsOptions,
+    type RotateHandleHandle,
+    type RotateHandleOptions,
+} from '../ui/index.js';
 
 // `createRotateButtons`/`createRotateHandle` only put anything in the DOM
 // once `rotationFocus` already has a focused group (see
 // rotate-buttons.test.ts / rotate-handle.test.ts: "starts hidden — no
 // buttons exist before show() and focus is set"). Asserting DOM presence
 // here would either be vacuously null or require duplicating that focus
-// setup, so instead the two factories are replaced with spy handles and
-// `syncVisibility` is asserted against `show`/`hide` calls directly — the
-// same seam the real code drives.
-vi.mock('../ui/index.js', () => ({
-    createRotateButtons: vi.fn(() => ({
-        show: vi.fn(),
-        hide: vi.fn(),
-        destroy: vi.fn(),
-    })),
-    createRotateHandle: vi.fn(() => ({
-        show: vi.fn(),
-        hide: vi.fn(),
-        destroy: vi.fn(),
-    })),
-}));
+// setup, so instead the two factories are replaced with spy handles:
+// `syncVisibility` is asserted against `show`/`hide` calls, and the
+// callbacks the real controls would invoke are driven through the options
+// each factory was handed — the same seam the real code drives.
+//
+// Passthrough rather than a two-export factory: `rotation-ui.ts` also reaches
+// this barrel transitively, through `snap-tolerances.ts`'s
+// `getActiveTolerance`/`getActiveRotationTolerance`, which every commit path
+// below calls. Replacing the module wholesale would fail those with "No
+// export is defined on the mock" instead of asserting anything.
+vi.mock('../ui/index.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../ui/index.js')>();
+    return {
+        ...actual,
+        createRotateButtons: vi.fn(() => ({
+            show: vi.fn(),
+            hide: vi.fn(),
+            destroy: vi.fn(),
+        })),
+        createRotateHandle: vi.fn(() => ({
+            show: vi.fn(),
+            hide: vi.fn(),
+            destroy: vi.fn(),
+        })),
+    };
+});
 
 import { createRotationUi } from './rotation-ui.js';
 
@@ -51,6 +74,24 @@ function lastHandleHandle(): RotateHandleHandle {
 }
 
 /**
+ * The options the rotate buttons were built with — the callbacks the real
+ * control invokes on a quarter-turn tap, and the bounds projector it asks
+ * for its own placement.
+ */
+function buttonsOptions(): RotateButtonsOptions {
+    const last = vi.mocked(createRotateButtons).mock.calls.at(-1);
+    if (!last) throw new Error('createRotateButtons was never called');
+    return last[0];
+}
+
+/** The options the rotate handle was built with; see {@link buttonsOptions}. */
+function handleOptions(): RotateHandleOptions {
+    const last = vi.mocked(createRotateHandle).mock.calls.at(-1);
+    if (!last) throw new Error('createRotateHandle was never called');
+    return last[0];
+}
+
+/**
  * A state with one real, well-formed group (rather than the default empty
  * `groups: []`) so bounds/pivot math has something to actually measure.
  * Group id 9 — deliberately neither 0 nor an array index — so an assertion
@@ -60,6 +101,24 @@ function makeStateWithGroup(): GameState {
     const pieces = [makeRectPiece({ id: 0, width: 100, height: 100 })];
     const groups: PieceGroup[] = [makeCenteredGroup(9, 0, { x: 100, y: 100 })];
     return makeGameState({ pieces, groups });
+}
+
+/**
+ * A 100×100 piece whose top edge bulges 30 units *above* the corner line,
+ * via bezier control points at y = −30.
+ *
+ * The bulge is what separates the two candidate rotation pivots: the
+ * tab-inclusive local bounds run y ∈ [−30, 100], so their center sits 15
+ * units above the corner-only image center that `getGroupImageCenter`
+ * would return. A pivot computed the other way lands somewhere else, which
+ * is what the pivot test below relies on.
+ *
+ * `makePiece` re-derives `bounds` from the edges it is handed, so the tab
+ * is reflected there too rather than leaving `makeRectPiece`'s square.
+ */
+function makeTabbedPiece(id: number): Piece {
+    const [top, ...sides] = makeRectPiece({ id, width: 100, height: 100 }).edges;
+    return makePiece({ id, edges: [{ ...top, path: 'M0,0 C30,-30 70,-30 100,0' }, ...sides] });
 }
 
 describe('createRotationUi', () => {
@@ -76,9 +135,20 @@ describe('createRotationUi', () => {
     let applyMerge: Mock<
         (state: GameState, result: MergeResult, droppedGroupIds: readonly number[]) => void
     >;
+    // Prototype spies, not a module mock: `rotation-ui` constructs the
+    // controller itself, so this is the only seam that can observe whether a
+    // handle callback entered the snap gesture at all. Both keep the real
+    // implementation, so the gesture still behaves normally. Installed after
+    // `clearAllMocks` and torn down in `afterEach` — `vite.config.ts` sets no
+    // `restoreMocks`, so a spy left on a shared prototype would follow every
+    // later test file in the same worker.
+    let snapStart: MockInstance<SnapProximityPositionController['start']>;
+    let snapStop: MockInstance<SnapProximityPositionController['stop']>;
 
     beforeEach(() => {
         vi.clearAllMocks();
+        snapStart = vi.spyOn(SnapProximityPositionController.prototype, 'start');
+        snapStop = vi.spyOn(SnapProximityPositionController.prototype, 'stop');
         container = document.createElement('div');
         document.body.appendChild(container);
         renderer = createFakeRenderer();
@@ -91,6 +161,8 @@ describe('createRotationUi', () => {
     });
 
     afterEach(() => {
+        snapStart.mockRestore();
+        snapStop.mockRestore();
         container.remove();
     });
 
@@ -165,21 +237,32 @@ describe('createRotationUi', () => {
         });
     });
 
+    // Asserted through the options the two controls were handed rather than
+    // off the returned object: that is the only consumer in production, and
+    // the projector is deliberately not part of `RotationUi`'s surface.
     describe('getFocusedGroupScreenBounds', () => {
+        it('is handed to both controls', () => {
+            make();
+
+            expect(buttonsOptions().getFocusedGroupScreenBounds).toBe(
+                handleOptions().getFocusedGroupScreenBounds,
+            );
+        });
+
         it('returns null for a group that is gone', () => {
-            const ui = make();
-            expect(ui.getFocusedGroupScreenBounds(4242)).toBeNull();
+            make();
+            expect(buttonsOptions().getFocusedGroupScreenBounds(4242)).toBeNull();
         });
 
         it('returns null when there is no game at all', () => {
-            const ui = make();
+            make();
             state = undefined;
-            expect(ui.getFocusedGroupScreenBounds(9)).toBeNull();
+            expect(buttonsOptions().getFocusedGroupScreenBounds(9)).toBeNull();
         });
 
         it('projects a live group into screen space', () => {
-            const ui = make();
-            const bounds = ui.getFocusedGroupScreenBounds(9);
+            make();
+            const bounds = buttonsOptions().getFocusedGroupScreenBounds(9);
 
             expect(bounds).not.toBeNull();
             // Identity viewport transform (scale 1, offset 0,0): world bounds
@@ -187,6 +270,193 @@ describe('createRotationUi', () => {
             // numbers rather than just "some finite box" — a group centered at
             // (100, 100) with a 100x100 piece spans (50,50)-(150,150).
             expect(bounds).toEqual({ left: 50, top: 50, right: 150, bottom: 150 });
+        });
+    });
+
+    describe('quarter-turn rotation', () => {
+        it('rotates the group, re-renders and saves', () => {
+            make();
+            selectionManager.select(9);
+            renderer.setGroupSelected.mockClear();
+
+            buttonsOptions().onRotate(9, 'cw');
+
+            expect(state!.groupsById.get(9)!.rotation).toBe(90);
+            expect(renderer.renderState).toHaveBeenCalledWith(state);
+            // Re-render recreates group elements, so the selection visual has
+            // to be re-applied after it or the highlight silently drops.
+            expect(renderer.setGroupSelected).toHaveBeenCalledWith(9, true);
+            expect(save).toHaveBeenCalledWith(state);
+        });
+
+        it('rotates counter-clockwise for a ccw tap', () => {
+            make();
+            buttonsOptions().onRotate(9, 'ccw');
+
+            // `rotateGroup` normalizes into [0, 360), so a −90° delta lands
+            // on 270 rather than staying negative.
+            expect(state!.groupsById.get(9)!.rotation).toBe(270);
+        });
+
+        it('does nothing with no game', () => {
+            make();
+            state = undefined;
+
+            expect(() => buttonsOptions().onRotate(9, 'cw')).not.toThrow();
+            expect(save).not.toHaveBeenCalled();
+        });
+
+        it('does nothing for a group that is gone', () => {
+            make();
+
+            buttonsOptions().onRotate(4242, 'cw');
+
+            expect(renderer.renderState).not.toHaveBeenCalled();
+            expect(save).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('free rotation', () => {
+        it('rotates by the drag delta and re-renders without saving', () => {
+            // The drag fires this on every frame; saving per tick would
+            // restart the debounced write continuously. The commit saves.
+            make();
+            selectionManager.select(9);
+            renderer.setGroupSelected.mockClear();
+
+            handleOptions().onRotate(9, 12);
+
+            expect(state!.groupsById.get(9)!.rotation).toBe(12);
+            expect(renderer.renderState).toHaveBeenCalledWith(state);
+            expect(renderer.setGroupSelected).toHaveBeenCalledWith(9, true);
+            expect(save).not.toHaveBeenCalled();
+        });
+
+        it('opens a snap-proximity gesture for the group being rotated', () => {
+            make();
+            // Optional on `RotateHandleOptions`, but the rotation UI always
+            // supplies it — asserting that before calling keeps a silently
+            // dropped dependency from passing as "did not throw".
+            const onRotateStart = handleOptions().onRotateStart;
+            expect(onRotateStart).toBeDefined();
+
+            onRotateStart!(9);
+
+            expect(snapStart).toHaveBeenCalledWith(9);
+        });
+
+        it('tolerates a rotate start with no game, without opening a gesture', () => {
+            // `SnapProximityPositionController.start` already tolerates an
+            // undefined state on its own, so "did not throw" alone would pass
+            // just as well with `rotation-ui`'s own `if (!getState()) return`
+            // deleted. Asserting the controller is never entered is what
+            // actually pins that guard.
+            make();
+            state = undefined;
+
+            expect(() => handleOptions().onRotateStart!(9)).not.toThrow();
+
+            expect(snapStart).not.toHaveBeenCalled();
+        });
+
+        it('closes the snap-proximity gesture when the drag ends', () => {
+            // Unconditional — the gesture has to be released on a canceled
+            // drag too, or the stale context follows the next one.
+            make();
+            const onRotateEnd = handleOptions().onRotateEnd;
+            expect(onRotateEnd).toBeDefined();
+
+            onRotateEnd!(9);
+
+            expect(snapStop).toHaveBeenCalledTimes(1);
+        });
+
+        it('reports the focused group rotation, and null once it is gone', () => {
+            make();
+            state!.groupsById.get(9)!.rotation = 45;
+
+            expect(handleOptions().getGroupRotation(9)).toBe(45);
+            expect(handleOptions().getGroupRotation(4242)).toBeNull();
+        });
+    });
+
+    describe('getGroupPivotWorld', () => {
+        it('pivots about the tab-inclusive bounds center, in world space', () => {
+            // The pivot the drag handle rotates the group around. Two things
+            // are pinned by the exact number: that the bounds include tab
+            // path geometry (a corner-only center — what the completion spin
+            // uses via `getGroupImageCenter` — would sit 15 units lower), and
+            // that the local center is projected through the group's own
+            // rotation rather than merely offset by its position.
+            //
+            // Tab-inclusive local bounds: x ∈ [0, 100], y ∈ [−30, 100], so
+            // the center is (50, 35). Rotated 90° CW that is (−35, 50), which
+            // lands at (200 − 35, 300 + 50) from the group's position.
+            const pieces = [makeTabbedPiece(0)];
+            const groups: PieceGroup[] = [
+                { id: 9, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 200, y: 300 }, rotation: 90 },
+            ];
+            state = makeGameState({ pieces, groups });
+            make();
+
+            expect(handleOptions().getGroupPivotWorld(9)).toEqual({ x: 165, y: 350 });
+        });
+
+        it('returns null for a group that is gone', () => {
+            make();
+            expect(handleOptions().getGroupPivotWorld(4242)).toBeNull();
+        });
+
+        it('returns null when there is no game at all', () => {
+            make();
+            state = undefined;
+            expect(handleOptions().getGroupPivotWorld(9)).toBeNull();
+        });
+    });
+
+    describe('commit', () => {
+        it('hands a merge off to applyMerge and saves', () => {
+            // Two mated pieces placed at exactly their aligned offset, so
+            // `processDrop` merges for the real reason (real tolerances, via
+            // the un-mocked `getActiveTolerance` this file's passthrough
+            // keeps reachable) rather than a stubbed one.
+            const { piece0, piece1 } = makeMatedPiecePair();
+            state = makeGameState({
+                pieces: [piece0, piece1],
+                groups: [
+                    makeCenteredGroup(10, 0, { x: 50, y: 50 }),
+                    makeCenteredGroup(11, 1, { x: 150, y: 50 }),
+                ],
+                rotationMode: 'free',
+            });
+            make();
+
+            handleOptions().onCommit(11);
+
+            expect(applyMerge).toHaveBeenCalledTimes(1);
+            const [mergedState, result, droppedIds] = applyMerge.mock.calls[0];
+            expect(mergedState).toBe(state);
+            expect(droppedIds).toEqual([result.group.id]);
+            expect(save).toHaveBeenCalledWith(state);
+        });
+
+        it('saves without a merge when the drop lands nowhere', () => {
+            // The lone group in `makeStateWithGroup` has nothing to mate with.
+            make();
+
+            handleOptions().onCommit(9);
+
+            expect(applyMerge).not.toHaveBeenCalled();
+            expect(save).toHaveBeenCalledWith(state);
+        });
+
+        it('does nothing with no game', () => {
+            make();
+            state = undefined;
+
+            expect(() => handleOptions().onCommit(9)).not.toThrow();
+            expect(applyMerge).not.toHaveBeenCalled();
+            expect(save).not.toHaveBeenCalled();
         });
     });
 });

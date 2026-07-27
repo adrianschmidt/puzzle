@@ -73,3 +73,21 @@ later, you're stuck) and still consumes shared outer state.
 Don't retrofit this onto existing generators. Their current outer-call
 counts are the contract; reshuffling them silently breaks every share
 link that targets that generator.
+
+## Keep `main.ts` an entry point
+
+`src/main.ts` is loaded by `index.html` as a side-effecting module, so
+nothing in it can be imported or called by a test — importing it would boot
+the app. It reached 1939 lines because it was also the composition root, and
+every feature appended to it.
+
+The composition root is now `src/app/bootstrap.ts`, which exports a function,
+runs nothing on import, and has tests (`bootstrap.test.ts` asserts the wiring
+order: global handlers first, rotation UI before the session, the `hashchange`
+listener after boot is kicked off). **Put new wiring there, with a test.**
+
+`src/main.test.ts` enforces that `main.ts` holds nothing but its two CSS
+imports and the `bootstrap()` call. It is deliberately not a line-count cap —
+a threshold is just a number the next feature raises by ten. If you find
+yourself wanting to relax that assertion rather than clear it, the thing you
+are adding belongs in `bootstrap.ts` or in a module it wires.

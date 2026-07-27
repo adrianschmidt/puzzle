@@ -6,10 +6,12 @@
  * must not drift.
  *
  * `solvePuzzle` is exported separately from `installDevHooks` so the
- * composition root can wire the exact same implementation into both
- * `window.__solvePuzzle` and the info modal's Solve button
- * (`installToolbar`'s `solve` dependency) — the one sanctioned behavior
- * change in this refactor (see the plan's Global Constraints).
+ * composition root can bind it *once* and hand that one reference to both
+ * `window.__solvePuzzle` (this module's `solve` dependency) and the info
+ * modal's Solve button (`installToolbar`'s `solve`) — the one sanctioned
+ * behavior change in this refactor (see the plan's Global Constraints). One
+ * binding rather than two identical-looking ones is what makes them
+ * impossible to desynchronize by editing either call site.
  */
 
 import type { GameState, GridSize, PieceGroup } from '../model/types.js';
@@ -80,23 +82,30 @@ export function solvePuzzle(deps: SolvePuzzleDeps): void {
 
 /** Collaborators {@link installDevHooks} cannot own itself. */
 export interface DevHooksDeps {
-    session: GameSession;
-    renderer: Renderer;
     /** `startNewGame` bound to the composition root's deps. */
     start: (gridSize: GridSize, options: StartNewGameOptions) => Promise<void>;
     /** `loadSharedPuzzle` bound to the composition root's deps. */
     loadShared: (payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>;
-    /** Frame and celebrate a solved puzzle — the completion zoom. */
-    onSolved: (state: GameState, group: PieceGroup) => void;
+    /**
+     * Solve the puzzle — `solvePuzzle` bound to the composition root's deps.
+     *
+     * Injected rather than built here so `window.__solvePuzzle` and the info
+     * modal's Solve button (`installToolbar`'s `solve`) are the same
+     * reference. While each installer built its own `solvePuzzle` call, an
+     * edit to either one's `onSolved` would have silently desynchronized the
+     * two — the exact agreement the sanctioned behavior change establishes.
+     */
+    solve: () => void;
 }
 
 /**
  * Install the four dev-console hooks on `window`.
  */
 export function installDevHooks(deps: DevHooksDeps): void {
-    // Debug helper: solve the puzzle by placing all pieces in their correct positions.
+    // Debug helper: solve the puzzle by placing all pieces in their correct
+    // positions. The same reference the info modal's Solve button calls.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__solvePuzzle = () => solvePuzzle(deps);
+    (window as any).__solvePuzzle = deps.solve;
 
     /**
      * Dev-console hook for visual smoke-testing the experimental two-circle
