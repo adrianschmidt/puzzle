@@ -47,7 +47,6 @@ import {
     removeAttribution,
     createNewGameDialog,
     createCorruptSaveDialog,
-    showCompletionOverlay as renderCompletionOverlay,
     showToast,
     showLoadingOverlay,
     hideLoadingOverlay,
@@ -137,6 +136,7 @@ import {
 } from './app/orientation.js';
 import { activeSnapTolerances } from './app/snap-tolerances.js';
 import { createBlankImageDataUrl } from './app/blank-canvas.js';
+import { createCompletionPresenter } from './app/completion-presenter.js';
 import { initPwaUpdates } from './pwa/register.js';
 import {
     wasRescueAttempted,
@@ -190,28 +190,6 @@ if (appVersion) {
     app.appendChild(versionEl);
 }
 
-let currentCompletionHide: (() => void) | null = null;
-
-function showCompletionOverlay(): void {
-    if (currentCompletionHide) return;
-    // Clear focus so any visible rotate buttons quick-fade out before the
-    // celebratory zoom; without this the buttons would linger in front
-    // of (or under) the completion overlay during the animation.
-    rotationFocus.clearFocus();
-    currentCompletionHide = renderCompletionOverlay({
-        container: app,
-        state: gameState,
-        onDismiss: () => {
-            currentCompletionHide = null;
-        },
-    });
-}
-
-function removeCompletionOverlay(): void {
-    currentCompletionHide?.();
-    currentCompletionHide = null;
-}
-
 /**
  * Analytics metadata for the currently-playing puzzle.
  *
@@ -233,6 +211,8 @@ const selectionManager = new SelectionManager();
 
 // Floating rotate-buttons focus tracker
 const rotationFocus = new RotationFocus();
+
+const completionPresenter = createCompletionPresenter({ container: app, rotationFocus });
 
 // When selection changes, update group visuals and persist it (debounced)
 // so the selection survives a reload. The selection is stored alongside the
@@ -448,7 +428,7 @@ function zoomToFitCompletedPuzzle(
 
     // Use the same animated zoom as normal completion
     zoomToFitCompletedPuzzle(solvedGroup, () => {
-        showCompletionOverlay();
+        completionPresenter.show(gameState);
     });
 };
 
@@ -819,11 +799,11 @@ function applyMergeResult(
         track('puzzle-completed', buildPuzzleCompletedData(gameState, currentGameAnalytics));
         if (gameState.groups.length === 1) {
             zoomToFitCompletedPuzzle(gameState.groups[0], () => {
-                showCompletionOverlay();
+                completionPresenter.show(gameState);
             });
         } else {
             // Fallback: shouldn't happen if the puzzle just completed.
-            showCompletionOverlay();
+            completionPresenter.show(gameState);
         }
     }
 }
@@ -844,7 +824,7 @@ function updateAttribution(): void {
  * Set up the game with a given state: render it and wire up interaction.
  */
 function initGame(state: GameState): void {
-    removeCompletionOverlay();
+    completionPresenter.remove();
     selectionManager.clearAll();
     rotationFocus.clearFocus();
 
@@ -859,7 +839,7 @@ function initGame(state: GameState): void {
     updateRotationUiVisibility();
 
     if (gameState.completed) {
-        showCompletionOverlay();
+        completionPresenter.show(gameState);
     }
 
     // Keep this last, and keep it unconditional: the boot fallback's
