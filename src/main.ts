@@ -3,7 +3,6 @@ import './style.css';
 import type { GameState } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { ViewportTransform, RotationFocus } from './interaction/index.js';
-import { createNewGame } from './game/index.js';
 import { loadState, loadSavedGame, clearSavedState } from './persistence/index.js';
 import {
     createNewGameButton,
@@ -20,7 +19,6 @@ import {
     showToast,
     showLoadingOverlay,
     hideLoadingOverlay,
-    yieldForPaint,
     loadRotationEnabledPreference,
     saveRotationEnabledPreference,
 } from './ui/index.js';
@@ -71,7 +69,6 @@ import {
     reproParamsToPayload,
     type ReproParams,
 } from './sharing/index.js';
-import { applyProgress } from './game/reconstruct-groups.js';
 import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
 import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
@@ -79,11 +76,9 @@ import type { NewGameData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { startWithBootFallback } from './app/start-with-boot-fallback.js';
 import { startNewGame, type StartNewGameDeps } from './app/start-new-game.js';
-import { needsTracedTabChunk, shareInitOptions } from './app/share-payload-to-init.js';
-import { buildSharedGameData } from './app/new-game-payload.js';
+import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './app/load-shared-puzzle.js';
 import { fetchCandidateImages } from './app/fetch-candidate-images.js';
 import { orientationForViewport } from './app/orientation.js';
-import { createBlankImageDataUrl } from './app/blank-canvas.js';
 import { createCompletionPresenter } from './app/completion-presenter.js';
 import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
 import { createSaveCoordinator } from './app/save-coordinator.js';
@@ -380,7 +375,7 @@ selectionManager.onChange((selectedIds) => {
     clearSavedState();
     return runWithErrorReport({
         run: async () => {
-            await loadSharedPuzzle(validated, hadSavedState);
+            await loadSharedPuzzle(validated, hadSavedState, sharedDeps);
             return true;
         },
         warnMessage: 'Failed to load repro puzzle:',
@@ -726,84 +721,21 @@ createInfoButton({
     },
 });
 
-async function loadSharedPuzzle(
-    payload: SharePayload,
-    recipientHadSavedState: boolean,
-): Promise<void> {
-    showLoadingOverlay();
-    try {
-        // A share link with `cf.tg: "traced"` needs the lazy chunk before
-        // generation runs. The await is short on warm caches and fits
-        // inside the loading overlay the user already sees.
-        if (needsTracedTabChunk(payload)) {
-            await preloadTracedTabGenerator();
-        }
-
-        const imageSize = { width: payload.is[0], height: payload.is[1] };
-
-        // If the sentinel is the blank canvas, regenerate it locally.
-        let imageUrl = payload.i;
-        if (imageUrl === 'blank') {
-            imageUrl = createBlankImageDataUrl(imageSize);
-        }
-
-        const viewport = {
-            width: app.clientWidth || window.innerWidth,
-            height: app.clientHeight || window.innerHeight,
-        };
-
-        // Let the overlay paint before the synchronous piece-generation burst.
-        await yieldForPaint();
-
-        const state = createNewGame(
-            imageUrl,
-            imageSize,
-            viewport,
-            { cols: payload.g[0], rows: payload.g[1] },
-            shareInitOptions(payload),
-        );
-
-        if (payload.a) {
-            state.attribution = {
-                photographerName: payload.a.n,
-                photographerUrl: payload.a.u,
-                photoUrl: payload.a.p,
-            };
-        }
-
-        if (payload.pr) {
-            const ok = applyProgress(state, payload.pr);
-            if (!ok) {
-                showToast("Couldn't load progress — starting from scratch");
-            }
-        }
-
-        session.install(state);
-        gatherAndZoomToFit(state, viewportFitDeps);
-        renderer.renderState(state);
-        saveCoordinator.persistNewPuzzle(state);
-
-        // Offer the sharer's background color to a recipient who has never
-        // picked one. 'none' means the link carried no color at all; a
-        // present-but-unrecognized id reports as 'invalid' so palette drift
-        // that silently drops a live link's color stays visible in analytics.
-        let sharedColor: NonNullable<NewGameData['sharedColor']> = 'none';
-        if (payload.bgc !== undefined) {
-            sharedColor = backgroundColor.adopt(payload.bgc);
-        }
-
-        const data = buildSharedGameData({
-            state,
-            includesProgress: payload.pr !== undefined,
-            recipientHadSavedState,
-            sharedColor,
-        });
-        currentGameAnalytics = data;
-        track('new-game-started', currentGameAnalytics);
-    } finally {
-        hideLoadingOverlay();
-    }
-}
+/**
+ * Dependencies for `loadSharedPuzzle`, built once so both call sites — the
+ * share-link boot path and the `__reproPuzzle` console hook — spell the
+ * argument the same way. Reuses `startNewGameDeps`'s `fitView`,
+ * `persistNewPuzzle` and `onGameAnalytics`: installing a freshly generated
+ * puzzle works the same whether it came from a fresh start or a share link.
+ */
+const sharedDeps: LoadSharedPuzzleDeps = {
+    container: app,
+    session,
+    fitView: startNewGameDeps.fitView,
+    persistNewPuzzle: startNewGameDeps.persistNewPuzzle,
+    backgroundColor,
+    onGameAnalytics: startNewGameDeps.onGameAnalytics,
+};
 
 // Set when a rescue update was applied and the page is about to reload:
 // the boot flow's blanket overlay teardown must not run, or the page
@@ -921,7 +853,7 @@ async function tryLoadSharedPuzzle(): Promise<boolean> {
     // letting it surface as an unhandled rejection.
     return runWithErrorReport({
         run: async () => {
-            await loadSharedPuzzle(payload, hasExistingProgress);
+            await loadSharedPuzzle(payload, hasExistingProgress, sharedDeps);
             return true;
         },
         warnMessage: 'Failed to load shared puzzle:',
