@@ -67,7 +67,8 @@ export interface NewGameData {
      *   arrives as `source: 'shared'`.
      *
      * So the query on `new-game-started` is: `cutStyle: 'classic'`, no
-     * `traceSetVersion`, not `tracedChunkDegraded` — then split on `source`.
+     * `traceSetVersion`, neither `tracedChunkDegraded` nor `bootFallback` —
+     * then split on `source`.
      * Both halves count the same one thing: a Classic game that rendered
      * legacy geometry. `'fresh'` is the stale-build population and falls to
      * zero as the fleet turns over. `'shared'` is the link tail, and it is
@@ -98,8 +99,31 @@ export interface NewGameData {
      * geometry), and `new-game-started` is the right denominator for the
      * retire-the-legacy-generator question and stays clean. Not worth
      * persisting a telemetry-only failure flag onto the saved state.
+     *
+     * A boot fallback sets `bootFallback` instead — it never attempts the
+     * fetch, so there is no failure to record.
      */
     tracedChunkDegraded?: boolean;
+    /**
+     * True when the boot path's preferred start failed and the app
+     * recovered by starting a last-resort puzzle instead (#488): legacy
+     * Classic cut, lazy chunk never fetched, every other preference kept.
+     * The player's cut-style preference is untouched, so this is a
+     * per-boot recovery and not a permanent switch — the next New Game
+     * offers their style again.
+     *
+     * Never set on the dialog path: there a rejection leaves the previous
+     * puzzle on screen and the player retries, so there is nothing to
+     * substitute. The matching `new-game-failed { phase: 'boot' }` carries
+     * why the preferred start failed; this flag counts the recoveries that
+     * worked.
+     *
+     * Like `tracedChunkDegraded`, these games ran legacy geometry with no
+     * `traceSetVersion`, so they must be excluded from the pre-upgrade-tail
+     * query described above. Unlike it, the cause need not be the chunk at
+     * all — a saved config the build cannot generate lands here too.
+     */
+    bootFallback?: boolean;
     rotationMode: 'none' | 'quarter-turn' | 'free';
     /**
      * Puzzle orientation. Derivable from `rows > cols` (both paths store the

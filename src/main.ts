@@ -81,7 +81,6 @@ import {
     loadCutStylePreference,
     saveCutStylePreference,
     rotationModeForNewGame,
-    cutStyleNeedsTracedTabs,
 } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
 import {
@@ -125,6 +124,7 @@ import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
+import { planTracedTabs, resolveTracedTabOutcome } from './app/traced-tab-plan.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
 import { traceSetVersionOf } from './app/trace-set-version.js';
@@ -1000,6 +1000,12 @@ interface StartNewGameOptions {
     rotationEnabled?: boolean;
     seed?: number;
     pickedImage?: CandidateImage;
+    /**
+     * Start the last-resort boot puzzle (#488): legacy Classic cut, lazy
+     * traced-tab chunk never fetched, flagged in analytics. Overrides
+     * `cutStyle` — see `planTracedTabs`.
+     */
+    bootFallback?: boolean;
 }
 
 /**
@@ -1015,7 +1021,7 @@ async function startNewGame(
     options: StartNewGameOptions = {},
 ): Promise<void> {
     const {
-        cutStyle = 'classic',
+        cutStyle: requestedCutStyle = 'classic',
         composableConfig,
         imageSource,
         imageCategory,
@@ -1025,6 +1031,7 @@ async function startNewGame(
         rotationEnabled = false,
         seed,
         pickedImage,
+        bootFallback = false,
     } = options;
     showLoadingOverlay();
     try {
@@ -1032,23 +1039,34 @@ async function startNewGame(
         viewportTransform.reset();
         applyViewportTransform();
 
-        // Traced tabs live in a lazy chunk; the dialog kicked off the preload
-        // when the user picked a traced style, so this usually resolves
-        // instantly. Started here but awaited further down, so on the paths
-        // that didn't go through the dialog (the boot path, the
-        // __newComposableGame console hook) the chunk fetch overlaps the
-        // image request — where there is one — instead of running ahead of
-        // it. The first-run boot puzzle uses a bundled image and so has
-        // nothing to overlap with; it just pays the fetch under the overlay.
+        // Traced tabs live in a lazy chunk. `planTracedTabs` decides
+        // whether this start needs it and which cut style is actually
+        // generated; the boot fallback forces legacy Classic and skips the
+        // fetch entirely, so the recovery path cannot fail the same way the
+        // start it is recovering from did.
+        const tracedTabPlan = planTracedTabs({
+            cutStyle: requestedCutStyle,
+            tabGenerator: composableConfig?.tabGenerator,
+            bootFallback,
+        });
+        const { cutStyle, preloadChunk } = tracedTabPlan;
+
+        // The dialog kicked off the preload when the user picked a traced
+        // style, so this usually resolves instantly. Started here but
+        // awaited further down, so on the paths that didn't go through the
+        // dialog (the boot path, the __newComposableGame console hook) the
+        // chunk fetch overlaps the image request — where there is one —
+        // instead of running ahead of it. The first-run boot puzzle uses a
+        // bundled image and so has nothing to overlap with; it just pays the
+        // fetch under the overlay.
         //
         // The rejection is captured into a value rather than left floating:
         // an unawaited rejected promise would surface as an unhandled
-        // rejection while the image loads. It's re-raised — or, for Classic,
-        // degraded — at the await site below. `null` is the success sentinel
-        // there, so a rejection reason that is itself falsy (`reject()`,
-        // `reject(null)`) has to be defaulted to a real Error — otherwise it
-        // would read as success and skip the re-raise.
-        const tracedTabsPreload = cutStyleNeedsTracedTabs(cutStyle, composableConfig?.tabGenerator)
+        // rejection while the image loads. It is interpreted at the await
+        // site below. `null` is the success sentinel there, so a rejection
+        // reason that is itself falsy (`reject()`, `reject(null)`) has to be
+        // defaulted to a real Error — otherwise it would read as success.
+        const tracedTabsPreload = preloadChunk
             ? preloadTracedTabGenerator().then(
                 () => null,
                 (error: unknown) => error ?? new Error('Traced tab chunk failed to load'),
@@ -1114,28 +1132,27 @@ async function startNewGame(
             }
         }
 
-        // The traced-tab chunk fetch started before the image request; collect
-        // its outcome now that the image has resolved. Before the download
-        // report below, not after: a start that is about to throw must not
-        // report an Unsplash "download" for a photo it then discards.
-        const tracedTabsError = tracedTabsPreload ? await tracedTabsPreload : null;
-        if (tracedTabsError !== null) {
-            // Classic is the only traced style with a generator that needs no
-            // chunk, so a failed fetch degrades it to the legacy straight-grid
-            // cut instead of failing the whole start. That matters most on the
-            // boot path, which has no error handling of its own: without this,
-            // a chunk failure on the default cut style would leave `gameState`
-            // unassigned, the canvas empty, and the New Game button throwing on
-            // click. Every other style needs the chunk, so their failure
-            // propagates.
-            if (cutStyle !== 'classic') throw tracedTabsError;
+        // The traced-tab chunk fetch started before the image request;
+        // collect its outcome now that the image has resolved. Before the
+        // download report below, not after: a start that is about to throw
+        // must not report an Unsplash "download" for a photo it discards.
+        const tracedTabs = resolveTracedTabOutcome({
+            plan: tracedTabPlan,
+            chunkError: tracedTabsPreload ? await tracedTabsPreload : null,
+        });
+        if (tracedTabs.kind === 'fail') throw tracedTabs.error;
+        // Read twice, ~100 lines apart (warn here, flag the analytics event
+        // below), so it gets one spelling. Aliasing the discriminant check
+        // keeps `tracedTabs.error` narrowed at the first use.
+        const chunkDegraded = tracedTabs.kind === 'legacy-classic' && tracedTabs.degraded;
+        if (chunkDegraded) {
             // Degrading is quiet for the player by design, but not for us:
-            // warn like every other failure channel in this file, and flag the
-            // analytics event below so these games stay separable from genuine
-            // pre-upgrade Classic traffic.
+            // warn like every other failure channel in this file, and flag
+            // the analytics event below so these games stay separable from
+            // genuine pre-upgrade Classic traffic.
             diagnostics.warn(
                 'Traced tab chunk failed to load; Classic fell back to the legacy cut:',
-                tracedTabsError,
+                tracedTabs.error,
             );
         }
 
@@ -1167,12 +1184,13 @@ async function startNewGame(
             ? { traceSetVersion: CURRENT_TRACE_SET_VERSION }
             : undefined;
 
-        // Every new Classic game uses the sine-based generator with traced tabs
-        // at the current trace-set version — same stamping rationale as
-        // generatorWavyConfig. A Classic game without this config falls back to
-        // the legacy generator, so stamping it is what activates the upgrade
-        // for fresh puzzles (and withholding it is the degraded path above).
-        const generatorClassicConfig = cutStyle === 'classic' && tracedTabsError === null
+        // Every new Classic game uses the sine-based generator with traced
+        // tabs at the current trace-set version — same stamping rationale as
+        // generatorWavyConfig. A Classic game without this config falls back
+        // to the legacy generator, so stamping it is what activates the
+        // upgrade for fresh puzzles, and withholding it is what the
+        // `legacy-classic` outcome means.
+        const generatorClassicConfig = cutStyle === 'classic' && tracedTabs.kind === 'ok'
             ? { traceSetVersion: CURRENT_TRACE_SET_VERSION }
             : undefined;
 
@@ -1223,12 +1241,18 @@ async function startNewGame(
             data.traceSetVersion = traceSetVersion;
         }
         // Only Classic reaches here with a chunk error — every other style
-        // threw above. Without this flag a degraded game is indistinguishable
-        // from genuine pre-upgrade Classic traffic (both are `classic` with no
-        // `traceSetVersion`), which is the metric that decides when the legacy
-        // generator can be retired.
-        if (tracedTabsError !== null) {
+        // threw above. Without this flag a degraded game is
+        // indistinguishable from genuine pre-upgrade Classic traffic (both
+        // are `classic` with no `traceSetVersion`), which is the metric that
+        // decides when the legacy generator can be retired.
+        if (chunkDegraded) {
             data.tracedChunkDegraded = true;
+        }
+        // Same bucket, different cause: the boot fallback never fetched the
+        // chunk, so it has no failure to record — but its game is legacy
+        // geometry too and has to be excludable from that same query.
+        if (bootFallback) {
+            data.bootFallback = true;
         }
         if (data.imageSource === 'unsplash') {
             data.imageCategory = imageCategory ?? 'any';
