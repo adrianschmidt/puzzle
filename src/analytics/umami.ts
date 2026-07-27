@@ -45,7 +45,8 @@ export interface NewGameData {
      * Wavy games, Triangles games, and sine-based Classic games; omitted for
      * Fractal, Composable, legacy (classic-tab) Wavy links, pre-upgrade
      * Classic links/saves, Classic games degraded to the legacy generator by
-     * a failed chunk fetch (see `tracedChunkDegraded`), and any link whose
+     * a failed chunk fetch (see `tracedChunkDegraded`), boot-fallback games
+     * (see `bootFallback`), and any link whose
      * per-style config the decoder dropped as invalid — a `tf`-less Triangles
      * link still generates with traced tabs, but at a version substituted
      * during generation that the state never records. Lets analytics follow
@@ -58,9 +59,11 @@ export interface NewGameData {
      * queries: "has traceSetVersion" is no longer a proxy for
      * "Wavy/Triangles" — filter on `cutStyle` explicitly.
      *
-     * Two confounds sit in that bucket, both separable:
+     * Three confounds sit in that bucket, all separable:
      * - degraded new games (a failed chunk fetch) land in it — exclude
      *   `tracedChunkDegraded`;
+     * - boot-fallback games (#488) land in it too, with no chunk failure of
+     *   their own — exclude `bootFallback`;
      * - during a rollout window, clients still on the pre-upgrade build
      *   (PWA caches especially) start Classic games without the field too.
      *   Those are `source: 'fresh'`; a genuine pre-upgrade Classic *link*
@@ -78,9 +81,13 @@ export interface NewGameData {
      * only, so an unknown `clf` passes validation and is then ignored.
      * Permanently, it includes links shared from a game that had no sine
      * config of its own to pass on (a degraded start, a resumed pre-upgrade
-     * save). All of them genuinely ran the legacy generator, so every extra
-     * population inflates the tail in the safe direction — toward keeping
-     * that generator, never toward retiring it early.
+     * save, a boot-fallback game). That last one is not excludable
+     * recipient-side the way a boot fallback's own start is: `bootFallback`
+     * rides on the originator's `new-game-started` only, and nothing about
+     * it is encoded in the link. All of them genuinely ran the legacy
+     * generator, so every extra population inflates the tail in the safe
+     * direction — toward keeping that generator, never toward retiring it
+     * early.
      */
     traceSetVersion?: number;
     /**
@@ -122,6 +129,10 @@ export interface NewGameData {
      * `traceSetVersion`, so they must be excluded from the pre-upgrade-tail
      * query described above. Unlike it, the cause need not be the chunk at
      * all — a saved config the build cannot generate lands here too.
+     *
+     * Also like `tracedChunkDegraded`, it isn't persisted onto the saved
+     * puzzle, so the same `puzzle-completed`-after-reload caveat documented
+     * there applies here too.
      */
     bootFallback?: boolean;
     rotationMode: 'none' | 'quarter-turn' | 'free';
