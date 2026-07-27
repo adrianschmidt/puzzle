@@ -2,17 +2,14 @@ import './palette.css';
 import './style.css';
 import { diagnostics } from './diagnostics.js';
 import type { GameState, GridSize } from './model/types.js';
-import { SvgDomRenderer, applyGroupTransform } from './renderer/index.js';
+import { SvgDomRenderer } from './renderer/index.js';
 import { setupInteraction, ViewportTransform, RotationFocus } from './interaction/index.js';
 import {
     createNewGame,
     processDrop,
     checkAndMarkWin,
-    computeGatheredPositions,
-    applyGatheredPositions,
     getGroupLocalBounds,
     getGroupVisualBounds,
-    getGroupImageCenter,
     type MergeResult,
 } from './game/index.js';
 import {
@@ -61,9 +58,7 @@ import { SnapProximityPositionController } from './interaction/snap-proximity-po
 import { rotateGroup } from './game/rotate-group.js';
 import {
     buildGroupIndexes,
-    rotatePoint,
     localToWorld,
-    signedAngularDelta,
 } from './model/helpers.js';
 import { reorderGroupsAfterDrop } from './game/z-order.js';
 import { getUnsplashAccessKey, triggerPhotoDownload } from './images/index.js';
@@ -137,6 +132,7 @@ import {
 import { activeSnapTolerances } from './app/snap-tolerances.js';
 import { createBlankImageDataUrl } from './app/blank-canvas.js';
 import { createCompletionPresenter } from './app/completion-presenter.js';
+import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
 import { initPwaUpdates } from './pwa/register.js';
 import {
     wasRescueAttempted,
@@ -226,180 +222,6 @@ selectionManager.onChange((selectedIds) => {
     if (gameState) autoSave();
 });
 
-/**
- * Gather all groups into a compact layout and zoom the viewport to fit.
- * Reusable by the gather button, the solver, and new game initialization.
- */
-function gatherAndZoomToFit(): void {
-    const screenWidth = app.clientWidth || window.innerWidth;
-    const screenHeight = app.clientHeight || window.innerHeight;
-    const aspectRatio = screenWidth / screenHeight;
-
-    const { positions, layoutBounds } = computeGatheredPositions(
-        gameState.groups,
-        aspectRatio,
-        gameState.piecesById,
-    );
-
-    applyGatheredPositions(gameState.groups, positions);
-
-    const scaleX = screenWidth / layoutBounds.width;
-    const scaleY = screenHeight / layoutBounds.height;
-    const scale = Math.min(scaleX, scaleY) * 0.9;
-
-    const layoutCenterX = layoutBounds.x + layoutBounds.width / 2;
-    const layoutCenterY = layoutBounds.y + layoutBounds.height / 2;
-
-    viewportTransform.setState({
-        scale,
-        offset: {
-            x: screenWidth / 2 - layoutCenterX * scale,
-            y: screenHeight / 2 - layoutCenterY * scale,
-        },
-    });
-
-    applyViewportTransform();
-}
-
-/**
- * Animate the viewport to center and zoom-to-fit a single completed group.
- * Unlike gatherAndZoomToFit(), this doesn't move pieces — it just smoothly
- * animates the viewport to frame the completed puzzle nicely.
- *
- * @param completedGroup - The single group containing all pieces
- * @param onComplete - Callback to run after the animation finishes
- */
-function zoomToFitCompletedPuzzle(
-    completedGroup: import('./model/types.js').PieceGroup,
-    onComplete: () => void
-): void {
-    const screenWidth = app.clientWidth || window.innerWidth;
-    const screenHeight = app.clientHeight || window.innerHeight;
-
-    // If the puzzle was completed at a non-zero rotation, spin the group
-    // upright in parallel with the viewport zoom. Two things matter for how
-    // this looks:
-    //
-    //   1. It should spin about the puzzle's own center, in place — not orbit.
-    //      CSS interpolates `translate(...)` and `rotate(...)` independently,
-    //      so animating both would swing the center along an arc. Instead we
-    //      pin the rotation's `transform-origin` to the image center and
-    //      animate the angle only, keeping the center fixed throughout.
-    //   2. It should take the shortest path (≤180°): 350° spins +10° to land
-    //      upright, not −350° the long way round.
-    let groupTransitionCleanup: (() => void) | null = null;
-    if (completedGroup.rotation !== 0) {
-        const startRotation = completedGroup.rotation;
-
-        // Pivot about the assembled image center (corner geometry only, so
-        // asymmetric tabs don't offset it). `getGroupImageCenter` works in
-        // un-rotated local space — the same frame `transform-origin` uses.
-        const centerLocal = getGroupImageCenter(completedGroup, gameState.piecesById);
-
-        // Compensate `position` so that, with the origin moved to the center,
-        // the puzzle stays exactly where it was rendered. Same world point as
-        // before; only its local-space pivot changed.
-        const rotatedCenter = rotatePoint(centerLocal, startRotation);
-        const finalPosition = {
-            x: completedGroup.position.x + rotatedCenter.x - centerLocal.x,
-            y: completedGroup.position.y + rotatedCenter.y - centerLocal.y,
-        };
-
-        // Shortest signed turn that lands on an upright (0°-equivalent) angle.
-        // e.g. 350° → 360°, 10° → 0°, 200° → 360°.
-        const targetRotation = startRotation + signedAngularDelta(0, startRotation);
-
-        const groupEl = app.querySelector(
-            `[data-group-id="${completedGroup.id}"]`,
-        ) as HTMLElement | null;
-        if (groupEl) {
-            // Re-anchor to the center origin without moving the puzzle (same
-            // angle, compensated position), then force a reflow so this state
-            // becomes the transition's start frame rather than collapsing into
-            // the spin below.
-            groupEl.style.transition = 'none';
-            applyGroupTransform(groupEl, finalPosition, startRotation, centerLocal);
-            groupEl.getBoundingClientRect();
-
-            // Spin about the center to upright.
-            groupEl.style.transition = 'transform 0.8s ease-in-out';
-            applyGroupTransform(groupEl, finalPosition, targetRotation, centerLocal);
-
-            groupTransitionCleanup = () => {
-                // Settle into the normal representation: origin back at 0,0 and
-                // rotation normalized to 0. Visually identical to the spin's
-                // final frame (targetRotation ≡ 0 mod 360), so no jump.
-                groupEl.style.transition = '';
-                renderer.renderState(gameState);
-            };
-        }
-
-        // Commit the upright resting state. Used immediately below to frame the
-        // viewport on the final orientation, and as the model's settled value.
-        completedGroup.position = finalPosition;
-        completedGroup.rotation = 0;
-    }
-
-    // Compute the visual bounds of the completed group in its current position
-    const groupBounds = getGroupVisualBounds(completedGroup, gameState.piecesById);
-
-    // Convert to world-space bounds (group-local space + group position)
-    const worldBounds = {
-        x: completedGroup.position.x + groupBounds.minX,
-        y: completedGroup.position.y + groupBounds.minY,
-        width: groupBounds.width,
-        height: groupBounds.height,
-    };
-
-    // Calculate target scale to fit the completed puzzle with padding
-    const scaleX = screenWidth / worldBounds.width;
-    const scaleY = screenHeight / worldBounds.height;
-    const targetScale = Math.min(scaleX, scaleY) * 0.9; // 10% padding like gatherAndZoomToFit
-
-    // Calculate target offset to center the completed puzzle
-    const worldCenterX = worldBounds.x + worldBounds.width / 2;
-    const worldCenterY = worldBounds.y + worldBounds.height / 2;
-    const targetOffset = {
-        x: screenWidth / 2 - worldCenterX * targetScale,
-        y: screenHeight / 2 - worldCenterY * targetScale,
-    };
-
-    // Enable transition before applying the new transform
-    renderer.enableViewportTransition();
-
-    // Apply the target transform on next frame to ensure transition is set
-    requestAnimationFrame(() => {
-        viewportTransform.setState({
-            scale: targetScale,
-            offset: targetOffset,
-        });
-
-        applyViewportTransform();
-
-        // Listen for the transition to complete
-        const tableEl = app.querySelector('[data-puzzle-table]') as HTMLElement;
-        if (tableEl) {
-            const handleTransitionEnd = (event: TransitionEvent) => {
-                // Make sure it's the transform property and not some other transition
-                if (event.propertyName === 'transform' && event.target === tableEl) {
-                    tableEl.removeEventListener('transitionend', handleTransitionEnd);
-                    renderer.disableViewportTransition();
-                    groupTransitionCleanup?.();
-                    onComplete();
-                }
-            };
-            tableEl.addEventListener('transitionend', handleTransitionEnd);
-        } else {
-            // Fallback: disable transition and run callback after expected duration
-            setTimeout(() => {
-                renderer.disableViewportTransition();
-                groupTransitionCleanup?.();
-                onComplete();
-            }, 800);
-        }
-    });
-}
-
 // Debug helper: solve the puzzle by placing all pieces in their correct positions.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).__solvePuzzle = () => {
@@ -427,7 +249,7 @@ function zoomToFitCompletedPuzzle(
     renderer.renderState(gameState);
 
     // Use the same animated zoom as normal completion
-    zoomToFitCompletedPuzzle(solvedGroup, () => {
+    zoomToFitCompletedPuzzle(gameState, solvedGroup, viewportFitDeps, () => {
         completionPresenter.show(gameState);
     });
 };
@@ -626,6 +448,17 @@ function applyViewportTransform(): void {
     renderer.setViewportTransform(state.scale, state.offset.x, state.offset.y);
 }
 
+/** Dependencies for `gatherAndZoomToFit` / `zoomToFitCompletedPuzzle`, built once. */
+const viewportFitDeps: ViewportFitDeps = {
+    container: app,
+    renderer,
+    viewportTransform,
+    applyTransform: applyViewportTransform,
+    // Late-bound: the completion cleanup can fire up to 800ms after the
+    // triggering call, by which time a new game may have started.
+    renderCurrent: () => renderer.renderState(gameState),
+};
+
 /**
  * React to a viewport (zoom/pan) change: re-apply the transform to the
  * renderer and persist the new view via the debounced auto-save, so the
@@ -798,7 +631,7 @@ function applyMergeResult(
     if (checkAndMarkWin(gameState)) {
         track('puzzle-completed', buildPuzzleCompletedData(gameState, currentGameAnalytics));
         if (gameState.groups.length === 1) {
-            zoomToFitCompletedPuzzle(gameState.groups[0], () => {
+            zoomToFitCompletedPuzzle(gameState, gameState.groups[0], viewportFitDeps, () => {
                 completionPresenter.show(gameState);
             });
         } else {
@@ -1121,7 +954,7 @@ async function startNewGame(
         }
 
         initGame(state);
-        gatherAndZoomToFit();
+        gatherAndZoomToFit(gameState, viewportFitDeps);
         renderer.renderState(gameState);
         persistNewPuzzle();
 
@@ -1265,7 +1098,7 @@ createGatherPiecesButton({
         // left no game behind. There is nothing to gather in that state,
         // so doing nothing is the whole correct behavior.
         if (!gameState) return;
-        gatherAndZoomToFit();
+        gatherAndZoomToFit(gameState, viewportFitDeps);
         renderer.renderState(gameState);
         autoSave();
     },
@@ -1483,7 +1316,7 @@ async function loadSharedPuzzle(
         }
 
         initGame(state);
-        gatherAndZoomToFit();
+        gatherAndZoomToFit(gameState, viewportFitDeps);
         renderer.renderState(gameState);
         persistNewPuzzle();
 
