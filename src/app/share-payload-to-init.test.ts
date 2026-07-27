@@ -1,0 +1,116 @@
+import { describe, it, expect } from 'vitest';
+import type { SharePayload } from '../sharing/index.js';
+import { needsTracedTabChunk, shareInitOptions } from './share-payload-to-init.js';
+
+/**
+ * Minimal decoded payload, matching the base literal used across
+ * `src/sharing/share-link.test.ts` (e.g. its `base` const at the top of the
+ * "attribution scheme validation" describe block): the required fields
+ * `{ v, i, is, g, c, s, r }` with no optional blocks. Callers override the
+ * fields each test cares about.
+ */
+function payload(overrides: Partial<SharePayload> = {}): SharePayload {
+    return {
+        v: 1,
+        i: 'https://images.unsplash.com/photo-123?w=1080',
+        is: [1080, 720],
+        g: [8, 6],
+        c: 'classic',
+        s: 12345,
+        r: 'none',
+        ...overrides,
+    };
+}
+
+describe('needsTracedTabChunk', () => {
+    it('is true for a composable link asking for traced tabs', () => {
+        expect(needsTracedTabChunk(payload({
+            c: 'composable',
+            cf: { bg: 'sine', bgc: {}, tg: 'traced', tgc: {} },
+        }))).toBe(true);
+    });
+
+    it('is true for a versioned Wavy link but false for a legacy one', () => {
+        expect(needsTracedTabChunk(payload({ c: 'wavy', wf: { bl: false, tv: 1 } }))).toBe(true);
+        expect(needsTracedTabChunk(payload({ c: 'wavy', wf: { bl: false } }))).toBe(false);
+    });
+
+    it('is true for every Triangles link', () => {
+        expect(needsTracedTabChunk(payload({ c: 'triangles' }))).toBe(true);
+    });
+
+    it('is true for a Classic link carrying a trace-set version', () => {
+        expect(needsTracedTabChunk(payload({ c: 'classic', clf: { tv: 1 } }))).toBe(true);
+    });
+
+    it('denies a chunk fetch to a crafted link whose clf is falsy', () => {
+        // Narrower than the truthiness check the config reconstruction uses:
+        // this link would never consume the chunk, so it must not fetch it.
+        // `clf` is deliberately malformed here (its real type is
+        // `{ tv: number } | undefined`, never `0`) to exercise that rejection
+        // path, hence the cast.
+        expect(needsTracedTabChunk(payload({ c: 'classic', clf: 0 as unknown as SharePayload['clf'] }))).toBe(false);
+    });
+
+    it('is false for a plain Classic link', () => {
+        expect(needsTracedTabChunk(payload({ c: 'classic' }))).toBe(false);
+    });
+});
+
+describe('shareInitOptions', () => {
+    it('carries seed, cut style and rotation mode through', () => {
+        const options = shareInitOptions(payload({ c: 'wavy', s: 1234, r: 'free' }));
+        expect(options.cutStyle).toBe('wavy');
+        expect(options.seed).toBe(1234);
+        expect(options.rotationMode).toBe('free');
+    });
+
+    it('reconstructs the per-style configs the payload carries', () => {
+        const options = shareInitOptions(payload({
+            c: 'wavy',
+            wf: { bl: true, tv: 2 },
+        }));
+        expect(options.wavyConfig).toEqual({ borderless: true, traceSetVersion: 2 });
+    });
+
+    it('omits configs the payload does not carry', () => {
+        const options = shareInitOptions(payload({ c: 'classic' }));
+        expect(options.classicConfig).toBeUndefined();
+        expect(options.wavyConfig).toBeUndefined();
+        expect(options.trianglesConfig).toBeUndefined();
+        expect(options.composableConfig).toBeUndefined();
+    });
+
+    it('reconstructs the classicConfig the payload carries', () => {
+        // classicConfig's presence is the discriminator between the
+        // sine-based Classic generator and the legacy straight-grid one, so
+        // its populated mapping needs its own assertion, not just the
+        // omitted-case coverage above. tv: 4 is distinct from every other
+        // fixture's tv in this file so a cross-wired mapping can't
+        // accidentally pass.
+        const options = shareInitOptions(payload({ c: 'classic', clf: { tv: 4 } }));
+        expect(options.classicConfig).toEqual({ traceSetVersion: 4 });
+    });
+
+    it('reconstructs a composable config via shareCfToComposableConfig', () => {
+        const options = shareInitOptions(payload({
+            c: 'composable',
+            cf: { bg: 'sine', bgc: { hf: 2 }, tg: 'classic', tgc: {}, bl: true },
+        }));
+        expect(options.composableConfig).toEqual({
+            baseCutGenerator: 'sine',
+            baseCutConfig: { hf: 2 },
+            tabGenerator: 'classic',
+            tabConfig: {},
+            borderless: true,
+        });
+    });
+
+    it('reconstructs fractal and triangles configs', () => {
+        const fractalOptions = shareInitOptions(payload({ c: 'fractal', ff: { bl: true } }));
+        expect(fractalOptions.fractalConfig).toEqual({ borderless: true });
+
+        const trianglesOptions = shareInitOptions(payload({ c: 'triangles', tf: { tv: 3 } }));
+        expect(trianglesOptions.trianglesConfig).toEqual({ traceSetVersion: 3 });
+    });
+});
