@@ -4,12 +4,7 @@ import { diagnostics } from './diagnostics.js';
 import type { GameState, GridSize } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { ViewportTransform, RotationFocus } from './interaction/index.js';
-import {
-    createNewGame,
-    processDrop,
-    getGroupLocalBounds,
-    getGroupVisualBounds,
-} from './game/index.js';
+import { createNewGame } from './game/index.js';
 import { loadState, loadSavedGame, clearSavedState } from './persistence/index.js';
 import {
     createNewGameButton,
@@ -30,8 +25,6 @@ import {
     createSelectToolButton,
     createMarqueeToolButton,
     createDeselectButton,
-    createRotateButtons,
-    createRotateHandle,
     createAttributionElement,
     removeAttribution,
     createNewGameDialog,
@@ -46,12 +39,7 @@ import {
     type WavyDialogConfig,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
-import { SnapProximityPositionController } from './interaction/snap-proximity-position-controller.js';
-import { rotateGroup } from './game/rotate-group.js';
-import {
-    buildGroupIndexes,
-    localToWorld,
-} from './model/helpers.js';
+import { buildGroupIndexes } from './model/helpers.js';
 import { getUnsplashAccessKey, triggerPhotoDownload } from './images/index.js';
 import {
     loadSizePreference,
@@ -118,13 +106,13 @@ import {
     orientGridSize,
     blankSizeForOrientation,
 } from './app/orientation.js';
-import { activeSnapTolerances } from './app/snap-tolerances.js';
 import { createBlankImageDataUrl } from './app/blank-canvas.js';
 import { createCompletionPresenter } from './app/completion-presenter.js';
 import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
 import { createSaveCoordinator } from './app/save-coordinator.js';
 import { applyMergeResult } from './app/merge-result.js';
 import { createGameSession } from './app/game-session.js';
+import { createRotationUi } from './app/rotation-ui.js';
 import { initPwaUpdates } from './pwa/register.js';
 import {
     wasRescueAttempted,
@@ -475,6 +463,33 @@ function onViewportChanged(): void {
 // visibilitychange listeners as a side effect of construction).
 const saveCoordinator = createSaveCoordinator({ selectionManager, viewportTransform });
 
+// Owns the rotate-buttons/-handle pair (bottom-left, fractal-only /
+// free-rotation drag handle), their shared snap-position controller, and
+// screen-space bounds projection. Constructed before `session` so
+// `rotationUi.syncVisibility` can be handed to the session's `onInstalled`
+// below as a bare value — no wrapper, no `.bind` — which makes "the
+// rotation UI must exist before the session" a data dependency the
+// compiler enforces, rather than an ordering that only held because of
+// where these consts used to sit in the file.
+const rotationUi = createRotationUi({
+    container: app,
+    renderer,
+    viewportTransform,
+    selectionManager,
+    rotationFocus,
+    getState: () => session.current(),
+    save: (state) => saveCoordinator.autoSave(state),
+    applyMerge: (state, result, droppedGroupIds) => {
+        applyMergeResult(state, result, droppedGroupIds, {
+            renderer,
+            selectionManager,
+            rotationFocus,
+            currentGameAnalytics: () => currentGameAnalytics,
+            onCompleted: onPuzzleCompleted,
+        });
+    },
+});
+
 // Owns the installed game and the interaction wiring bound to it. Everything
 // above reads it through `session.current()`, which is `GameState |
 // undefined` — boot can fail and install nothing (#488), and the compiler
@@ -490,7 +505,7 @@ const session = createGameSession({
         // shown — `completionPresenter.show` no-ops while one is already up.
         completionPresenter.remove();
         updateAttribution(state);
-        updateRotationUiVisibility();
+        rotationUi.syncVisibility(state);
         if (state.completed) {
             completionPresenter.show(state);
         }
@@ -514,28 +529,6 @@ const session = createGameSession({
 // The save coordinator flushes first so progress within the debounce window
 // survives the reload.
 const pwaUpdates = initPwaUpdates(() => saveCoordinator.flush());
-
-/**
- * Project the visual bounds of the given group from world space into
- * screen space, using the current viewport transform. Returns `null` if
- * the group is no longer in the game state.
- */
-function getFocusedGroupScreenBounds(
-    groupId: number,
-): { left: number; right: number; top: number; bottom: number } | null {
-    const state = session.current();
-    if (!state) return null;
-    const group = state.groupsById.get(groupId);
-    if (!group) return null;
-    const local = getGroupVisualBounds(group, state.piecesById);
-    const worldLeft = group.position.x + local.minX;
-    const worldTop = group.position.y + local.minY;
-    const worldRight = worldLeft + local.width;
-    const worldBottom = worldTop + local.height;
-    const tl = viewportTransform.worldToScreen({ x: worldLeft, y: worldTop });
-    const br = viewportTransform.worldToScreen({ x: worldRight, y: worldBottom });
-    return { left: tl.x, top: tl.y, right: br.x, bottom: br.y };
-}
 
 /**
  * Frame and celebrate a just-completed puzzle: zoom to fit the single
@@ -928,112 +921,6 @@ createDeselectButton({
     container: app,
     selectionManager,
 });
-
-// Set up the rotate buttons (bottom-left, fractal-only).
-// Visibility is updated whenever a game is installed.
-const rotateButtons = createRotateButtons({
-    container: app,
-    rotationFocus,
-    onRotate: (groupId, direction) => {
-        const state = session.current();
-        if (!state) return;
-        const group = state.groupsById.get(groupId);
-        if (!group) return;
-
-        const deltaDeg = direction === 'cw' ? 90 : -90;
-        rotateGroup(group, state.piecesById, deltaDeg);
-
-        renderer.renderState(state);
-        // Re-apply selection visuals after re-render (rotation re-renders the group).
-        for (const selectedId of selectionManager.selectedGroupIds) {
-            renderer.setGroupSelected(selectedId, true);
-        }
-        saveCoordinator.autoSave(state);
-    },
-    getFocusedGroupScreenBounds,
-});
-
-const snapPosition = new SnapProximityPositionController({
-    getState: () => session.current(),
-    getTolerances: activeSnapTolerances,
-});
-
-const rotateHandle = createRotateHandle({
-    container: app,
-    rotationFocus,
-    onRotateStart: (groupId) => {
-        if (!session.current()) return;
-        snapPosition.start(groupId);
-    },
-    onRotate: (groupId, deltaDegrees) => {
-        const state = session.current();
-        if (!state) return;
-        const group = state.groupsById.get(groupId);
-        if (!group) return;
-        rotateGroup(group, state.piecesById, deltaDegrees);
-        snapPosition.onGroupRotated();
-        renderer.renderState(state);
-        // Re-apply selection visuals after re-render.
-        for (const selectedId of selectionManager.selectedGroupIds) {
-            renderer.setGroupSelected(selectedId, true);
-        }
-        // Don't autoSave on every drag tick — autoSave fires on commit.
-    },
-    onCommit: (groupId) => {
-        const state = session.current();
-        if (!state) return;
-
-        const { tolerancePx, rotationToleranceDeg } = activeSnapTolerances(state);
-
-        const result = processDrop(groupId, state, tolerancePx, rotationToleranceDeg);
-        if (result) {
-            applyMergeResult(state, result, [result.group.id], {
-                renderer,
-                selectionManager,
-                rotationFocus,
-                currentGameAnalytics: () => currentGameAnalytics,
-                onCompleted: onPuzzleCompleted,
-            });
-        }
-        saveCoordinator.autoSave(state);
-    },
-    onRotateEnd: () => {
-        snapPosition.stop();
-    },
-    getFocusedGroupScreenBounds,
-    getGroupRotation: (groupId) => session.current()?.groupsById.get(groupId)?.rotation ?? null,
-    getGroupPivotWorld: (groupId) => {
-        const state = session.current();
-        const group = state?.groupsById.get(groupId);
-        if (!group || !state) return null;
-        // Interactive rotation pivots about the tab-inclusive bounds center so
-        // the handle tracks the visible footprint of a mid-assembly group with
-        // exposed tabs/blanks. (The completion spin instead pivots about the
-        // corner-only image center via getGroupImageCenter — a deliberately
-        // different point, since a solved puzzle has a flat border.)
-        const bounds = getGroupLocalBounds(group, state.piecesById);
-        const centerLocal = {
-            x: bounds.minX + bounds.width / 2,
-            y: bounds.minY + bounds.height / 2,
-        };
-        return localToWorld(centerLocal, group);
-    },
-    screenToWorld: (clientX, clientY) => viewportTransform.screenToWorld({ x: clientX, y: clientY }),
-});
-
-function updateRotationUiVisibility(): void {
-    const state = session.current();
-    if (state?.rotationMode === 'quarter-turn') {
-        rotateButtons.show();
-        rotateHandle.hide();
-    } else if (state?.rotationMode === 'free') {
-        rotateButtons.hide();
-        rotateHandle.show();
-    } else {
-        rotateButtons.hide();
-        rotateHandle.hide();
-    }
-}
 
 // Install the SVG filter used by the "Outline" piece-outline mode and
 // apply the saved style + color preferences. The color itself flips
