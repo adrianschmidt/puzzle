@@ -19,6 +19,7 @@
  */
 
 import { runWithErrorReport } from './run-with-error-report.js';
+import { BOOT_FALLBACK_CUT_STYLE } from './traced-tab-plan.js';
 import { showToast } from '../ui/toast.js';
 
 /** Shown once the last-resort puzzle is actually on screen. */
@@ -30,6 +31,12 @@ export const BOOT_FAILED_TOAST = "Couldn't start a puzzle — try reloading";
 export async function startWithBootFallback(opts: {
     /** Start the puzzle the player's preferences ask for. */
     start: () => Promise<void>;
+    /**
+     * Cut style `start` is attempting, for failure attribution. The
+     * fallback's own failure reports {@link BOOT_FALLBACK_CUT_STYLE}
+     * instead — it never generates the requested style.
+     */
+    cutStyle: string;
     /** Start the last-resort puzzle: legacy Classic, no lazy chunk. */
     startFallback: () => Promise<void>;
     /**
@@ -54,6 +61,7 @@ export async function startWithBootFallback(opts: {
         // dialog and share-link flows (already caught pre-#488) stay silent.
         logInProduction: true,
         event: 'new-game-failed',
+        cutStyle: opts.cutStyle,
         phase: 'boot',
         // No toast: the message the player gets depends on whether the
         // recovery below works, and only one toast renders at a time.
@@ -78,6 +86,7 @@ export async function startWithBootFallback(opts: {
         // production console.
         logInProduction: true,
         event: 'new-game-failed',
+        cutStyle: BOOT_FALLBACK_CUT_STYLE,
         phase: 'boot-fallback',
         // No toast here either, for the same reason as above: this
         // function owns every message it shows, so all three live in the

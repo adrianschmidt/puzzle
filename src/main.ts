@@ -1376,6 +1376,7 @@ createNewGameButton({
                     run: () => newGame,
                     warnMessage: 'Failed to start new game:',
                     event: 'new-game-failed',
+                    cutStyle,
                     toastMessage: "Couldn't start new game",
                     fallback: undefined,
                 });
@@ -1882,6 +1883,7 @@ void (async () => {
         const vibrant = loadVibrantPreference();
 
         await startWithBootFallback({
+            cutStyle: preferredCutStyle,
             start: () => startNewGame(gridSize, {
                 cutStyle: preferredCutStyle,
                 composableConfig: preferredCutStyle === 'composable' && preferredComposable

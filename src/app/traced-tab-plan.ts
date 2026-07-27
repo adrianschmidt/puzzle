@@ -37,6 +37,13 @@ export interface TracedTabPlan {
 }
 
 /**
+ * The cut style the boot fallback is forced to. Exported so the analytics
+ * attribution on the fallback's own failure event names the style it
+ * actually attempted, without a second literal to keep in step.
+ */
+export const BOOT_FALLBACK_CUT_STYLE: CutStyle = 'classic';
+
+/**
  * Decide, before any fetch, which cut style to generate and whether the
  * traced-tab chunk is needed for it.
  *
@@ -52,7 +59,7 @@ export function planTracedTabs(opts: {
     bootFallback?: boolean;
 }): TracedTabPlan {
     if (opts.bootFallback) {
-        return { cutStyle: 'classic', preloadChunk: false, forceLegacyClassic: true };
+        return { cutStyle: BOOT_FALLBACK_CUT_STYLE, preloadChunk: false, forceLegacyClassic: true };
     }
     return {
         cutStyle: opts.cutStyle,

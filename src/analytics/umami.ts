@@ -391,6 +391,26 @@ export interface ImageFetchFailedData {
 export interface NewGameFailedData {
     reason: string;
     /**
+     * Cut style the failed attempt asked for — the same attribution
+     * {@link SaveFailedData}, {@link SaveCompressedData} and
+     * {@link ProgressSaveSkippedData} carry, for the same stated reason:
+     * without it a failure arrives as an unattributable count. (The
+     * principle is {@link ImageFetchFailedData}'s too, but with the
+     * dimensions that matter there — it carries `orientation` and
+     * `imageCategory`, not a cut style.)
+     * It is what makes the #488 question answerable at all, namely
+     * whether a Wavy or Triangles preference is what dead-ends a boot. The
+     * recovered `new-game-started` cannot answer it — that one reports
+     * `'classic'`, the style the fallback substituted.
+     *
+     * The *requested* style, so on `phase: 'boot-fallback'` it is always
+     * `'classic'`: the fallback's own forced cut, not the preference that
+     * failed. The preference is on the paired `phase: 'boot'` event.
+     *
+     * Absent on rows recorded before the field existed.
+     */
+    cutStyle: string;
+    /**
      * Which start attempt failed. Absent on the new-game dialog path,
      * where a rejection leaves the previous puzzle on screen and the
      * player can simply retry — so absence is also every event recorded

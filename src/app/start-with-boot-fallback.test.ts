@@ -38,6 +38,7 @@ describe('startWithBootFallback', () => {
         const startFallback = vi.fn(async () => {});
 
         await startWithBootFallback({
+            cutStyle: 'wavy',
             start: async () => {},
             startFallback,
             hasGame: () => true,
@@ -54,6 +55,7 @@ describe('startWithBootFallback', () => {
         const error = new Error('chunk boom at https://cdn.example/x.js');
 
         await startWithBootFallback({
+            cutStyle: 'wavy',
             start: async () => {
                 throw error;
             },
@@ -65,6 +67,7 @@ describe('startWithBootFallback', () => {
         expect(umamiTrack).toHaveBeenCalledTimes(1);
         expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', {
             reason: 'chunk boom at <url>',
+            cutStyle: 'wavy',
             phase: 'boot',
         });
         expect(showToast).toHaveBeenCalledTimes(1);
@@ -79,6 +82,7 @@ describe('startWithBootFallback', () => {
         const startFallback = vi.fn(async () => {});
 
         await startWithBootFallback({
+            cutStyle: 'wavy',
             start: async () => {
                 throw new Error('late boom');
             },
@@ -89,6 +93,7 @@ describe('startWithBootFallback', () => {
         expect(startFallback).not.toHaveBeenCalled();
         expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', {
             reason: 'late boom',
+            cutStyle: 'wavy',
             phase: 'boot',
         });
         expect(showToast).not.toHaveBeenCalled();
@@ -99,6 +104,7 @@ describe('startWithBootFallback', () => {
         const second = new Error('second');
 
         await startWithBootFallback({
+            cutStyle: 'wavy',
             start: async () => {
                 throw first;
             },
@@ -111,10 +117,14 @@ describe('startWithBootFallback', () => {
         expect(umamiTrack).toHaveBeenCalledTimes(2);
         expect(umamiTrack).toHaveBeenNthCalledWith(1, 'new-game-failed', {
             reason: 'first',
+            cutStyle: 'wavy',
             phase: 'boot',
         });
         expect(umamiTrack).toHaveBeenNthCalledWith(2, 'new-game-failed', {
+            // The style the fallback actually attempts, not the
+            // preference that failed — that one is on the 'boot' event.
             reason: 'second',
+            cutStyle: 'classic',
             phase: 'boot-fallback',
         });
         expect(showToast).toHaveBeenCalledTimes(1);
@@ -133,6 +143,7 @@ describe('startWithBootFallback', () => {
         let onScreen = false;
 
         await startWithBootFallback({
+            cutStyle: 'wavy',
             start: async () => {
                 throw new Error('first');
             },

@@ -23,11 +23,17 @@ import { showToast } from '../ui/toast.js';
  * Which typed failure event the operation reports on, plus the per-event
  * fields that can't be derived from the error itself. `shared-load-failed`
  * has two producers (a real `#p=` share link and the `__reproPuzzle` console
- * helper), so it carries a `source` discriminator; `new-game-failed` has one.
+ * helper), so it carries a `source` discriminator; `new-game-failed` carries
+ * the cut style the failed attempt asked for, and — on the boot path only —
+ * which of the two attempts it was.
  */
 export type ErrorReportEvent =
     | { event: 'shared-load-failed'; source: SharedLoadFailedData['source'] }
-    | { event: 'new-game-failed'; phase?: NewGameFailedData['phase'] };
+    | {
+        event: 'new-game-failed';
+        cutStyle: string;
+        phase?: NewGameFailedData['phase'];
+    };
 
 /**
  * `track` is overloaded per event name, so it can't be called with a union
@@ -40,10 +46,16 @@ function trackReasonEvent(report: ErrorReportEvent, reason: string): void {
     switch (report.event) {
         case 'new-game-failed': {
             // Build the payload rather than passing `phase` straight
-            // through: an explicit `phase: undefined` would ship a hollow
-            // property to Umami instead of no property, and the dialog
-            // path's events must stay byte-identical to today's.
-            const data: NewGameFailedData = { reason };
+            // through: a dialog-path failure has to reach Umami with no
+            // `phase` key at all, since its absence is exactly what marks
+            // it. See `NewGameFailedData.phase` — recovering a
+            // dialog-path-only figure is subtraction over rows that carry
+            // no `phase` key. Assembling it conditionally keeps that
+            // independent of how the tracker serializes an explicit
+            // `phase: undefined`, and the unit test pins the key's absence
+            // in the payload handed to the tracker. (`cutStyle` is
+            // unconditional on every path and needs no such care.)
+            const data: NewGameFailedData = { reason, cutStyle: report.cutStyle };
             if (report.phase) data.phase = report.phase;
             track(report.event, data);
             return;

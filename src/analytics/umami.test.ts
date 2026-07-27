@@ -236,9 +236,12 @@ describe('track', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
 
-        track('new-game-failed', { reason: 'chunk load failed' });
+        track('new-game-failed', { reason: 'chunk load failed', cutStyle: 'triangles' });
 
-        expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', { reason: 'chunk load failed' });
+        expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', {
+            reason: 'chunk load failed',
+            cutStyle: 'triangles',
+        });
     });
 
     it('forwards share-failed with source and reason', () => {
