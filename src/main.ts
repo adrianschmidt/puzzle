@@ -1277,9 +1277,18 @@ async function startNewGame(
 // Set up the New Game button
 createNewGameButton({
     container: app,
-    isCompleted: () => gameState.completed,
-    getGroupCount: () => gameState.groups.length,
-    getPieceCount: () => gameState.pieces.length,
+    // Guarded like the other interaction entry points that read the
+    // global: these three run synchronously on click, so an unguarded read
+    // threw and swallowed the click whenever boot left no game behind —
+    // making the New Game dialog, the one place a player can pick a
+    // smaller grid or a blank image and escape a failure rooted in their
+    // inputs, the one thing they couldn't reach (#488). Reloading just
+    // replays the same inputs. Zero counts read as "no progress to lose",
+    // so the dialog opens without a confirm, which is correct with nothing
+    // on screen.
+    isCompleted: () => gameState?.completed ?? false,
+    getGroupCount: () => gameState?.groups.length ?? 0,
+    getPieceCount: () => gameState?.pieces.length ?? 0,
     onNewGame: () => {
         const preferredSizeId = loadSizePreference();
         const preferredCutStyleId = loadCutStylePreference();
