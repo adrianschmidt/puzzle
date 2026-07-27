@@ -5,8 +5,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SelectionManager } from '../interaction/selection-manager.js';
 import type { GameState } from '../model/types.js';
+import type { BackgroundColorControl } from './install-background-color.js';
 import type { GameSession } from './game-session.js';
 import { installToolbar, type InstallToolbarDeps } from './install-toolbar.js';
+
+/** A stand-in for the handle `installBackgroundColorControl` produces. */
+function makeBackgroundColor(): BackgroundColorControl {
+    return { adopt: vi.fn(() => 'adopted' as const) };
+}
 
 /** A `GameSession` fake whose `current()` returns `state` (default: no game). */
 function makeSession(state: GameState | undefined = undefined): GameSession {
@@ -41,7 +47,7 @@ describe('installToolbar', () => {
             fitView: vi.fn(),
             save: vi.fn(),
             onNewGame: vi.fn(),
-            installBackgroundColorControl: vi.fn(),
+            installBackgroundColorControl: vi.fn(makeBackgroundColor),
             solve: vi.fn(),
             ...overrides,
         };
@@ -62,15 +68,16 @@ describe('installToolbar', () => {
         }
     });
 
-    it('keeps the background-colour control between deselect and Info in DOM order', () => {
+    it('keeps the background-color control between deselect and Info in DOM order', () => {
         // Every one of these controls is absolutely positioned in one
         // visual top-to-bottom stack (src/style.css), so DOM order alone
         // sets keyboard tab order — it has to match New Game -> Gather ->
-        // select -> marquee -> deselect -> background-colour -> Info.
+        // select -> marquee -> deselect -> background-color -> Info.
         const installBackgroundColorControl = vi.fn(() => {
             const marker = document.createElement('div');
             marker.className = 'background-color-marker';
             container.appendChild(marker);
+            return makeBackgroundColor();
         });
         installToolbar(deps({ installBackgroundColorControl }));
 
@@ -84,6 +91,21 @@ describe('installToolbar', () => {
             'background-color-marker',
             'info-button',
         ]);
+    });
+
+    it('hands back the background-color handle it installed', () => {
+        // The composition root needs the handle for the share path but wants
+        // the picker's DOM to land here, between deselect and Info. Returning
+        // it is what lets that root bind it with a plain `const` — an
+        // assigned-by-callback binding would need a definite-assignment
+        // assertion, and would silently be `undefined` if this call ever
+        // stopped invoking the dependency.
+        const control = makeBackgroundColor();
+        const returned = installToolbar(
+            deps({ installBackgroundColorControl: vi.fn(() => control) }),
+        );
+
+        expect(returned).toBe(control);
     });
 
     it('reads zero counts and not-completed when there is no game', () => {
