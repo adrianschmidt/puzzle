@@ -124,6 +124,7 @@ import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData, PuzzleCompletedData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
+import { startWithBootFallback } from './app/start-with-boot-fallback.js';
 import { planTracedTabs, resolveTracedTabOutcome } from './app/traced-tab-plan.js';
 import { resolveUnsplashImage } from './app/resolve-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './app/classify-image-source.js';
@@ -909,6 +910,13 @@ function initGame(state: GameState): void {
         showCompletionOverlay();
     }
 
+    // Keep this last, and keep it unconditional: the boot fallback's
+    // `hasGame` predicate reads `cleanupDrag !== null` as "a puzzle is
+    // rendered and interactive" (see the call site at the bottom of this
+    // file). Moving the assignment earlier, wiring interaction only for
+    // some states, or nulling `cleanupDrag` from anywhere but the teardown
+    // above silently restores #488's dead-and-silent app, and `main.ts` is
+    // not importable under test so nothing would catch it.
     cleanupDrag = setupInteraction({
         container: app,
         renderer,
@@ -1859,17 +1867,47 @@ void (async () => {
         const firstRun = saved.status === 'empty'
             && !imageSourcePreferenceExists()
             && !imageCategoryPreferenceExists();
-        await startNewGame(toGridSize(option), {
-            cutStyle: preferredCutStyle,
-            composableConfig: preferredCutStyle === 'composable' && preferredComposable
-                ? composableSliderToGeneratorConfig(preferredComposable)
-                : undefined,
-            imageSource: firstRun ? 'first-run' : loadImageSourcePreference(),
-            imageCategory: loadImageCategoryPreference(),
-            fractalConfig: preferredFractalConfig,
-            wavyConfig: preferredWavyConfig,
-            vibrant: loadVibrantPreference(),
-            rotationEnabled: preferredRotationEnabled,
+        const gridSize = toGridSize(option);
+        const imageSource = firstRun ? 'first-run' : loadImageSourcePreference();
+        const imageCategory = loadImageCategoryPreference();
+        const vibrant = loadVibrantPreference();
+
+        await startWithBootFallback({
+            start: () => startNewGame(gridSize, {
+                cutStyle: preferredCutStyle,
+                composableConfig: preferredCutStyle === 'composable' && preferredComposable
+                    ? composableSliderToGeneratorConfig(preferredComposable)
+                    : undefined,
+                imageSource,
+                imageCategory,
+                fractalConfig: preferredFractalConfig,
+                wavyConfig: preferredWavyConfig,
+                vibrant,
+                rotationEnabled: preferredRotationEnabled,
+            }),
+            // Everything except the cut is kept: same size, image source,
+            // category, vibrancy, rotation. The per-style configs are
+            // deliberately dropped — with the style forced to Classic they
+            // are dead weight, and a saved Composable config the build
+            // cannot generate is one of the failures being recovered from.
+            startFallback: () => startNewGame(gridSize, {
+                bootFallback: true,
+                imageSource,
+                imageCategory,
+                vibrant,
+                rotationEnabled: preferredRotationEnabled,
+            }),
+            // Deliberately not `gameState !== undefined`: `initGame`
+            // assigns the global before it renders and wires interaction,
+            // so a throw inside that window would report "a puzzle reached
+            // the screen" over a blank or undraggable canvas — the fallback
+            // skipped and no toast shown, which is the #488 symptom again.
+            // `cleanupDrag` is assigned by `initGame`'s last statement and
+            // is null until the first game completes it, so it means
+            // exactly what this predicate has to mean. (A throw in that
+            // window makes the fallback re-run `initGame` and most likely
+            // fail the same way — but then the player gets told.)
+            hasGame: () => cleanupDrag !== null,
         });
     } finally {
         if (!rescueReloadPending) hideLoadingOverlay();
