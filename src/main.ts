@@ -3,7 +3,7 @@ import './style.css';
 import type { GameState } from './model/types.js';
 import { SvgDomRenderer } from './renderer/index.js';
 import { ViewportTransform, RotationFocus } from './interaction/index.js';
-import { loadState, loadSavedGame, clearSavedState } from './persistence/index.js';
+import { loadState, clearSavedState } from './persistence/index.js';
 import {
     createNewGameButton,
     createGatherPiecesButton,
@@ -14,33 +14,13 @@ import {
     createDeselectButton,
     createAttributionElement,
     removeAttribution,
-    createCorruptSaveDialog,
-    hideLoadingOverlay,
-    loadRotationEnabledPreference,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
 import { buildGroupIndexes } from './model/helpers.js';
-import {
-    loadSizePreference,
-    getSizeOption,
-    toGridSize,
-} from './game/puzzle-sizes.js';
-import { loadCutStylePreference } from './game/cut-styles.js';
-import type { CutStyle } from './game/cut-styles.js';
-import {
-    loadComposableConfigPreference,
-    composableSliderToGeneratorConfig,
-} from './game/composable-config.js';
-import { loadFractalConfigPreference } from './game/fractal-config.js';
-import { loadWavyConfigPreference } from './game/wavy-config.js';
-import {
-    loadImageSourcePreference,
-    imageSourcePreferenceExists,
-} from './game/image-source.js';
+import { loadImageSourcePreference } from './game/image-source.js';
 import {
     loadImageCategoryPreference,
     loadVibrantPreference,
-    imageCategoryPreferenceExists,
 } from './game/image-categories.js';
 import {
     type SharePayload,
@@ -49,13 +29,13 @@ import {
     reproParamsToPayload,
     type ReproParams,
 } from './sharing/index.js';
-import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
+import { initAnalytics, initErrorTracking } from './analytics/index.js';
 import type { NewGameData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
-import { startWithBootFallback } from './app/start-with-boot-fallback.js';
 import { startNewGame, type StartNewGameDeps } from './app/start-new-game.js';
 import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './app/load-shared-puzzle.js';
 import { createShareLinkLoader } from './app/share-link-loader.js';
+import { runBootSequence } from './app/boot-sequence.js';
 import { openNewGameDialog } from './app/new-game-flow.js';
 import { createCompletionPresenter } from './app/completion-presenter.js';
 import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
@@ -634,116 +614,18 @@ const shareLinks = createShareLinkLoader({
     attemptRescue: () => pwaUpdates.attemptShareLinkRescue(),
 });
 
-// On load: shared-link (hash) > saved game > fresh start.
-// index.html renders the loading overlay up front so users see feedback
-// before JS finishes booting. `startNewGame` / `loadSharedPuzzle` manage
-// the overlay themselves; the saved-state branch hides it manually.
-void (async () => {
-    try {
-        const loadedFromShare = await shareLinks.tryLoad();
-        if (loadedFromShare) return;
-
-        const saved = loadSavedGame();
-        if (saved.status === 'ok') {
-            session.install(saved.state);
-            session.restoreSelection(saved.selection);
-            if (saved.viewport) {
-                // Restore the zoom/pan the player last had (#420). Absent on
-                // pre-feature saves — those keep the default view, as before.
-                viewportTransform.setState(saved.viewport);
-                applyViewportTransform();
-            }
-            return;
-        }
-        if (saved.status === 'unreadable') {
-            // A save was present but couldn't be restored. Stop before the
-            // fresh puzzle overwrites it: let the player download the raw
-            // (in-memory) blobs for recovery. Boot continues once they close
-            // the dialog. The pre-boot loading overlay (z-index above the
-            // dialog) is hidden so the modal is visible.
-            track('save-unreadable', { reason: saved.reason });
-            hideLoadingOverlay();
-            await new Promise<void>((resolve) => {
-                createCorruptSaveDialog({
-                    container: app,
-                    raw: saved.raw,
-                    onDismiss: ({ downloaded }) => {
-                        track('save-recovery', { downloaded });
-                        resolve();
-                    },
-                });
-            });
-        }
-
-        // No (readable) saved game: use the saved preferences. Mirror the
-        // New Game dialog path so a first-load (or post-regeneration) puzzle
-        // respects every remembered preference — otherwise composable cuts,
-        // image source/category, and vibrancy silently fall back to defaults
-        // and the resulting save (and any share link from it) wouldn't match
-        // what the user last chose.
-        const preferredSizeId = loadSizePreference();
-        const option = getSizeOption(preferredSizeId);
-        const preferredCutStyle = loadCutStylePreference() as CutStyle;
-        const preferredComposable = loadComposableConfigPreference();
-        const preferredFractalConfig = loadFractalConfigPreference();
-        const preferredWavyConfig = loadWavyConfigPreference();
-        const preferredRotationEnabled = loadRotationEnabledPreference();
-        // A brand-new visitor (no save at all, never touched an image
-        // preference) gets the hand-picked bundled image instead of a
-        // random one, so the first impression works against the default
-        // background. An unreadable save means a returning user — they
-        // keep today's random-image behavior.
-        const firstRun = saved.status === 'empty'
-            && !imageSourcePreferenceExists()
-            && !imageCategoryPreferenceExists();
-        const gridSize = toGridSize(option);
-        const imageSource = firstRun ? 'first-run' : loadImageSourcePreference();
-        const imageCategory = loadImageCategoryPreference();
-        const vibrant = loadVibrantPreference();
-
-        await startWithBootFallback({
-            cutStyle: preferredCutStyle,
-            start: () => startNewGame(gridSize, {
-                cutStyle: preferredCutStyle,
-                composableConfig: preferredCutStyle === 'composable' && preferredComposable
-                    ? composableSliderToGeneratorConfig(preferredComposable)
-                    : undefined,
-                imageSource,
-                imageCategory,
-                fractalConfig: preferredFractalConfig,
-                wavyConfig: preferredWavyConfig,
-                vibrant,
-                rotationEnabled: preferredRotationEnabled,
-            }, startNewGameDeps),
-            // Everything except the cut is kept: same size, image source,
-            // category, vibrancy, rotation. The per-style configs are
-            // deliberately dropped — with the style forced to Classic they
-            // are dead weight, and a saved Composable config the build
-            // cannot generate is one of the failures being recovered from.
-            startFallback: () => startNewGame(gridSize, {
-                bootFallback: true,
-                imageSource,
-                imageCategory,
-                vibrant,
-                rotationEnabled: preferredRotationEnabled,
-            }, startNewGameDeps),
-            // Deliberately not `session.current() !== undefined`: `install`
-            // makes the state current before it renders and wires
-            // interaction, so a throw inside that window would report "a
-            // puzzle reached the screen" over a blank or undraggable canvas
-            // — the fallback skipped and no toast shown, which is the #488
-            // symptom again. `hasGame()` is false until the interaction
-            // teardown handle is assigned, which is `install`'s last
-            // statement, so it means exactly what this predicate has to
-            // mean. (A throw in that window makes the fallback re-run
-            // `install` and most likely fail the same way — but then the
-            // player gets told.)
-            hasGame: () => session.hasGame(),
-        });
-    } finally {
-        if (!shareLinks.isRescueReloadPending()) hideLoadingOverlay();
-    }
-})();
+// On load: shared-link (hash) > saved game > fresh start. See
+// `boot-sequence.ts` for the flow, the corrupt-save recovery gate, and
+// first-run detection.
+void runBootSequence({
+    container: app,
+    session,
+    viewportTransform,
+    applyTransform: applyViewportTransform,
+    tryLoadShared: () => shareLinks.tryLoad(),
+    isRescueReloadPending: () => shareLinks.isRescueReloadPending(),
+    start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps),
+});
 
 // Handle share links pasted into the address bar of a tab that already
 // has the app loaded. Without this, the hash changes but nothing reacts
