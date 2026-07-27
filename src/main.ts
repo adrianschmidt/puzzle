@@ -9,17 +9,6 @@ import { loadState, loadSavedGame, clearSavedState } from './persistence/index.j
 import {
     createNewGameButton,
     createGatherPiecesButton,
-    loadColorPreference,
-    saveColorPreference,
-    applyBackgroundColor,
-    adoptSharedBackgroundColor,
-    onColorSchemeChange,
-    installPieceOutlineFilter,
-    loadPieceOutlinePreference,
-    applyPieceOutline,
-    loadPieceOutlineColorPreference,
-    applyPieceOutlineColor,
-    createBackgroundColorPicker,
     createInfoButton,
     createInfoModal,
     createSelectToolButton,
@@ -113,6 +102,7 @@ import { createSaveCoordinator } from './app/save-coordinator.js';
 import { applyMergeResult } from './app/merge-result.js';
 import { createGameSession } from './app/game-session.js';
 import { createRotationUi } from './app/rotation-ui.js';
+import { installBackgroundColor } from './app/install-background-color.js';
 import { initPwaUpdates } from './pwa/register.js';
 import {
     wasRescueAttempted,
@@ -922,35 +912,8 @@ createDeselectButton({
     selectionManager,
 });
 
-// Install the SVG filter used by the "Outline" piece-outline mode and
-// apply the saved style + color preferences. The color itself flips
-// with the OS theme via CSS, so (unlike the background) no re-apply on
-// theme change is needed.
-installPieceOutlineFilter();
-applyPieceOutline(loadPieceOutlinePreference());
-applyPieceOutlineColor(loadPieceOutlineColorPreference());
-
-// Set up the Background Color picker
-let currentColorId = loadColorPreference();
-applyBackgroundColor(currentColorId);
-
-// The background color flips with the OS theme via CSS; re-apply only
-// to recompute the luminance-derived UI-chrome scheme on the flip.
-onColorSchemeChange(() => applyBackgroundColor(currentColorId));
-
-const backgroundColorPicker = createBackgroundColorPicker({
-    container: app,
-    selectedId: currentColorId,
-    onSelect: (id) => {
-        // Re-selecting the current swatch is a no-op, not a switch.
-        if (id !== currentColorId) {
-            track('background-color-changed', { from: currentColorId, to: id });
-        }
-        currentColorId = id;
-        saveColorPreference(id);
-        applyBackgroundColor(id);
-    },
-});
+// Set up the background color picker and the piece-outline style/color.
+const backgroundColor = installBackgroundColor({ container: app });
 
 // Set up the Info button
 createInfoButton({
@@ -1025,20 +988,13 @@ async function loadSharedPuzzle(
         renderer.renderState(state);
         saveCoordinator.persistNewPuzzle(state);
 
-        // Offer the sharer's background color to a recipient who has
-        // never picked one. Adoption persists it as their preference and
-        // must be reflected in the picker + the OS-theme re-apply state.
-        // 'none' means the link carried no color at all; a present-but-
-        // unrecognized id reports as 'invalid' so palette drift that
-        // silently drops a live link's color stays visible in analytics.
+        // Offer the sharer's background color to a recipient who has never
+        // picked one. 'none' means the link carried no color at all; a
+        // present-but-unrecognized id reports as 'invalid' so palette drift
+        // that silently drops a live link's color stays visible in analytics.
         let sharedColor: NonNullable<NewGameData['sharedColor']> = 'none';
         if (payload.bgc !== undefined) {
-            const outcome = adoptSharedBackgroundColor(payload.bgc);
-            if (outcome === 'adopted') {
-                currentColorId = payload.bgc;
-                backgroundColorPicker.setSelected(payload.bgc);
-            }
-            sharedColor = outcome;
+            sharedColor = backgroundColor.adopt(payload.bgc);
         }
 
         const data = buildSharedGameData({
