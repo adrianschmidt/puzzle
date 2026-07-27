@@ -15,13 +15,24 @@
 
 import { getPieceBounds } from '../model/derive.js';
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
-import type { Renderer } from './types.js';
+import { VIEWPORT_TRANSITION_MS, type Renderer } from './types.js';
 
 /**
  * Extra padding around each piece's SVG element to accommodate
  * tabs that extend beyond the base piece rectangle.
  */
 const PIECE_PADDING = 30;
+
+/**
+ * The CSS `transition` value {@link VIEWPORT_TRANSITION_MS} spells out.
+ *
+ * Exported for the one caller outside this module that writes a `transition`
+ * itself: `app/viewport-fit.ts` spins the completed group in lockstep with
+ * the viewport zoom, through the same direct-DOM route it already uses for
+ * `applyGroupTransform`. Sharing the string rather than rebuilding it keeps
+ * the easing and the duration identical, which is what "lockstep" means here.
+ */
+export const VIEWPORT_TRANSITION = `transform ${VIEWPORT_TRANSITION_MS / 1000}s ease-in-out`;
 
 /**
  * Write a group container's CSS transform.
@@ -147,7 +158,7 @@ export class SvgDomRenderer implements Renderer {
 
     enableViewportTransition(): void {
         if (!this.tableEl) return;
-        this.tableEl.style.transition = 'transform 0.8s ease-in-out';
+        this.tableEl.style.transition = VIEWPORT_TRANSITION;
     }
 
     disableViewportTransition(): void {

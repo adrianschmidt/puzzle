@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SvgDomRenderer } from './svg-dom-renderer.js';
+import { VIEWPORT_TRANSITION_MS } from './types.js';
 import type { GameState, PieceGroup } from '../model/types.js';
 import { makeGameState, makeRectPiece } from '../test-helpers/fixtures.js';
 import { computePieceBounds } from '../model/derive.js';
@@ -578,6 +579,34 @@ describe('SvgDomRenderer', () => {
             } finally {
                 doc.elementFromPoint = original;
             }
+        });
+    });
+
+    describe('viewport transition', () => {
+        it('writes a CSS duration derived from VIEWPORT_TRANSITION_MS', () => {
+            // `app/viewport-fit.ts` arms a fallback timer against this same
+            // constant and hands the transition a 200ms grace period on top.
+            // While the CSS was a literal, raising it to e.g. 1.2s left the
+            // timer at 1.0s and silently truncated every completion zoom —
+            // nothing typed or tested linked the two.
+            //
+            // What this pins is the shape of the derivation, not the link
+            // itself: at 800 the expected value below is character-identical
+            // to `'transform 0.8s ease-in-out'`, so re-hardcoding *that*
+            // literal still passes. Writing any other duration, unit,
+            // property or easing fails here, and the link proper is
+            // structural now — `viewport-fit.ts` imports both the constant
+            // and this exact string rather than restating either.
+            renderer.init(container);
+            const table = container.querySelector<HTMLElement>('[data-puzzle-table]');
+
+            renderer.enableViewportTransition();
+
+            expect(table?.style.transition)
+                .toBe(`transform ${VIEWPORT_TRANSITION_MS / 1000}s ease-in-out`);
+
+            renderer.disableViewportTransition();
+            expect(table?.style.transition).toBe('');
         });
     });
 
