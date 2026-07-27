@@ -15,6 +15,7 @@
 These apply to every task. Do not restate them per task; do not violate them.
 
 - **No behavior change.** This is a pure refactor. If a task tempts you to fix a bug, stop and report it instead. #500 is explicitly out of scope.
+  - *Ruling (2026-07-27, pre-flight):* read as **no user-observable behavior change**. The one sanctioned exception is Task 18's info-modal Solve wiring, which receives the solve function as a dependency instead of looking up `window.__solvePuzzle` at click time. `bootstrap` always installs the hooks, so the button behaves identically. No other task may rely on this reading.
 - **Every task's commit leaves `main.ts` compiling and smaller.** Create module + test, rewire `main.ts` to import it, delete the inline original — all one commit. Never leave the old copy behind "for now".
 - **Type-only imports must use `import type`** — `verbatimModuleSyntax: true`.
 - **Relative imports end in `.js`** even though the source is `.ts` (repo-wide convention).
@@ -3377,7 +3378,7 @@ Expected: full suite PASSes, typecheck clean, and the production build succeeds 
 - [ ] Complete a puzzle → upright spin, zoom-to-fit, overlay
 - [ ] Each rotation mode → quarter-turn buttons for Fractal, free handle for Wavy, neither for Classic
 - [ ] Share link → loads, confirms before discarding progress
-- [ ] Undecordable `#p=` link → "Invalid share link", hash stripped
+- [ ] Undecodable `#p=` link → "Invalid share link", hash stripped
 - [ ] Corrupt save (hand-edit `puzzle-game-state` in localStorage) → recovery dialog, then boot continues
 - [ ] New Game dialog → every preference survives a reload
 - [ ] `__reproPuzzle` and `__newComposableGame` in the console still work
