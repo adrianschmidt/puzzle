@@ -130,4 +130,36 @@ describe('runWithErrorReport', () => {
 
         expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', { reason: 'chunk load failed' });
     });
+
+    it('skips the toast when no toastMessage is given', async () => {
+        await runWithErrorReport({
+            run: async () => {
+                throw new Error('boom');
+            },
+            warnMessage: 'Failed to start new game:',
+            event: 'new-game-failed',
+            fallback: undefined,
+        });
+
+        expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', { reason: 'boom' });
+        expect(showToast).not.toHaveBeenCalled();
+    });
+
+    it('passes the phase through to new-game-failed', async () => {
+        await runWithErrorReport({
+            run: async () => {
+                throw new Error('boom');
+            },
+            warnMessage: 'Boot fallback puzzle also failed to start:',
+            event: 'new-game-failed',
+            phase: 'boot-fallback',
+            toastMessage: "Couldn't start a puzzle",
+            fallback: undefined,
+        });
+
+        expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', {
+            reason: 'boom',
+            phase: 'boot-fallback',
+        });
+    });
 });

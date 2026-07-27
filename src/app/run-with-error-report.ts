@@ -9,7 +9,12 @@
  */
 
 import { diagnostics } from '../diagnostics.js';
-import { track, sanitizeErrorReason, type SharedLoadFailedData } from '../analytics/index.js';
+import {
+    track,
+    sanitizeErrorReason,
+    type SharedLoadFailedData,
+    type NewGameFailedData,
+} from '../analytics/index.js';
 import { showToast } from '../ui/toast.js';
 
 /**
@@ -20,7 +25,7 @@ import { showToast } from '../ui/toast.js';
  */
 export type ErrorReportEvent =
     | { event: 'shared-load-failed'; source: SharedLoadFailedData['source'] }
-    | { event: 'new-game-failed' };
+    | { event: 'new-game-failed'; phase?: NewGameFailedData['phase'] };
 
 /**
  * `track` is overloaded per event name, so it can't be called with a union
@@ -31,9 +36,16 @@ export type ErrorReportEvent =
  */
 function trackReasonEvent(report: ErrorReportEvent, reason: string): void {
     switch (report.event) {
-        case 'new-game-failed':
-            track(report.event, { reason });
+        case 'new-game-failed': {
+            // Build the payload rather than passing `phase` straight
+            // through: an explicit `phase: undefined` would ship a hollow
+            // property to Umami instead of no property, and the dialog
+            // path's events must stay byte-identical to today's.
+            const data: NewGameFailedData = { reason };
+            if (report.phase) data.phase = report.phase;
+            track(report.event, data);
             return;
+        }
         case 'shared-load-failed':
             track(report.event, { reason, source: report.source });
             return;
@@ -51,7 +63,14 @@ function trackReasonEvent(report: ErrorReportEvent, reason: string): void {
 export async function runWithErrorReport<T>(opts: ErrorReportEvent & {
     run: () => Promise<T>;
     warnMessage: string;
-    toastMessage: string;
+    /**
+     * Message for the user-facing toast. Omit to stay silent — only for a
+     * caller that shows its own message once a recovery attempt has
+     * settled. `showToast` renders one toast at a time, so an eager
+     * failure toast would be replaced by the recovery's message anyway,
+     * and the intermediate flash reads as a contradiction.
+     */
+    toastMessage?: string;
     fallback: T;
     /**
      * Log through `console.error` instead of the DEV-gated
@@ -71,7 +90,7 @@ export async function runWithErrorReport<T>(opts: ErrorReportEvent & {
             diagnostics.warn(opts.warnMessage, error);
         }
         trackReasonEvent(opts, sanitizeErrorReason(error));
-        showToast(opts.toastMessage);
+        if (opts.toastMessage !== undefined) showToast(opts.toastMessage);
         return opts.fallback;
     }
 }
