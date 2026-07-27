@@ -510,17 +510,16 @@ function zoomToFitCompletedPuzzle(
         rightCenter: overrides?.rightCenter ?? { x: 648, y: 360 },
         rightRadius: overrides?.rightRadius ?? 240,
     };
-    void startNewGame(
-        { cols: 1, rows: 1 },
-        'composable',
-        {
+    void startNewGame({ cols: 1, rows: 1 }, {
+        cutStyle: 'composable',
+        composableConfig: {
             baseCutGenerator: 'venn',
             baseCutConfig,
             tabGenerator: overrides?.tabs ? 'classic' : 'none',
             tabConfig: {},
         },
-        'blank',
-    );
+        imageSource: 'blank',
+    });
 };
 
 /**
@@ -571,18 +570,15 @@ function zoomToFitCompletedPuzzle(
         config.minPieceArea = overrides.minPieceArea;
     }
     const rotation = overrides?.rotation ?? 'none';
-    void startNewGame(
-        { cols, rows },
-        'composable',
-        config,
-        overrides?.imageSource ?? loadImageSourcePreference(),
-        loadImageCategoryPreference(),
-        undefined, // fractalConfig
-        undefined, // wavyConfig
-        loadVibrantPreference(),
-        rotation !== 'none',
-        overrides?.seed,
-    );
+    void startNewGame({ cols, rows }, {
+        cutStyle: 'composable',
+        composableConfig: config,
+        imageSource: overrides?.imageSource ?? loadImageSourcePreference(),
+        imageCategory: loadImageCategoryPreference(),
+        vibrant: loadVibrantPreference(),
+        rotationEnabled: rotation !== 'none',
+        seed: overrides?.seed,
+    });
 };
 
 /**
@@ -992,27 +988,44 @@ function restorePersistedSelection(savedSelection: readonly number[]): void {
     }
 }
 
+interface StartNewGameOptions {
+    /** Cut style for piece generation. Defaults to Classic. */
+    cutStyle?: CutStyle;
+    composableConfig?: import('./puzzle/composable-generator.js').ComposableConfig;
+    imageSource?: string;
+    imageCategory?: string;
+    fractalConfig?: FractalDialogConfig;
+    wavyConfig?: WavyDialogConfig;
+    vibrant?: boolean;
+    rotationEnabled?: boolean;
+    seed?: number;
+    pickedImage?: CandidateImage;
+}
+
 /**
  * Start a new game. Uses the player-picked photo when one is given;
  * otherwise fetches a random Unsplash image if available. Falls back to
  * the default image if the API key is missing or fetch fails.
  *
  * @param gridSize - Grid dimensions (cols × rows) for the puzzle
- * @param cutStyle - Cut style to use for piece generation
+ * @param options - Per-game choices; see {@link StartNewGameOptions}
  */
 async function startNewGame(
     gridSize: GridSize,
-    cutStyle: CutStyle = 'classic',
-    composableConfig?: import('./puzzle/composable-generator.js').ComposableConfig,
-    imageSource?: string,
-    imageCategory?: string,
-    fractalConfig?: FractalDialogConfig,
-    wavyConfig?: WavyDialogConfig,
-    vibrant: boolean = false,
-    rotationEnabled: boolean = false,
-    seed?: number,
-    pickedImage?: CandidateImage,
+    options: StartNewGameOptions = {},
 ): Promise<void> {
+    const {
+        cutStyle = 'classic',
+        composableConfig,
+        imageSource,
+        imageCategory,
+        fractalConfig,
+        wavyConfig,
+        vibrant = false,
+        rotationEnabled = false,
+        seed,
+        pickedImage,
+    } = options;
     showLoadingOverlay();
     try {
         // Reset viewport transform so pieces are randomized in unzoomed coordinates
@@ -1300,21 +1313,20 @@ createNewGameButton({
                 const option = getSizeOption(sizeId);
                 const cutStyle = cutStyleId as CutStyle;
                 clearSavedState();
-                const newGame = startNewGame(
-                    toGridSize(option),
+                const newGame = startNewGame(toGridSize(option), {
                     cutStyle,
-                    composableConfig
+                    composableConfig: composableConfig
                         ? composableSliderToGeneratorConfig(composableConfig)
                         : undefined,
-                    imageChoice.kind === 'blank' ? 'blank' : 'random',
+                    imageSource: imageChoice.kind === 'blank' ? 'blank' : 'random',
                     imageCategory,
                     fractalConfig,
                     wavyConfig,
                     vibrant,
                     rotationEnabled,
-                    undefined, // seed — fresh random for every dialog game
-                    imageChoice.kind === 'photo' ? imageChoice.photo : undefined,
-                );
+                    // seed omitted — fresh random for every dialog game
+                    pickedImage: imageChoice.kind === 'photo' ? imageChoice.photo : undefined,
+                });
                 void runWithErrorReport({
                     // The chunk-load path (traced tabs lazy import) is the most
                     // likely source of a rejection here — a network blip or
@@ -1823,19 +1835,18 @@ void (async () => {
         const firstRun = saved.status === 'empty'
             && !imageSourcePreferenceExists()
             && !imageCategoryPreferenceExists();
-        await startNewGame(
-            toGridSize(option),
-            preferredCutStyle,
-            preferredCutStyle === 'composable' && preferredComposable
+        await startNewGame(toGridSize(option), {
+            cutStyle: preferredCutStyle,
+            composableConfig: preferredCutStyle === 'composable' && preferredComposable
                 ? composableSliderToGeneratorConfig(preferredComposable)
                 : undefined,
-            firstRun ? 'first-run' : loadImageSourcePreference(),
-            loadImageCategoryPreference(),
-            preferredFractalConfig,
-            preferredWavyConfig,
-            loadVibrantPreference(),
-            preferredRotationEnabled,
-        );
+            imageSource: firstRun ? 'first-run' : loadImageSourcePreference(),
+            imageCategory: loadImageCategoryPreference(),
+            fractalConfig: preferredFractalConfig,
+            wavyConfig: preferredWavyConfig,
+            vibrant: loadVibrantPreference(),
+            rotationEnabled: preferredRotationEnabled,
+        });
     } finally {
         if (!rescueReloadPending) hideLoadingOverlay();
     }
