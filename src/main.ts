@@ -14,51 +14,34 @@ import {
     createDeselectButton,
     createAttributionElement,
     removeAttribution,
-    createNewGameDialog,
     createCorruptSaveDialog,
     showToast,
     showLoadingOverlay,
     hideLoadingOverlay,
     loadRotationEnabledPreference,
-    saveRotationEnabledPreference,
 } from './ui/index.js';
 import { SelectionManager } from './interaction/selection-manager.js';
 import { buildGroupIndexes } from './model/helpers.js';
-import { getUnsplashAccessKey } from './images/index.js';
 import {
     loadSizePreference,
-    saveSizePreference,
     getSizeOption,
     toGridSize,
 } from './game/puzzle-sizes.js';
-import {
-    loadCutStylePreference,
-    saveCutStylePreference,
-} from './game/cut-styles.js';
+import { loadCutStylePreference } from './game/cut-styles.js';
 import type { CutStyle } from './game/cut-styles.js';
 import {
     loadComposableConfigPreference,
-    saveComposableConfigPreference,
     composableSliderToGeneratorConfig,
 } from './game/composable-config.js';
-import {
-    loadFractalConfigPreference,
-    saveFractalConfigPreference,
-} from './game/fractal-config.js';
-import {
-    loadWavyConfigPreference,
-    saveWavyConfigPreference,
-} from './game/wavy-config.js';
+import { loadFractalConfigPreference } from './game/fractal-config.js';
+import { loadWavyConfigPreference } from './game/wavy-config.js';
 import {
     loadImageSourcePreference,
-    saveImageSourcePreference,
     imageSourcePreferenceExists,
 } from './game/image-source.js';
 import {
     loadImageCategoryPreference,
-    saveImageCategoryPreference,
     loadVibrantPreference,
-    saveVibrantPreference,
     imageCategoryPreferenceExists,
 } from './game/image-categories.js';
 import {
@@ -69,16 +52,13 @@ import {
     reproParamsToPayload,
     type ReproParams,
 } from './sharing/index.js';
-import { preloadTracedTabGenerator } from './puzzle/topology/traced-tab-loader.js';
-import { getBaseCutGenerator } from './puzzle/topology/generator-registry.js';
 import { initAnalytics, initErrorTracking, track } from './analytics/index.js';
 import type { NewGameData } from './analytics/index.js';
 import { runWithErrorReport } from './app/run-with-error-report.js';
 import { startWithBootFallback } from './app/start-with-boot-fallback.js';
 import { startNewGame, type StartNewGameDeps } from './app/start-new-game.js';
 import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './app/load-shared-puzzle.js';
-import { fetchCandidateImages } from './app/fetch-candidate-images.js';
-import { orientationForViewport } from './app/orientation.js';
+import { openNewGameDialog } from './app/new-game-flow.js';
 import { createCompletionPresenter } from './app/completion-presenter.js';
 import { gatherAndZoomToFit, zoomToFitCompletedPuzzle, type ViewportFitDeps } from './app/viewport-fit.js';
 import { createSaveCoordinator } from './app/save-coordinator.js';
@@ -573,97 +553,9 @@ createNewGameButton({
     getGroupCount: () => session.current()?.groups.length ?? 0,
     getPieceCount: () => session.current()?.pieces.length ?? 0,
     onNewGame: () => {
-        const preferredSizeId = loadSizePreference();
-        const preferredCutStyleId = loadCutStylePreference();
-        const savedComposableConfig = loadComposableConfigPreference();
-        const savedFractalConfig = loadFractalConfigPreference();
-        const savedRotationEnabled = loadRotationEnabledPreference();
-        const savedImageCategory = loadImageCategoryPreference();
-        const savedVibrant = loadVibrantPreference();
-        createNewGameDialog({
+        openNewGameDialog({
             container: app,
-            selectedSizeId: preferredSizeId,
-            selectedCutStyleId: preferredCutStyleId,
-            savedComposableConfig: savedComposableConfig,
-            savedFractalConfig: savedFractalConfig,
-            savedWavyConfig: loadWavyConfigPreference(),
-            savedRotationEnabled: savedRotationEnabled,
-            composableSupportsBorderless:
-                getBaseCutGenerator('sine').supportsBorderless ?? false,
-            savedImageCategory: savedImageCategory,
-            savedVibrant: savedVibrant,
-            fetchImageCandidates: (() => {
-                const accessKey = getUnsplashAccessKey();
-                if (!accessKey) return undefined;
-                return (imageCategory: string, vibrant: boolean) =>
-                    fetchCandidateImages(
-                        accessKey,
-                        imageCategory,
-                        vibrant,
-                        orientationForViewport({
-                            width: app.clientWidth || window.innerWidth,
-                            height: app.clientHeight || window.innerHeight,
-                        }),
-                    );
-            })(),
-            onPreloadTracedTabs: () => {
-                // Fire-and-forget — preloadTracedTabGenerator is
-                // idempotent and clears its cached promise on failure,
-                // so the eventual `await` in startNewGame triggers a
-                // fresh attempt that surfaces the real error. Swallow
-                // here only to stop the in-flight rejection from
-                // surfacing as an unhandled-rejection warning.
-                preloadTracedTabGenerator().catch(() => {});
-            },
-            onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, imageChoice, imageCategory, vibrant }) => {
-                saveSizePreference(sizeId);
-                saveCutStylePreference(cutStyleId);
-                if (composableConfig) {
-                    saveComposableConfigPreference(composableConfig);
-                }
-                if (fractalConfig) {
-                    saveFractalConfigPreference(fractalConfig);
-                }
-                if (wavyConfig) {
-                    saveWavyConfigPreference(wavyConfig);
-                }
-                saveRotationEnabledPreference(rotationEnabled);
-                // No UI reads this preference anymore, but first-run
-                // detection depends on the key existing, and analytics
-                // still classifies by it.
-                saveImageSourcePreference(imageChoice.kind === 'blank' ? 'blank' : 'random');
-                saveImageCategoryPreference(imageCategory);
-                saveVibrantPreference(vibrant);
-                const option = getSizeOption(sizeId);
-                const cutStyle = cutStyleId as CutStyle;
-                clearSavedState();
-                const newGame = startNewGame(toGridSize(option), {
-                    cutStyle,
-                    composableConfig: composableConfig
-                        ? composableSliderToGeneratorConfig(composableConfig)
-                        : undefined,
-                    imageSource: imageChoice.kind === 'blank' ? 'blank' : 'random',
-                    imageCategory,
-                    fractalConfig,
-                    wavyConfig,
-                    vibrant,
-                    rotationEnabled,
-                    // seed omitted — fresh random for every dialog game
-                    pickedImage: imageChoice.kind === 'photo' ? imageChoice.photo : undefined,
-                }, startNewGameDeps);
-                void runWithErrorReport({
-                    // The chunk-load path (traced tabs lazy import) is the most
-                    // likely source of a rejection here — a network blip or
-                    // stale deploy hash. The user gets a toast so the click
-                    // doesn't silently do nothing; `new-game-failed` records it.
-                    run: () => newGame,
-                    warnMessage: 'Failed to start new game:',
-                    event: 'new-game-failed',
-                    cutStyle,
-                    toastMessage: "Couldn't start new game",
-                    fallback: undefined,
-                });
-            },
+            start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps),
         });
     },
 });
