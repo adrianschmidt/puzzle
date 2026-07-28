@@ -23,7 +23,10 @@ import { createUpdateAvailableIndicator } from '../ui/index.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { diagnostics } from '../diagnostics.js';
 
-/** Handle returned to main.ts for flows that need the update machinery. */
+/**
+ * Handle returned to the composition root (app/bootstrap.ts) for flows that
+ * need the update machinery.
+ */
 export interface PwaUpdates {
     /**
      * Run the stale-client share-link rescue: one forced update check;

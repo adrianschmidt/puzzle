@@ -1,7 +1,7 @@
 // Public barrel for the UI layer.
 //
 // Convention: any UI factory or helper consumed from outside `src/ui/`
-// (main.ts, interaction/, …) is re-exported here, and consumers import
+// (app/, interaction/, …) is re-exported here, and consumers import
 // via `./ui/index.js`. Direct deep imports between files inside
 // `src/ui/` are fine — those are internal collaborators (e.g.
 // `share-section` is consumed only by `info-modal`).
@@ -10,6 +10,42 @@
 // It is shared infrastructure that `game/` modules use directly, and
 // some of those modules are loaded transitively by UI dialogs through
 // this barrel — routing them through here would create an import cycle.
+//
+// The convention governs *production* code; `src/app/` and
+// `src/interaction/` hold zero deep imports into `src/ui/`. Nine test
+// files there do deep-import — nine statements, each for one of two
+// reasons the barrel cannot serve:
+//
+//   1. `vi.mock` targets (eight statements: six mock `'../ui/toast.js'`,
+//      one `'../ui/loading-overlay.js'`, one `'../ui/offset-drag.js'`).
+//      The leaf mock intercepts through the re-export either way: six of
+//      the eight modules under test import the name from here, and the
+//      other two — `dev-hooks.ts` and `new-game-flow.ts` — reach
+//      `showToast` only transitively, through `run-with-error-report.ts`,
+//      which does. Targeting the leaf is a preference, not a necessity:
+//      a one-export factory is enough, whereas mocking this barrel needs
+//      the `importOriginal` passthrough form (`rotation-ui.test.ts`,
+//      `new-game-flow.test.ts`) because the module under test reaches
+//      other names here too — usually transitively, which is easy to miss
+//      until the run fails with "No export is defined on the mock".
+//   2. Names the barrel does not export. `install-background-color.test.ts`
+//      reads `COLOR_PREFERENCE_KEY` from `background-color.js` to seed
+//      localStorage — test-only setup, so it stays unexported here. Its two
+//      barrel-reachable neighbors ride along in that one statement rather
+//      than being split across two imports of the same module.
+//
+// Anything else a test needs comes through the barrel, as production code
+// does. Mocking it is no reason to route around it: `rotation-ui.test.ts`
+// and `new-game-flow.test.ts` both mock this module and both still import
+// from it — type-only names are erased and never meet the mock at all, and
+// value names come back unchanged through the passthrough.
+//
+// The dependency direction is otherwise one-way (`app/` consumes `ui/`),
+// with three edges back, all to `app/unsplash-display-image.ts`:
+// `image-picker.ts` imports `CANDIDATE_COUNT` and the `CandidateImage`
+// type, `new-game-dialog.ts` the type alone, and `image-picker.test.ts`
+// the type alone. Those are the only `ui/ → app/` edges, and that module
+// imports nothing from `src/ui/`, so the graph is acyclic.
 //
 // Return-shape convention for UI factory functions:
 //

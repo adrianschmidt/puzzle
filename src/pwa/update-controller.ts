@@ -139,9 +139,10 @@ export function createUpdateController(
             }
         },
         requestReloadIfPending() {
-            // Note: focus-regain reload is only safe because `main.ts` flushes
-            // the debounced save on `visibilitychange → hidden` / `pagehide`,
-            // so progress is already persisted before the app is backgrounded.
+            // Note: focus-regain reload is only safe because the save
+            // coordinator (app/save-coordinator.ts) flushes the debounced save
+            // on `visibilitychange → hidden` / `pagehide`, so progress is
+            // already persisted before the app is backgrounded.
             if (pending) apply('focus-regain');
         },
         reloadNow(trigger = 'manual') {

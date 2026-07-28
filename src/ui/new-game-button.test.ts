@@ -23,7 +23,7 @@ describe('shouldConfirmNewGame', () => {
     });
 
     it('should not confirm when there is no game at all (zero counts)', () => {
-        // main.ts reports 0/0 when boot left no `gameState`. The #488 guard
+        // app/install-toolbar.ts reports 0/0 when boot left no game. The #488 guard
         // depends on `0 < 0` being false, so the dialog opens straight away
         // with nothing on screen to lose.
         expect(shouldConfirmNewGame(false, 0, 0)).toBe(false);
