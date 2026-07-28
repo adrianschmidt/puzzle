@@ -243,7 +243,10 @@ describe('openNewGameDialog', () => {
         const opts = open();
 
         // Must not throw synchronously, and must not become an unhandled
-        // rejection — both would fail this test.
+        // rejection — the latter fires after this test function returns, so
+        // it wouldn't fail this test specifically, but it would fail the run:
+        // vitest's process-level handler catches it, and this repo sets no
+        // `dangerouslyIgnoreUnhandledErrors` in vite.config.ts.
         expect(() => opts.onPreloadTracedTabs?.()).not.toThrow();
         expect(preloadTracedTabGenerator).toHaveBeenCalledTimes(1);
         // Let the swallowed rejection's microtask settle before the test ends.

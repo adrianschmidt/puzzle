@@ -67,7 +67,7 @@ export interface GameSession {
  *
  * The collaborators it cannot own itself are injected: the DOM container and
  * renderer it draws through, the shared viewport/selection/rotation state,
- * and four callbacks for the parts of installation and drop handling that
+ * and five callbacks for the parts of installation and drop handling that
  * belong to the composition root (attribution, rotation UI, the completion
  * overlay, analytics-carrying merges, and persistence).
  */

@@ -28,6 +28,10 @@ export interface SnapProximityPositionOptions {
      * and leave nothing installed (#488); with no game there is no gesture
      * to track, so the controller stays inert rather than making its caller
      * prove otherwise.
+     *
+     * Called on every rotation frame, including gated ones — `onGroupRotated`
+     * reads it before the `!this.ctx || this.gated` early return, so it must
+     * be cheap and side-effect-free.
      */
     getState: () => GameState | undefined;
     /** Active snap tolerances for `state`; read once per gesture, at start(). */
