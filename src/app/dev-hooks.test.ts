@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock, type MockInstance } from 'vitest';
 import { createFakeRenderer, type FakeRenderer } from '../test-helpers/fake-renderer.js';
-import { makeGameState, makeRectPiece } from '../test-helpers/fixtures.js';
+import { makeGameState, makeRectPiece, makeSavedGameState } from '../test-helpers/fixtures.js';
 import { saveNewPuzzle, loadState } from '../persistence/index.js';
 import type { GameState, GridSize, PieceGroup } from '../model/types.js';
 import type { GameSession } from './game-session.js';
@@ -39,20 +39,6 @@ function hooks(): WindowHooks {
 /** The read-only session slice `solvePuzzle` takes. */
 function makeSession(state: GameState | undefined): Pick<GameSession, 'current'> {
     return { current: () => state };
-}
-
-/**
- * A game state that actually round-trips through `saveNewPuzzle` /
- * `loadState` — `recombine` rejects an empty `pieces` array (as
- * `makeGameState()`'s bare default has). Mirrors `boot-sequence.test.ts`'s
- * fixture.
- */
-function makeSavedGameState(): GameState {
-    const pieces = [makeRectPiece({ id: 0 })];
-    const groups: PieceGroup[] = [
-        { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 },
-    ];
-    return makeGameState({ pieces, groups, imageUrl: 'test-image.jpg' });
 }
 
 /** A minimal `ReproParams` the share codec accepts. */

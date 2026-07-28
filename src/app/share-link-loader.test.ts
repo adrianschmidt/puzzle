@@ -14,8 +14,7 @@ import {
     type RescueOutcome,
 } from '../pwa/share-link-rescue.js';
 import { loadState, saveNewPuzzle } from '../persistence/index.js';
-import { makeGameState, makeRectPiece } from '../test-helpers/fixtures.js';
-import type { PieceGroup } from '../model/types.js';
+import { makeSavedGameState } from '../test-helpers/fixtures.js';
 import { createShareLinkLoader } from './share-link-loader.js';
 
 /**
@@ -25,20 +24,6 @@ import { createShareLinkLoader } from './share-link-loader.js';
  */
 function decodablePayload(): SharePayload {
     return { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 42, r: 'none' };
-}
-
-/**
- * A game state that actually round-trips through `saveNewPuzzle` /
- * `loadState` — `recombine` rejects an empty `pieces` array (as
- * `makeGameState()`'s bare default has), so a saved-progress fixture needs
- * at least one real piece.
- */
-function makeSavedGameState(): ReturnType<typeof makeGameState> {
-    const pieces = [makeRectPiece({ id: 0 })];
-    const groups: PieceGroup[] = [
-        { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 },
-    ];
-    return makeGameState({ pieces, groups, imageUrl: 'test-image.jpg' });
 }
 
 describe('createShareLinkLoader', () => {

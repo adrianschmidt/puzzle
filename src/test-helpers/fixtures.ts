@@ -211,3 +211,20 @@ export function makeCenteredGroup(
         rotation,
     };
 }
+
+/**
+ * A game state that round-trips through the persistence layer.
+ *
+ * `recombine` rejects an empty `pieces` array — which is exactly what
+ * `makeGameState()`'s bare default has — so a fixture that gets saved and
+ * read back needs at least one real piece, and a group holding it. Shared
+ * by every test that seeds a save with `saveNewPuzzle` and then exercises
+ * the code that loads it.
+ */
+export function makeSavedGameState(): GameState {
+    const pieces = [makeRectPiece({ id: 0 })];
+    const groups: PieceGroup[] = [
+        { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 },
+    ];
+    return makeGameState({ pieces, groups, imageUrl: 'test-image.jpg' });
+}
