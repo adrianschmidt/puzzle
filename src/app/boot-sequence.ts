@@ -49,7 +49,14 @@ import { track } from '../analytics/index.js';
 export interface BootSequenceDeps {
     /** Container the corrupt-save dialog attaches to. */
     container: HTMLElement;
-    session: GameSession;
+    /**
+     * The slice of the {@link GameSession} boot needs: install a restored
+     * save, re-apply its selection, and ask whether anything ended up
+     * installed. Deliberately not `current` — the fallback gate turns on
+     * `hasGame`, and the two are not interchangeable (see
+     * `game-session.ts`).
+     */
+    session: Pick<GameSession, 'install' | 'restoreSelection' | 'hasGame'>;
     viewportTransform: ViewportTransform;
     /** Push the viewport transform to the renderer without persisting it. */
     applyTransform: () => void;

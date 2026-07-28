@@ -101,7 +101,7 @@ describe('loadSharedPuzzle', () => {
         adopt = vi.fn();
         deps = {
             container: document.createElement('div'),
-            session: { install, current: () => makeGameState(), hasGame: () => true, restoreSelection: vi.fn() },
+            session: { install },
             fitView,
             persistNewPuzzle,
             backgroundColor: { adopt },

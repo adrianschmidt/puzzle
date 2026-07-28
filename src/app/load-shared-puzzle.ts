@@ -48,7 +48,12 @@ import type { GameSession } from './game-session.js';
  */
 export interface LoadSharedPuzzleDeps {
     container: HTMLElement;
-    session: GameSession;
+    /**
+     * Install-only slice of the {@link GameSession}: this flow regenerates
+     * the shared puzzle and installs it, and never reads back what was
+     * there before.
+     */
+    session: Pick<GameSession, 'install'>;
     /** Gather and zoom-to-fit the freshly installed puzzle. */
     fitView: (state: GameState) => void;
     persistNewPuzzle: (state: GameState) => void;

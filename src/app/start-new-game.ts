@@ -84,7 +84,11 @@ export interface StartNewGameOptions {
  */
 export interface StartNewGameDeps {
     container: HTMLElement;
-    session: GameSession;
+    /**
+     * Install-only slice of the {@link GameSession}: this flow generates a
+     * puzzle and installs it, and never reads back what was there before.
+     */
+    session: Pick<GameSession, 'install'>;
     /**
      * Reset the viewport transform to identity and push it to the renderer,
      * before generation starts, so pieces are randomized in unzoomed

@@ -113,7 +113,7 @@ describe('startNewGame', () => {
         onGameAnalytics = vi.fn();
         deps = {
             container: document.createElement('div'),
-            session: { install, current: () => makeGameState(), hasGame: () => true, restoreSelection: vi.fn() },
+            session: { install },
             resetViewport,
             fitView,
             persistNewPuzzle,

@@ -14,14 +14,13 @@ function makeBackgroundColor(): BackgroundColorControl {
     return { adopt: vi.fn(() => 'adopted' as const) };
 }
 
-/** A `GameSession` fake whose `current()` returns `state` (default: no game). */
-function makeSession(state: GameState | undefined = undefined): GameSession {
-    return {
-        current: () => state,
-        hasGame: () => state !== undefined,
-        install: vi.fn(),
-        restoreSelection: vi.fn(),
-    };
+/**
+ * The read-only session slice the toolbar takes, returning `state` (default:
+ * no game). Only `current` — the narrowed dependency is what stops a fake
+ * from having to guess at `hasGame`'s stricter meaning.
+ */
+function makeSession(state: GameState | undefined = undefined): Pick<GameSession, 'current'> {
+    return { current: () => state };
 }
 
 describe('installToolbar', () => {
