@@ -11,7 +11,7 @@ vi.mock('../ui/loading-overlay.js', () => ({
 
 import { hideLoadingOverlay } from '../ui/loading-overlay.js';
 import { ViewportTransform } from '../interaction/index.js';
-import { makeGameState, makeRectPiece } from '../test-helpers/fixtures.js';
+import { makeSavedGameState } from '../test-helpers/fixtures.js';
 import { saveNewPuzzle, STORAGE_KEY } from '../persistence/index.js';
 import { saveCutStylePreference } from '../game/cut-styles.js';
 import { saveComposableConfigPreference } from '../game/composable-config.js';
@@ -20,23 +20,9 @@ import { saveWavyConfigPreference } from '../game/wavy-config.js';
 import { saveImageSourcePreference } from '../game/image-source.js';
 import { saveImageCategoryPreference, saveVibrantPreference } from '../game/image-categories.js';
 import { saveRotationEnabledPreference } from '../ui/index.js';
-import type { GameState, GridSize, PieceGroup } from '../model/types.js';
+import type { GameState, GridSize } from '../model/types.js';
 import { runBootSequence, type BootSequenceDeps } from './boot-sequence.js';
 import type { StartNewGameOptions } from './start-new-game.js';
-
-/**
- * A game state that actually round-trips through `saveNewPuzzle` /
- * `loadSavedGame` — `recombine` rejects an empty `pieces` array (as
- * `makeGameState()`'s bare default has), so a saved-progress fixture needs
- * at least one real piece. Mirrors `share-link-loader.test.ts`'s fixture.
- */
-function makeSavedGameState(): ReturnType<typeof makeGameState> {
-    const pieces = [makeRectPiece({ id: 0 })];
-    const groups: PieceGroup[] = [
-        { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 },
-    ];
-    return makeGameState({ pieces, groups, imageUrl: 'test-image.jpg' });
-}
 
 /** Click the corrupt-save dialog's "Start new game" button. */
 function dismissCorruptSaveDialog(container: HTMLElement): void {
