@@ -36,13 +36,9 @@ function hooks(): WindowHooks {
     return window as unknown as WindowHooks;
 }
 
-function makeSession(state: GameState | undefined): GameSession {
-    return {
-        current: () => state,
-        hasGame: () => state !== undefined,
-        install: vi.fn(),
-        restoreSelection: vi.fn(),
-    };
+/** The read-only session slice `solvePuzzle` takes. */
+function makeSession(state: GameState | undefined): Pick<GameSession, 'current'> {
+    return { current: () => state };
 }
 
 /**

@@ -37,7 +37,12 @@ import type { GameSession } from './game-session.js';
 
 /** Collaborators {@link solvePuzzle} cannot own itself. */
 export interface SolvePuzzleDeps {
-    session: GameSession;
+    /**
+     * Read-only slice of the {@link GameSession}: this solves whatever is
+     * installed and never replaces it, so it has no business reaching
+     * `install`.
+     */
+    session: Pick<GameSession, 'current'>;
     renderer: Renderer;
     /** Frame and celebrate a solved puzzle — the completion zoom. */
     onSolved: (state: GameState, group: PieceGroup) => void;

@@ -37,7 +37,13 @@ import type { GameSession } from './game-session.js';
 export interface InstallToolbarDeps {
     /** Container the floating controls and the info modal attach to. */
     container: HTMLElement;
-    session: GameSession;
+    /**
+     * Read-only slice of the {@link GameSession}: the toolbar reports on the
+     * installed game (piece/group counts, completion) and hands the info
+     * modal a getter for it, but never installs one itself — starting a game
+     * is `onNewGame`'s business.
+     */
+    session: Pick<GameSession, 'current'>;
     selectionManager: SelectionManager;
     /**
      * Gather all groups into a compact layout, zoom to fit, and render —

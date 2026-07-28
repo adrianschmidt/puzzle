@@ -91,11 +91,7 @@ describe('runBootSequence', () => {
     function deps(overrides: Partial<BootSequenceDeps> = {}): BootSequenceDeps {
         return {
             container: document.createElement('div'),
-            session: {
-                install, restoreSelection,
-                current: () => undefined,
-                hasGame: () => hasGame,
-            },
+            session: { install, restoreSelection, hasGame: () => hasGame },
             viewportTransform: new ViewportTransform(),
             applyTransform: vi.fn(),
             tryLoadShared: vi.fn(async () => false),
