@@ -89,7 +89,7 @@ export {
     applyBackgroundColor,
     adoptSharedBackgroundColor,
 } from './background-color.js';
-export type { BackgroundColorPreset } from './background-color.js';
+export type { BackgroundColorPreset, SharedColorOutcome } from './background-color.js';
 export { onColorSchemeChange } from './palette.js';
 
 export {

@@ -25,6 +25,7 @@
  */
 
 import type { GameState, PieceGroup } from '../model/types.js';
+import type { MergeResult } from '../game/group-merging.js';
 import { SvgDomRenderer } from '../renderer/index.js';
 import { ViewportTransform, RotationFocus } from '../interaction/index.js';
 import {
@@ -149,6 +150,27 @@ export function bootstrap(
     // visibilitychange listeners as a side effect of construction).
     const saveCoordinator = createSaveCoordinator({ selectionManager, viewportTransform });
 
+    /**
+     * Apply a merge produced by a drop or a rotate-handle commit: hand off to
+     * `applyMergeResult` with the collaborators it needs to update visuals,
+     * selection and rotation focus, carry analytics, and trigger the
+     * completion flow. Shared, unmodified, by the rotation UI and the game
+     * session — both drive a merge outcome through the exact same follow-up.
+     */
+    const applyMerge = (
+        state: GameState,
+        result: MergeResult,
+        droppedGroupIds: readonly number[],
+    ): void => {
+        applyMergeResult(state, result, droppedGroupIds, {
+            renderer,
+            selectionManager,
+            rotationFocus,
+            currentGameAnalytics: () => currentGameAnalytics,
+            onCompleted: onPuzzleCompleted,
+        });
+    };
+
     // Owns the rotate-buttons/-handle pair (bottom-left, fractal-only /
     // free-rotation drag handle), their shared snap-position controller, and
     // screen-space bounds projection. Constructed before `session` — see
@@ -161,15 +183,7 @@ export function bootstrap(
         rotationFocus,
         getState: () => session.current(),
         save: (state) => saveCoordinator.autoSave(state),
-        applyMerge: (state, result, droppedGroupIds) => {
-            applyMergeResult(state, result, droppedGroupIds, {
-                renderer,
-                selectionManager,
-                rotationFocus,
-                currentGameAnalytics: () => currentGameAnalytics,
-                onCompleted: onPuzzleCompleted,
-            });
-        },
+        applyMerge,
     });
 
     /**
@@ -220,15 +234,7 @@ export function bootstrap(
         rotationFocus,
         onInstalled: createOnInstalled(rotationUi.syncVisibility),
         save: (state) => saveCoordinator.autoSave(state),
-        applyMerge: (state, result, droppedGroupIds) => {
-            applyMergeResult(state, result, droppedGroupIds, {
-                renderer,
-                selectionManager,
-                rotationFocus,
-                currentGameAnalytics: () => currentGameAnalytics,
-                onCompleted: onPuzzleCompleted,
-            });
-        },
+        applyMerge,
         onViewportChanged,
         applyTransform: applyViewportTransform,
     });

@@ -25,6 +25,7 @@ import {
     applyPieceOutline,
     loadPieceOutlineColorPreference,
     applyPieceOutlineColor,
+    type SharedColorOutcome,
 } from '../ui/index.js';
 import { track } from '../analytics/index.js';
 
@@ -38,7 +39,7 @@ export interface BackgroundColorControl {
      * On `'adopted'`, updates both the closed-over id and the picker's
      * selection — the pair that keeps a later OS-theme re-apply correct.
      */
-    adopt(id: string): 'adopted' | 'kept-own' | 'invalid';
+    adopt(id: string): SharedColorOutcome;
 }
 
 /**
@@ -80,7 +81,7 @@ export function installBackgroundColor(deps: {
     });
 
     return {
-        adopt(id: string): 'adopted' | 'kept-own' | 'invalid' {
+        adopt(id: string): SharedColorOutcome {
             const outcome = adoptSharedBackgroundColor(id);
             if (outcome === 'adopted') {
                 currentColorId = id;
