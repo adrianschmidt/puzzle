@@ -85,8 +85,8 @@ function classifyEntryCache(
  * Returns `'unknown'` when no usable entry is available — the API is
  * absent (non-browser/jsdom), the entry was evicted from a full
  * Resource Timing buffer (long-lived PWA sessions; the buffer size is
- * bumped at boot in main.ts to reduce this), or the import was mocked
- * in tests. `'unknown'` therefore conflates "unsupported" with
+ * bumped at boot in app/global-handlers.ts to reduce this), or the import
+ * was mocked in tests. `'unknown'` therefore conflates "unsupported" with
  * "evicted"; they aren't separable from here.
  */
 function detectCacheState(): 'cold' | 'warm' | 'revalidated' | 'unknown' {

@@ -37,7 +37,8 @@ describe('buildReproParams', () => {
 
     it('collapses a blank canvas data URL to the blank sentinel', () => {
         const state = classicTracedState();
-        // What main.ts stores for a blank puzzle: the painted canvas itself.
+        // What app/blank-canvas.ts produces for a blank puzzle, stored as-is:
+        // the painted canvas itself.
         state.imageUrl = 'data:image/png;base64,' + 'A'.repeat(6000);
         const params = buildReproParams(state);
         expect(params.imageUrl).toBe('blank');

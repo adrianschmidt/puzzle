@@ -3,7 +3,8 @@
  * URL-safe base64 JSON payload and back.
  *
  * Used by the "Share this puzzle" section of the info modal and by
- * main.ts on boot to detect and load `#p=...` hash links.
+ * app/share-link-loader.ts, on boot and on an in-tab hash change, to
+ * detect and load `#p=...` hash links.
  */
 
 import type { GameState } from '../model/types.js';
@@ -283,7 +284,7 @@ export function decodePayload(encoded: string): SharePayload | null {
         // check). Normal grids (<= the shared grid cap) pass through unchanged.
         translated.g = [clampGridDim(translated.g[0]), clampGridDim(translated.g[1])];
         // Bound the image size before it reaches the canvas allocation in
-        // main.ts (`canvas.width/height`). Legitimate sizes (<= MAX_IMAGE_DIM)
+        // app/blank-canvas.ts (`canvas.width/height`). Legitimate sizes (<= MAX_IMAGE_DIM)
         // pass through unchanged; a crafted `is:[1e9, 1e9]` is capped. Note that
         // a *fractional* `is` is not necessarily adversarial: fractal/wavy links
         // inscribe the image to the grid aspect (cut-style-strategies.ts), so a

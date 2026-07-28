@@ -17,7 +17,7 @@ import {
     type SharedLoadFailedData,
     type NewGameFailedData,
 } from '../analytics/index.js';
-import { showToast } from '../ui/toast.js';
+import { showToast } from '../ui/index.js';
 
 /**
  * Which typed failure event the operation reports on, plus the per-event

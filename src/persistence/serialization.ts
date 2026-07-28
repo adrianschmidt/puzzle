@@ -199,8 +199,9 @@ export interface SerializedViewport {
 
 /**
  * Pin {@link SerializedViewport} to the runtime {@link ViewportState} it
- * mirrors. The save/restore wiring (main.ts) assigns one to the other purely
- * by structural compatibility — there is no explicit conversion. These
+ * mirrors. The save/restore wiring (app/save-coordinator.ts writes it,
+ * app/boot-sequence.ts reads it back) assigns one to the other purely by
+ * structural compatibility — there is no explicit conversion. These
  * `declare` signatures make that contract load-bearing: if a field is ever
  * added to one interface but not the other, the assignment would silently drop
  * the field at save or restore time, but this fails to compile first. They emit
