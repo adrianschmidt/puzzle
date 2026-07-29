@@ -23,6 +23,29 @@ import type { TopologyGeneratorConfig } from './generator.js';
  * tabs both off ('none') and on ('classic'), so the digest exercises the
  * skip path (non-adjacent curve pairs) and the vertex-merge path that the
  * broad-phase rewrites.
+ *
+ * Our code is not the only input to these digests: cut geometry comes
+ * out of bezier-js's numerics, and `package.json` allows any 6.x
+ * (`^6.1.4`), so the version in `package-lock.json` is part of the
+ * contract too. A bump that moves a piece path by more than the
+ * two decimals `p.shape` is formatted to (`fmt` in
+ * `src/model/build-shape.ts`) shows up here as a red digest. That is
+ * the tripwire working, and Dependabot's auto-merge gates on it. The
+ * response is to decide whether the geometry break is acceptable and
+ * pin or take the bump deliberately; it is never to re-record the
+ * snapshot.
+ *
+ * Its reach stops short of one path in particular: the `reduce()`
+ * coverage gap that `complete-reduction.ts` works around (#498).
+ * Instrumenting this matrix counts 421 `reduce()` calls, 3 of them
+ * gapped and none of those carrying a crossing — four of the eleven
+ * cases never reach `reduce()` at all, being straight cuts with tabs
+ * off, which route through `lineLineIntersect`. (The straight-cut cases
+ * with `classic` tabs do reach it: the tabs add curved segments.) That
+ * is why landing the workaround moved none of these digests, and a
+ * bezier-js release that closed the gap upstream would leave them
+ * green too. The guard for that path is
+ * the 192-piece assertion in `repro-bug.test.ts`.
  */
 
 // FNV-1a 32-bit digest of the concatenated piece shapes — a compact

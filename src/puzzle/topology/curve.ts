@@ -10,6 +10,7 @@
 
 import type { Point } from '../../model/types.js';
 import { Bezier } from 'bezier-js';
+import { completeReduction } from './complete-reduction.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,6 +74,9 @@ export class Curve {
     /** Cached per-segment bounding boxes (one per segment). */
     private _segmentBoxes?: BBox[];
 
+    /** Cached per-segment gap-free reductions (lazily filled per segment). */
+    private _reducedSegments?: Array<Bezier[] | undefined>;
+
     constructor(segments: BezierSegment[]) {
         if (segments.length === 0) {
             throw new Error('Curve must have at least one segment');
@@ -109,6 +113,30 @@ export class Curve {
             this._segmentBoxes = this.segments.map(segmentBBox);
         }
         return this._segmentBoxes;
+    }
+
+    /**
+     * Segment `index` reduced to sub-curves covering its whole length,
+     * for `Bezier.curveintersects`. See {@link completeReduction} for why
+     * bezier-js's own `reduce()` is not enough.
+     *
+     * Cached per segment rather than for the curve as a whole: the
+     * bounding-box pre-filter rejects most segment pairs, so a curve
+     * typically needs only a few of its segments reduced. What is
+     * computed is reused across the DCEL builder's repeated `intersect`
+     * calls — where `intersects()` would re-reduce both segments on
+     * every pair.
+     *
+     * Like `beziers` and `segmentBoxes`, this rests on segments never
+     * being mutated after construction — the third cache to do so. The
+     * `readonly` array only makes that a convention (the constructor
+     * stores the caller's array, and `BezierSegment`'s points are
+     * mutable), so a caller that edits segments in place would silently
+     * stale all three together.
+     */
+    private reducedSegment(index: number): Bezier[] {
+        this._reducedSegments ??= new Array<Bezier[] | undefined>(this.segments.length);
+        return (this._reducedSegments[index] ??= completeReduction(this.beziers[index]));
     }
 
     // -- Factory methods ---------------------------------------------------
@@ -407,10 +435,19 @@ export class Curve {
                         return { tA, tB, point: pt };
                     }).filter(p => p.tB >= -0.001 && p.tB <= 1.001);
                 } else {
-                    // Curve-curve: use bezier-js intersects
-                    const rawPairs = this.beziers[i].intersects(other.beziers[j]);
-                    pairs = rawPairs.filter(p => typeof p === 'string').map(p => {
-                        const [t1str, t2str] = (p as string).split('/');
+                    // Curve-curve: pair off the reduced sub-curves, as
+                    // bezier-js's own `intersects()` does — but from a
+                    // reduction repaired to cover both segments in full,
+                    // so a crossing in a range `reduce()` dropped is still
+                    // reachable (#498). Unlike `intersects()`, which can
+                    // also return bare line-intersection `t`s,
+                    // `curveintersects` only ever yields `"tA/tB"` pairs.
+                    const rawPairs = this.beziers[i].curveintersects(
+                        this.reducedSegment(i),
+                        other.reducedSegment(j),
+                    );
+                    pairs = rawPairs.map(p => {
+                        const [t1str, t2str] = p.split('/');
                         const tA = parseFloat(t1str);
                         const tB = parseFloat(t2str);
                         return { tA, tB, point: evalCubic(segA, tA) };

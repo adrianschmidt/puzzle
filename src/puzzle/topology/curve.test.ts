@@ -417,6 +417,73 @@ describe('intersect', () => {
         const ix = a.intersect(b);
         expect(ix).toHaveLength(1);
     });
+
+    // #498. bezier-js's `reduce()` drops a sub-curve when the window just
+    // past an extremum is too short to pass its `simple()` check, so the
+    // dropped range becomes unreachable to `intersects()`. These two
+    // segments are the real cuts from seed 1534700170 @ 12×16 @ 1080×1440:
+    // the vertical cut has an x-extremum at t=0.9758 and crosses the
+    // horizontal cut at t=0.9890 — inside the dropped tail.
+    describe('a crossing past a near-endpoint extremum (#498)', () => {
+        /** Ground truth from dense polyline sampling. */
+        const CROSSING = { x: 89.513, y: 719.285 };
+
+        const horizontalCut = () => new Curve([{
+            p0: { x: 67.5, y: 721.7577492991035 },
+            cp1: { x: 90, y: 719.3348490806693 },
+            cp2: { x: 112.5, y: 716.2929568242326 },
+            p3: { x: 135, y: 715.3726014434133 },
+        }]);
+        const verticalCut = () => new Curve([{
+            p0: { x: 94.8845119780905, y: 654.5454545454545 },
+            cp1: { x: 94.477045388968, y: 676.3636363636364 },
+            cp2: { x: 91.92740345570223, y: 698.1818181818181 },
+            p3: { x: 89.43080069151513, y: 720 },
+        }]);
+
+        it('is found', () => {
+            const ix = horizontalCut().intersect(verticalCut());
+
+            expect(ix).toHaveLength(1);
+            expect(ix[0].point.x).toBeCloseTo(CROSSING.x, 1);
+            expect(ix[0].point.y).toBeCloseTo(CROSSING.y, 1);
+        });
+
+        it('is found with the operands swapped', () => {
+            const ix = verticalCut().intersect(horizontalCut());
+
+            expect(ix).toHaveLength(1);
+            expect(ix[0].point.x).toBeCloseTo(CROSSING.x, 1);
+            expect(ix[0].point.y).toBeCloseTo(CROSSING.y, 1);
+        });
+    });
+
+    // The curve-curve branch reduces `this` segment `i` against `other`
+    // segment `j`, each cached under its own index. Every other
+    // curve-curve case here is single-segment, where `i` and `j` are
+    // both 0 and a mixed-up index would go unnoticed; this one crosses
+    // at `i = 1`, `j = 0`.
+    it('finds a crossing between the later segments of two multi-segment curves', () => {
+        const wavyH = Curve.fromBezierPath([
+            { x: 0, y: 0 },
+            { x: 30, y: 60 }, { x: 70, y: -60 }, { x: 100, y: 0 },
+            { x: 130, y: 60 }, { x: 170, y: -60 }, { x: 200, y: 0 },
+        ]);
+        const wavyV = Curve.fromBezierPath([
+            { x: 150, y: -100 },
+            { x: 190, y: -70 }, { x: 110, y: -30 }, { x: 150, y: 40 },
+            { x: 190, y: 80 }, { x: 110, y: 140 }, { x: 150, y: 180 },
+        ]);
+
+        const ix = wavyH.intersect(wavyV);
+
+        expect(ix).toHaveLength(1);
+        expect(ix[0].segSelf).toBe(1);
+        expect(ix[0].segOther).toBe(0);
+        // Ground truth from dense polyline sampling.
+        expect(ix[0].point.x).toBeCloseTo(139.078, 0);
+        expect(ix[0].point.y).toBeCloseTo(8.973, 0);
+    });
 });
 
 // ---------------------------------------------------------------------------

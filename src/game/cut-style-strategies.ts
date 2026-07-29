@@ -119,6 +119,15 @@ const classicStrategy: CutStyleStrategy = {
         }
         // Sine-based Classic: a gentle Wavy. Params are fixed here (not on the
         // wire), so Classic links carry no attacker-controllable sine config.
+        // `puzzle/topology/repro-bug.test.ts` hand-copies this config to
+        // reproduce #498 from a shipping setup (it cannot import from
+        // `src/game`); keep the two in step if these values change. A
+        // retune of the tuned values below cannot slip past unnoticed —
+        // each is pinned in `cut-style-strategies.classic-traced.test.ts`,
+        // so that goes red first, and it is the cue to update the copy.
+        // Those pins are `objectContaining`, though, so an *added* key
+        // moves geometry without turning anything red: add one and you
+        // have to update the copy by hand.
         const avgPieceArea =
             (puzzleSize.width * puzzleSize.height) / (grid.cols * grid.rows);
         return generateComposablePuzzle(grid.cols, grid.rows, puzzleSize, seed, {
