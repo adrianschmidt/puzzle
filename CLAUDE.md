@@ -74,6 +74,20 @@ Don't retrofit this onto existing generators. Their current outer-call
 counts are the contract; reshuffling them silently breaks every share
 link that targets that generator.
 
+## bezier-js's pinned version is part of the geometry contract
+
+The seeded PRNG above is not the only input to a reproduced puzzle. Cut
+geometry comes out of bezier-js's numerics, and `package.json` allows any
+6.x, so the version resolved in `package-lock.json` decides the piece paths
+too. The tripwire is
+`src/puzzle/topology/dcel-broad-phase-equivalence.test.ts`, which digests
+the piece paths of 11 generator configurations.
+
+A red digest there means something moved generated geometry. Work out what,
+and decide whether to take or pin the bump — do **not** re-record. Those
+digests are an external snapshot, so `vitest -u` rewrites all 11 without a
+word and takes the alarm with them.
+
 ## Keep `main.ts` an entry point
 
 `src/main.ts` is loaded by `index.html` as a side-effecting module, so
