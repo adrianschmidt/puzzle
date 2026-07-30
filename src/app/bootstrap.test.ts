@@ -19,6 +19,9 @@
  *     buttons. `install-toolbar.test.ts` owns that tab-order contract with a
  *     full DOM-order assertion; this file checks the real DOM `bootstrap`
  *     builds still satisfies it.
+ *  5. Invalidation of the geometry-ownership token is installed, and
+ *     installed before boot is kicked off — storage events are delivered
+ *     only to a document already listening, never replayed.
  *
  * Plus the one agreement no statement order can enforce: `installDevHooks`
  * and `installToolbar` must receive the *same* `solve` reference, or
@@ -129,6 +132,9 @@ import { createShareLinkLoader } from './share-link-loader.js';
 import { installBackgroundColor } from './install-background-color.js';
 import { installToolbar } from './install-toolbar.js';
 import { installDevHooks } from './dev-hooks.js';
+// Straight from the module rather than the barrel: the token key is
+// deliberately not part of the persistence layer's public surface.
+import { STORAGE_KEY, GEOMETRY_SEED_KEY } from '../persistence/storage.js';
 import { bootstrap } from './bootstrap.js';
 
 const HOOK_NAMES = [
@@ -311,6 +317,42 @@ describe('bootstrap', () => {
 
         expect(tryLoad).toHaveBeenCalledTimes(1);
         expect(runBootSequence).not.toHaveBeenCalled();
+    });
+
+    it('installs cross-tab invalidation of the geometry-ownership token', () => {
+        // Nothing else re-derives the token while the app is running, so if
+        // this is not wired the app trusts a token another tab has already
+        // invalidated — which is #404's torn save, the thing the #490 fast
+        // path is not allowed to give back. Asserted through the behavior
+        // rather than "addEventListener was called", so it stays honest if
+        // the listener moves.
+        bootstrap(root);
+        localStorage.setItem(GEOMETRY_SEED_KEY, '5');
+
+        window.dispatchEvent(
+            new StorageEvent('storage', {
+                key: STORAGE_KEY,
+                newValue: '{}',
+                storageArea: localStorage,
+            }),
+        );
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+    });
+
+    it('installs geometry-token invalidation before boot is kicked off', () => {
+        // Not about this tab's own writes — storage events never fire in the
+        // window that made the change. About another tab's: a storage event
+        // reaches only a document that is already listening, and is never
+        // replayed, so every turn of the event loop that precedes the install
+        // is a turn whose cross-tab geometry writes are lost. `bootstrap` is
+        // synchronous down to `runBootSequence`, so no turn passes today —
+        // this is what holds if a statement above it ever gains an `await`.
+        bootstrap(root);
+
+        expect(windowListenerOrder(windowListeners, 'storage')).toBeLessThan(
+            vi.mocked(runBootSequence).mock.invocationCallOrder[0],
+        );
     });
 
     it('passes one and the same solve reference to the dev hooks and the toolbar', () => {
