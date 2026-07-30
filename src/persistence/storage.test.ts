@@ -20,7 +20,7 @@ vi.mock('./compression.js', async (importOriginal) => {
     };
 });
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi, afterEach } from 'vitest';
 import type { GameState, PieceGroup } from '../model/types.js';
 import * as compression from './compression.js';
 import { COMPRESSED_MARKER } from './compression.js';
@@ -38,6 +38,7 @@ import {
     loadSavedGame,
     clearSavedState,
     createDebouncedSave,
+    installGeometryTokenInvalidation,
     STORAGE_KEY,
     PROGRESS_KEY,
     GEOMETRY_SEED_KEY,
@@ -46,6 +47,15 @@ import {
     makeRectPiece,
     makeGameState as makeBaseGameState,
 } from '../test-helpers/fixtures.js';
+
+// The app installs these from `bootstrap.ts`; this file stands in for that.
+// Installed once for the whole file because that is what production does —
+// not because a second call would break anything. The listeners live on
+// `window`, which jsdom shares across every test here, and the installer is
+// idempotent (see the "registers each listener once" test below).
+beforeAll(() => {
+    installGeometryTokenInvalidation();
+});
 
 /** The persisted selection, or `[]` when nothing/none is saved. */
 function loadedSelection(): number[] {
@@ -554,15 +564,26 @@ describe('saveProgress cross-tab guard (#404)', () => {
         expect(result).not.toBe('skipped');
     });
 
-    it('skips after a cross-tab geometry change (cache invalidation)', () => {
-        // Geometry replaced by a different puzzle between two progress saves: the
-        // raw bytes change, so the guard re-reads the new seed and now skips.
+    it('skips after another tab replaces the geometry', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        saveNewPuzzle(makeGameState({ seed: 1 }), []); // geometry=1
-        expect(saveProgress(makeGameState({ seed: 1 }), [1])).not.toBe('skipped');
+        saveNewPuzzle(makeGameState({ seed: 490028 }), []);
+        expect(saveProgress(makeGameState({ seed: 490028 }), [1])).not.toBe('skipped');
 
-        saveGeometry(makeGameState({ seed: 2 })); // another tab takes over → geometry=2
-        expect(saveProgress(makeGameState({ seed: 1 }), [2])).toBe('skipped');
+        // Another tab takes over: it writes the geometry key directly, and the
+        // browser delivers us a storage event for it. Calling saveGeometry here
+        // instead would be a *same-tab* write, which legitimately updates the
+        // seed token — and the test would pass for the wrong reason.
+        const raw = JSON.stringify(serializeStatic(makeGameState({ seed: 490029 })));
+        localStorage.setItem(STORAGE_KEY, raw);
+        window.dispatchEvent(
+            new StorageEvent('storage', {
+                key: STORAGE_KEY,
+                newValue: raw,
+                storageArea: localStorage,
+            }),
+        );
+
+        expect(saveProgress(makeGameState({ seed: 490028 }), [2])).toBe('skipped');
         warnSpy.mockRestore();
     });
 });
@@ -725,15 +746,18 @@ describe('geometry seed token (#490)', () => {
 
         // The stale 490016 is gone rather than left standing.
         expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
-        // And the degrade is not silent. Nothing retries the token write, so a
-        // persistent quota condition leaves the #490 fast path off for good —
-        // the same class of failure `writeWithOverflow` warns about.
+        // And the degrade is not silent — the same class of failure
+        // `writeWithOverflow` warns about.
         expect(warnSpy).toHaveBeenCalledWith(
             expect.stringContaining(GEOMETRY_SEED_KEY),
             expect.anything(),
         );
         // And the guard still works, the slow way.
         expect(saveProgress(makeGameState({ seed: 490013 }), [1])).toBe('skipped');
+        // Nor is the degrade permanent: that decode backfilled the token with
+        // the identical write that just failed, so once storage recovers the
+        // fast path comes back on its own.
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490012');
         warnSpy.mockRestore();
     });
 
@@ -744,6 +768,161 @@ describe('geometry seed token (#490)', () => {
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
         expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
         expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+    });
+
+    /**
+     * A `pageshow` for a document restored from the back/forward cache.
+     * `PageTransitionEvent` is not constructible in jsdom, and `persisted` is
+     * read-only on the interface, so it is defined onto a plain event.
+     */
+    function bfcacheRestore(): Event {
+        const event = new Event('pageshow');
+        Object.defineProperty(event, 'persisted', { value: true });
+        return event;
+    }
+
+    /** What another tab writing the geometry looks like from inside this one. */
+    function otherTabWritesGeometry(seed: number): void {
+        const raw = JSON.stringify(serializeStatic(makeGameState({ seed })));
+        const oldValue = localStorage.getItem(STORAGE_KEY);
+        localStorage.setItem(STORAGE_KEY, raw); // no token update: not our write
+        window.dispatchEvent(
+            new StorageEvent('storage', {
+                key: STORAGE_KEY,
+                oldValue,
+                newValue: raw,
+                storageArea: localStorage,
+            }),
+        );
+    }
+
+    it('drops the token when another tab writes the geometry', () => {
+        saveNewPuzzle(makeGameState({ seed: 490020 }), []);
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490020');
+
+        otherTabWritesGeometry(490021);
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+    });
+
+    it('detects a takeover by a tab that does not maintain the token (#404)', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 490022 }), []);
+        expect(saveProgress(makeGameState({ seed: 490022 }), [1])).not.toBe('skipped');
+        const progressBefore = localStorage.getItem(PROGRESS_KEY);
+
+        otherTabWritesGeometry(490023);
+
+        expect(saveProgress(makeGameState({ seed: 490022 }), [2])).toBe('skipped');
+        expect(localStorage.getItem(PROGRESS_KEY)).toBe(progressBefore);
+        warnSpy.mockRestore();
+    });
+
+    it('re-derives exactly once after a cross-tab write, then goes fast again', () => {
+        saveNewPuzzle(makeGameState({ seed: 490024 }), []);
+        otherTabWritesGeometry(490025);
+        const spy = vi.spyOn(compression, 'decompressFromStorage');
+
+        saveProgress(makeGameState({ seed: 490025 }), [1]); // decode + backfill
+        saveProgress(makeGameState({ seed: 490025 }), [2]); // token path
+        saveProgress(makeGameState({ seed: 490025 }), [3]);
+
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490025');
+        spy.mockRestore();
+    });
+
+    it('drops the token when another tab clears storage (null-key event)', () => {
+        saveNewPuzzle(makeGameState({ seed: 490026 }), []);
+
+        window.dispatchEvent(
+            new StorageEvent('storage', { key: null, storageArea: localStorage }),
+        );
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+    });
+
+    it('ignores a storage event from sessionStorage', () => {
+        saveNewPuzzle(makeGameState({ seed: 490031 }), []);
+
+        // A null-key sessionStorage clear is the reachable shape of this: it
+        // says nothing about our geometry key and must not drop the token.
+        window.dispatchEvent(
+            new StorageEvent('storage', { key: null, storageArea: sessionStorage }),
+        );
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490031');
+    });
+
+    it('still drops the token when the storage area is unrecognized', () => {
+        saveNewPuzzle(makeGameState({ seed: 490034 }), []);
+
+        // Not a shape any engine produces — `storageArea` identity is
+        // spec-mandated. It pins the *polarity* of the guard: written as
+        // `!== localStorage` this would fail open and switch cross-tab
+        // invalidation off entirely, which is the one failure mode this
+        // mechanism must not have. Excluding only sessionStorage fails safe,
+        // at a ceiling of one redundant decode.
+        window.dispatchEvent(
+            new StorageEvent('storage', { key: STORAGE_KEY, storageArea: null }),
+        );
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+    });
+
+    it('drops the token on a bfcache restore, which delivers no storage events', () => {
+        saveNewPuzzle(makeGameState({ seed: 490032 }), []);
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490032');
+
+        // While this document sat in the back/forward cache it was not "fully
+        // active", so any geometry write by another tab reached no listener
+        // here and is not replayed on restore. The token can only be treated
+        // as a guess from here on.
+        window.dispatchEvent(bfcacheRestore());
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+    });
+
+    it('keeps the token across an ordinary (non-bfcache) pageshow', () => {
+        saveNewPuzzle(makeGameState({ seed: 490033 }), []);
+
+        window.dispatchEvent(new Event('pageshow'));
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490033');
+    });
+
+    it('registers each listener once however many times it is installed', () => {
+        // `beforeAll` already installed; this is a second call. It must not
+        // stack a duplicate of either handler — which is why they are
+        // module-scope function references rather than inline arrows: the DOM
+        // spec dedupes on (type, callback, capture). Handing `addEventListener`
+        // a fresh arrow per call defeats that, and each event would then drop
+        // the token twice.
+        installGeometryTokenInvalidation();
+        saveNewPuzzle(makeGameState({ seed: 490036 }), []);
+
+        const removeItem = vi.spyOn(Storage.prototype, 'removeItem');
+        otherTabWritesGeometry(490035);
+        window.dispatchEvent(bfcacheRestore());
+        const drops = removeItem.mock.calls.filter(([key]) => key === GEOMETRY_SEED_KEY);
+        removeItem.mockRestore();
+
+        // Two events, two drops — not four.
+        expect(drops).toHaveLength(2);
+    });
+
+    it('ignores storage events for unrelated keys', () => {
+        saveNewPuzzle(makeGameState({ seed: 490027 }), []);
+
+        window.dispatchEvent(
+            new StorageEvent('storage', {
+                key: 'some-other-app-key',
+                newValue: 'x',
+                storageArea: localStorage,
+            }),
+        );
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490027');
     });
 });
 

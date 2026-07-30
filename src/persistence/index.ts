@@ -23,6 +23,7 @@ export {
     loadSavedGame,
     clearSavedState,
     createDebouncedSave,
+    installGeometryTokenInvalidation,
     STORAGE_KEY,
     PROGRESS_KEY,
     SAVE_DEBOUNCE_MS,

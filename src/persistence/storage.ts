@@ -205,6 +205,70 @@ function recordGeometrySeed(seed: number | undefined): void {
 }
 
 /**
+ * Install the watchers that keep the ownership-token invariant true while the
+ * app runs: drop {@link GEOMETRY_SEED_KEY} the moment we stop being able to
+ * vouch for it. Call once, from the composition root.
+ *
+ * Named for that invariant rather than for a trigger, because the triggers are
+ * already of two different kinds — another tab wrote the geometry, and this
+ * tab may have missed such a write while bfcached — and more may accrue.
+ *
+ * A token is only correct while every writer of {@link STORAGE_KEY} maintains
+ * it, and two tabs on one origin need not be running the same build —
+ * `/puzzle/` and `/puzzle/dev/` share a localStorage (it is keyed by origin,
+ * not path), as does a tab left open across a deploy. A tab on older JS writes
+ * the geometry without touching the token, and the #404 takeover would go
+ * undetected. The `storage` event fires regardless of what that tab's JS
+ * knows, so it is the backstop: drop the token and let the next reader
+ * re-derive it from the blob.
+ *
+ * Storage events never fire in the window that made the change, so anything we
+ * receive is by definition another tab — no self-filtering needed, and our own
+ * removal cannot re-trigger us. That removal does fire an event in other tabs,
+ * but they ignore keys other than the geometry key, so there is no cascade.
+ *
+ * `pageshow` covers the hole in that: a bfcached document is not "fully
+ * active", so storage events are neither delivered to it nor replayed on
+ * restore. Coming back from the back/forward cache therefore means "I may have
+ * missed a geometry write", and the honest answer is to distrust the token.
+ * It costs one decode on the next flush — `loadSavedGame` re-anchors on a real
+ * load, so `persisted` is the only case that needs this.
+ */
+export function installGeometryTokenInvalidation(): void {
+    // Module-scope function references, not inline arrows, so that
+    // `addEventListener` deduplicates them: the DOM spec appends a listener
+    // only if the list holds no entry with the same type, callback and
+    // capture flag. A second call is therefore a no-op, with no `installed`
+    // flag to reset and no teardown handle to thread through the composition
+    // root. It also survives a test that removes the listeners and boots
+    // again — removal deletes the entry, so the next call re-adds it.
+    window.addEventListener('storage', onForeignGeometryWrite);
+    window.addEventListener('pageshow', onPageShow);
+}
+
+/** Another tab wrote (or cleared) the geometry key: stop vouching for the token. */
+function onForeignGeometryWrite(event: StorageEvent): void {
+    // Only localStorage owns our keys; a sessionStorage event — notably a
+    // null-key clear() — must not drop the token. Written as an exclusion
+    // of sessionStorage rather than a requirement of `=== localStorage`
+    // deliberately: the identity is spec-mandated and holds everywhere we
+    // run, but if it ever didn't, requiring it would fail *open* and
+    // silently switch this whole mechanism off. Excluding fails safe —
+    // the worst an unrecognized area can cost is a redundant decode,
+    // which is the same trade every other decision here makes.
+    if (event.storageArea === sessionStorage) return;
+    // `key === null` is how the spec reports another tab's localStorage.clear().
+    if (event.key === STORAGE_KEY || event.key === null) {
+        recordGeometrySeed(undefined);
+    }
+}
+
+/** Back/forward-cache restore: we may have missed a geometry write while frozen. */
+function onPageShow(event: PageTransitionEvent): void {
+    if (event.persisted) recordGeometrySeed(undefined);
+}
+
+/**
  * Seed of the geometry currently in localStorage, or `undefined` if there is no
  * geometry, it cannot be decoded, or it carries no seed. Never throws.
  *
@@ -365,7 +429,7 @@ export function loadSavedGame(): LoadOutcome {
 
     // Re-anchor the ownership token to whatever is in the slot *now*.
     //
-    // `installCrossTabInvalidation` only sees writes made while this document
+    // `installGeometryTokenInvalidation` only sees writes made while this document
     // is running and fully active. A geometry write by a build that does not
     // maintain the token — the pre-#490 build at `/puzzle/` while `/puzzle/dev/`
     // shares its localStorage, a rollback, a PWA client still on the old

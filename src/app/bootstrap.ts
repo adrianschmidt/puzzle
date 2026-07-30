@@ -12,6 +12,14 @@
  *
  *  - `installGlobalHandlers` goes first, so analytics and error reporting are
  *    up before anything that can throw.
+ *  - `installGeometryTokenInvalidation` follows it, ahead of boot. Not because
+ *    of *this* tab's writes — storage events never fire in the window that
+ *    made the change, so our own saves are invisible to that listener by
+ *    design. Because another tab's write is only ever seen live: there is no
+ *    replay for a document that was not listening at the time. Nothing below
+ *    can deliver one today, since this function runs synchronously through to
+ *    `runBootSequence`; installing here is what keeps that true if any
+ *    statement above it ever gains an `await`.
  *  - The rotation UI is built before the session. The session's `onInstalled`
  *    is built from `rotationUi.syncVisibility` read as a bare value, which
  *    makes reordering the two a use-before-declaration error the compiler
@@ -49,6 +57,7 @@ import { installBackgroundColor } from './install-background-color.js';
 import { installGlobalHandlers } from './global-handlers.js';
 import { installToolbar } from './install-toolbar.js';
 import { installDevHooks, solvePuzzle } from './dev-hooks.js';
+import { installGeometryTokenInvalidation } from '../persistence/index.js';
 import { initPwaUpdates } from '../pwa/register.js';
 
 /**
@@ -62,6 +71,14 @@ export function bootstrap(
     root: HTMLElement = document.querySelector<HTMLDivElement>('#app')!,
 ): void {
     installGlobalHandlers(root);
+
+    // Distrust the persisted geometry-ownership token as soon as another tab
+    // touches the geometry, or as soon as we come back from the back/forward
+    // cache having missed those events. Installed ahead of boot because a
+    // storage event is delivered only to a document already listening — it is
+    // never replayed — so any turn of the event loop that precedes this is a
+    // turn whose cross-tab writes we never learn about.
+    installGeometryTokenInvalidation();
 
     /**
      * Analytics metadata for the currently-playing puzzle.
