@@ -512,11 +512,57 @@ export interface SaveUnreadableData {
 
 /**
  * Data attached to `progress-save-skipped` — a debounced progress autosave was
- * refused because the geometry in localStorage belongs to a different puzzle
- * than the one being saved (a cross-tab takeover; see `saveProgress`). Lets an
- * operator see how often the cross-tab save race actually fires in the wild —
- * the race that previously produced a torn save and a false "corrupt" dialog.
- * `cutStyle`/`pieceCount` describe the puzzle whose progress was dropped.
+ * refused because the recorded owner of the save slot is a different puzzle
+ * than the one being saved (see `saveProgress`). `cutStyle`/`pieceCount`
+ * describe the puzzle whose progress was dropped.
+ *
+ * **Not a synonym for "cross-tab takeover".** It counts three distinct causes,
+ * and the takeover may well be the smallest:
+ *
+ * 1. **The cross-tab race** (#404) — another tab started a puzzle over this
+ *    one. This is what the guard was built for, and what previously produced a
+ *    torn save and a false "corrupt" dialog. Every later autosave of this
+ *    tab's puzzle mismatches too, so it shows up as a *run*.
+ * 2. **A new puzzle too large to store.** When `saveNewPuzzle`'s geometry
+ *    write fails on quota (the #487/#399 large-save regime), the *previous*
+ *    puzzle's geometry stays in the slot and the token correctly still names
+ *    it — so every autosave of the new puzzle mismatches and skips, for the
+ *    rest of the session, with no second tab involved at all. Note this
+ *    produces exactly the shape a sustained takeover would: a long run of this
+ *    event from one user.
+ * 3. **A debounced save that straddled a new game.** A progress save queued
+ *    for the outgoing puzzle can still be pending when the new puzzle's
+ *    geometry (and token) replace it, and nothing cancels it — `SaveCoordinator`
+ *    never calls `cancel()`. The flush then names the old puzzle against the
+ *    new slot and skips. Starting a new game *while a multi-select selection is
+ *    active* hits this every time rather than on a race: `GameSession.install`
+ *    clears the selection before assigning the new state, so bootstrap's
+ *    selection listener autosaves the state that is still current — the
+ *    outgoing one. Single tab, no quota, and exactly **one** event per new
+ *    game: the next autosave carries the new state, which matches. The skip
+ *    is correct — that progress had already been superseded. Pre-existing and
+ *    deliberately not changed here; tracked as #514.
+ *
+ * Discriminating them is per-session inspection, not arithmetic on the totals.
+ * `save-failed` with `op: 'new-puzzle'` is the useful marker but it neither
+ * counts nor filters: cause 2 emits *one* of it ahead of a run of *many*
+ * skips, so the two counts are at different granularities and differencing
+ * them is meaningless; and `op: 'new-puzzle'` also fires when the geometry
+ * write succeeded and only the initial *progress* write hit quota
+ * (`saveNewPuzzle` reports the worse of the two), which produces no skipped
+ * run at all. Absence is not filterable here either (see
+ * {@link NewGameFailedData}). So read sessions: a `save-failed{op:'new-puzzle'}`
+ * followed by a long run is cause 2; a long run with no `save-failed` is
+ * cause 1; an isolated event around a new game is cause 3.
+ *
+ * Since #490 the comparison reads the derived `puzzle-geometry-seed` token
+ * instead of decoding the geometry blob. That does not add a cause: every path
+ * the app can take keeps the token equal to the seed of the blob in the slot —
+ * it is re-anchored on load, dropped on a foreign geometry write and on a
+ * bfcache restore, and left alone on a failed geometry write (which is what
+ * makes cause 2 a correct skip rather than a bug). A token written by foreign
+ * same-origin script is the one thing that could make it lie, and no dimension
+ * separates that case.
  */
 export interface ProgressSaveSkippedData {
     cutStyle: string;

@@ -122,6 +122,10 @@ export function createGameSession(deps: {
         },
 
         install(state: GameState): void {
+            // Clears before `installed = state`, so bootstrap's selection
+            // listener autosaves the *outgoing* puzzle — a debounced save the
+            // new puzzle's save slot then correctly refuses, emitting a
+            // spurious `progress-save-skipped`. Pre-existing. Tracked as #514.
             selectionManager.clearAll();
             rotationFocus.clearFocus();
 

@@ -1,10 +1,15 @@
 /**
  * Persistence layer for puzzle game state.
  *
- * Two-key model:
- * - STORAGE_KEY  ('puzzle-game-state')  — static geometry + metadata, written once per puzzle.
- * - PROGRESS_KEY ('puzzle-progress')    — small mutable blob (groups/selection/completed),
- *                                         written on every debounced save.
+ * Three-key model:
+ * - STORAGE_KEY       ('puzzle-game-state')    — static geometry + metadata, written once per puzzle.
+ * - PROGRESS_KEY      ('puzzle-progress')      — small mutable blob (groups/selection/completed),
+ *                                                written on every debounced save.
+ * - GEOMETRY_SEED_KEY ('puzzle-geometry-seed') — derived cache: the seed of the geometry above, so
+ *                                                the cross-tab guard need not decode it (#490).
+ *
+ * The first two are the save; the third is rebuildable from the first and is
+ * not part of the save format.
  *
  * All serialization/deserialization goes through the serialization module.
  */
@@ -30,6 +35,23 @@ export const STORAGE_KEY = 'puzzle-game-state';
 
 /** localStorage key for the small mutable progress blob (groups/selection/completed). */
 export const PROGRESS_KEY = 'puzzle-progress';
+
+/**
+ * localStorage key holding the seed of the geometry currently at
+ * {@link STORAGE_KEY}, as a decimal string.
+ *
+ * Purely derived data — everything it holds is already inside the geometry
+ * blob — so it is not part of the save format and needs no migration: absent,
+ * non-numeric, or invalidated all fall back to decoding the blob (see
+ * {@link currentGeometrySeed}). It exists so the per-flush cross-tab check in
+ * {@link saveProgress} can read ~10 bytes instead of a blob that reaches
+ * ~5.8 MB on a 16×12 composable puzzle (#490).
+ *
+ * The invariant: **the token exists only while we believe it matches the
+ * geometry.** Anyone with evidence otherwise deletes it, and the next reader
+ * re-derives it.
+ */
+export const GEOMETRY_SEED_KEY = 'puzzle-geometry-seed';
 
 /** Debounce interval for auto-save (milliseconds). */
 export const SAVE_DEBOUNCE_MS = 500;
@@ -107,21 +129,104 @@ function writeWithOverflow(key: string, json: string): SaveResult {
     }
 }
 
-// Cache of the stored geometry's seed, keyed on the verbatim raw geometry
-// string. A debounced progress save runs often; decoding the (potentially
-// multi-MB) geometry blob on every call just to read its seed would be
-// wasteful. Correctness comes from reading the real value on every call — we
-// only re-run decompress+parse when the raw bytes differ from the last decode.
-// A cross-tab geometry write (or a new puzzle in this tab) changes the bytes
-// and invalidates the cache lazily on the next read.
+// Memo for the fallback path in `currentGeometrySeed`, keyed on the verbatim
+// raw geometry string. The token path never decodes, so this is only reached
+// when the token is missing or unusable, and the fallback backfills the token
+// whenever the decode yields a seed. A second hit on this memo therefore means
+// one of three things:
+//   1. the blob is seedless or unreadable, so there was nothing to record;
+//   2. the token write itself keeps failing (see `recordGeometrySeed`);
+//   3. the token was dropped again while the blob stayed byte-identical —
+//      a repeat bfcache restore is the production case, and another tab
+//      rewriting the geometry key with the same bytes is another.
+// The first two never leave a usable token behind, so without the memo every
+// flush for the rest of the session would re-parse a blob that reaches ~5.8 MB.
+// The third re-parses only once per invalidation, but nothing bounds how often
+// those happen; the memo makes every repeat over unchanged bytes free. Either
+// way it earns its keep.
 let cachedGeometryRaw: string | null = null;
 let cachedGeometrySeed: number | undefined;
 
 /**
+ * Record (or, for `undefined`, clear) the seed of the geometry now at
+ * {@link STORAGE_KEY}.
+ *
+ * A failed write must not leave a stale token behind — that would claim the
+ * slot belongs to a puzzle it doesn't, and this tab would then skip every
+ * progress save for a puzzle it legitimately owns. So a throw falls back to
+ * removing the key, which puts the next read on the decode path: slower, but
+ * correct. If the removal throws too there is no in-process remedy, so say so.
+ *
+ * Both failures warn, and neither message may name a consequence that only
+ * holds at some call sites: this runs from `saveGeometry`, from the
+ * `currentGeometrySeed` backfill, from the invalidation listeners and from
+ * `loadSavedGame`, and those differ in both direction and remedy. What is
+ * common to all of them: a *record* that ends with the key absent is slow but
+ * correct, and the backfill re-attempts the identical write on every subsequent
+ * flush that decodes, so it heals as soon as storage does; a *removal* that
+ * fails leaves a token we already know not to trust, and nothing re-derives —
+ * the token path answers from it without ever opening the blob — so it heals
+ * only when some later write or removal succeeds. Which of the two the outer
+ * catch is reporting is not known until the fallback `removeItem` below has
+ * been tried, which is why the outer warning states both and the inner one
+ * states the outcome.
+ */
+function recordGeometrySeed(seed: number | undefined): void {
+    try {
+        if (seed === undefined) {
+            localStorage.removeItem(GEOMETRY_SEED_KEY);
+        } else {
+            localStorage.setItem(GEOMETRY_SEED_KEY, String(seed));
+        }
+    } catch (error) {
+        diagnostics.warn(
+            `Could not ${seed === undefined ? 'clear' : 'update'} "${GEOMETRY_SEED_KEY}" ` +
+                '(a storage problem, usually quota — look there, not at the puzzle ' +
+                'state). Falling back to removing the key below. If that succeeds the ' +
+                'cross-tab guard re-reads the whole geometry blob on every progress ' +
+                'save — slow but correct, and it re-attempts this write each time it ' +
+                'decodes, so it clears itself as soon as storage recovers. If the ' +
+                'removal throws too, the next warning says what is left behind:',
+            error,
+        );
+        try {
+            localStorage.removeItem(GEOMETRY_SEED_KEY);
+        } catch (removeError) {
+            diagnostics.warn(
+                `Could not clear "${GEOMETRY_SEED_KEY}" either, so a token we already ` +
+                    'know not to trust is still in place. Either way it is wrong is ' +
+                    'damaging: naming another puzzle, every progress save for this one ' +
+                    'is skipped; naming this puzzle while another tab\'s geometry sits ' +
+                    'in the slot, saves go through and tear the pair (#404):',
+                removeError,
+            );
+        }
+    }
+}
+
+/**
  * Seed of the geometry currently in localStorage, or `undefined` if there is no
  * geometry, it cannot be decoded, or it carries no seed. Never throws.
+ *
+ * Answers from {@link GEOMETRY_SEED_KEY} when it is present — a ~10-byte read,
+ * which matters because {@link saveProgress} calls this on every debounced
+ * flush (#490). Otherwise decodes the blob and backfills the token, so a save
+ * written before the token existed pays that cost once rather than on every
+ * flush for the rest of the session.
  */
 function currentGeometrySeed(): number | undefined {
+    const token = localStorage.getItem(GEOMETRY_SEED_KEY);
+    if (token !== null) {
+        const seed = Number(token);
+        // Anything we did not write is corruption, not an answer: fall through
+        // and re-derive rather than trusting it. `Number.isFinite` alone is too
+        // permissive — `''` and `'   '` read as seed 0, which would skip every
+        // save — so require the value to round-trip through `String(seed)`,
+        // which is exactly what `recordGeometrySeed` produces. (`Number.isFinite`
+        // is still needed: `'NaN'` and `'Infinity'` round-trip.)
+        if (Number.isFinite(seed) && String(seed) === token) return seed;
+    }
+
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw === null) {
         cachedGeometryRaw = null;
@@ -138,12 +243,32 @@ function currentGeometrySeed(): number | undefined {
             cachedGeometrySeed = undefined;
         }
     }
+    // Backfill so the next flush takes the fast path. A seedless or unreadable
+    // blob records nothing — there is no seed to claim, and leaving the token
+    // absent keeps re-derivation honest if that blob is later replaced. The
+    // price is that such a blob keeps paying the multi-MB `getItem` and
+    // full-length compare above on *every* flush, permanently: the pre-#490
+    // cost, for a case only a pre-v4 legacy save (no seed) or a corrupt blob
+    // can reach. A sentinel would buy the fast path back at the cost of
+    // blinding the takeover check, which is the wrong trade.
+    if (cachedGeometrySeed !== undefined) recordGeometrySeed(cachedGeometrySeed);
     return cachedGeometrySeed;
 }
 
-/** Persist the static geometry + metadata blob. Written once per puzzle. */
+/**
+ * Persist the static geometry + metadata blob. Written once per puzzle.
+ *
+ * Records the new owner in {@link GEOMETRY_SEED_KEY} only on a successful
+ * write: when the write fails the *previous* puzzle's geometry is still in the
+ * slot, and the existing token still describes it correctly.
+ */
 export function saveGeometry(state: GameState): SaveResult {
-    return writeWithOverflow(STORAGE_KEY, JSON.stringify(serializeStatic(state)));
+    const result = writeWithOverflow(STORAGE_KEY, JSON.stringify(serializeStatic(state)));
+    // Positive check on purpose: `writeWithOverflow` cannot return `'skipped'`
+    // today, but `SaveResult` allows it, and `!== 'failed'` would silently
+    // start claiming ownership of a write that never happened if it ever did.
+    if (result === 'ok' || result === 'ok-compressed') recordGeometrySeed(state.seed);
+    return result;
 }
 
 /**
@@ -155,8 +280,11 @@ export function saveGeometry(state: GameState): SaveResult {
  * one. Writing here would tear the geometry/progress pair into a seed-mismatch
  * that the next load rejects as a false "corrupt save" (#404). The geometry key
  * is the anchor; the tab that last wrote it owns the single save slot. Only a
- * confirmed seed mismatch skips — absent / unreadable / seedless geometry writes
- * as before.
+ * confirmed seed mismatch skips — a geometry that is absent, unreadable or
+ * seedless *and* has no {@link GEOMETRY_SEED_KEY} token naming its owner writes
+ * as before. (With a token present the answer comes from it, without opening
+ * the blob; the token is dropped whenever anything suggests it no longer
+ * describes what is in the slot.)
  */
 export function saveProgress(
     state: GameState,
@@ -170,8 +298,16 @@ export function saveProgress(
         geometrySeed !== state.seed
     ) {
         diagnostics.warn(
-            'Skipping progress save: stored geometry belongs to a different puzzle ' +
-                '(cross-tab takeover); not overwriting it.',
+            `Skipping progress save: the recorded owner of the save slot (seed ` +
+                `${geometrySeed}) is not the puzzle being saved (seed ${state.seed}); ` +
+                'not overwriting it. Three causes are indistinguishable here: another ' +
+                'tab started a puzzle over this one, a geometry write from this tab ' +
+                'failed on quota so the previous puzzle still owns the slot, or a ' +
+                'debounced save queued for the outgoing puzzle flushed after a new ' +
+                'game replaced it (which a new game started with an active selection ' +
+                'hits every time). See `ProgressSaveSkippedData` in analytics/umami.ts ' +
+                'for how to tell them apart. Since #490 the deciding read is the ' +
+                'token, not the blob.',
         );
         return 'skipped';
     }
@@ -220,9 +356,35 @@ export function saveNewPuzzle(
  * failure to restore yields `unreadable` carrying the raw blobs (see
  * {@link CorruptSaveData}) so the caller can offer them for download instead
  * of silently destroying the data.
+ *
+ * Re-anchors {@link GEOMETRY_SEED_KEY} as a side effect — the one write on
+ * this path. See the comment at the top of the body.
  */
 export function loadSavedGame(): LoadOutcome {
     const staticRaw = localStorage.getItem(STORAGE_KEY);
+
+    // Re-anchor the ownership token to whatever is in the slot *now*.
+    //
+    // `installCrossTabInvalidation` only sees writes made while this document
+    // is running and fully active. A geometry write by a build that does not
+    // maintain the token — the pre-#490 build at `/puzzle/` while `/puzzle/dev/`
+    // shares its localStorage, a rollback, a PWA client still on the old
+    // service worker — made while this tab was closed reaches no listener at
+    // all, and nothing else re-derives: the token path in
+    // `currentGeometrySeed` answers without consulting the blob, and the
+    // backfill that would correct it runs only when the token is absent. The
+    // stale token would then be trusted for the whole next session, in either
+    // direction: naming the previous puzzle, every progress save is skipped
+    // and the player silently loses the session; naming this tab's puzzle
+    // while the slot holds another, we write the torn pair the guard exists to
+    // prevent (#404).
+    //
+    // Load is the moment we hold the truth for free: the blob is decoded below
+    // anyway. Dropped here and re-recorded only after a successful decode, so
+    // every exit below leaves the token either correct or absent — and absent
+    // is always safe, since the next reader re-derives it.
+    recordGeometrySeed(undefined);
+
     if (staticRaw === null) {
         // No geometry anchor = no save the player would recognize. (A stray
         // progress key, if any, is a harmless torn-write artifact that the
@@ -245,6 +407,13 @@ export function loadSavedGame(): LoadOutcome {
         const staticData: SerializedStaticState & SerializedGameState = JSON.parse(
             decompressFromStorage(staticRaw),
         );
+
+        // The other half of the re-anchor above: the geometry in the slot is
+        // readable and names its puzzle, so put that back in the token. Placed
+        // before the outcome branches on purpose — the token describes the
+        // geometry blob, not the geometry/progress *pair*, so a seed mismatch
+        // or a torn write below still leaves it correct.
+        recordGeometrySeed(typeof staticData.seed === 'number' ? staticData.seed : undefined);
 
         if (progressRaw !== null) {
             const progress: SerializedProgress = JSON.parse(decompressFromStorage(progressRaw));
@@ -307,9 +476,10 @@ export function loadSavedGame(): LoadOutcome {
  * Load just the saved GameState, discarding any persisted selection.
  *
  * Thin wrapper over {@link loadSavedGame} for the existence check and any
- * caller that does not need the selection. The load is read-only; an
+ * caller that does not need the selection. The *save* is left untouched; an
  * unreadable save reads as "no state" here and its recovery blobs are
- * discarded — only the startup path surfaces them for download.
+ * discarded — only the startup path surfaces them for download. (The derived
+ * {@link GEOMETRY_SEED_KEY} token is re-anchored, as on every load.)
  */
 export function loadState(): GameState | undefined {
     const outcome = loadSavedGame();
@@ -322,6 +492,7 @@ export function loadState(): GameState | undefined {
 export function clearSavedState(): void {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(PROGRESS_KEY);
+    localStorage.removeItem(GEOMETRY_SEED_KEY);
 }
 
 /**
@@ -337,9 +508,12 @@ export function clearSavedState(): void {
  * Optional callbacks report a flushed save that did not persist:
  * - `onSaveFailed` — the write could not be persisted (quota exceeded even after
  *   compression), so the caller can warn the user their progress was not saved.
- * - `onSaveSkipped` — the write was intentionally refused because the stored
- *   geometry belongs to a different puzzle (a cross-tab takeover; see
- *   {@link saveProgress}). Not a failure — the caller can record it for telemetry.
+ * - `onSaveSkipped` — the write was intentionally refused because the save slot
+ *   is recorded as belonging to a different puzzle (see {@link saveProgress}).
+ *   A cross-tab takeover is one way that happens and the one the guard was
+ *   built for, but not the only one: a geometry write that failed on quota, and
+ *   the straddle described below, produce the same mismatch from a single tab.
+ *   Not a failure — the caller can record it for telemetry.
  *
  * Each callback receives the state whose save failed or was skipped. Callers
  * must attribute telemetry to *that* state rather than to whatever puzzle is

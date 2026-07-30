@@ -24,7 +24,12 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { GameState, PieceGroup } from '../model/types.js';
 import * as compression from './compression.js';
 import { COMPRESSED_MARKER } from './compression.js';
-import { STATE_VERSION, serializeProgress, type SerializedViewport } from './serialization.js';
+import {
+    STATE_VERSION,
+    serializeProgress,
+    serializeStatic,
+    type SerializedViewport,
+} from './serialization.js';
 import {
     saveGeometry,
     saveProgress,
@@ -35,6 +40,7 @@ import {
     createDebouncedSave,
     STORAGE_KEY,
     PROGRESS_KEY,
+    GEOMETRY_SEED_KEY,
 } from './storage.js';
 import {
     makeRectPiece,
@@ -548,24 +554,6 @@ describe('saveProgress cross-tab guard (#404)', () => {
         expect(result).not.toBe('skipped');
     });
 
-    it('does not re-decode the geometry on repeated same-puzzle saves (cache)', () => {
-        // saveGeometry does not read/decode, so the cache still holds whatever a
-        // previous test left. A unique seed guarantees the first read is a cache
-        // miss (one decode); subsequent reads of the unchanged bytes must not
-        // decode again.
-        saveGeometry(makeGameState({ seed: 424242 }));
-        const spy = vi.spyOn(compression, 'decompressFromStorage');
-
-        saveProgress(makeGameState({ seed: 424242 }), [1]); // miss → 1 decode
-        const afterFirst = spy.mock.calls.length;
-        saveProgress(makeGameState({ seed: 424242 }), [2]); // hit → 0
-        saveProgress(makeGameState({ seed: 424242 }), [3]); // hit → 0
-
-        expect(afterFirst).toBe(1); // also proves the spy intercepts storage.ts
-        expect(spy).toHaveBeenCalledTimes(1);
-        spy.mockRestore();
-    });
-
     it('skips after a cross-tab geometry change (cache invalidation)', () => {
         // Geometry replaced by a different puzzle between two progress saves: the
         // raw bytes change, so the guard re-reads the new seed and now skips.
@@ -576,6 +564,186 @@ describe('saveProgress cross-tab guard (#404)', () => {
         saveGeometry(makeGameState({ seed: 2 })); // another tab takes over → geometry=2
         expect(saveProgress(makeGameState({ seed: 1 }), [2])).toBe('skipped');
         warnSpy.mockRestore();
+    });
+});
+
+// Seeds here are unique per test on purpose: `cachedGeometryRaw` inside
+// storage.ts memoizes on the raw geometry string and outlives
+// localStorage.clear(), so byte-identical geometry in two tests would make a
+// decode count depend on test order.
+describe('geometry seed token (#490)', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        vi.clearAllMocks(); // reset the vi.mock'd decompressFromStorage call count
+    });
+
+    it('records the geometry seed on save so the guard need not decode', () => {
+        saveNewPuzzle(makeGameState({ seed: 490001 }), []);
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490001');
+    });
+
+    it('does not decode the geometry at all on repeated same-puzzle saves', () => {
+        saveGeometry(makeGameState({ seed: 490002 }));
+        const spy = vi.spyOn(compression, 'decompressFromStorage');
+
+        saveProgress(makeGameState({ seed: 490002 }), [1]);
+        saveProgress(makeGameState({ seed: 490002 }), [2]);
+        saveProgress(makeGameState({ seed: 490002 }), [3]);
+
+        expect(spy).not.toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
+    it('skips a mismatched save using the token, without decoding', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 490003 }), []);
+        const progressBefore = localStorage.getItem(PROGRESS_KEY);
+        const decodeSpy = vi.spyOn(compression, 'decompressFromStorage');
+
+        const result = saveProgress(makeGameState({ seed: 490004 }), [1]);
+
+        expect(result).toBe('skipped');
+        expect(localStorage.getItem(PROGRESS_KEY)).toBe(progressBefore);
+        expect(decodeSpy).not.toHaveBeenCalled();
+        decodeSpy.mockRestore();
+        warnSpy.mockRestore();
+    });
+
+    it('falls back to decoding once, then backfills, for a save with no token', () => {
+        // A save written before this change: geometry present, token absent.
+        saveNewPuzzle(makeGameState({ seed: 490005 }), []);
+        localStorage.removeItem(GEOMETRY_SEED_KEY);
+        const spy = vi.spyOn(compression, 'decompressFromStorage');
+
+        saveProgress(makeGameState({ seed: 490005 }), [1]); // miss → decode + backfill
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490005');
+
+        saveProgress(makeGameState({ seed: 490005 }), [2]); // token path → no decode
+        saveProgress(makeGameState({ seed: 490005 }), [3]);
+        expect(spy).toHaveBeenCalledTimes(1);
+        spy.mockRestore();
+    });
+
+    it('still detects a takeover when the token is absent', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 490006 }), []);
+        localStorage.removeItem(GEOMETRY_SEED_KEY);
+
+        expect(saveProgress(makeGameState({ seed: 490007 }), [1])).toBe('skipped');
+        warnSpy.mockRestore();
+    });
+
+    it('ignores a non-numeric token and re-derives from the geometry', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 490008 }), []);
+        localStorage.setItem(GEOMETRY_SEED_KEY, 'not-a-number');
+
+        expect(saveProgress(makeGameState({ seed: 490009 }), [1])).toBe('skipped');
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490008'); // re-derived
+        warnSpy.mockRestore();
+    });
+
+    // Both halves of the guard are load-bearing, and each has entries here
+    // that only it rejects. `Number('')` is 0 and `Number.isFinite(0)` is
+    // true, so without the round-trip compare an empty token reads as "the
+    // slot belongs to puzzle 0". `'NaN'` and `'Infinity'` round-trip through
+    // `String()` perfectly, so without `Number.isFinite` they are accepted as
+    // seeds that compare unequal to every real one. Either way this tab skips
+    // every save for the puzzle it actually owns, for the whole session.
+    it.each(['', '   ', '0x10', ' 5 ', '1e3', 'NaN', 'Infinity'])(
+        'ignores the un-writable token %o rather than reading a seed out of it',
+        (token) => {
+            saveNewPuzzle(makeGameState({ seed: 490017 }), []);
+            localStorage.setItem(GEOMETRY_SEED_KEY, token);
+
+            expect(saveProgress(makeGameState({ seed: 490017 }), [1])).not.toBe('skipped');
+            expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490017'); // re-derived
+        },
+    );
+
+    it('does not record a token when the geometry write failed', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 490010 }), []); // this puzzle owns the slot
+
+        // Both the plain and the compressed geometry write throw → 'failed'.
+        // Every *other* key passes through, so a token write would really land:
+        // swallowing it here would make this test pass whether or not
+        // saveGeometry guards the recording on the write outcome.
+        const realSetItem = Storage.prototype.setItem;
+        const setItem = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(function (this: Storage, key: string, value: string) {
+                if (key === STORAGE_KEY) throw new Error('quota');
+                realSetItem.call(this, key, value);
+            });
+        const result = saveGeometry(makeGameState({ seed: 490011 }));
+        setItem.mockRestore();
+        warnSpy.mockRestore();
+
+        expect(result).toBe('failed');
+        // The slot still belongs to 490010, and the token must still say so.
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490010');
+    });
+
+    it('records the owner even when the geometry write had to compress', () => {
+        const realSetItem = Storage.prototype.setItem;
+        // Only the geometry blob is forced down the compressed retry; the
+        // ~10-byte token write is never the thing that overflows.
+        const setItem = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation(function (this: Storage, key: string, value: string) {
+                if (key === STORAGE_KEY && !value.startsWith(COMPRESSED_MARKER)) {
+                    throw new DOMException('quota', 'QuotaExceededError');
+                }
+                realSetItem.call(this, key, value);
+            });
+        const result = saveGeometry(makeGameState({ seed: 490015 }));
+        setItem.mockRestore();
+
+        expect(result).toBe('ok-compressed');
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490015');
+    });
+
+    it('falls back to decoding when the token write itself throws', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        // A token from the puzzle that owned the slot before this one. It is
+        // what the failing write must destroy: leaving it behind would make
+        // this tab skip every save for the puzzle it is about to own.
+        saveNewPuzzle(makeGameState({ seed: 490016 }), []);
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490016');
+
+        const realSetItem = localStorage.setItem.bind(localStorage);
+        const setItem = vi
+            .spyOn(Storage.prototype, 'setItem')
+            .mockImplementation((key: string, value: string) => {
+                if (key === GEOMETRY_SEED_KEY) throw new Error('quota');
+                realSetItem(key, value);
+            });
+        saveNewPuzzle(makeGameState({ seed: 490012 }), []);
+        setItem.mockRestore();
+
+        // The stale 490016 is gone rather than left standing.
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+        // And the degrade is not silent. Nothing retries the token write, so a
+        // persistent quota condition leaves the #490 fast path off for good —
+        // the same class of failure `writeWithOverflow` warns about.
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining(GEOMETRY_SEED_KEY),
+            expect.anything(),
+        );
+        // And the guard still works, the slow way.
+        expect(saveProgress(makeGameState({ seed: 490013 }), [1])).toBe('skipped');
+        warnSpy.mockRestore();
+    });
+
+    it('clearSavedState removes the token along with the other keys', () => {
+        saveNewPuzzle(makeGameState({ seed: 490014 }), []);
+        clearSavedState();
+
+        expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+        expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
     });
 });
 
@@ -643,15 +811,25 @@ describe('unreadable save carries the raw blobs for download', () => {
         expect(outcome.reason).toBe('torn-write');
     });
 
-    it('does not modify localStorage (read-only — the live keys are left intact)', () => {
+    it('leaves the save keys intact, so the recovery blobs survive to be downloaded', () => {
+        // Deliberately not "does not modify localStorage": since #490 this
+        // path re-anchors the derived geometry-seed token, so `loadSavedGame`
+        // is a writer. The property the recovery dialog actually depends on is
+        // narrower — the two keys that *are* the save are untouched, and no
+        // scratch or backup key is invented.
         localStorage.setItem(STORAGE_KEY, '{not valid json!!!');
-        const before = localStorage.getItem(STORAGE_KEY);
-        const keyCountBefore = localStorage.length;
+        localStorage.setItem(PROGRESS_KEY, '{also not valid!!!');
+        const geometryBefore = localStorage.getItem(STORAGE_KEY);
+        const progressBefore = localStorage.getItem(PROGRESS_KEY);
 
         loadSavedGame();
 
-        expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
-        expect(localStorage.length).toBe(keyCountBefore); // no extra backup keys written
+        expect(localStorage.getItem(STORAGE_KEY)).toBe(geometryBefore);
+        expect(localStorage.getItem(PROGRESS_KEY)).toBe(progressBefore);
+        const touchedKeys = Array.from({ length: localStorage.length }, (_, i) =>
+            localStorage.key(i),
+        ).filter((key) => key !== GEOMETRY_SEED_KEY);
+        expect(touchedKeys.sort()).toEqual([STORAGE_KEY, PROGRESS_KEY].sort());
     });
 
     it('reports "empty" (no raw) when nothing is saved', () => {
@@ -918,5 +1096,108 @@ describe('viewport persistence through storage', () => {
         expect(loadedViewport()).toBeUndefined();
         expect(warnSpy).not.toHaveBeenCalled();
         warnSpy.mockRestore();
+    });
+});
+
+// The `storage` event only reaches a running, fully active document, so a
+// geometry write by a build that doesn't maintain the token — the pre-#490
+// build at `/puzzle/` sharing an origin with `/puzzle/dev/`, a rollback, a
+// stale PWA client — while this tab was closed leaves the token describing a
+// puzzle that no longer owns the slot, with nothing to correct it. Load is the
+// re-anchor point.
+describe('geometry seed token: re-anchored on load (#490)', () => {
+    beforeEach(() => {
+        localStorage.clear();
+        vi.clearAllMocks(); // reset the vi.mock'd decompressFromStorage call count
+    });
+
+    /** Write a full save the way a build that ignores the token would. */
+    function foreignBuildWritesSave(seed: number): void {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStatic(makeGameState({ seed }))));
+        localStorage.setItem(
+            PROGRESS_KEY,
+            JSON.stringify(serializeProgress(makeGameState({ seed }), [])),
+        );
+    }
+
+    it('re-points a token left naming the previous puzzle at the geometry in the slot', () => {
+        saveNewPuzzle(makeGameState({ seed: 490040 }), []); // we owned the slot…
+        foreignBuildWritesSave(490041); // …until a token-blind build took it
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490040'); // stale
+
+        expect(loadSavedGame().status).toBe('ok');
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490041');
+        // The restored puzzle now autosaves. Without the re-anchor the stale
+        // token skips every save for the rest of the session, and a reload
+        // does not repair it — the player silently loses the lot.
+        expect(saveProgress(makeGameState({ seed: 490041 }), [1])).not.toBe('skipped');
+    });
+
+    it('drops a token that claims the puzzle we are about to overwrite', () => {
+        // The other direction: the token names *our* puzzle while the slot
+        // holds someone else's. Trusting it writes the torn pair the guard
+        // exists to prevent (#404).
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(serializeStatic(makeGameState({ seed: 490042 }))),
+        );
+        localStorage.setItem(GEOMETRY_SEED_KEY, '490043');
+
+        loadSavedGame();
+
+        expect(saveProgress(makeGameState({ seed: 490043 }), [1])).toBe('skipped');
+        warnSpy.mockRestore();
+    });
+
+    it('drops the token when the geometry key is gone', () => {
+        saveNewPuzzle(makeGameState({ seed: 490044 }), []);
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(PROGRESS_KEY);
+
+        expect(loadSavedGame().status).toBe('empty');
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+    });
+
+    it('drops the token when the geometry cannot be decoded', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        saveNewPuzzle(makeGameState({ seed: 490045 }), []);
+        localStorage.setItem(STORAGE_KEY, '{not valid json!!!');
+
+        expect(loadSavedGame().status).toBe('unreadable');
+
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
+        warnSpy.mockRestore();
+    });
+
+    it('anchors to the geometry, not the pair, on a seed-mismatched save', () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(serializeStatic(makeGameState({ seed: 490046 }))),
+        );
+        localStorage.setItem(
+            PROGRESS_KEY,
+            JSON.stringify(serializeProgress(makeGameState({ seed: 490047 }), [])),
+        );
+
+        expect(loadSavedGame().status).toBe('unreadable');
+
+        // The token describes the geometry blob, which is intact and is 490046's.
+        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490046');
+        warnSpy.mockRestore();
+    });
+
+    it('costs no extra decode — the load already decoded the geometry', () => {
+        saveNewPuzzle(makeGameState({ seed: 490048 }), []);
+        const spy = vi.spyOn(compression, 'decompressFromStorage');
+
+        loadSavedGame();
+
+        // Geometry + progress, exactly as before the re-anchor was added.
+        expect(spy).toHaveBeenCalledTimes(2);
+        spy.mockRestore();
     });
 });
