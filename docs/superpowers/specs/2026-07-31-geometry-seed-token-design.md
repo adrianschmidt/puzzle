@@ -46,13 +46,12 @@ back to decoding the blob and is then re-recorded. No migration, no
 version bump, and a save whose token is missing loads and plays exactly as
 before. `clearSavedState()` removes it alongside the other two keys.
 
-### `currentGeometrySeed()` — three paths
+### `currentGeometrySeed()` — two paths
 
 | Situation | Work done |
 |---|---|
-| Token present and trusted (steady play) | one ~10-byte `getItem` |
-| Token absent (save predates this change) | full decode **once**, then backfill the token |
-| Token untrusted (another tab wrote geometry) | full decode once, token rewritten |
+| Token present (steady play) | one ~10-byte `getItem` |
+| Token absent — save predates this change, or was invalidated | full decode **once**, then backfill the token |
 
 The fallback path is today's implementation, unchanged: read the raw blob,
 `decompressFromStorage` + `JSON.parse`, keep `cachedGeometryRaw` /
@@ -67,7 +66,20 @@ writes the token until the player starts a new puzzle. The backfill is
 derived from the blob that was just decoded, so it cannot invent an
 ownership claim that isn't already true.
 
-A token that parses to a non-finite number is treated as absent.
+A blob that is **seedless or unreadable** has nothing to backfill, so it
+keeps paying the pre-#490 cost — the multi-MB `getItem` and full-length
+compare — on every flush, permanently. That is parity with today rather than
+a regression, and only a pre-v4 legacy save (which predates traced tabs, so
+it is nowhere near the 5.8 MB regime) or a corrupt blob can reach it. A
+sentinel would buy the fast path back at the cost of blinding the takeover
+check, which is the wrong trade. `cachedGeometryRaw` is what keeps that case
+to a compare rather than a re-parse, and it is the only case where that memo
+still earns its keep.
+
+A token that does not round-trip through `String(Number(token))`, or parses
+to a non-finite number, is treated as absent. `Number.isFinite` alone is too
+loose: `''` and `'   '` read as seed `0`, which no writer produces and which
+would make every save look like a mismatch.
 
 ### Trust invalidation — the `storage` event
 
@@ -80,28 +92,101 @@ leaves the token pointing at the previous puzzle — and the takeover the
 guard exists to catch goes undetected, reintroducing #404's false "corrupt
 save".
 
-So a module-scope `storage` listener sets `tokenUntrusted = true` when:
+So a `storage` listener **removes the token key** when the event did not
+come from `sessionStorage` (whose null-key `clear()` says nothing about our
+geometry) and:
 
 - `event.key === STORAGE_KEY` — someone else wrote or removed the geometry;
 - `event.key === null` — someone else called `localStorage.clear()`, which
   the spec reports as a single null-key event.
 
-Storage events never fire in the window that made the change, so any event
-we receive *is* another tab; no self-filtering is needed. The listener is
-registered at module scope (guarded on `typeof window`), not wired from
-`bootstrap.ts`: it is a correctness mechanism, and one that silently
-degrades if a caller forgets to install it is worse than a module-level
-side effect in the module that owns the invariant. It only sets a boolean.
+Deleting the key rather than flipping an in-memory "untrusted" flag is what
+makes this simple to reason about, because it collapses the whole mechanism
+to one invariant:
 
-This is the belt to the token's braces, and each covers the other's gap:
-the event catches writers that don't maintain the token, and the token
-catches events that were never delivered (a bfcached or frozen tab misses
-storage events entirely, but the tab that wrote the geometry updated the
-token before freezing us out).
+> The token key exists only while we believe it describes the geometry at
+> `STORAGE_KEY`. Anyone who sees evidence otherwise deletes it, and the next
+> reader re-derives it from the blob.
 
-`tokenUntrusted` is cleared at the start of the fallback path, before the
-read — JavaScript is single-threaded, so an event cannot interleave with
-the synchronous decode that follows.
+There is then no second source of truth to keep in sync, no in-memory state
+that outlives a `localStorage.clear()`, and the invalidation path is the
+same one an old save already exercises. Deleting a token the other tab had
+just written correctly costs one redundant decode, never a wrong answer.
+
+That asymmetry is also why the `sessionStorage` test is written as an
+exclusion rather than as `event.storageArea === localStorage`. The identity
+is spec-mandated and holds in every engine and in jsdom, so the two are the
+same test today — but they fail in opposite directions. Requiring the
+identity fails *open*: anywhere it did not hold, cross-tab invalidation
+would silently switch off entirely and the mixed-build takeover would go
+undetected until the next load. Excluding `sessionStorage` fails safe, at
+a ceiling of one redundant decode. Every other decision here deletes when
+in doubt; this one should too.
+
+Storage events never fire in the window that made the change (confirmed
+against jsdom as well as the spec), so any event we receive *is* another
+tab; no self-filtering is needed, and our own removal cannot re-trigger us.
+The removal does fire an event in *other* tabs, but their handlers ignore
+any key that isn't the geometry key, so there is no cascade. The listener
+is installed by an exported `installGeometryTokenInvalidation()` — named for
+the invariant rather than for either of its two triggers — wired from
+`bootstrap.ts` with a test, per the repo's composition-root convention —
+the same way the equally load-bearing `pagehide` flush and
+`installErrorTracking` are wired. (An earlier draft registered it at module
+scope on the grounds that a correctness mechanism shouldn't degrade when a
+caller forgets it; the convention plus a `bootstrap.test.ts` assertion that
+the app actually *has* cross-tab invalidation covers that better, and keeps
+the listener out of every test that merely imports `storage.ts`.)
+
+The two mechanisms **do not** fully cover each other's gaps. Their
+intersection — a writer that doesn't maintain the token *and* a reader that
+never receives the event — is real, and it is what the load-time re-anchor
+below exists for:
+
+- The event has a **delivery-latency window**. Per the HTML spec the stored
+  value is updated at write time while the event is delivered as a queued
+  global task, so there is at least one task turn (longer if this tab is
+  busy mid-drag) in which we can see new geometry with a stale token. In
+  practice Chrome and WebKit apply the value and dispatch the event from the
+  same IPC, which collapses the window to zero, and the owning tab's next
+  autosave self-heals it — but it is not a guarantee the spec gives.
+- The event is **not delivered at all** to a document that is not fully
+  active. A bfcached tab misses storage events and gets no replay on
+  restore; a tab that was *closed* when the write happened never had a
+  listener. The claim that "the tab that wrote the geometry updated the
+  token before freezing us out" assumes the writer maintains the token —
+  the one assumption the mixed-build case above establishes we cannot make.
+
+### Re-anchoring on load, and on bfcache restore
+
+Two cheap backstops close that intersection:
+
+- **`loadSavedGame` re-anchors the token.** It drops the token up front and
+  re-records it from `staticData.seed` after the decode it performs anyway,
+  so every exit leaves the token either correct or absent (absent is always
+  safe — the next reader re-derives). No extra decode, and it makes the
+  fails-closed direction — a token naming the *previous* puzzle, so this tab
+  skips every progress save for a session and the player silently loses the
+  lot — unreachable across a reload rather than sticky for the session. Note
+  this is placed before the outcome branches: the token describes the
+  geometry blob, not the geometry/progress pair, so a seed-mismatch or
+  torn-write outcome still leaves it correct.
+
+  "Correct" there is relative to a read that may already be stale. A
+  multi-MB decode sits between the `getItem(STORAGE_KEY)` and the
+  re-record, so another tab that runs `clearSavedState()` +
+  `saveNewPuzzle(B)` inside that window has the loading tab write a token
+  naming A over the right answer. Left as-is deliberately: it fails closed
+  (the wrong direction is "skip saves", never "tear the pair"), and it
+  self-heals within one task turn — the loading tab is fully active, so it
+  receives the queued `STORAGE_KEY` event, drops the token, and B's next
+  flush backfills the truth. A verify-after-write (`getItem(STORAGE_KEY)
+  === staticRaw`, else drop) would narrow it to nothing for one more
+  ~10-byte read per load, if this ever proves reachable in practice.
+- **`pageshow` with `event.persisted` drops the token.** That is exactly the
+  bfcache restore, i.e. "I may have missed events". One decode on the next
+  flush; the fails-open direction (writing our progress over another
+  puzzle's geometry — #404 again) closes with it.
 
 ### Write side — `saveGeometry`
 
@@ -111,10 +196,30 @@ in the slot and the existing token still describes it correctly; writing
 the new seed there would make this tab skip every subsequent progress save
 for a puzzle it legitimately owns.
 
-If the token write itself throws (storage full — largely theoretical, since
-the geometry write ahead of it just succeeded), remove the key so the next
-check falls back to decoding, and set `tokenUntrusted` in case the removal
-throws too. Degrading to slow-but-correct beats recording a lie.
+If the token write itself throws (storage full — largely theoretical from
+`saveGeometry`, since the geometry write ahead of it just succeeded, but the
+backfill call site runs inside `saveProgress` with no such precedent),
+remove the key so the next check falls back to decoding. Degrading to
+slow-but-correct beats recording a lie.
+
+**Both** failures warn through `diagnostics`, like every other failed write
+in the module. Neither message may name a consequence that only holds at
+*some* call sites — `recordGeometrySeed` runs from `saveGeometry`, from the
+backfill, from the two invalidation listeners and from `loadSavedGame`, and
+the direction of the damage differs between them. What is common:
+
+- A failed **record** leaves the token absent. Slow but correct: this tab
+  reverts to the pre-#490 multi-MB read per flush. It is not stuck there —
+  the backfill re-attempts the identical write every time it decodes, so the
+  condition clears itself the moment the underlying storage pressure does.
+  The message should point at quota, not at the puzzle state, and must not
+  claim nothing retries.
+- A failed **removal** leaves a token we already know not to trust. Which
+  way it hurts depends on which puzzle it names: naming another puzzle, this
+  tab skips every progress save; naming this tab's puzzle while another
+  tab's geometry sits in the slot, saves go through and tear the pair
+  (#404). Naming only the first points a reader at the wrong — and less
+  damaging — failure.
 
 `saveProgress` and `saveNewPuzzle` keep their current shape; `saveProgress`
 calls the same `currentGeometrySeed()` and its skip semantics are
@@ -129,6 +234,10 @@ calling `saveGeometry()` in-process — under the new model that *is* a
 same-tab write, and it would pass for the wrong reason. It becomes a direct
 `localStorage.setItem(STORAGE_KEY, ...)` plus a dispatched `StorageEvent`,
 which is what a real other tab looks like from inside this one.
+
+Because no invalidation state lives outside `localStorage`, the existing
+`localStorage.clear()` in each suite's `beforeEach` fully resets the new
+behavior; the decode-count assertions below are order-independent.
 
 New cases in `src/persistence/storage.test.ts`:
 
@@ -155,13 +264,12 @@ New cases in `src/persistence/storage.test.ts`:
 
 - **Save format / serialization:** untouched. No version bump; the token is
   derived data, and its absence is a supported state.
-- **`loadSavedGame`:** stays read-only. It would be a natural place to
-  populate the token, but the "does not modify localStorage" property is
-  worth more than saving one decode on the first flush of a session, which
-  the backfill covers anyway.
 - **`CorruptSaveData` / the corrupt-save download:** unchanged. The token
   holds no information not already in the geometry blob, so there is
-  nothing to recover from it.
+  nothing to recover from it — and with the load-time re-anchor above, the
+  token a corrupt-save dialog could report is one this same load just
+  rewrote, not the one that caused the tear (that was a previous session).
+  It would be a field with no diagnostic power.
 - **Help text:** none. No player-visible behavior change — the same saves
   are written and skipped in the same situations, just cheaper.
 - **Analytics:** no new events. `onSaveSkipped` telemetry keeps its
