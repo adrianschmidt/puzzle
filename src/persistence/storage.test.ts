@@ -911,6 +911,21 @@ describe('geometry seed token (#490)', () => {
         expect(drops).toHaveLength(2);
     });
 
+    it('never reads the geometry blob on a steady-state flush (#490)', () => {
+        saveNewPuzzle(makeGameState({ seed: 490030 }), []);
+
+        const getItem = vi.spyOn(Storage.prototype, 'getItem');
+        saveProgress(makeGameState({ seed: 490030 }), [1]);
+        saveProgress(makeGameState({ seed: 490030 }), [2]);
+
+        // Two flushes, two ~10-byte reads, and the multi-MB blob untouched.
+        expect(getItem.mock.calls.map(([key]) => key)).toEqual([
+            GEOMETRY_SEED_KEY,
+            GEOMETRY_SEED_KEY,
+        ]);
+        getItem.mockRestore();
+    });
+
     it('ignores storage events for unrelated keys', () => {
         saveNewPuzzle(makeGameState({ seed: 490027 }), []);
 
