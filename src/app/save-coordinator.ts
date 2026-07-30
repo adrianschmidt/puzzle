@@ -81,10 +81,15 @@ export function createSaveCoordinator(deps: {
     // count for the old puzzle's failure.
     const debouncedSave = createDebouncedSave({
         onSaveFailed: (state) => notifySaveFailed('progress', state),
-        // A cross-tab takeover refused this autosave (another tab started a
-        // new puzzle on the same origin). Not a failure to warn the user
-        // about, but worth measuring — this is the race that used to
-        // produce a torn save.
+        // The save slot is recorded as another puzzle's, so this autosave was
+        // refused rather than allowed to tear the pair. A cross-tab takeover
+        // (another tab started a new puzzle on the same origin) is the race
+        // this was built for, but it is not the only cause — a geometry write
+        // that failed on quota, and a save queued for the outgoing puzzle that
+        // flushed after a new game replaced it, land here too. See
+        // `ProgressSaveSkippedData` in `analytics/umami.ts` for the full set
+        // and how to tell them apart. Not a failure to warn the user about,
+        // but worth measuring.
         onSaveSkipped: (state) =>
             track('progress-save-skipped', {
                 cutStyle: state.cutStyle ?? 'classic',
