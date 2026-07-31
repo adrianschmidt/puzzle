@@ -377,6 +377,7 @@ describe('startNewGame', () => {
         // broken puzzle: the detector itself is covered in generator.test.ts,
         // and what this test owns is the wiring — that the callback is passed,
         // captured, and reported against the state that createNewGame returned.
+        warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
         vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
             return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
@@ -384,28 +385,77 @@ describe('startNewGame', () => {
 
         await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
 
+        expect(umamiTrack).toHaveBeenCalledWith('piece-count-mismatch', expect.objectContaining({
+            source: 'fresh',
+            expected: 4,
+            actual: 2,
+            baseCut: 'sine',
+            cols: 2,
+            rows: 2,
+        }));
+        // The console copy is the only signal on a local `npm run dev`, where
+        // `track` is a no-op without a website ID — so it is a tested part of
+        // this report, not incidental logging. Asserted against the payload
+        // read back out of the tracked call rather than against a second
+        // `objectContaining`: two matchers over the same six keys both stay
+        // green when `warn` is handed a trimmed copy (no `seed`, no
+        // `imageWidth`, no `rotationMode`), which is exactly the
+        // paste-into-`__reproPuzzle`-identically property claimed here.
+        const tracked = umamiTrack.mock.calls
+            .find(([name]) => name === 'piece-count-mismatch')?.[1];
+        expect(warnSpy).toHaveBeenCalledWith('[piece-count] repro params', tracked);
+    });
+
+    // #512: `__newComposableGame` and other dev-console starts pass 'dev' as
+    // the 4th argument so a developer poking at cut parameters doesn't
+    // inflate the field-incident count. The wiring that binds 'dev' at the
+    // composition root is `bootstrap.test.ts`'s concern; this is the
+    // mechanism the binding relies on — that the parameter actually reaches
+    // the tracked event.
+    it('threads a non-default source through to the mismatch event', async () => {
+        // Spied purely to silence it: the branch under test also writes the
+        // repro params to the console, and `diagnostics` is enabled under
+        // Vitest, so an unstubbed run prints them on every suite run.
+        warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
+        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+            options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
+            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+        });
+
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps, 'dev');
+
         expect(umamiTrack).toHaveBeenCalledWith(
             'piece-count-mismatch',
-            expect.objectContaining({
-                source: 'fresh',
-                expected: 4,
-                actual: 2,
-                baseCut: 'sine',
-                cols: 2,
-                rows: 2,
-            }),
+            expect.objectContaining({ source: 'dev' }),
         );
     });
 
     it('never reports the image URL on the mismatch event', async () => {
+        // Silencing again, as above.
+        warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
         vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
             return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
         });
 
-        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+        // A player-picked photo, so the state carries a real `https://` URL.
+        // The blank-canvas harness the other tests here use would make the
+        // assertion below unfailable: its image URL is a `data:` URI, so
+        // "carries no http" holds whether or not the URL is redacted.
+        vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
+        await startNewGame(
+            { cols: 2, rows: 2 },
+            noTracedTabsOptions({ imageSource: undefined, pickedImage: makeCandidateImage() }),
+            deps,
+        );
+        expect(install.mock.calls.at(-1)?.[0].imageUrl).toContain('https://');
 
         const call = umamiTrack.mock.calls.find(([name]) => name === 'piece-count-mismatch');
+        // Named separately so a missing event fails with "no call found"
+        // rather than the opaque "the given combination of arguments
+        // (undefined and string) is invalid" `JSON.stringify(undefined)`
+        // throws below.
+        expect(call).toBeDefined();
         expect(JSON.stringify(call?.[1])).not.toContain('http');
     });
 

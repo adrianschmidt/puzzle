@@ -30,9 +30,10 @@
  *
  * Most collaborators are spy-*wrapped* rather than replaced, so the real
  * implementations still run and the DOM assertions exercise real code.
- * `global-handlers`, `boot-sequence`, `start-new-game` and
- * `load-shared-puzzle` are replaced outright: they reach analytics, the
- * network and the save file, none of which this file is about.
+ * `global-handlers`, `boot-sequence`, `start-new-game`, `load-shared-puzzle`
+ * and `new-game-flow` are replaced outright: they reach analytics, the
+ * network, the save file, or the new-game dialog's own preference loading
+ * and DOM, none of which this file is about.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock, type MockInstance } from 'vitest';
@@ -53,6 +54,10 @@ vi.mock('./global-handlers.js', () => ({ installGlobalHandlers: vi.fn() }));
 vi.mock('./boot-sequence.js', () => ({ runBootSequence: vi.fn(async () => {}) }));
 vi.mock('./start-new-game.js', () => ({ startNewGame: vi.fn(async () => {}) }));
 vi.mock('./load-shared-puzzle.js', () => ({ loadSharedPuzzle: vi.fn(async () => {}) }));
+// Only its `start` binding matters here (see the source-labeling tests
+// below); replaced outright rather than spy-wrapped so calling `onNewGame`
+// doesn't run the real dialog's preference loading and DOM construction.
+vi.mock('./new-game-flow.js', () => ({ openNewGameDialog: vi.fn() }));
 
 vi.mock('./rotation-ui.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('./rotation-ui.js')>();
@@ -123,7 +128,9 @@ vi.mock('./dev-hooks.js', async (importOriginal) => {
 
 import { installGlobalHandlers } from './global-handlers.js';
 import { runBootSequence } from './boot-sequence.js';
+import { startNewGame } from './start-new-game.js';
 import { loadSharedPuzzle } from './load-shared-puzzle.js';
+import { openNewGameDialog } from './new-game-flow.js';
 import { createRotationUi } from './rotation-ui.js';
 import { createCompletionPresenter } from './completion-presenter.js';
 import { zoomToFitCompletedPuzzle } from './viewport-fit.js';
@@ -412,20 +419,69 @@ describe('bootstrap', () => {
     // from a developer's `__reproPuzzle` replay of a known-bad puzzle, or
     // the latter would inflate the `piece-count-mismatch` incident count.
     // The dev-hooks binding above is asserted 'repro'; this pins the
-    // share-link binding at the *default* ('shared', the 4th argument
-    // omitted entirely) rather than merely "not 'repro'", so a future edit
-    // that starts passing 'repro' here too — or anything else — fails this
-    // assertion.
+    // share-link binding at the *resolved* default ('shared') rather than
+    // "not 'repro'", so a future edit that starts passing 'repro' here too
+    // — or anything else — fails this assertion.
+    //
+    // Asserted via the resolved value (`?? 'shared'`), not
+    // `toHaveBeenCalledWith` on a fixed 3-argument call: the latter pins
+    // *arity*, not behavior — making the source explicit
+    // (`loadSharedPuzzle(payload, recipient, deps, 'shared')`) is
+    // semantically identical to omitting it, but fails a length-sensitive
+    // `toHaveBeenCalledWith` for a maintainer who did that for readability.
     it('leaves the real share-link binding at the default source', () => {
         bootstrap(root);
         const { loadShared } = vi.mocked(createShareLinkLoader).mock.calls[0][0];
         void loadShared({} as SharePayload, false);
 
-        expect(loadSharedPuzzle).toHaveBeenCalledWith(
-            {},
-            false,
-            expect.anything(),
-        );
+        const call = vi.mocked(loadSharedPuzzle).mock.calls.at(-1);
+        expect(call?.[0]).toEqual({});
+        expect(call?.[1]).toBe(false);
+        expect(call?.[3] ?? 'shared').toBe('shared');
+    });
+
+    // #512: the same split as above, for `startNewGame`'s `'dev'` source.
+    // `installDevHooks`'s `start` binding is the only way to reach
+    // `__newComposableGame`'s arbitrary sine configs outside a crafted share
+    // link, so a piece-count mismatch it surfaces must not be
+    // indistinguishable from a real player's game in the incident count.
+    it('labels the dev-hooks start binding as a dev-console start', () => {
+        bootstrap(root);
+        const { start } = vi.mocked(installDevHooks).mock.calls[0][0];
+        void start({ cols: 2, rows: 2 }, {});
+
+        const call = vi.mocked(startNewGame).mock.calls.at(-1);
+        expect(call?.[3]).toBe('dev');
+    });
+
+    // The two real player paths must both stay at the default. Asserted via
+    // the resolved value, not a fixed-arity `toHaveBeenCalledWith` — see the
+    // share-link binding test above for why. The `toBeDefined` floor is what
+    // keeps `?? 'fresh'` from passing vacuously: without it, a binding that
+    // stopped calling `startNewGame` at all leaves `call` undefined and the
+    // defaulted assertion still holds. (The share-link test doesn't need the
+    // floor — its `expect(call?.[0]).toEqual({})` already fails on undefined.)
+    it('leaves the boot-path start binding at the default source', () => {
+        bootstrap(root);
+        const { start } = vi.mocked(runBootSequence).mock.calls[0][0];
+        void start({ cols: 2, rows: 2 }, {});
+
+        const call = vi.mocked(startNewGame).mock.calls.at(-1);
+        expect(call).toBeDefined();
+        expect(call?.[3] ?? 'fresh').toBe('fresh');
+    });
+
+    it('leaves the new-game-dialog start binding at the default source', () => {
+        bootstrap(root);
+        const { onNewGame } = vi.mocked(installToolbar).mock.calls[0][0];
+        onNewGame();
+
+        const { start } = vi.mocked(openNewGameDialog).mock.calls.at(-1)![0];
+        void start({ cols: 2, rows: 2 }, {});
+
+        const call = vi.mocked(startNewGame).mock.calls.at(-1);
+        expect(call).toBeDefined();
+        expect(call?.[3] ?? 'fresh').toBe('fresh');
     });
 
     it('reads the session late before showing the completion overlay', () => {

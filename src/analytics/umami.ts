@@ -484,6 +484,12 @@ export interface NewGameFailedData {
  * total `piece-count-mismatch` minus `source = 'repro'`, arithmetic rather
  * than a negated filter (the rule {@link SharedLoadFailedData} documents).
  *
+ * That subtraction is sound only while Composable stays dev-only. Shipping it
+ * to production — `isComposableVisible()` returning true for a production
+ * build — makes `'fresh'` + `'composable'` a real player, and this rule starts
+ * silently discarding genuine incidents. Delete it in the same change, and
+ * label the dev routes some other way if they still need excluding.
+ *
  * Not every row is a bug: exotic composable configs (e.g. sine `hf`/`vf` = 10
  * on a small grid) can self-intersect and carve genuine island faces, so the
  * real face count legitimately exceeds the declared one without a fused- or
@@ -553,7 +559,7 @@ export interface PieceCountMismatchData {
      */
     styleConfigOmitted?: true;
     /** How the puzzle started. See the note above on excluding `'repro'`. */
-    source: 'fresh' | 'shared' | 'repro';
+    source: 'fresh' | 'shared' | 'repro' | 'dev';
 }
 
 /**

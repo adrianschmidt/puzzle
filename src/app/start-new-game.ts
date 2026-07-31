@@ -113,11 +113,28 @@ export interface StartNewGameDeps {
  * @param gridSize - Grid dimensions (cols × rows) for the puzzle
  * @param options - Per-game choices; see {@link StartNewGameOptions}
  * @param deps - Collaborators; see {@link StartNewGameDeps}
+ * @param source - `'fresh'` for a real player start (the new-game dialog or
+ * the boot path), `'dev'` for a start kicked off from the dev console (e.g.
+ * `__newComposableGame`). Only affects the `piece-count-mismatch` event's
+ * `source` field — it keeps a developer poking at cut parameters out of the
+ * field-incident signal, the same distinction `loadSharedPuzzle`'s `source`
+ * already draws for `__reproPuzzle` (#512). Defaults to `'fresh'`; the
+ * composition root passes `'dev'` explicitly on the one binding it hands to
+ * `installDevHooks`.
+ *
+ * The default is the PLAYER path, so a new binding that forgets the argument
+ * opts itself INTO the field-incident count and nothing goes red
+ * (`bootstrap.test.ts` asserts per binding). Kept optional deliberately —
+ * making it required would touch every call site to catch a mistake possible
+ * only in the composition root — so: a new binding that is not a real player
+ * start must pass `'dev'`. The developer traffic this does miss today is
+ * separable by query instead; see `PieceCountMismatchData`'s `source` note.
  */
 export async function startNewGame(
     gridSize: GridSize,
     options: StartNewGameOptions,
     deps: StartNewGameDeps,
+    source: 'fresh' | 'dev' = 'fresh',
 ): Promise<void> {
     const {
         cutStyle: requestedCutStyle = 'classic',
@@ -308,10 +325,27 @@ export async function startNewGame(
         // anything below throws. A diagnostic, not an error — this must
         // never block a game start.
         if (pieceCountMismatch) {
-            track(
-                'piece-count-mismatch',
-                buildPieceCountMismatchData(state, pieceCountMismatch, 'fresh'),
-            );
+            const mismatchData =
+                buildPieceCountMismatchData(state, pieceCountMismatch, source);
+            track('piece-count-mismatch', mismatchData);
+            // Also to the console. The generator's own `[piece-count]` warn
+            // cannot carry repro params: `generateTopologyPuzzle` is handed a
+            // `random: () => number` rather than the seed behind it, and
+            // neither the rotation mode nor the cut style reaches that far
+            // down — so on a local `npm run dev`, where `track` is a no-op
+            // without a website ID, this is the only place a replayable set
+            // exists at all. Same object the event ships, so it pastes into
+            // `__reproPuzzle` the way an Umami row does.
+            //
+            // Local loop only, and more strictly than "unless enabled at
+            // runtime" suggests: `diagnostics` is on under `import.meta.env.DEV`
+            // (dev server and Vitest), and `enableDiagnostics()` is a module
+            // export bound to no `window` property or dev hook — so on ANY
+            // deployed build, `/puzzle/dev/` included, nothing can turn it on
+            // and this line never prints. There the Umami event is the whole
+            // signal, which is why it carries the full repro params rather
+            // than leaning on the console copy.
+            diagnostics.warn('[piece-count] repro params', mismatchData);
         }
     } finally {
         hideLoadingOverlay();
