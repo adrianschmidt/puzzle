@@ -221,4 +221,53 @@ describe('loadSharedPuzzle', () => {
         await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('generation boom');
         expect(hideLoadingOverlay).toHaveBeenCalled();
     });
+
+    it('reports piece-count-mismatch with repro params when generation flags one', async () => {
+        // Drive the callback directly rather than constructing a genuinely
+        // broken puzzle: the detector itself is covered in generator.test.ts,
+        // and what this test owns is the wiring — that the callback is passed,
+        // captured, and reported against the state that createNewGame returned.
+        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+            options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
+            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+        });
+
+        await loadSharedPuzzle(payload(), false, deps);
+
+        expect(umamiTrack).toHaveBeenCalledWith(
+            'piece-count-mismatch',
+            expect.objectContaining({
+                source: 'shared',
+                expected: 4,
+                actual: 2,
+                baseCut: 'sine',
+                cols: 8,
+                rows: 6,
+            }),
+        );
+    });
+
+    it('reports nothing for a healthy shared puzzle', async () => {
+        await loadSharedPuzzle(payload(), false, deps);
+        const names = umamiTrack.mock.calls.map(([name]) => name);
+        expect(names).not.toContain('piece-count-mismatch');
+    });
+
+    // Closes the `source: 'repro'` gap (#512): a `__reproPuzzle` replay runs
+    // through this same flow, and without an explicit source it would report
+    // indistinguishably from a real recipient's `source: 'shared'` — turning
+    // a developer's own debugging replays into apparent field incidents.
+    it('reports source repro when the caller identifies the load as a repro replay', async () => {
+        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+            options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
+            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+        });
+
+        await loadSharedPuzzle(payload(), false, deps, 'repro');
+
+        expect(umamiTrack).toHaveBeenCalledWith(
+            'piece-count-mismatch',
+            expect.objectContaining({ source: 'repro' }),
+        );
+    });
 });

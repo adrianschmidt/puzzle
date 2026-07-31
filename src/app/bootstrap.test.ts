@@ -403,6 +403,28 @@ describe('bootstrap', () => {
             {},
             false,
             expect.objectContaining({ backgroundColor: control }),
+            'repro',
+        );
+    });
+
+    // #512: the two `loadSharedPuzzle` bindings must not converge on the
+    // same `source` — a real recipient's link has to stay distinguishable
+    // from a developer's `__reproPuzzle` replay of a known-bad puzzle, or
+    // the latter would inflate the `piece-count-mismatch` incident count.
+    // The dev-hooks binding above is asserted 'repro'; this pins the
+    // share-link binding at the *default* ('shared', the 4th argument
+    // omitted entirely) rather than merely "not 'repro'", so a future edit
+    // that starts passing 'repro' here too — or anything else — fails this
+    // assertion.
+    it('leaves the real share-link binding at the default source', () => {
+        bootstrap(root);
+        const { loadShared } = vi.mocked(createShareLinkLoader).mock.calls[0][0];
+        void loadShared({} as SharePayload, false);
+
+        expect(loadSharedPuzzle).toHaveBeenCalledWith(
+            {},
+            false,
+            expect.anything(),
         );
     });
 
