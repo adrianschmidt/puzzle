@@ -139,7 +139,7 @@ Every change is additive. No existing signature moves.
 
 ### 3. The event
 
-`piece-count-mismatch`, 13 properties — one wider than the widest event
+`piece-count-mismatch`, 12 properties — the same width as the widest event
 shipping today, and well inside Umami's 50-property cap. Two groups, by the
 question each answers.
 
@@ -152,7 +152,11 @@ dashboard without an export.
 | `baseCut` | string | `'sine'`. Not derivable from `cutStyle` — classic, wavy, triangles and composable all sit on the sine base cut, so the mismatch is a property of the base cut, not the style. |
 | `expected` | number | Pre-strip, generation-grid. |
 | `actual` | number | Pre-strip, generation-grid. |
-| `delta` | number | `actual − expected`. Derivable in the export, but the only field comparable *across* grid sizes: `−3` means three fused faces whether the puzzle is 48 or 192 pieces, which is what makes a dashboard top-values list readable. |
+
+No `delta` property. It is `actual − expected` and both are already here,
+so the export computes it; adding it would buy a slightly more readable
+dashboard top-values list at the cost of a field that can contradict its
+own inputs if one of them is ever wrong.
 
 **Which puzzle was it?** The repro params, minus `imageUrl`.
 
