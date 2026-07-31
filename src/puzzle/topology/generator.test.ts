@@ -180,12 +180,26 @@ describe('generateTopologyPuzzle', () => {
     it('wavy 2×2 with freq 10 produces at least 4 pieces', () => {
         // High-frequency waves may create extra "island" pieces
         // from multiple crossings — at least the base grid count
-        const { pieces } = generateTopologyPuzzle(
+        const { pieces, pieceCountMismatch } = generateTopologyPuzzle(
             2, 2, { width: 200, height: 200 },
             seededRandom(42),
             sineConfig({ ha: 0.15, hf: 10, va: 0.15, vf: 10, disableTabs: true }),
         );
         expect(pieces.length).toBeGreaterThanOrEqual(4);
+        // This IS a real piece-count mismatch, and a legitimate one, not a
+        // fused-piece bug: at this frequency the sine cuts self-intersect and
+        // carve extra "island" faces, so the DCEL genuinely yields more faces
+        // than cols x rows predicts. Pinned rather than left to fire
+        // unasserted, so a change to this extreme-config behavior is caught
+        // here instead of showing up as incidental console noise.
+        //
+        // `actual: 6` is an island-face count straight out of bezier-js's
+        // curve intersections, which makes this a geometry tripwire in the
+        // sense `dcel-broad-phase-equivalence.test.ts` describes. If it goes
+        // red, work out what moved generated geometry — a bezier-js bump, a
+        // change to the cut or DCEL code — and decide whether to take it. Do
+        // NOT re-record it to whatever the run produced.
+        expect(pieceCountMismatch).toEqual({ expected: 4, actual: 6, baseCutId: 'sine' });
     });
 
     it('wavy cuts produce pieces with bidirectional mates', () => {
@@ -460,8 +474,6 @@ describe('generateTopologyPuzzle deep-resolution gating', () => {
 });
 
 describe('generateTopologyPuzzle piece-count invariant', () => {
-    const FRAME_400 = { width: 400, height: 400 };
-
     it('reports a mismatch when a generator produces fewer faces than it declared', () => {
         // Declares a 2x2 grid but emits only the horizontal internal cut, so
         // the DCEL extracts 2 faces, not 4. This is the shape of the real
@@ -481,7 +493,7 @@ describe('generateTopologyPuzzle piece-count invariant', () => {
         registerBaseCutGenerator(fake);
 
         const { pieces, pieceCountMismatch } = generateTopologyPuzzle(
-            2, 2, FRAME_400, rng,
+            2, 2, FRAME, rng,
             { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0 },
         );
 
@@ -509,7 +521,7 @@ describe('generateTopologyPuzzle piece-count invariant', () => {
         registerBaseCutGenerator(fake);
 
         const { pieces, pieceCountMismatch } = generateTopologyPuzzle(
-            2, 2, FRAME_400, rng,
+            2, 2, FRAME, rng,
             { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0 },
         );
 
@@ -532,7 +544,7 @@ describe('generateTopologyPuzzle piece-count invariant', () => {
         registerBaseCutGenerator(fake);
 
         const { pieceCountMismatch } = generateTopologyPuzzle(
-            2, 2, FRAME_400, rng,
+            2, 2, FRAME, rng,
             { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0 },
         );
 
@@ -554,7 +566,7 @@ describe('generateTopologyPuzzle piece-count invariant', () => {
         // The sine grid oversizes to 4x4 = 16 faces, then the strip removes the
         // outer ring leaving 4 pieces. The check must see 16 vs 16, not 4 vs 16.
         const { pieces, pieceCountMismatch } = generateTopologyPuzzle(
-            2, 2, FRAME_400, rng,
+            2, 2, FRAME, rng,
             { baseCutGeneratorId: 'sine', tabGeneratorId: 'none', minPieceArea: 0,
               baseCutConfig: { cols: 2, rows: 2 }, borderless: true },
         );
