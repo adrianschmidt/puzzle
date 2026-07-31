@@ -389,10 +389,66 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (typeof p.s !== 'number') return false;
     if (!isRotationMode(p.r)) return false;
     if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
+    if (p.ff !== undefined && !isValidBorderlessBlock(p.ff)) return false;
+    if (p.wf !== undefined && !isValidBorderlessBlock(p.wf)) return false;
     if (p.pr !== undefined && !isValidProgress(p.pr)) return false;
     if (p.bgc !== undefined && typeof p.bgc !== 'string') return false;
     if (p.a !== undefined && !isValidAttribution(p.a)) return false;
     return true;
+}
+
+/**
+ * Validate the fractal (`ff`) and wavy (`wf`) config blocks, whose only
+ * shared field is the borderless flag.
+ *
+ * `bl` is typed `boolean` but reached `GameState` unchecked:
+ * `shareInitOptions` copies it straight into `fractalConfig`/`wavyConfig`,
+ * and from there it is printed in the info modal's repro block, re-emitted
+ * on a re-share, and serialized into the `piece-count-mismatch` event's
+ * `styleConfig`. What an arbitrary string parked there did to generation
+ * differed by style, and neither answer was good: wavy funnels into
+ * `generator.ts`'s strict `borderless === true`, so the value rode along
+ * inertly while the puzzle looked entirely normal; fractal ran its own
+ * pipeline and read the flag for truthiness at every hop, so `'yes'`
+ * generated a genuinely BORDERLESS puzzle that a re-share then described as
+ * bordered. Fractal now coerces with `=== true` too (`fractal/index.ts`,
+ * `game/cut-style-strategies.ts`), which makes "non-`true` means off" a
+ * property of the generators rather than a claim about them — but the
+ * cheapest place to stop the value is still here, before it enters state.
+ * `isValidComposableCf` has always type-checked composable's equivalent
+ * `cf.bl`; this closes the same hole for the other two styles.
+ *
+ * Rejecting the whole payload matches how the codec handles every other
+ * malformed optional block (`cf`, `pr`, `bgc`, `a`), and rejects nothing
+ * this app has ever emitted: both producers go through `applyStyleConfigs`,
+ * which has written a boolean `bl` since either block existed (`?? false`
+ * historically, `=== true` now — see the note there for why the difference
+ * matters on a state restored from an older build's save).
+ *
+ * `bl` is REQUIRED here, unlike the optional-but-typed `cf.bl` in
+ * `isValidComposableCf`. Both forms reject the same values, so the
+ * difference is only that this one makes "always emit `bl`" part of the wire
+ * contract: a later producer-side change that dropped a `false` `bl` to
+ * shorten links would be rejected outright by every client already shipped
+ * with this decoder. Loosen this to the optional form in the same change if
+ * that is ever worth doing — see the note at the `ff`/`wf` branches of
+ * `applyStyleConfigs`.
+ *
+ * `wf.tv` is deliberately NOT checked here. `decodePayload` clamps it, and
+ * an unusable one falls back to classic tabs rather than losing the link —
+ * see the wavy branch there.
+ *
+ * Applied to EVERY cut style, unlike the `cf` check one line up, which is
+ * gated on `p.c === 'composable'`. So `{ c: 'classic', wf: { bl: 'yes' } }` is
+ * rejected even though nothing would read that `wf`. Deliberate: no producer
+ * emits a foreign block (`applyStyleConfigs` writes only the one matching
+ * `payload.c`), so the gate would buy nothing, and the ungated form keeps the
+ * decode-time guarantee unconditional — a later reader that started consulting
+ * `wf` for another style would inherit the check rather than need one added.
+ */
+function isValidBorderlessBlock(x: unknown): boolean {
+    if (!x || typeof x !== 'object') return false;
+    return typeof (x as Record<string, unknown>).bl === 'boolean';
 }
 
 /**
@@ -574,16 +630,45 @@ export function applyStyleConfigs(payload: SharePayload, source: StyleConfigSour
         if (c.minPieceArea !== undefined) {
             cf.mpa = c.minPieceArea;
         }
-        if (c.borderless !== undefined) cf.bl = c.borderless;
+        if (c.borderless !== undefined) cf.bl = c.borderless === true;
         payload.cf = cf;
     }
 
+    // `bl` is written unconditionally on both blocks, including when it is
+    // `false`. That is load-bearing, not verbosity: `isValidBorderlessBlock`
+    // requires it, so omitting it to shorten links would make new links
+    // undecodable by every already-shipped client. Loosen that validator
+    // first if this ever changes.
+    //
+    // `=== true` rather than `?? false`, on all three blocks, so the encoder
+    // can never emit a link its own decoder refuses. `borderless` is typed
+    // `boolean | undefined`, so for anything this app builds the two are the
+    // same expression — but a state restored from a save written by a PRE-
+    // tightening build can carry a crafted `bl: 'yes'` verbatim
+    // (`share-payload-to-init.ts` copies it into `wavyConfig`/`fractalConfig`,
+    // `serialization.ts` round-trips the block as-is), and `?? false` would
+    // pass that straight back onto the wire for the new `isValidBorderlessBlock`
+    // to reject — a share link broken with no signal to the sharer. Coercing
+    // also keeps the link faithful to what it REPRODUCES: `false` is what such
+    // a state now generates, because every generator entry point coerces the
+    // flag the same `=== true` way (`generator.ts` for wavy and composable,
+    // `fractal/index.ts` and `game/cut-style-strategies.ts` for fractal, which
+    // does not go through it). Not to what the sharer is looking at — a
+    // restored save rebuilds its pieces from the stored blob instead of
+    // regenerating, so a puzzle an older build cut borderless stays borderless
+    // on screen while its link says bordered. That mismatch is the old build's
+    // and needs a crafted `bl` — a hand-edited link or a hand-typed
+    // `__reproPuzzle` param, neither of which the old build validated — to
+    // exist at all; what this coercion owns is that encode and generate never
+    // disagree going forward. Those two readings are kept deliberately in
+    // step; loosening either end would make a link describe a puzzle that
+    // isn't the one it reproduces.
     if (payload.c === 'fractal' && source.fractalConfig) {
-        payload.ff = { bl: source.fractalConfig.borderless ?? false };
+        payload.ff = { bl: source.fractalConfig.borderless === true };
     }
 
     if (payload.c === 'wavy' && source.wavyConfig) {
-        payload.wf = { bl: source.wavyConfig.borderless ?? false };
+        payload.wf = { bl: source.wavyConfig.borderless === true };
         if (source.wavyConfig.traceSetVersion !== undefined) {
             payload.wf.tv = source.wavyConfig.traceSetVersion;
         }

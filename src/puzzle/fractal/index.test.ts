@@ -211,6 +211,38 @@ describe('generateFractalPuzzle', () => {
         }
     });
 
+    test('a non-boolean borderless generates the bordered puzzle, not the borderless one', () => {
+        // This layer coerces its own input rather than trusting the caller
+        // (#512 tightening): `borderless` is typed `boolean | undefined`, but
+        // a crafted `__reproPuzzle` param or a config restored from a
+        // pre-tightening save can carry a string here, and truthiness would
+        // generate a BORDERLESS puzzle that `applyStyleConfigs` then re-shares
+        // as `ff: { bl: false }`. `game/cut-style-strategies.test.ts` pins the
+        // same read through the strategy; this keeps the geometry layer
+        // guarding its own invariant, since it is meant to stay usable
+        // without the game layer above it (#489).
+        const cols = 4, rows = 4, seed = 7;
+        const bordered = generateFractalPuzzle(cols, rows, imageSize, seed);
+        const borderless = generateFractalPuzzle(
+            cols, rows, imageSize, seed, { borderless: true },
+        );
+        const shapes = (pieces: ReturnType<typeof generateFractalPuzzle>) =>
+            pieces.map((p) => p.shape);
+
+        // The control: the flag is not inert for this case, so the equality
+        // below is a coercion rather than a puzzle that ignores it.
+        expect(shapes(borderless)).not.toEqual(shapes(bordered));
+
+        for (const crafted of ['yes', 'true', 1, {}]) {
+            const pieces = generateFractalPuzzle(
+                cols, rows, imageSize, seed,
+                { borderless: crafted } as unknown as { borderless?: boolean },
+            );
+            expect(shapes(pieces), `borderless: ${JSON.stringify(crafted)}`)
+                .toEqual(shapes(bordered));
+        }
+    });
+
     test('borderless mode omits orphan-disc sub-paths for known orphan seed', () => {
         // Seed (cols=4, rows=4, seed=1) produces orphan tiles that default
         // mode attaches as disc sub-paths (per PR #225/#226). In borderless

@@ -112,6 +112,59 @@ describe('wavy borderless', () => {
     });
 });
 
+describe('fractal borderless coercion', () => {
+    // Fractal is the one style that does not funnel into `generator.ts`'s
+    // strict `borderless === true` — it runs its own pipeline and reads the
+    // flag in three places. Those reads used truthiness, so a crafted
+    // non-boolean (a `"borderless": "true"` hand-typed into `__reproPuzzle`,
+    // a config restored from a pre-tightening save) generated a genuinely
+    // BORDERLESS puzzle — while `applyStyleConfigs` encodes it as
+    // `ff: { bl: false }`, so a re-share described a bordered one. Pinning all
+    // three at once: reverting any single read makes the `'yes'` result differ
+    // from the `false` result somewhere below.
+    const strategy = getCutStyleStrategy('fractal');
+    const imageSize = { width: 400, height: 300 };
+    const ctxWith = (borderless: unknown) =>
+        ({ fractalConfig: { borderless } } as unknown as Parameters<typeof strategy.scaleGrid>[2]);
+
+    const readings = (borderless: unknown) => {
+        const ctx = ctxWith(borderless);
+        const grid = strategy.scaleGrid({ cols: 6, rows: 4 }, imageSize, ctx);
+        return {
+            grid,
+            size: strategy.inscribePuzzleSize(imageSize, { cols: 10, rows: 8 }, ctx),
+            shapes: strategy
+                .generatePieces({ cols: 6, rows: 5 }, imageSize, 42, ctx)
+                .pieces.map((p) => p.shape),
+        };
+    };
+
+    it('reads a non-boolean borderless as off, matching what a re-share encodes', () => {
+        const off = readings(false);
+        // The control, asserted per field rather than on the aggregate: an
+        // aggregate `not.toEqual` proves only that ONE of the three reads
+        // moves, so a later change making a site ignore the flag would leave
+        // it green — the same silent degradation this test exists to catch.
+        const on = readings(true);
+        expect(on.grid).not.toEqual(off.grid);
+        expect(on.size).not.toEqual(off.size);
+        expect(on.shapes).not.toEqual(off.shapes);
+
+        expect(readings('yes')).toEqual(off);
+        expect(readings('true')).toEqual(off);
+        expect(readings(1)).toEqual(off);
+    });
+
+    it('is unchanged for the boolean and absent values the type admits', () => {
+        expect(readings(undefined)).toEqual(readings(false));
+        // Only `scaleGrid` is compared here, so call it directly rather than
+        // paying for a whole `readings(false)` run to read `.grid` off it.
+        expect(
+            strategy.scaleGrid({ cols: 6, rows: 4 }, imageSize, {}),
+        ).toEqual(strategy.scaleGrid({ cols: 6, rows: 4 }, imageSize, ctxWith(false)));
+    });
+});
+
 describe('selectTriangleRows', () => {
     const landscape = { width: 1080, height: 720 };
 
