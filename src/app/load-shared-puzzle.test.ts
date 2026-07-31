@@ -2,11 +2,14 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
+import {
+    describe, it, expect, beforeEach, afterEach, vi, type Mock, type MockInstance,
+} from 'vitest';
 import type { GameState } from '../model/types.js';
 import type { SharePayload } from '../sharing/index.js';
 import type { BackgroundColorControl } from './install-background-color.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
+import { diagnostics } from '../diagnostics.js';
 
 vi.mock('../ui/index.js', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../ui/index.js')>()),
@@ -85,6 +88,13 @@ describe('loadSharedPuzzle', () => {
     let onGameAnalytics: Mock<(data: unknown) => void>;
     let adopt: Mock<BackgroundColorControl['adopt']>;
     let deps: LoadSharedPuzzleDeps;
+    /**
+     * Installed by the tests that reach the piece-count-mismatch branch, and
+     * restored one by one rather than through `vi.restoreAllMocks()`:
+     * `vite.config.ts` sets no `restoreMocks`, and a blanket restore here would
+     * also strip the implementations the `vi.mock` factories above installed.
+     */
+    let warnSpy: MockInstance<typeof diagnostics.warn> | undefined;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -110,6 +120,8 @@ describe('loadSharedPuzzle', () => {
     });
 
     afterEach(() => {
+        warnSpy?.mockRestore();
+        warnSpy = undefined;
         delete (window as unknown as { umami?: unknown }).umami;
     });
 
@@ -227,6 +239,7 @@ describe('loadSharedPuzzle', () => {
         // broken puzzle: the detector itself is covered in generator.test.ts,
         // and what this test owns is the wiring — that the callback is passed,
         // captured, and reported against the state that createNewGame returned.
+        warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
         vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
             return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
@@ -234,17 +247,24 @@ describe('loadSharedPuzzle', () => {
 
         await loadSharedPuzzle(payload(), false, deps);
 
-        expect(umamiTrack).toHaveBeenCalledWith(
-            'piece-count-mismatch',
-            expect.objectContaining({
-                source: 'shared',
-                expected: 4,
-                actual: 2,
-                baseCut: 'sine',
-                cols: 8,
-                rows: 6,
-            }),
-        );
+        expect(umamiTrack).toHaveBeenCalledWith('piece-count-mismatch', expect.objectContaining({
+            source: 'shared',
+            expected: 4,
+            actual: 2,
+            baseCut: 'sine',
+            cols: 8,
+            rows: 6,
+        }));
+        // The console copy is the only signal on a local `npm run dev`, where
+        // `track` is a no-op without a website ID — so it is a tested part of
+        // this report, not incidental logging. Spying also silences it: without
+        // the stub the real `console.warn` fires on every suite run. Asserted
+        // against the payload read back out of the tracked call, so dropping a
+        // repro field from the console copy fails here — a second
+        // `objectContaining` over the same six keys would not.
+        const tracked = umamiTrack.mock.calls
+            .find(([name]) => name === 'piece-count-mismatch')?.[1];
+        expect(warnSpy).toHaveBeenCalledWith('[piece-count] repro params', tracked);
     });
 
     it('reports nothing for a healthy shared puzzle', async () => {
@@ -258,6 +278,9 @@ describe('loadSharedPuzzle', () => {
     // indistinguishably from a real recipient's `source: 'shared'` — turning
     // a developer's own debugging replays into apparent field incidents.
     it('reports source repro when the caller identifies the load as a repro replay', async () => {
+        // Spied purely to silence it; the branch's console copy is asserted
+        // once above.
+        warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
         vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
             return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);

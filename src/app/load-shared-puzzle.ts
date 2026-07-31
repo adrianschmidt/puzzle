@@ -36,6 +36,7 @@ import { needsTracedTabChunk, shareInitOptions } from './share-payload-to-init.j
 import { buildSharedGameData } from './new-game-payload.js';
 import { buildPieceCountMismatchData } from './piece-count-mismatch-payload.js';
 import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
+import { diagnostics } from '../diagnostics.js';
 import { createBlankImageDataUrl } from './blank-canvas.js';
 import type { BackgroundColorControl } from './install-background-color.js';
 import type { GameSession } from './game-session.js';
@@ -176,10 +177,13 @@ export async function loadSharedPuzzle(
         // anything below throws. A diagnostic, not an error — this must
         // never block a game load.
         if (pieceCountMismatch) {
-            track(
-                'piece-count-mismatch',
-                buildPieceCountMismatchData(state, pieceCountMismatch, source),
-            );
+            const mismatchData =
+                buildPieceCountMismatchData(state, pieceCountMismatch, source);
+            track('piece-count-mismatch', mismatchData);
+            // Console copy for the local loop; see the matching note in
+            // `start-new-game.ts`, including why no deployed build — the
+            // `/puzzle/dev/` preview included — can print it.
+            diagnostics.warn('[piece-count] repro params', mismatchData);
         }
     } finally {
         hideLoadingOverlay();

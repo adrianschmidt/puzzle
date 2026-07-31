@@ -8,9 +8,15 @@
  *   Used for runtime issues that developers should see in dev/test
  *   builds but stay silent in production.
  *
- * Auto-enabled in dev and test (Vite's `import.meta.env.DEV`). In
- * production builds the singleton is disabled by default; call
- * `enableDiagnostics()` to turn it on at runtime.
+ * Auto-enabled in dev and test (Vite's `import.meta.env.DEV`), and off in
+ * every production build — which includes `/puzzle/dev/`, a production build
+ * served from a subpath, so `diagnostics.warn` is silent there too.
+ *
+ * `enableDiagnostics()` flips the singleton for code that imports it — no
+ * call site does today. It is bound to no `window` property and no
+ * dev-console hook, so nothing can turn diagnostics on at runtime in a
+ * deployed build — treat `warn` as a local-loop signal only, and don't build
+ * a production diagnostic on top of it.
  */
 
 // ---------------------------------------------------------------------------

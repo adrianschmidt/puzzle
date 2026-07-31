@@ -363,7 +363,24 @@ export function bootstrap(
         solvePuzzle({ session, renderer, onSolved: celebrateCompletion });
 
     installDevHooks({
-        start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps),
+        // 'dev': this binding is exclusively dev-console starts (e.g.
+        // `__newComposableGame`), never the new-game dialog or the boot
+        // path. Dev-deploy reports to the same Umami website ID as
+        // production, so without this a developer poking at cut parameters
+        // would inflate the field-incident count with games no player ever
+        // started. Not 'repro': a fresh dev game is not a replay of anything.
+        //
+        // It is not the only developer route to an arbitrary sine config: on
+        // a dev build `isComposableVisible()` also puts Composable in the
+        // new-game dialog, frequency sliders and all, and that binding below
+        // reports the default 'fresh'. Deliberately left that way — labeling
+        // it would mean labeling the whole dialog on a dev build, which would
+        // also suppress genuine Classic/Wavy mismatches seen while reviewing
+        // a preview, and those are real signal from the production code path.
+        // Production hides Composable from the dialog, so the dev rows are
+        // separable by query instead; see `PieceCountMismatchData`'s `source`
+        // note for the exclusion the operator applies.
+        start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps, 'dev'),
         // 'repro': this binding is exclusively `__reproPuzzle`'s replay path
         // (see `dev-hooks.ts`), never a real recipient's `#p=` link — so a
         // piece-count mismatch it surfaces is a developer re-running a
