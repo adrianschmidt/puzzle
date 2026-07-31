@@ -44,6 +44,8 @@ import type { NewGameData } from '../analytics/index.js';
 import { planTracedTabs, resolveTracedTabOutcome } from './traced-tab-plan.js';
 import { generatorConfigsForNewGame } from './generator-configs.js';
 import { buildFreshGameData } from './new-game-payload.js';
+import { buildPieceCountMismatchData } from './piece-count-mismatch-payload.js';
+import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import { pickBundledImage } from './bundled-image.js';
 import { resolveUnsplashImage } from './resolve-image.js';
 import { createBlankImageDataUrl } from './blank-canvas.js';
@@ -265,12 +267,17 @@ export async function startNewGame(
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
 
+        // The callback fires synchronously during `createNewGame`, while the
+        // state is still being built — captured here so it can be reported
+        // below, once the state exists to report it against.
+        let pieceCountMismatch: PieceCountMismatch | undefined;
         const state = createNewGame(imageUrl, imageSize, viewport, oriented, {
             cutStyle,
             composableConfig,
             ...generatorConfigs,
             rotationMode,
             seed,
+            onPieceCountMismatch: (m) => { pieceCountMismatch = m; },
         });
 
         if (attribution) {
@@ -296,6 +303,16 @@ export async function startNewGame(
         });
         deps.onGameAnalytics(data);
         track('new-game-started', data);
+
+        // Reported after the normal event, so it still lands first if
+        // anything below throws. A diagnostic, not an error — this must
+        // never block a game start.
+        if (pieceCountMismatch) {
+            track(
+                'piece-count-mismatch',
+                buildPieceCountMismatchData(state, pieceCountMismatch, 'fresh'),
+            );
+        }
     } finally {
         hideLoadingOverlay();
     }

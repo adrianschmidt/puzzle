@@ -364,8 +364,14 @@ export function bootstrap(
 
     installDevHooks({
         start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps),
+        // 'repro': this binding is exclusively `__reproPuzzle`'s replay path
+        // (see `dev-hooks.ts`), never a real recipient's `#p=` link — so a
+        // piece-count mismatch it surfaces is a developer re-running a
+        // known-bad puzzle while investigating, not a new field incident.
+        // Mirrors the same distinction `runWithErrorReport`'s `source:
+        // 'repro'` already makes for `shared-load-failed` on this path.
         loadShared: (payload, recipientHadSavedState) =>
-            loadSharedPuzzle(payload, recipientHadSavedState, sharedDeps),
+            loadSharedPuzzle(payload, recipientHadSavedState, sharedDeps, 'repro'),
         solve,
     });
 

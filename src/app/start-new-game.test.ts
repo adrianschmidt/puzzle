@@ -371,6 +371,49 @@ describe('startNewGame', () => {
         const createOrder = vi.mocked(createNewGame).mock.invocationCallOrder[0];
         expect(yieldOrder).toBeLessThan(createOrder);
     });
+
+    it('reports piece-count-mismatch with repro params when generation flags one', async () => {
+        // Drive the callback directly rather than constructing a genuinely
+        // broken puzzle: the detector itself is covered in generator.test.ts,
+        // and what this test owns is the wiring — that the callback is passed,
+        // captured, and reported against the state that createNewGame returned.
+        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+            options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
+            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+        });
+
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+
+        expect(umamiTrack).toHaveBeenCalledWith(
+            'piece-count-mismatch',
+            expect.objectContaining({
+                source: 'fresh',
+                expected: 4,
+                actual: 2,
+                baseCut: 'sine',
+                cols: 2,
+                rows: 2,
+            }),
+        );
+    });
+
+    it('never reports the image URL on the mismatch event', async () => {
+        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+            options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
+            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+        });
+
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+
+        const call = umamiTrack.mock.calls.find(([name]) => name === 'piece-count-mismatch');
+        expect(JSON.stringify(call?.[1])).not.toContain('http');
+    });
+
+    it('reports nothing for a healthy puzzle', async () => {
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+        const names = umamiTrack.mock.calls.map(([name]) => name);
+        expect(names).not.toContain('piece-count-mismatch');
+    });
 });
 
 /** A fully-populated player-picked candidate, for the "picked image" paths. */

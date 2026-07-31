@@ -34,6 +34,8 @@ import { track } from '../analytics/index.js';
 import type { NewGameData } from '../analytics/index.js';
 import { needsTracedTabChunk, shareInitOptions } from './share-payload-to-init.js';
 import { buildSharedGameData } from './new-game-payload.js';
+import { buildPieceCountMismatchData } from './piece-count-mismatch-payload.js';
+import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import { createBlankImageDataUrl } from './blank-canvas.js';
 import type { BackgroundColorControl } from './install-background-color.js';
 import type { GameSession } from './game-session.js';
@@ -76,11 +78,22 @@ export interface LoadSharedPuzzleDeps {
  * before this load; carried into the `recipientHadSavedState` analytics
  * field untouched.
  * @param deps - Collaborators; see {@link LoadSharedPuzzleDeps}.
+ * @param source - `'shared'` for a real `#p=` link, `'repro'` for a
+ * `__reproPuzzle` replay. Only affects the `piece-count-mismatch` event's
+ * `source` field — it separates real field incidents from a developer
+ * replaying a known-bad puzzle while investigating one (#512). Defaults to
+ * `'shared'`; the composition root passes `'repro'` explicitly on the one
+ * binding it hands to `__reproPuzzle`.
+ *
+ * As with `startNewGame`'s `source`, the default is the real-recipient path:
+ * a new binding that omits the argument reports as field traffic and nothing
+ * goes red, so a binding that is not a real recipient must pass `'repro'`.
  */
 export async function loadSharedPuzzle(
     payload: SharePayload,
     recipientHadSavedState: boolean,
     deps: LoadSharedPuzzleDeps,
+    source: 'shared' | 'repro' = 'shared',
 ): Promise<void> {
     showLoadingOverlay();
     try {
@@ -107,12 +120,19 @@ export async function loadSharedPuzzle(
         // Let the overlay paint before the synchronous piece-generation burst.
         await yieldForPaint();
 
+        // The callback fires synchronously during `createNewGame`, while the
+        // state is still being built — captured here so it can be reported
+        // below, once the state exists to report it against.
+        let pieceCountMismatch: PieceCountMismatch | undefined;
         const state = createNewGame(
             imageUrl,
             imageSize,
             viewport,
             { cols: payload.g[0], rows: payload.g[1] },
-            shareInitOptions(payload),
+            {
+                ...shareInitOptions(payload),
+                onPieceCountMismatch: (m) => { pieceCountMismatch = m; },
+            },
         );
 
         if (payload.a) {
@@ -151,6 +171,16 @@ export async function loadSharedPuzzle(
         });
         deps.onGameAnalytics(data);
         track('new-game-started', data);
+
+        // Reported after the normal event, so it still lands first if
+        // anything below throws. A diagnostic, not an error — this must
+        // never block a game load.
+        if (pieceCountMismatch) {
+            track(
+                'piece-count-mismatch',
+                buildPieceCountMismatchData(state, pieceCountMismatch, source),
+            );
+        }
     } finally {
         hideLoadingOverlay();
     }
