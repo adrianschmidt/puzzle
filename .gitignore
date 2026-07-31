@@ -27,3 +27,11 @@ debug-*.png
 
 # Visual brainstorming companion (local mockups)
 .superpowers/
+
+# Spike scratch. Spikes live on their own branches (e.g. `spike/tab-tracing`,
+# which carries its own .gitignore for its outputs); on every other branch what
+# is left in here is leftover generated output that nothing should track.
+# Already-tracked files are unaffected — ignore rules never apply to them — so
+# the spike branches keep their sources. Adding a *new* file on one of those
+# branches needs `git add -f`.
+spike/
