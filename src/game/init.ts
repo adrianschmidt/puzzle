@@ -12,6 +12,7 @@ import type { GameState, PieceGroup, Piece, Point, Size, GridSize } from '../mod
 import type { FractalConfig } from '../puzzle/fractal/index.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
+import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
 import { quantizePieceGeometry } from '../model/quantize-geometry.js';
 import { sealPieceGeometry } from '../model/seal-geometry.js';
@@ -68,6 +69,17 @@ export interface InitOptions {
      * as well as position.
      */
     rotationMode?: 'none' | 'quarter-turn' | 'free';
+    /**
+     * Called when generation produced a different piece count than the base
+     * cut declared (#512). Invoked synchronously during generation, before
+     * this function returns — so a caller that wants to report it alongside
+     * game state must capture it into a local and act after `createNewGame`
+     * returns, when the state exists.
+     *
+     * Optional: omitting it silently discards the diagnostic, which is the
+     * right default for tests and for any caller with nowhere to send it.
+     */
+    onPieceCountMismatch?: (mismatch: PieceCountMismatch) => void;
 }
 
 /**
@@ -103,8 +115,12 @@ export function createNewGame(
 
     const generationGrid = strategy.scaleGrid(gridSize, imageSize, ctx);
     const puzzleSize = strategy.inscribePuzzleSize(imageSize, generationGrid, ctx);
-    const { pieces: rawPieces, autoGroups, tabDebugReport } =
+    const { pieces: rawPieces, autoGroups, tabDebugReport, pieceCountMismatch } =
         strategy.generatePieces(generationGrid, puzzleSize, seed, ctx);
+
+    if (pieceCountMismatch) {
+        options.onPieceCountMismatch?.(pieceCountMismatch);
+    }
 
     // Round generated coordinates to the precision the app actually uses, so
     // the geometry we play, save, and regenerate from a share link is one set
