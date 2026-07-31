@@ -111,6 +111,17 @@ describe('sineCutGenerator.expectedPieceCount', () => {
         // mismatch for `baseCutConfig: {}`.
         expect(sineCutGenerator.expectedPieceCount?.({})).toBe(1);
         expect(sineCutGenerator.expectedPieceCount?.(undefined)).toBe(1);
+
+        // The other half of the mirror: generate() itself must actually
+        // derive a 1x1 grid for `{}` — 4 border curves, 0 internal (both
+        // `cols-1` and `rows-1` are 0). Before both sides shared
+        // `resolveGrid`, this side of the mirror went untested: changing
+        // generate()'s defaults to `cfg.cols ?? 8` / `cfg.rows ?? 6` while
+        // leaving expectedPieceCount alone kept the entire suite green,
+        // because nothing exercised generate()'s own fallback. This
+        // assertion is what closes that hole.
+        const curves = sineCutGenerator.generate({ width: 100, height: 100 }, () => 0.5, {});
+        expect(curves).toHaveLength(4);
     });
 });
 

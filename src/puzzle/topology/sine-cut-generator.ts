@@ -39,18 +39,28 @@ export interface SineCutConfig {
     borderless?: boolean;
 }
 
+/**
+ * The grid `expectedPieceCount` and `generate` must agree on: same `cols`/
+ * `rows` fallbacks, same borderless oversizing. Extracted so the two can't
+ * independently drift — before this existed, changing one's defaults without
+ * the other's left the whole test suite green (#512's false-negative hole).
+ * Pure config reading: no PRNG draw, no geometry, so factoring it out here
+ * touches neither the share-link contract nor `dcel-broad-phase-
+ * equivalence.test.ts`'s pinned geometry.
+ */
+function resolveGrid(config: unknown): { cols: number; rows: number } {
+    const cfg = (config ?? {}) as Partial<SineCutConfig>;
+    const extra = cfg.borderless === true ? 2 : 0;
+    return { cols: (cfg.cols ?? 1) + extra, rows: (cfg.rows ?? 1) + extra };
+}
+
 export const sineCutGenerator: BaseCutGenerator = {
     id: 'sine',
     supportsBorderless: true,
 
     expectedPieceCount(config: unknown): number {
-        // Mirrors generate()'s own reading of the config exactly — same
-        // defaults, same borderless oversizing. If generate() changes how it
-        // derives its grid, this must change with it or the framework will
-        // report a mismatch that isn't one.
-        const cfg = (config ?? {}) as Partial<SineCutConfig>;
-        const extra = cfg.borderless === true ? 2 : 0;
-        return ((cfg.cols ?? 1) + extra) * ((cfg.rows ?? 1) + extra);
+        const { cols, rows } = resolveGrid(config);
+        return cols * rows;
     },
 
     generate(frame: Size, random: () => number, config: unknown): Curve[] {
@@ -64,9 +74,7 @@ export const sineCutGenerator: BaseCutGenerator = {
         // ring (strip-border-ring.ts), leaving the requested cols×rows pieces
         // with a tab on every side. Only applies when borderless is true, so
         // the bordered PRNG/cut sequence is unchanged.
-        const extra = cfg.borderless === true ? 2 : 0;
-        const cols = (cfg.cols ?? 1) + extra;
-        const rows = (cfg.rows ?? 1) + extra;
+        const { cols, rows } = resolveGrid(config);
         const ha = cfg.ha ?? 0.15;
         const hf = cfg.hf ?? 1.5;
         const va = cfg.va ?? 0.15;
