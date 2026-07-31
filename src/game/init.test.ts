@@ -1,4 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+// `createNewGame` (in `init.ts`) calls `getCutStyleStrategy` from this
+// module. A plain `vi.spyOn` on the export can't intercept that call under
+// Vite's ESM — see `src/app/start-new-game.test.ts`'s `vi.mock('../game/index.js', ...)`
+// for the same pattern. Wrapping the real implementation with `vi.fn(...)`
+// keeps every existing test's real generation working; only the one test
+// that installs a `mockImplementationOnce` below sees a fake strategy.
+vi.mock('./cut-style-strategies.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('./cut-style-strategies.js')>();
+    return { ...actual, getCutStyleStrategy: vi.fn(actual.getCutStyleStrategy) };
+});
+
 import {
     createNewGame,
     createInitialGroups,
@@ -7,9 +18,21 @@ import {
     DEFAULT_ROWS,
     VIEWPORT_MARGIN,
 } from './init.js';
+import { getCutStyleStrategy, type CutStyleStrategy } from './cut-style-strategies.js';
 import type { GridSize, Piece, Size } from '../model/types.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
+import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import { computePieceBounds } from '../model/derive.js';
+
+/**
+ * The real strategy lookup the mock above wraps, captured once so the
+ * mismatch test's `afterEach` can restore it explicitly. `vi.clearAllMocks()`
+ * (not used here, but repo-wide there is no `restoreMocks` in
+ * `vite.config.ts`) only clears call records, not a `mockImplementationOnce`
+ * override — without an explicit restore, a fake strategy installed by one
+ * test could leak into a test declared after it.
+ */
+const realGetCutStyleStrategy = vi.mocked(getCutStyleStrategy).getMockImplementation()!;
 
 /** A deterministic RNG for reproducible tests: cycles through provided values. */
 function seededRandom(values: number[]): () => number {
@@ -433,11 +456,22 @@ describe('randomizePositions', () => {
 });
 
 describe('createNewGame piece-count mismatch reporting', () => {
-    it('does not call the callback for a healthy puzzle', () => {
+    afterEach(() => {
+        // Guard against the fake strategy installed below leaking into a
+        // later test — see the module-level comment on `realGetCutStyleStrategy`.
+        vi.mocked(getCutStyleStrategy).mockImplementation(realGetCutStyleStrategy);
+    });
+
+    it('does not call the callback for a healthy composable puzzle', () => {
+        // Real generation through the topology pipeline (not the legacy
+        // classic path, which structurally can never carry a
+        // `pieceCountMismatch` — see the mocked test below for that case).
+        // This pins that the sine base-cut's real `expectedPieceCount` hook
+        // does not false-positive against its own generator's real output.
         const onPieceCountMismatch = vi.fn();
         createNewGame('img.jpg', { width: 400, height: 400 },
             { width: 800, height: 600 }, { cols: 2, rows: 2 },
-            { seed: 1, cutStyle: 'classic', onPieceCountMismatch });
+            { seed: 1, cutStyle: 'composable', onPieceCountMismatch });
         expect(onPieceCountMismatch).not.toHaveBeenCalled();
     });
 
@@ -464,5 +498,29 @@ describe('createNewGame piece-count mismatch reporting', () => {
                 { width: 800, height: 600 }, { cols: 2, rows: 2 },
                 { seed: 1, cutStyle: 'classic' }),
         ).not.toThrow();
+    });
+
+    it('invokes the callback with the mismatch a strategy reports', () => {
+        // Forces the mismatch path without depending on a real generator
+        // actually miscounting: stub the strategy lookup so
+        // `generatePieces` returns a `pieceCountMismatch` directly, and
+        // assert `createNewGame` forwards that exact value to the
+        // callback. This is the regression check for the destructure/invoke
+        // wiring in `init.ts` — deleting that wiring should fail this test.
+        const mismatch: PieceCountMismatch = { expected: 4, actual: 3, baseCutId: 'fake' };
+        const fakeStrategy: CutStyleStrategy = {
+            scaleGrid: (grid) => grid,
+            inscribePuzzleSize: (imageSize) => imageSize,
+            generatePieces: () => ({ pieces: [], pieceCountMismatch: mismatch }),
+        };
+        vi.mocked(getCutStyleStrategy).mockImplementationOnce(() => fakeStrategy);
+
+        const onPieceCountMismatch = vi.fn();
+        createNewGame('img.jpg', { width: 400, height: 400 },
+            { width: 800, height: 600 }, { cols: 2, rows: 2 },
+            { seed: 1, cutStyle: 'classic', onPieceCountMismatch });
+
+        expect(onPieceCountMismatch).toHaveBeenCalledTimes(1);
+        expect(onPieceCountMismatch).toHaveBeenCalledWith(mismatch);
     });
 });
