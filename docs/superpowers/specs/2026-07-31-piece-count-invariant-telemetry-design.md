@@ -26,9 +26,13 @@ Two structural facts shape everything below:
 1. **The detection point cannot emit the event.** `generateTopologyPuzzle`
    receives a `random` function, not the seed, and knows nothing about
    `imageUrl`, `rotationMode` or the per-style configs. `buildReproParams`
-   needs a whole `GameState`. The generator is also pure — it runs under
-   vitest and #489 wants it inside a Web Worker where `window.umami` does
-   not exist. The signal must travel up as data.
+   needs a whole `GameState`. That, not import hygiene, is the durable
+   reason — `src/puzzle/` is *not* analytics-free today (`generator.ts` →
+   `generator-registry.ts` → `traced-tab-loader.ts` → `analytics/index.js`),
+   so "the generator is pure" would be the wrong justification to lean on.
+   What does survive is that the mismatch is three scalars: structured-clone
+   safe, so carrying it as data keeps the layer worker-ready for #489. The
+   signal must travel up as data.
 2. **Umami's event-data limits are the payload contract.** Per the tracker
    docs: strings max 500 chars, numbers max precision 4, arrays stringified
    to 500 chars, objects max 50 properties.
@@ -80,12 +84,22 @@ generator its own config lets it apply its own oversizing rule. For sine
 that is `(cols + 2) × (rows + 2)` when borderless and `cols × rows`
 otherwise, and the framework never has to encode which.
 
-Implemented for the **sine grid only**. Venn circles and the triangular
-lattice legitimately produce counts unrelated to `cols × rows` — they
-receive those parameters only because the shared signature passes them
-along — so they omit the hook and are exempt rather than false-positive.
+Implemented for the **sine grid only**; the other two omit the hook and are
+exempt rather than false-positive, for different reasons. Venn circles
+produce a count unrelated to `cols × rows` — they receive those parameters
+only because the shared signature passes them along. The triangular
+lattice's count *is* derivable, and `estimateTriangleFaceCount(rows, frame)`
+already derives it for the Triangles cut style's row selection, but only
+exactly for `jitter: 0, smooth: false`; the shipped preset is
+`jitter: 0.5, smooth: true`, whose bowing and jitter "add or drop the odd
+micro-face" (that function's own doc). An estimate that is off by a face on
+a healthy puzzle is a permanent false positive, which is the one outcome
+this hook must avoid. A second, smaller obstacle: the hook receives only
+`config`, and the lattice needs the frame — a trailing `frame: Size`
+parameter is backward-compatible whenever a generator that can use it turns
+up, so nothing here is foreclosed.
 
-**Where the check runs:** at `generator.ts:201`, immediately after
+**Where the check runs:** at `generator.ts:230-248`, immediately after
 `facesToPieceDefinitions`, against `pieceDefs.length`. That is *before*
 `composePuzzle` and *before* `stripBorderRing`, so the comparison never has
 to reason about the strip's removal count — an oversized expectation and a
@@ -94,12 +108,16 @@ with `disableTabs: true` here and changes no counts; `minPieceArea`
 auto-grouping groups pieces without removing them.
 
 The check also runs *before* the auto-group pass itself
-(`generator.ts:257-278`). `DEFAULT_MIN_PIECE_AREA` exists to absorb
-sub-pixel sliver faces from curve-intersection rounding, so a sliver that
-auto-grouping makes invisible to the player still counts as one extra face
-here: `actual = expected + 1`. An operator triaging a mismatch row should
-rule that out first when the delta is exactly `+1`, before reading it as a
-self-intersection artifact (below).
+(`generator.ts:257-278`), but that placement is incidental, not load-bearing:
+auto-grouping merges sub-threshold faces into a neighbour's starting group
+and never removes them, so `actual` would be identical after it. What the
+pass changes is visibility — a sub-pixel sliver face from
+curve-intersection rounding that the player never sees as a separate piece
+still counts here, as `actual = expected + 1`. The area floor that absorbs
+one is per style (`avgPieceArea / 4` for Classic and Wavy,
+`DEFAULT_MIN_PIECE_AREA` for a composable game that sets none). An operator
+triaging a small positive delta should rule that out first, before reading
+it as a self-intersection artifact (below).
 
 **On mismatch:** `diagnostics.warn` — never throw. A wrong count is a bad
 puzzle, not an unusable one, and throwing at generation time would turn a
@@ -163,7 +181,7 @@ dashboard without an export.
 | property | type | notes |
 |---|---|---|
 | `cutStyle` | string | The attribution convention `SaveFailedData`, `NewGameFailedData` and `ProgressSaveSkippedData` all carry, for the same reason: without it a failure arrives as an unattributable count. |
-| `baseCut` | string | `'sine'`. Not derivable from `cutStyle` — classic, wavy, triangles and composable all sit on the sine base cut, so the mismatch is a property of the base cut, not the style. |
+| `baseCut` | string | `'sine'` on every row — sine is the only generator that implements `expectedPieceCount`. Not derivable from `cutStyle`, and the mapping is not onto: only sine-based Classic (i.e. one carrying `classicConfig`), Wavy and sine-based Composable reach a checked base cut. Triangles (its preset hardcodes `baseCutGenerator: 'triangular'`), Fractal and legacy Classic are structurally exempt and can never appear here, so zero rows for those styles is silence, not health. |
 | `expected` | number | Pre-strip, generation-grid. |
 | `actual` | number | Pre-strip, generation-grid. |
 
@@ -177,21 +195,29 @@ sign discriminates the two populations a mismatch row can belong to. A
 fused-face defect — #512's whole motivation; #498 was 189 vs 192 — always
 gives `actual < expected`. A self-intersecting cut carving a genuine island
 face (legitimate at extreme frequencies, e.g. sine `hf`/`vf` = 10 on a small
-grid) always gives `actual > expected`, by large factors. So `actual <
-expected` is the incident query and `actual > expected` is the triage
-bucket for "not a bug, an exotic config" — not an automatic incident count
-either way, but the sign is what tells the two apart at a glance.
+grid) always gives `actual > expected`. So `actual < expected` is the
+incident query and `actual > expected` is the triage bucket for "not a bug,
+an exotic config" — not an automatic incident count either way, but the sign
+is what tells the two apart at a glance.
+
+The *sign* discriminates; the magnitude does not. The sweep below reached the
+extreme end (`expected 48, actual 4881`), but a milder self-intersection
+overshoots by only a face or two — `generator.test.ts` pins wavy 2×2 at
+`hf`/`vf` = 10 producing `expected 4, actual 6`. A small positive delta is
+therefore ordinary self-intersection or sliver territory, not an unexplained
+row, so the schema must not describe the benign population as "large factors
+only" and leave that row in no bucket at all.
 
 **Which puzzle was it?** The repro params, minus `imageUrl`.
 
 | property | type | notes |
 |---|---|---|
-| `seed` | number | uint32 (`seeded-random.ts:37`), so the 4-decimal precision rule cannot touch it. |
+| `seed` | number | Normalized to a uint32 by the payload builder, so the 4-decimal precision rule cannot touch it. `generateSeed` (`seeded-random.ts`) already produces one, but the share-link decoder only checks that `s` is a *number*, so a crafted link can carry a fraction or a value past Umami's `DECIMAL(19,4)` range — the first would round into a seed that reads as replayable and isn't, the second would lose the row. `ToUint32` is a no-op on every real seed and preserves the stream `createSeededRandom` produces (it applies `ToInt32` to whatever it gets), so the normalization never changes which puzzle the value replays. |
 | `cols`, `rows` | number | The **user** grid, matching `buildReproParams` — so the values replay directly through `__reproPuzzle`. |
-| `imageWidth`, `imageHeight` | number | From `state.imageSize`. Fractional values are normal for the inscribed rectangles fractal and wavy produce; precision-4 rounding is *finer* than the decoder's own `clampDim` floor, so nothing is lost relative to replaying a share link. |
+| `imageWidth`, `imageHeight` | number | From `state.imageSize`, rounded to Umami's 4-decimal precision — a third divergence from what the info modal prints, alongside the dropped `imageUrl` and the normalized `seed`. Narrow in practice: Fractal is the only style whose `inscribePuzzleSize` returns anything but the image size, and Fractal is structurally exempt from this event, so no row that can ship today is fractional. Rounding here anyway keeps the value the tests assert identical to the value the column stores, and precision-4 is *finer* than the decoder's own `clampDim` floor, so nothing is lost relative to replaying a share link. |
 | `rotationMode` | string | Does not affect cut geometry, but it is part of the repro contract and costs one property. |
-| `styleConfig` | string | Compact JSON of whichever per-style block the puzzle carries (`classicConfig` / `wavyConfig` / `trianglesConfig` / `fractalConfig` / `composableConfig`), omitted when none. One property instead of flattening four mutually-exclusive shapes, and exactly what `reproParamsToPayload` needs to rebuild the payload. Also omitted — in favor of `styleConfigOmitted` — when the serialized block would exceed Umami's 500-char limit. |
-| `styleConfigOmitted` | `true` | Present instead of `styleConfig` when the per-style config serialized past 500 chars. In practice this means `cutStyle: 'composable'`: `baseCutConfig`/`tabConfig` are opaque `Record<string, unknown>` with no size bound enforced by the share-link decoder, so a crafted link can produce an oversized config. A row with this flag is not replayable as-is — the config needed to reproduce the exact cut is missing — but every other repro field is still valid. Never `false`; absent when the config fit, matching this schema's absence-is-the-filter convention. Truncating instead of omitting was rejected: truncated JSON doesn't parse, so it would look replayable and not be — the same reasoning `imageUrl`'s omission already uses. |
+| `styleConfig` | string | Compact JSON of the per-style block belonging to the puzzle's own `cutStyle` (`classicConfig` / `wavyConfig` / `trianglesConfig` / `fractalConfig` / `composableConfig`), omitted when it carries none. Selected by a `cutStyle` gate rather than "whichever block is present", matching `traceSetVersionOf` and `applyStyleConfigs`: `buildReproParams` copies every block on the state, so a stray foreign block from a crafted link or hand-edited save would otherwise be mis-attributed. One property instead of flattening four mutually-exclusive shapes, and exactly what `reproParamsToPayload` needs to rebuild the payload. Also omitted — in favor of `styleConfigOmitted` — when the block would exceed Umami's 500-char limit **or** does not serialize at all. |
+| `styleConfigOmitted` | `true` | Present instead of `styleConfig` in two cases: the per-style config serialized past 500 chars, or `JSON.stringify` threw on it (a circular or BigInt-bearing config, or one nested deeply enough to overflow). Both mean `cutStyle: 'composable'`: `baseCutConfig`/`tabConfig` are opaque `Record<string, unknown>` with no size or shape bound enforced by the share-link decoder, so a crafted link can produce an oversized config and a dev-console `__newComposableGame` can hand over a live circular one. The flag does not separate the two, and neither does `source`: being `JSON.parse` output rules out circularity and BigInt but bounds neither depth nor size, so a crafted link can carry an unserializable config too. Neither reaches an export — both flows persist before they track, and `saveGeometry` stringifies the same config one level deeper, so an unserializable one throws out of the save first (see `styleConfigOmitted` in `analytics/umami.ts`). Every row an operator can see is therefore over-limit, whatever its `source`. A row with this flag is not replayable as-is — the config needed to reproduce the exact cut is missing — but every other repro field is still valid. Never `false`; absent when the config fit, matching this schema's absence-is-the-filter convention. Truncating instead of omitting was rejected: truncated JSON doesn't parse, so it would look replayable and not be — the same reasoning `imageUrl`'s omission already uses. |
 | `source` | string | `'fresh' \| 'shared' \| 'repro' \| 'dev'`. |
 
 #### `imageUrl` is deliberately omitted
@@ -234,10 +260,9 @@ claim there is a real defect. Two things must be stated:
 - **`source: 'repro'`/`'dev'` exist to keep developer activity out of the
   signal.** Replaying a known-bad puzzle through `__reproPuzzle` re-runs
   generation and re-fires the event (`'repro'`). A dev-console start such as
-  `__newComposableGame` — the only way to reach an arbitrary sine config
-  outside a crafted share link — does the same for a *fresh* game, not a
-  replay, so it gets its own value (`'dev'`) rather than reusing `'repro'`
-  and misdescribing itself. The `'repro'` discrimination already existed at
+  `__newComposableGame` does the same for a *fresh* game, not a replay, so it
+  gets its own value (`'dev'`) rather than reusing `'repro'` and
+  misdescribing itself. The `'repro'` discrimination already existed at
   `dev-hooks.ts:293` (`SharedLoadFailedData.source`); `'dev'` threads that
   same distinction through `startNewGame`, mirroring the parameter
   `loadSharedPuzzle` already added for `'repro'`. As with every other
@@ -245,6 +270,22 @@ claim there is a real defect. Two things must be stated:
   player-facing population is computed by subtraction (`total` minus
   `source in ('repro', 'dev')`), per the rule `SharedLoadFailedData`
   already documents.
+- **`source` is not the whole exclusion; `cutStyle = 'composable'` completes
+  it.** The dev console is *not* the only route to an arbitrary sine config:
+  wherever `isComposableVisible()` is true — `npm run dev` and the
+  `/puzzle/dev/` preview deploy — the new-game dialog offers Composable with
+  H/V Frequency sliders reaching 10, past the false-positive boundary
+  recorded above, and that binding is a plain `startNewGame(...)` reporting
+  `'fresh'`. Labeling the whole dialog `'dev'` on a dev build would be the
+  wrong trade: it would also suppress genuine Classic/Wavy mismatches seen
+  while reviewing a preview, which run the same production code path and are
+  real signal. The dev composable rows are instead separable by query, since
+  the production build filters Composable out of the dialog: the only
+  legitimate production composable puzzle comes from a share link and reports
+  `'shared'`. So the player-facing population subtracts `source in ('repro',
+  'dev')` **and** `source = 'fresh' AND cutStyle = 'composable'`. Wavy and
+  Triangles are composable-backed but ship as fixed presets under their own
+  `cutStyle`, so they are unaffected.
 
 #### No volume cap
 
@@ -286,6 +327,12 @@ the operator to ignore the event.
   `styleConfigOmitted: true` set instead, and a normal-sized config carries
   `styleConfig` with no `styleConfigOmitted` key at all (absence, not
   `false`).
+- **An unserializable composable `styleConfig`:** a circular config — which
+  a dev-console start can hand over as a live object — lands in the same
+  `styleConfigOmitted` bucket rather than throwing out of the builder. Both
+  call sites fire this event after the game is installed and from inside the
+  flow's own try, so an escape would show a false "Couldn't load shared
+  puzzle" toast on a game that started fine.
 - Wiring tests at both call sites, accounting for this repo's vitest mock
   state leaking across tests (no `restoreMocks` in `vite.config.ts`).
 
