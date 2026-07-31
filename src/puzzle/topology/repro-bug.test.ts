@@ -14,6 +14,12 @@
  *    post-extremum sliver, putting the crossing out of reach of
  *    `intersects()`. Fixed in `curve.ts` by completing the reduction
  *    before intersecting.
+ *
+ * Each case now also asserts `pieceCountMismatch` is undefined. All three
+ * bugs are fixed, so none of them can demonstrate the detector firing — what
+ * these assertions buy is the reverse: if one of the three ever regresses,
+ * the detector is proven to catch it rather than merely assumed to. The
+ * detector firing is covered in generator.test.ts with a fake generator.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -29,7 +35,7 @@ describe('composable: fused-piece regression', () => {
     const TIMEOUT_MS = 15000;
 
     it('seed=124741785 (low amp / high freq) produces 192 pieces at 1080x720', () => {
-        const { pieces } = generateComposablePuzzle(
+        const { pieces, pieceCountMismatch } = generateComposablePuzzle(
             16, 12, { width: 1080, height: 720 }, 124741785,
             {
                 baseCutGenerator: 'sine',
@@ -39,10 +45,11 @@ describe('composable: fused-piece regression', () => {
             },
         );
         expect(pieces).toHaveLength(192);
+        expect(pieceCountMismatch).toBeUndefined();
     }, TIMEOUT_MS);
 
     it('seed=3215341677 (high amp) produces 192 pieces at 1080x720', () => {
-        const { pieces } = generateComposablePuzzle(
+        const { pieces, pieceCountMismatch } = generateComposablePuzzle(
             16, 12, { width: 1080, height: 720 }, 3215341677,
             {
                 baseCutGenerator: 'sine',
@@ -52,6 +59,7 @@ describe('composable: fused-piece regression', () => {
             },
         );
         expect(pieces).toHaveLength(192);
+        expect(pieceCountMismatch).toBeUndefined();
     }, TIMEOUT_MS);
 
     // #498. Distinct root cause from the two above (see the file header),
@@ -83,7 +91,7 @@ describe('composable: fused-piece regression', () => {
 
         const cols = 12, rows = 16;
         const size = { width: 1080, height: 1440 };
-        const { pieces } = generateComposablePuzzle(
+        const { pieces, pieceCountMismatch } = generateComposablePuzzle(
             cols, rows, size, 1534700170,
             {
                 baseCutGenerator: 'sine',
@@ -99,5 +107,6 @@ describe('composable: fused-piece regression', () => {
             },
         );
         expect(pieces).toHaveLength(192);
+        expect(pieceCountMismatch).toBeUndefined();
     }, TIMEOUT_MS);
 });

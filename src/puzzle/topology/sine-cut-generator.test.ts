@@ -92,6 +92,28 @@ describe('sineCutGenerator borderless oversize', () => {
     });
 });
 
+describe('sineCutGenerator.expectedPieceCount', () => {
+    it('is cols x rows for a bordered grid', () => {
+        expect(sineCutGenerator.expectedPieceCount?.({ cols: 16, rows: 12 })).toBe(192);
+    });
+
+    it('oversizes by one piece on each side when borderless', () => {
+        // The generator adds +2 cols and +2 rows internally, and the check
+        // runs BEFORE stripBorderRing, so the expectation is the oversized grid.
+        expect(
+            sineCutGenerator.expectedPieceCount?.({ cols: 16, rows: 12, borderless: true }),
+        ).toBe(18 * 14);
+    });
+
+    it('mirrors generate()`s fallbacks for a config with no dims', () => {
+        // generate() falls back to `cfg.cols ?? 1` / `cfg.rows ?? 1`, so the
+        // expectation must use the same defaults or it would report a false
+        // mismatch for `baseCutConfig: {}`.
+        expect(sineCutGenerator.expectedPieceCount?.({})).toBe(1);
+        expect(sineCutGenerator.expectedPieceCount?.(undefined)).toBe(1);
+    });
+});
+
 function makeSeededRandom(seed: number): () => number {
     let s = seed | 0;
     return () => {
