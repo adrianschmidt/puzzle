@@ -438,6 +438,86 @@ export interface NewGameFailedData {
 }
 
 /**
+ * Data attached to `piece-count-mismatch` — generation produced a different
+ * number of pieces than the base cut declared it would (#512). Three
+ * historical fused-piece bugs shipped undetected before this event existed.
+ *
+ * The event exists to be ACTED on, not just counted: `seed`, `cols`, `rows`,
+ * `imageWidth`, `imageHeight`, `rotationMode` and `styleConfig` are exactly
+ * the repro params the info modal prints, so a row here can be replayed
+ * locally through `__reproPuzzle` and turned into a regression test.
+ *
+ * `expected` and `actual` are PRE-STRIP, GENERATION-GRID counts, while
+ * `cols`/`rows` are the USER grid. For a borderless puzzle these legitimately
+ * disagree: a borderless 16x12 oversizes to 18x14 = 252 faces before the outer
+ * ring is stripped, so `expected: 252` alongside `cols: 16, rows: 12` is
+ * correct, not a contradiction. The user grid is what a replay needs.
+ *
+ * No `delta` property: it is `actual - expected` and both are here, so the
+ * CSV export computes it.
+ *
+ * `imageUrl` is deliberately absent. Cut geometry is a function of the seed,
+ * the grid, the image SIZE, the style and the style config — the image bytes
+ * do not enter it, and `reproParamsToPayload` defaults a missing image to the
+ * blank canvas, so a replay is geometrically identical without it. It is also
+ * the only repro field that could approach Umami's 500-char string limit, and
+ * shipping it would be the first exception to the redaction rule
+ * {@link TracedChunkLoadFailedData} follows.
+ *
+ * `source` separates real players from developer investigation: replaying a
+ * known-bad puzzle through `__reproPuzzle` re-runs generation and re-fires
+ * this event, so `source = 'repro'` rows must be excluded when counting
+ * incidents. As everywhere else in this schema, absence cannot be filtered —
+ * event properties are key/value rows, so the player-facing population is
+ * total `piece-count-mismatch` minus `source = 'repro'`, arithmetic rather
+ * than a negated filter (the rule {@link SharedLoadFailedData} documents).
+ *
+ * Not every row is a bug: exotic composable configs (e.g. sine `hf`/`vf` = 10
+ * on a small grid) can self-intersect and carve genuine island faces, so the
+ * real face count legitimately exceeds the declared one without a fused- or
+ * dropped-piece defect behind it. Treat this event as a lead to replay and
+ * inspect, not an automatic incident count.
+ */
+export interface PieceCountMismatchData {
+    /** The cut style the player chose. */
+    cutStyle: string;
+    /**
+     * The base-cut generator that declared the expectation — `'sine'` today.
+     * NOT derivable from `cutStyle`: classic, wavy, triangles and composable
+     * all sit on the sine base cut, so the mismatch is a property of the base
+     * cut rather than the style.
+     */
+    baseCut: string;
+    /** Faces the base cut intended to produce. Pre-strip, generation-grid. */
+    expected: number;
+    /** Faces the pipeline actually yielded. Pre-strip, generation-grid. */
+    actual: number;
+    /** Repro param: the puzzle's PRNG seed (uint32). */
+    seed: number;
+    /** Repro param: the USER grid — see the note above. */
+    cols: number;
+    /** Repro param: the USER grid — see the note above. */
+    rows: number;
+    /** Repro param: image width. Part of the geometry contract, not decoration. */
+    imageWidth: number;
+    /** Repro param: image height. Part of the geometry contract, not decoration. */
+    imageHeight: number;
+    /** Repro param: rotation mode. */
+    rotationMode: string;
+    /**
+     * Repro param: compact JSON of whichever per-style config block the puzzle
+     * carries. One property rather than four mutually-exclusive flattened
+     * shapes, and exactly what `reproParamsToPayload` needs to rebuild the
+     * payload. Absent when the puzzle carries no per-style block (e.g. legacy
+     * Classic, whose absence is itself load-bearing — it selects the legacy
+     * generator).
+     */
+    styleConfig?: string;
+    /** How the puzzle started. See the note above on excluding `'repro'`. */
+    source: 'fresh' | 'shared' | 'repro';
+}
+
+/**
  * Data attached to `share-failed` — the share flow fell through to its error
  * path (clipboard write failed, or no share mechanism was available) and the
  * user saw a "Couldn't share" toast. User cancellation of the native share
@@ -752,6 +832,7 @@ export function track(name: 'unhandled-error', data: UnhandledErrorData): void;
 export function track(name: 'shared-load-failed', data: SharedLoadFailedData): void;
 export function track(name: 'image-fetch-failed', data: ImageFetchFailedData): void;
 export function track(name: 'new-game-failed', data: NewGameFailedData): void;
+export function track(name: 'piece-count-mismatch', data: PieceCountMismatchData): void;
 export function track(name: 'share-failed', data: ShareFailedData): void;
 export function track(name: 'save-failed', data: SaveFailedData): void;
 export function track(name: 'save-compressed', data: SaveCompressedData): void;

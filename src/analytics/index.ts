@@ -13,6 +13,7 @@ export type {
     SharedLoadFailedData,
     ImageFetchFailedData,
     NewGameFailedData,
+    PieceCountMismatchData,
     ShareFailedData,
     PwaUpdateDetectedData,
     PwaUpdateCheckFailedData,
