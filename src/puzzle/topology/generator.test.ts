@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { generateTopologyPuzzle } from './generator.js';
 import type { TopologyGeneratorConfig } from './generator.js';
-import { registerBaseCutGenerator, registerTabGenerator } from './generator-registry.js';
+import { getBaseCutGenerator, registerBaseCutGenerator, registerTabGenerator } from './generator-registry.js';
 import type { BaseCutGenerator, TabGenerator } from './plugin-types.js';
 import { Curve } from './curve.js';
+import { diagnostics } from '../../diagnostics.js';
 
 function seededRandom(seed: number): () => number {
     let s = seed;
@@ -455,5 +456,220 @@ describe('generateTopologyPuzzle deep-resolution gating', () => {
             tabGeneratorId: 'test-record-sine',
         });
         expect((sink.config as { deepResolve?: unknown } | undefined)?.deepResolve).not.toBe(true);
+    });
+});
+
+describe('generateTopologyPuzzle piece-count invariant', () => {
+    const FRAME_400 = { width: 400, height: 400 };
+
+    it('reports a mismatch when a generator produces fewer faces than it declared', () => {
+        // Declares a 2x2 grid but emits only the horizontal internal cut, so
+        // the DCEL extracts 2 faces, not 4. This is the shape of the real
+        // failure mode (a missed cut crossing fusing faces) without depending
+        // on a bug that is now fixed.
+        const fake: BaseCutGenerator = {
+            id: 'fake-declares-4-emits-2',
+            expectedPieceCount: () => 4,
+            generate: () => [
+                Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
+                Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
+                Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
+                Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
+                Curve.line({ x: 0, y: 200 }, { x: 400, y: 200 }),
+            ],
+        };
+        registerBaseCutGenerator(fake);
+
+        const { pieces, pieceCountMismatch } = generateTopologyPuzzle(
+            2, 2, FRAME_400, rng,
+            { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0 },
+        );
+
+        expect(pieces).toHaveLength(2);
+        expect(pieceCountMismatch).toEqual({
+            expected: 4,
+            actual: 2,
+            baseCutId: 'fake-declares-4-emits-2',
+        });
+    });
+
+    it('reports nothing when the declared count matches', () => {
+        const fake: BaseCutGenerator = {
+            id: 'fake-declares-4-emits-4',
+            expectedPieceCount: () => 4,
+            generate: () => [
+                Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
+                Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
+                Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
+                Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
+                Curve.line({ x: 0, y: 200 }, { x: 400, y: 200 }),
+                Curve.line({ x: 200, y: 0 }, { x: 200, y: 400 }),
+            ],
+        };
+        registerBaseCutGenerator(fake);
+
+        const { pieces, pieceCountMismatch } = generateTopologyPuzzle(
+            2, 2, FRAME_400, rng,
+            { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0 },
+        );
+
+        expect(pieces).toHaveLength(4);
+        expect(pieceCountMismatch).toBeUndefined();
+    });
+
+    it('exempts a generator that declares no expected count', () => {
+        // Same 2-face output as the mismatch case, but no hook -> no report.
+        const fake: BaseCutGenerator = {
+            id: 'fake-no-expectation',
+            generate: () => [
+                Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
+                Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
+                Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
+                Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
+                Curve.line({ x: 0, y: 200 }, { x: 400, y: 200 }),
+            ],
+        };
+        registerBaseCutGenerator(fake);
+
+        const { pieceCountMismatch } = generateTopologyPuzzle(
+            2, 2, FRAME_400, rng,
+            { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0 },
+        );
+
+        expect(pieceCountMismatch).toBeUndefined();
+    });
+
+    it.each(['venn', 'triangular'])(
+        'exempts the real %s generator, which declares no count',
+        (baseCutGeneratorId) => {
+            // These legitimately produce counts unrelated to cols x rows. If
+            // someone later adds an expectedPieceCount to either, this test
+            // goes red and forces them to prove the derivation is right.
+            expect(getBaseCutGenerator(baseCutGeneratorId).expectedPieceCount)
+                .toBeUndefined();
+        },
+    );
+
+    it('compares against the pre-strip count in borderless mode', () => {
+        // The sine grid oversizes to 4x4 = 16 faces, then the strip removes the
+        // outer ring leaving 4 pieces. The check must see 16 vs 16, not 4 vs 16.
+        const { pieces, pieceCountMismatch } = generateTopologyPuzzle(
+            2, 2, FRAME_400, rng,
+            { baseCutGeneratorId: 'sine', tabGeneratorId: 'none', minPieceArea: 0,
+              baseCutConfig: { cols: 2, rows: 2 }, borderless: true },
+        );
+
+        expect(pieces).toHaveLength(4);
+        expect(pieceCountMismatch).toBeUndefined();
+    });
+});
+
+/**
+ * The `diagnostics.warn` the check emits alongside the returned
+ * `PieceCountMismatch`. Worth its own coverage: on a local `npm run dev` it is
+ * the only signal a developer sees (the Umami event needs a website ID), so a
+ * transposed `cols`/`rows` or a dropped borderless arm would degrade it
+ * silently. Both cases below go red on exactly those mutations.
+ */
+describe('generateTopologyPuzzle piece-count warning', () => {
+    function spyOnWarn() {
+        return vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
+    }
+    let warn: ReturnType<typeof spyOnWarn> | undefined;
+
+    afterEach(() => {
+        // `diagnostics` is a module singleton shared with every other test in
+        // this file, and `vite.config.ts` sets no `restoreMocks` — restore
+        // explicitly rather than leaving a stubbed warn installed.
+        warn?.mockRestore();
+        warn = undefined;
+    });
+
+    /** Border plus one horizontal cut: two faces, whatever grid is declared. */
+    const twoFaceCurves = () => [
+        Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
+        Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
+        Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
+        Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
+        Curve.line({ x: 0, y: 200 }, { x: 400, y: 200 }),
+    ];
+
+    it('names the generator, both counts and the requested grid', () => {
+        const fake: BaseCutGenerator = {
+            id: 'fake-warns-plain',
+            expectedPieceCount: () => 6,
+            generate: twoFaceCurves,
+        };
+        registerBaseCutGenerator(fake);
+        warn = spyOnWarn();
+
+        // 3x2, not a square grid: a transposed `cols`/`rows` in the message
+        // would otherwise read identically.
+        generateTopologyPuzzle(
+            3, 2, FRAME, rng,
+            { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0 },
+        );
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(
+            '[piece-count] fake-warns-plain: expected 6 pieces, got 2 '
+            + '(requested grid 3x2)',
+        );
+    });
+
+    it('says so when the expectation counts an oversized borderless grid', () => {
+        // The user grid and the counted grid legitimately disagree under
+        // borderless, so the message has to say which is which — otherwise
+        // "16x12 … expected 252" reads as arithmetic nonsense. This fake
+        // declares 99 against a real 4x4 layout purely to force the branch.
+        const fake: BaseCutGenerator = {
+            id: 'fake-warns-borderless',
+            supportsBorderless: true,
+            expectedPieceCount: () => 99,
+            generate: () => [
+                Curve.line({ x: 0, y: 0 }, { x: 400, y: 0 }),
+                Curve.line({ x: 400, y: 0 }, { x: 400, y: 400 }),
+                Curve.line({ x: 400, y: 400 }, { x: 0, y: 400 }),
+                Curve.line({ x: 0, y: 400 }, { x: 0, y: 0 }),
+                Curve.line({ x: 0, y: 100 }, { x: 400, y: 100 }),
+                Curve.line({ x: 0, y: 200 }, { x: 400, y: 200 }),
+                Curve.line({ x: 0, y: 300 }, { x: 400, y: 300 }),
+                Curve.line({ x: 100, y: 0 }, { x: 100, y: 400 }),
+                Curve.line({ x: 200, y: 0 }, { x: 200, y: 400 }),
+                Curve.line({ x: 300, y: 0 }, { x: 300, y: 400 }),
+            ],
+        };
+        registerBaseCutGenerator(fake);
+        warn = spyOnWarn();
+
+        generateTopologyPuzzle(
+            3, 2, FRAME, rng,
+            { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0,
+              borderless: true },
+        );
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(
+            '[piece-count] fake-warns-borderless: expected 99 pieces, got 16 '
+            + "(requested grid 3x2, borderless — expected counts the generator's"
+            + ' oversized grid, pre-strip)',
+        );
+    });
+
+    it('stays silent when the declared count matches', () => {
+        const fake: BaseCutGenerator = {
+            id: 'fake-warns-never',
+            expectedPieceCount: () => 2,
+            generate: twoFaceCurves,
+        };
+        registerBaseCutGenerator(fake);
+        warn = spyOnWarn();
+
+        generateTopologyPuzzle(
+            3, 2, FRAME, rng,
+            { baseCutGeneratorId: fake.id, tabGeneratorId: 'none', minPieceArea: 0 },
+        );
+
+        expect(warn).not.toHaveBeenCalled();
     });
 });

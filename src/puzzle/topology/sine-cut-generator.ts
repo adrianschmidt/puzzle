@@ -43,6 +43,16 @@ export const sineCutGenerator: BaseCutGenerator = {
     id: 'sine',
     supportsBorderless: true,
 
+    expectedPieceCount(config: unknown): number {
+        // Mirrors generate()'s own reading of the config exactly — same
+        // defaults, same borderless oversizing. If generate() changes how it
+        // derives its grid, this must change with it or the framework will
+        // report a mismatch that isn't one.
+        const cfg = (config ?? {}) as Partial<SineCutConfig>;
+        const extra = cfg.borderless === true ? 2 : 0;
+        return ((cfg.cols ?? 1) + extra) * ((cfg.rows ?? 1) + extra);
+    },
+
     generate(frame: Size, random: () => number, config: unknown): Curve[] {
         // Fall back to sensible defaults when sub-fields are missing so that
         // `baseCutConfig: {}` (or no config) still produces the canonical

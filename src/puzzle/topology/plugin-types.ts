@@ -45,6 +45,40 @@ export interface BaseCutGenerator {
      */
     readonly supportsBorderless?: boolean;
     /**
+     * The number of faces this generator intends to produce for `config`,
+     * or undefined when it cannot say.
+     *
+     * Receives the SAME opaque config object `generate` gets, so a generator
+     * applies its own sizing rule (borderless oversizing included) without the
+     * framework having to encode it. The framework compares the value against
+     * the faces actually extracted, BEFORE composition and BEFORE the border
+     * strip, and reports a mismatch (see `TopologyPuzzle.pieceCountMismatch`).
+     *
+     * Implementing it: derive the count from the SAME code `generate` uses to
+     * read its config — one shared helper, not two independent readings of the
+     * same fields. Receiving the same opaque object is not enough on its own,
+     * because each side then applies its own defaults and its own sizing and
+     * nothing checks that those agree. `sine-cut-generator.ts` factors this
+     * out as `resolveGrid` for exactly that reason, and records the evidence:
+     * before the extraction existed, changing one side's defaults without the
+     * other's left the whole suite green. A check that silently stops checking
+     * is worse than no check, because it reads as a clean signal.
+     *
+     * Optional on purpose. Only a generator whose output count is a knowable
+     * function of its config should implement it; the other two omit it and
+     * are exempt rather than permanently false-positive, for different
+     * reasons. Venn circles produce a count unrelated to cols x rows. The
+     * triangular lattice's count IS derivable — `estimateTriangleFaceCount`
+     * already does it, and the Triangles cut style depends on it — but only
+     * exactly for `jitter: 0, smooth: false`; the shipped preset's jitter and
+     * bowing add or drop the odd micro-face, which is the same "intent, not a
+     * guarantee" problem that makes the estimate unusable as an invariant. It
+     * would also need the frame, which this signature does not pass — a
+     * trailing `frame: Size` parameter is backward-compatible whenever a
+     * generator that can use it turns up, so nothing here forecloses it.
+     */
+    expectedPieceCount?(config: unknown): number | undefined;
+    /**
      * Generate the cuts.
      * @param frame - puzzle pixel dimensions
      * @param random - seeded PRNG (call counts must be deterministic

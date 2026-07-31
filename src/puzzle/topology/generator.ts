@@ -87,6 +87,27 @@ export interface TopologyGeneratorConfig {
 // ---------------------------------------------------------------------------
 
 /**
+ * A generated puzzle whose face count did not match what its base-cut
+ * generator declared via {@link BaseCutGenerator.expectedPieceCount}.
+ *
+ * Both counts are pre-composition and pre-border-strip, so they are directly
+ * comparable: for a borderless puzzle they describe the oversized grid, not
+ * the smaller set the player ends up with.
+ *
+ * This is a diagnostic, not an error. The puzzle is returned and played as
+ * normal; the count is reported so a fused-piece bug stops being invisible
+ * (#512).
+ */
+export interface PieceCountMismatch {
+    /** Faces the base-cut generator intended to produce. */
+    expected: number;
+    /** Faces the DCEL actually yielded. */
+    actual: number;
+    /** Which base-cut generator declared the expectation. */
+    baseCutId: string;
+}
+
+/**
  * Result of {@link generateTopologyPuzzle}.
  *
  * `autoGroups` is populated when the caller supplied
@@ -107,6 +128,12 @@ export interface TopologyPuzzle {
      * which template was used.
      */
     tabDebugReport?: TabDebugReport;
+    /**
+     * Set only when the base cut declared an expected face count and the
+     * pipeline produced a different one. Absent is the normal case, and is
+     * also what every generator without an `expectedPieceCount` hook returns.
+     */
+    pieceCountMismatch?: PieceCountMismatch;
 }
 
 /**
@@ -200,6 +227,40 @@ export function generateTopologyPuzzle(
 
     diagnostics.log('pieces', `Generated ${pieceDefs.length} piece definitions`);
 
+    // Piece-count invariant (#512). Deliberately placed here: before
+    // composePuzzle and before stripBorderRing, so `expected` (which the
+    // generator computes for its own oversized grid) and `actual` are in the
+    // same coordinate system and no strip arithmetic is needed.
+    //
+    // Warn, never throw — a wrong count is a bad puzzle, not an unusable one,
+    // and throwing here would turn a cosmetic defect into a failed game start.
+    let pieceCountMismatch: PieceCountMismatch | undefined;
+    const expectedPieces = baseCutGenerator.expectedPieceCount?.(baseCutCfg);
+    if (expectedPieces !== undefined && expectedPieces !== pieceDefs.length) {
+        pieceCountMismatch = {
+            expected: expectedPieces,
+            actual: pieceDefs.length,
+            baseCutId,
+        };
+        // The grid printed here is the REQUESTED one (clamped, so a crafted
+        // `cf.bgc.cols` can't reach the log line), while `expected` counts the
+        // generator's own grid — which for borderless is oversized by one
+        // piece on each side. So a borderless 16x12 legitimately expects
+        // 18x14 = 252, and the message says so rather than leaving
+        // "16x12 ... expected 252" to read as nonsense. The framework does not
+        // recompute the oversizing itself: that rule belongs to the generator
+        // (see `BaseCutGenerator.expectedPieceCount`), and duplicating it here
+        // is exactly the drift the shared `resolveGrid` was extracted to stop.
+        const grid = baseCutCfg.borderless
+            ? `${baseCutCfg.cols}x${baseCutCfg.rows}, borderless — expected counts`
+                + " the generator's oversized grid, pre-strip"
+            : `${baseCutCfg.cols}x${baseCutCfg.rows}`;
+        diagnostics.warn(
+            `[piece-count] ${baseCutId}: expected ${expectedPieces} pieces, `
+            + `got ${pieceDefs.length} (requested grid ${grid})`,
+        );
+    }
+
     // 5. Auto-group sub-threshold pieces. We compute area/adjacency from
     //    the piece definitions (rather than the DCEL faces directly) so
     //    the auto-group pass operates on the same identifiers callers
@@ -252,7 +313,7 @@ export function generateTopologyPuzzle(
 
     const tabDebugReport = config?.tabDebug?.finish(graph);
 
-    return { pieces, autoGroups: finalAutoGroups, tabDebugReport };
+    return { pieces, autoGroups: finalAutoGroups, tabDebugReport, pieceCountMismatch };
 }
 
 // ---------------------------------------------------------------------------
