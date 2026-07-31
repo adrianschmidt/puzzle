@@ -265,6 +265,15 @@ export function installDevHooks(deps: DevHooksDeps): void {
             // imageSize/gridSize/seed throws from assertPayloadNumbersFinite), so
             // what still reaches this branch is a non-string `imageUrl` or a
             // `composableConfig` the decoder rejects.
+            //
+            // A non-boolean `wavyConfig.borderless`/`fractalConfig.borderless`
+            // is deliberately NOT in that list: `applyStyleConfigs` coerces it
+            // with `=== true`, so a hand-typed `"borderless": "true"` maps to
+            // `bl: false` and replays with borderless OFF rather than failing
+            // here. That is the same reading generation gives it, so the replay
+            // is faithful — but it is silent, so a repro that comes back
+            // bordered when the screenshot showed curved edges means the flag
+            // was typed as a string.
             // eslint-disable-next-line no-console
             console.error('[__reproPuzzle] params did not survive share-codec validation', payload);
             return false;

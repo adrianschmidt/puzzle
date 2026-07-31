@@ -1287,7 +1287,7 @@ describe('share-link: composable borderless (bl)', () => {
     });
 });
 
-describe('share-link: wavy borderless (wf)', () => {
+describe('share-link: wavy and fractal borderless (wf/ff)', () => {
     it('round-trips a wavy borderless payload (wf)', () => {
         const payload: SharePayload = {
             v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'wavy', s: 7, r: 'none',
@@ -1310,6 +1310,123 @@ describe('share-link: wavy borderless (wf)', () => {
         const state = makeGameState({ cutStyle: 'classic', seed: 7 });
         const payload = gameStateToPayload(state, { includeProgress: false });
         expect(payload.wf).toBeUndefined();
+    });
+
+    it.each([
+        ['a string', 'yes'],
+        ['a number', 1],
+        ['an object', {}],
+        ['null', null],
+        ['missing', undefined],
+    ])('rejects wf.bl that is %s', (_label, bl) => {
+        // `bl` is typed boolean but flowed to GameState unchecked, so a
+        // crafted link could park arbitrary text in `wavyConfig.borderless`
+        // — where the generator's `=== true` read ignores it (the puzzle
+        // looks entirely normal) while the info modal's repro block, a
+        // re-share and the `piece-count-mismatch` event's `styleConfig` all
+        // carry it verbatim. `cf.bl` has always been checked; this is the
+        // same hole for the other two styles.
+        //
+        // The `missing` row is the deliberate half: unlike `cf.bl`, `bl` is
+        // REQUIRED here, so "always emit `bl`" is part of the wire contract.
+        // See `isValidBorderlessBlock` before relaxing this row.
+        const bad = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'wavy', s: 7, r: 'none',
+            wf: { bl },
+        };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+
+    it('rejects a wf that is not an object', () => {
+        const bad = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'wavy', s: 7, r: 'none',
+            wf: 'borderless',
+        };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+
+    it('rejects ff.bl that is not a boolean', () => {
+        // Fractal's block is the same shape and reached GameState the same
+        // unchecked way.
+        const bad = {
+            v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'fractal', s: 7, r: 'none',
+            ff: { bl: 'yes' },
+        };
+        expect(decodePayload(encodeRaw(bad))).toBeNull();
+    });
+
+    it.each([
+        ['wavy', 'wavyConfig', 'wf'],
+        ['fractal', 'fractalConfig', 'ff'],
+    ] as const)(
+        'encodes a non-boolean %s borderless as false rather than emitting an undecodable link',
+        (cutStyle, configKey, block) => {
+            // The encoder/decoder must agree. A state restored from a save
+            // written by a pre-tightening build can still carry a crafted
+            // `bl: 'yes'` in its config block (`share-payload-to-init.ts`
+            // copies it verbatim, `serialization.ts` round-trips it), and a
+            // `?? false` encoder would hand that string straight back to the
+            // wire — where this build's own `isValidBorderlessBlock` rejects
+            // the whole payload and the sharer sees a link nobody can open.
+            // `=== true` is also the faithful reading: every generator treats
+            // a non-`true` borderless as off, so `false` is what this state
+            // actually generated.
+            const state = makeGameState({
+                cutStyle,
+                seed: 7,
+                [configKey]: { borderless: 'yes' },
+            } as unknown as Partial<GameState>);
+
+            const payload = gameStateToPayload(state, { includeProgress: false });
+
+            expect(payload[block]).toEqual({ bl: false });
+            expect(decodePayload(encodePayload(payload))).toEqual(payload);
+        },
+    );
+
+    it('encodes a non-boolean composable borderless as false rather than emitting an undecodable link', () => {
+        // The third arm of the same tightening. Not a row in the `it.each`
+        // above only because `cf` carries four more required fields, so the
+        // `toEqual({ bl: false })` shape doesn't transfer — the failure mode is
+        // identical: `isValidComposableCf` has always required a boolean `bl`,
+        // so a `?? false` encoder would emit an undecodable `cf`.
+        const state = makeGameState({
+            cutStyle: 'composable',
+            seed: 7,
+            composableConfig: {
+                baseCutGenerator: 'sine',
+                baseCutConfig: {},
+                tabGenerator: 'classic',
+                tabConfig: {},
+                borderless: 'yes',
+            },
+        } as unknown as Partial<GameState>);
+
+        const payload = gameStateToPayload(state, { includeProgress: false });
+
+        expect(payload.cf?.bl).toBe(false);
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+
+    it('still accepts every wf/ff shape this app emits', () => {
+        // `applyStyleConfigs` writes a boolean `bl` on both paths, so the
+        // tightening above cannot reject a legitimately produced link.
+        for (const bl of [true, false]) {
+            const wavy: SharePayload = {
+                v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'wavy', s: 7, r: 'none',
+                wf: { bl },
+            };
+            expect(decodePayload(encodePayload(wavy))).toEqual(wavy);
+
+            const wavyTraced: SharePayload = { ...wavy, wf: { bl, tv: 1 } };
+            expect(decodePayload(encodePayload(wavyTraced))).toEqual(wavyTraced);
+
+            const fractal: SharePayload = {
+                v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'fractal', s: 7, r: 'none',
+                ff: { bl },
+            };
+            expect(decodePayload(encodePayload(fractal))).toEqual(fractal);
+        }
     });
 });
 

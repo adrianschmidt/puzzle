@@ -174,16 +174,25 @@ const composableStrategy: CutStyleStrategy = {
 };
 
 const fractalStrategy: CutStyleStrategy = {
+    // `=== true` rather than `?? false`/truthiness on both reads below, and
+    // once more in `generateFractalPuzzle`. Identical for every `boolean |
+    // undefined` — which is all the type admits — so no generated geometry
+    // moves; what it buys is that a crafted non-boolean (a hand-typed
+    // `__reproPuzzle` param, a pre-tightening save) generates the BORDERED
+    // puzzle the share encoder then writes as `ff: { bl: false }`. Truthiness
+    // here would generate a borderless one and re-share it as bordered. The
+    // other styles funnel into `generator.ts`'s strict `borderless === true`;
+    // fractal has its own pipeline and has to say it itself.
     scaleGrid: (userGrid, imageSize, ctx) =>
         scaleFractalGrid(
             userGrid.cols * userGrid.rows,
             imageSize.width / imageSize.height,
-            ctx.fractalConfig?.borderless ?? false,
+            ctx.fractalConfig?.borderless === true,
         ),
     inscribePuzzleSize: (imageSize, generationGrid, ctx) => {
         // Borderless mode uses the full grid; bordered mode loses one tile
         // on each side to the curved outer edge.
-        const gridAspect = ctx.fractalConfig?.borderless
+        const gridAspect = ctx.fractalConfig?.borderless === true
             ? generationGrid.cols / generationGrid.rows
             : (generationGrid.cols - 1) / (generationGrid.rows - 1);
 

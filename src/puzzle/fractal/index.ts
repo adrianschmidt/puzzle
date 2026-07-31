@@ -146,7 +146,14 @@ export function generateFractalPuzzle(
     const random = createSeededRandom(seed);
     const minPieceSize = config?.minPieceSize ?? 2;
     const maxPieceSize = config?.maxPieceSize ?? 8;
-    const borderless = config?.borderless ?? false;
+    // `=== true`, not `?? false`: identical for every `boolean | undefined`
+    // the type admits, but it keeps a crafted non-boolean from generating a
+    // borderless puzzle that the share encoder re-emits as bordered. See the
+    // note on `fractalStrategy` in `game/cut-style-strategies.ts` for the
+    // full rationale; pinned here by `index.test.ts`'s non-boolean case, and
+    // together with the strategy's own two reads by
+    // `game/cut-style-strategies.test.ts`.
+    const borderless = config?.borderless === true;
 
     // Tile radius in abstract units. The actual pixel size is
     // determined by scaling in convertToStandardPieces.
