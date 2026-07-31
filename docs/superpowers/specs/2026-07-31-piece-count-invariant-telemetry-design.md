@@ -140,8 +140,10 @@ Every change is additive. No existing signature moves.
 ### 3. The event
 
 `piece-count-mismatch`, 12 properties — the same width as the widest event
-shipping today, and well inside Umami's 50-property cap. Two groups, by the
-question each answers.
+shipping today, and well inside Umami's 50-property cap. `styleConfig` and
+`styleConfigOmitted` (below) are mutually exclusive, so at most one of the
+two is ever present and the event never actually carries more than 12 at
+once. Two groups, by the question each answers.
 
 **Is this happening, and how bad?** Low cardinality, aggregates in the live
 dashboard without an export.
@@ -166,7 +168,8 @@ own inputs if one of them is ever wrong.
 | `cols`, `rows` | number | The **user** grid, matching `buildReproParams` — so the values replay directly through `__reproPuzzle`. |
 | `imageWidth`, `imageHeight` | number | From `state.imageSize`. Fractional values are normal for the inscribed rectangles fractal and wavy produce; precision-4 rounding is *finer* than the decoder's own `clampDim` floor, so nothing is lost relative to replaying a share link. |
 | `rotationMode` | string | Does not affect cut geometry, but it is part of the repro contract and costs one property. |
-| `styleConfig` | string | Compact JSON of whichever per-style block the puzzle carries (`classicConfig` / `wavyConfig` / `trianglesConfig` / `fractalConfig` / `composableConfig`), omitted when none. One property instead of flattening four mutually-exclusive shapes, and exactly what `reproParamsToPayload` needs to rebuild the payload. |
+| `styleConfig` | string | Compact JSON of whichever per-style block the puzzle carries (`classicConfig` / `wavyConfig` / `trianglesConfig` / `fractalConfig` / `composableConfig`), omitted when none. One property instead of flattening four mutually-exclusive shapes, and exactly what `reproParamsToPayload` needs to rebuild the payload. Also omitted — in favor of `styleConfigOmitted` — when the serialized block would exceed Umami's 500-char limit. |
+| `styleConfigOmitted` | `true` | Present instead of `styleConfig` when the per-style config serialized past 500 chars. In practice this means `cutStyle: 'composable'`: `baseCutConfig`/`tabConfig` are opaque `Record<string, unknown>` with no size bound enforced by the share-link decoder, so a crafted link can produce an oversized config. A row with this flag is not replayable as-is — the config needed to reproduce the exact cut is missing — but every other repro field is still valid. Never `false`; absent when the config fit, matching this schema's absence-is-the-filter convention. Truncating instead of omitting was rejected: truncated JSON doesn't parse, so it would look replayable and not be — the same reasoning `imageUrl`'s omission already uses. |
 | `source` | string | `'fresh' \| 'shared' \| 'repro'`. |
 
 #### `imageUrl` is deliberately omitted
@@ -242,6 +245,11 @@ the operator to ignore the event.
   `dcel-broad-phase-equivalence.test.ts` pins geometry. The export shows
   102 chars as today's longest string, so there is headroom — but nothing
   currently *holds* it.
+- **An oversized composable `styleConfig`:** a crafted config large enough
+  to cross the 500-char limit gets `styleConfig` omitted and
+  `styleConfigOmitted: true` set instead, and a normal-sized config carries
+  `styleConfig` with no `styleConfigOmitted` key at all (absence, not
+  `false`).
 - Wiring tests at both call sites, accounting for this repo's vitest mock
   state leaking across tests (no `restoreMocks` in `vite.config.ts`).
 

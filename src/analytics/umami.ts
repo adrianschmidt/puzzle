@@ -510,9 +510,35 @@ export interface PieceCountMismatchData {
      * shapes, and exactly what `reproParamsToPayload` needs to rebuild the
      * payload. Absent when the puzzle carries no per-style block (e.g. legacy
      * Classic, whose absence is itself load-bearing — it selects the legacy
-     * generator).
+     * generator), and also absent — in favor of {@link styleConfigOmitted} —
+     * when the serialized block would exceed Umami's 500-char string limit.
+     * Mutually exclusive with `styleConfigOmitted`: at most one of the two is
+     * ever present, so the event never carries more than the 12 documented
+     * properties.
      */
     styleConfig?: string;
+    /**
+     * Set instead of `styleConfig` when the puzzle's per-style config
+     * serializes past Umami's 500-char string limit. A row with this flag is
+     * **not** replayable as-is through `__reproPuzzle` — the config needed to
+     * regenerate the exact cut is missing — but every other repro field
+     * (`seed`, `cols`, `rows`, `imageWidth`, `imageHeight`, `rotationMode`) is
+     * still valid and the `expected`/`actual` counts are unaffected.
+     *
+     * In practice this means `cutStyle: 'composable'`: `composableConfig`'s
+     * `baseCutConfig`/`tabConfig` are opaque `Record<string, unknown>`
+     * (`model/types.ts`), and the share-link decoder only checks that they
+     * are non-null objects — no size or shape bound — so a crafted share
+     * link can produce a config large enough to cross the limit. None of the
+     * other four per-style config blocks are open-ended enough to approach
+     * it. Truncating instead of omitting was rejected: truncated JSON does
+     * not parse, so a truncated `styleConfig` would look replayable and not
+     * be — the same reasoning that keeps `imageUrl` off this event entirely.
+     *
+     * Never `false`; absent when the config fit. As everywhere else in this
+     * schema, absence is what a query filters on, not a boolean value.
+     */
+    styleConfigOmitted?: true;
     /** How the puzzle started. See the note above on excluding `'repro'`. */
     source: 'fresh' | 'shared' | 'repro';
 }

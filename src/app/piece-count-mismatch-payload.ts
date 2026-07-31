@@ -22,6 +22,9 @@ function toUmamiPrecision(value: number): number {
     return Math.round(value * 10000) / 10000;
 }
 
+/** Umami's event-data string-property limit; see `PieceCountMismatchData`. */
+const UMAMI_STRING_LIMIT = 500;
+
 export function buildPieceCountMismatchData(
     state: GameState,
     mismatch: PieceCountMismatch,
@@ -60,7 +63,18 @@ export function buildPieceCountMismatchData(
     };
 
     if (styleConfig !== undefined) {
-        data.styleConfig = JSON.stringify(styleConfig);
+        const serialized = JSON.stringify(styleConfig);
+        // A crafted composable share link can carry an open-ended
+        // baseCutConfig/tabConfig (src/model/types.ts, both typed
+        // Record<string, unknown> with no size bound the decoder enforces),
+        // so this can exceed Umami's string limit. Omit rather than
+        // truncate: truncated JSON doesn't parse, so it would look
+        // replayable and not be — see PieceCountMismatchData.
+        if (serialized.length <= UMAMI_STRING_LIMIT) {
+            data.styleConfig = serialized;
+        } else {
+            data.styleConfigOmitted = true;
+        }
     }
 
     return data;
