@@ -51,7 +51,11 @@ empirically rather than by assumption:
 
 Flat scalar properties therefore beat a JSON blob on every axis: they
 aggregate in the live dashboard, reassemble exactly in the export, and
-sidestep the 500-char question entirely.
+confine the 500-char question to the one field that has to carry an opaque
+per-style config (`styleConfig`) instead of leaving the whole payload
+exposed to it. That one field turned out not to be fully sidestepped after
+all — see `styleConfigOmitted` below, added after the initial
+implementation found composable's config unbounded.
 
 ## Design
 
@@ -183,10 +187,18 @@ white canvas, which is the whole of what a fused-piece investigation needs.
 
 Three reasons this is the right cut rather than a reluctant one:
 
-1. It is the only repro field that can approach the 500-char limit.
-   Unsplash URLs run 150–250 chars on their own.
+1. Unlike `styleConfig` — usually small, occasionally unbounded, and
+   checked against the 500-char limit at runtime (see `styleConfigOmitted`
+   above) — `imageUrl` cannot be usefully shortened at all: Unsplash URLs
+   run 150–250 chars on their own, and there is no length at which a
+   truncated one is still useful. So it is the one repro field dropped
+   unconditionally, at build time, rather than bounded at runtime. Both
+   mechanisms follow the same principle: never ship something that looks
+   replayable and isn't.
 2. Truncating it would be worse than omitting it — a truncated URL is a
    *broken* URL, so long ones would degrade to unusable rather than absent.
+   (The same reasoning is why an oversized `styleConfig` is omitted rather
+   than truncated: truncated JSON doesn't parse either.)
 3. This app does not ship URLs to analytics. `traced-chunk-load-failed`
    actively **redacts** them so per-deploy chunk hashes and ad-blocker
    extension IDs stay out (`umami.ts:265-270`). Adding a raw image URL
