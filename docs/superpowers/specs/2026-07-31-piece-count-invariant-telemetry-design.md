@@ -221,10 +221,17 @@ false-positive detector is worse than no detector, because it would train
 the operator to ignore the event.
 
 - `expectedPieceCount` for sine, plain and borderless configs.
-- **It fires on the real thing.** `repro-bug.test.ts` already carries the
-  three historical fused-piece cases. Asserting the detector flags the #498
-  case is the mutation check that proves it catches the actual failure mode
-  rather than a synthetic stub.
+- **It fires at all.** All three historical fused-piece cases are fixed, so
+  none of them mismatch any more — they cannot demonstrate the detector
+  working. Proving it fires needs a fake base-cut generator that declares a
+  higher `expectedPieceCount` than the faces it emits. `generator.test.ts:271`
+  already registers a fake `BaseCutGenerator` for the borderless-capability
+  test, so the pattern exists.
+- **The historical cases become negative guards.** Asserting
+  `pieceCountMismatch === undefined` for the three seeds in
+  `repro-bug.test.ts` upgrades those existing `toHaveLength(192)` assertions
+  to detector-level ones: if any of the three regresses, the detector is
+  proven to catch it rather than merely assumed to.
 - **It does not fire on healthy generation**, per shipped cut style. This
   is the false-positive risk #512 explicitly warns about.
 - Venn and the triangular lattice never report (hook absent).
