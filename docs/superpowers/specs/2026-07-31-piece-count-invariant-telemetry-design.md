@@ -93,6 +93,14 @@ pre-strip actual are in the same coordinate system. `composePuzzle` runs
 with `disableTabs: true` here and changes no counts; `minPieceArea`
 auto-grouping groups pieces without removing them.
 
+The check also runs *before* the auto-group pass itself
+(`generator.ts:257-278`). `DEFAULT_MIN_PIECE_AREA` exists to absorb
+sub-pixel sliver faces from curve-intersection rounding, so a sliver that
+auto-grouping makes invisible to the player still counts as one extra face
+here: `actual = expected + 1`. An operator triaging a mismatch row should
+rule that out first when the delta is exactly `+1`, before reading it as a
+self-intersection artifact (below).
+
 **On mismatch:** `diagnostics.warn` — never throw. A wrong count is a bad
 puzzle, not an unusable one, and throwing at generation time would turn a
 cosmetic defect into a failed game start (which is the #488 failure mode
@@ -164,6 +172,16 @@ so the export computes it; adding it would buy a slightly more readable
 dashboard top-values list at the cost of a field that can contradict its
 own inputs if one of them is ever wrong.
 
+The export should compute it to triage, not only to size the problem: its
+sign discriminates the two populations a mismatch row can belong to. A
+fused-face defect — #512's whole motivation; #498 was 189 vs 192 — always
+gives `actual < expected`. A self-intersecting cut carving a genuine island
+face (legitimate at extreme frequencies, e.g. sine `hf`/`vf` = 10 on a small
+grid) always gives `actual > expected`, by large factors. So `actual <
+expected` is the incident query and `actual > expected` is the triage
+bucket for "not a bug, an exotic config" — not an automatic incident count
+either way, but the sign is what tells the two apart at a glance.
+
 **Which puzzle was it?** The repro params, minus `imageUrl`.
 
 | property | type | notes |
@@ -174,7 +192,7 @@ own inputs if one of them is ever wrong.
 | `rotationMode` | string | Does not affect cut geometry, but it is part of the repro contract and costs one property. |
 | `styleConfig` | string | Compact JSON of whichever per-style block the puzzle carries (`classicConfig` / `wavyConfig` / `trianglesConfig` / `fractalConfig` / `composableConfig`), omitted when none. One property instead of flattening four mutually-exclusive shapes, and exactly what `reproParamsToPayload` needs to rebuild the payload. Also omitted — in favor of `styleConfigOmitted` — when the serialized block would exceed Umami's 500-char limit. |
 | `styleConfigOmitted` | `true` | Present instead of `styleConfig` when the per-style config serialized past 500 chars. In practice this means `cutStyle: 'composable'`: `baseCutConfig`/`tabConfig` are opaque `Record<string, unknown>` with no size bound enforced by the share-link decoder, so a crafted link can produce an oversized config. A row with this flag is not replayable as-is — the config needed to reproduce the exact cut is missing — but every other repro field is still valid. Never `false`; absent when the config fit, matching this schema's absence-is-the-filter convention. Truncating instead of omitting was rejected: truncated JSON doesn't parse, so it would look replayable and not be — the same reasoning `imageUrl`'s omission already uses. |
-| `source` | string | `'fresh' \| 'shared' \| 'repro'`. |
+| `source` | string | `'fresh' \| 'shared' \| 'repro' \| 'dev'`. |
 
 #### `imageUrl` is deliberately omitted
 
@@ -213,14 +231,20 @@ claim there is a real defect. Two things must be stated:
   grid.** With borderless they legitimately disagree — a borderless 16×12
   expects `18 × 14 = 252` pre-strip. Unstated, the event reads as
   self-contradictory.
-- **`source: 'repro'` exists to keep developer debugging out of the
+- **`source: 'repro'`/`'dev'` exist to keep developer activity out of the
   signal.** Replaying a known-bad puzzle through `__reproPuzzle` re-runs
-  generation and re-fires the event. The discrimination already exists at
-  `dev-hooks.ts:293` (`SharedLoadFailedData.source`), so this threads an
-  existing distinction rather than inventing one. As with every other
-  optional property here, absence cannot be filtered in Umami — a
-  `source`-free population is computed by subtraction, per the rule
-  `SharedLoadFailedData` already documents.
+  generation and re-fires the event (`'repro'`). A dev-console start such as
+  `__newComposableGame` — the only way to reach an arbitrary sine config
+  outside a crafted share link — does the same for a *fresh* game, not a
+  replay, so it gets its own value (`'dev'`) rather than reusing `'repro'`
+  and misdescribing itself. The `'repro'` discrimination already existed at
+  `dev-hooks.ts:293` (`SharedLoadFailedData.source`); `'dev'` threads that
+  same distinction through `startNewGame`, mirroring the parameter
+  `loadSharedPuzzle` already added for `'repro'`. As with every other
+  optional property here, absence cannot be filtered in Umami — the
+  player-facing population is computed by subtraction (`total` minus
+  `source in ('repro', 'dev')`), per the rule `SharedLoadFailedData`
+  already documents.
 
 #### No volume cap
 
@@ -264,6 +288,24 @@ the operator to ignore the event.
   `false`).
 - Wiring tests at both call sites, accounting for this repo's vitest mock
   state leaking across tests (no `restoreMocks` in `vite.config.ts`).
+
+### Empirical false-positive baseline (recorded, not a standing test)
+
+A one-off sweep during the final branch review, not codified as a repeated
+test: **450 shipped-shape configs** (classic + wavy + wavy-borderless × 5
+grid sizes × 30 seeds each) produced **0 mismatches**, and a further 16 runs
+using real `classic` tabs at production `minPieceArea` also produced
+**0 mismatches**. The false-positive boundary sits at roughly **2× shipped
+Wavy's frequency, or ~1.6× shipped amplitude** — at 8×6 on 1080×720, for
+example, shipped Wavy (`ha = va = 0.5`, shipped frequency) stayed clean
+while 2× that frequency mismatched on essentially every seed, often by
+10–100× (`expected 48, got 4881`).
+
+This baseline exists nowhere else in the repo. It is recorded here so a
+nonzero production count can be judged against it without re-deriving the
+sweep from scratch: it tells an operator how far outside shipped parameters
+a config has to be pushed before the detector starts firing, which is the
+context a raw event count on its own cannot supply.
 
 ## Out of scope
 

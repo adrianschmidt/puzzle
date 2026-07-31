@@ -30,11 +30,17 @@ const DEFAULT_SCRIPT_URL = 'https://cloud.umami.is/script.js';
  * are conditionally populated — see the spec for details.
  *
  * `'shared'` also covers a `__reproPuzzle` console replay, which runs the
- * same `loadSharedPuzzle` path. Only the failure event separates the two
- * ({@link SharedLoadFailedData}'s `source`), so a share-link success rate
- * computed from `new-game-started[source=shared]` against
+ * same `loadSharedPuzzle` path, and `'fresh'` likewise covers a dev-console
+ * start (`__newComposableGame`). This event does not separate either from a
+ * real player; {@link SharedLoadFailedData} and
+ * {@link PieceCountMismatchData} both do, via their own `source`. Two
+ * consequences, both dev-console volume and both accepted: a share-link
+ * success rate computed from `new-game-started[source=shared]` against
  * `shared-load-failed[source=shared]` has dev-console traffic in the
- * numerator only and reads slightly high. Dev-console volume, accepted.
+ * numerator only and reads slightly high; and a piece-count mismatch RATE has
+ * no matching denominator here, because a dev-console start lands in
+ * `new-game-started[source=fresh]` while its mismatch lands in
+ * `piece-count-mismatch[source=dev]`. Count mismatches, don't rate them.
  */
 export interface NewGameData {
     source: 'fresh' | 'shared';
@@ -442,12 +448,15 @@ export interface NewGameFailedData {
  * number of pieces than the base cut declared it would (#512). Three
  * historical fused-piece bugs shipped undetected before this event existed.
  *
- * The event exists to be ACTED on, not just counted: `seed`, `cols`, `rows`,
- * `imageWidth`, `imageHeight`, `rotationMode` and `styleConfig` are exactly
- * the repro params the info modal prints, so a row here can normally be
- * replayed locally through `__reproPuzzle` and turned into a regression
- * test — the exception is the rare row where the per-style config didn't
- * fit and `styleConfig` was replaced by
+ * The event exists to be ACTED on, not just counted: `seed`, `cutStyle`,
+ * `cols`, `rows`, `imageWidth`, `imageHeight`, `rotationMode` and
+ * `styleConfig` are exactly the repro params the info modal prints — and
+ * that `cutStyle` is not attribution-only: `reproParamsToPayload` throws
+ * without it (`repro-params.ts`), so a row missing it from this list would
+ * lead an operator to reassemble a `__reproPuzzle` call that fails. A row
+ * here can normally be replayed locally through `__reproPuzzle` and turned
+ * into a regression test — the exception is the rare row where the
+ * per-style config didn't fit and `styleConfig` was replaced by
  * {@link PieceCountMismatchData.styleConfigOmitted}.
  *
  * `expected` and `actual` are PRE-STRIP, GENERATION-GRID counts, while
@@ -457,7 +466,28 @@ export interface NewGameFailedData {
  * correct, not a contradiction. The user grid is what a replay needs.
  *
  * No `delta` property: it is `actual - expected` and both are here, so the
- * CSV export computes it.
+ * CSV export computes it — compute it to triage, not just to size the
+ * problem. Its SIGN, not its magnitude, is the discriminator between the two
+ * populations described below: a fused-face defect always gives
+ * `actual < expected`, a self-intersecting-cut artifact always gives
+ * `actual > expected`. So `actual < expected` is the incident query and
+ * `actual > expected` is the triage bucket. Magnitude is a weak hint at
+ * best — the extreme configs surveyed for #512 overshot by large factors
+ * (`expected 48, actual 4881`), but a milder self-intersection lands only a
+ * face or two over (`generator.test.ts` pins wavy 2x2 at `hf`/`vf` = 10
+ * producing `expected 4, actual 6`), so a small positive delta is normal
+ * self-intersection or sliver territory rather than an unexplained row.
+ *
+ * The sign splits the two populations, but it does NOT partition the
+ * incidents: both act on the same counter, so a puzzle carrying a fusion
+ * AND a sliver reports only their net. A fused pair (-1) alongside one
+ * sliver (+1) lands on `actual == expected` and fires nothing at all; a
+ * fusion alongside two slivers files as the benign `actual > expected`
+ * bucket. Slivers are common enough (see below) that this is not a corner
+ * case. So `actual < expected` is a LOWER BOUND on fusion incidents, not a
+ * complete list of them — a clean positive-delta export means "no fusion
+ * large enough to outweigh the slivers on the same puzzle", not "no
+ * fusions".
  *
  * `imageUrl` is deliberately absent. Cut geometry is a function of the seed,
  * the grid, the image SIZE, the style and the style config — the image bytes
@@ -476,13 +506,57 @@ export interface NewGameFailedData {
  * 500-char string limit. Both follow the same principle: never ship
  * something that looks replayable and isn't.
  *
- * `source` separates real players from developer investigation: replaying a
- * known-bad puzzle through `__reproPuzzle` re-runs generation and re-fires
- * this event, so `source = 'repro'` rows must be excluded when counting
- * incidents. As everywhere else in this schema, absence cannot be filtered —
- * event properties are key/value rows, so the player-facing population is
- * total `piece-count-mismatch` minus `source = 'repro'`, arithmetic rather
- * than a negated filter (the rule {@link SharedLoadFailedData} documents).
+ * `source` separates real players from developer investigation. Two
+ * non-player values: replaying a known-bad puzzle through `__reproPuzzle`
+ * re-runs generation and re-fires this event (`source = 'repro'`), and
+ * `__newComposableGame`/other dev-console starts do the same for arbitrary
+ * cut parameters (`source = 'dev'`) — at 2x shipped Wavy's frequency, for
+ * instance, a developer poking at the console mismatches on essentially
+ * every seed, and dev-deploy reports to the same Umami website ID as
+ * production. Both must be excluded when counting incidents, and here that
+ * exclusion is a POSITIVE filter: the player-facing population is
+ * `source in ('fresh', 'shared')`.
+ *
+ * Deliberately not the subtraction {@link SharedLoadFailedData}'s `source`
+ * needs. That one is subtractive because it was added to an already-shipping
+ * event, so its absent rows have to be read as `'shared'` and no filter can
+ * express "absent". This `source` shipped with the event, is required, and is
+ * set unconditionally at both emit sites, so every row carries one of the four
+ * values and the positive form is exact. It is also the safer of the two under
+ * change: a future FIFTH `source` value would be counted as player traffic by
+ * the subtraction and left out by the positive form, so the mistake it makes
+ * is visible (a total that no longer adds up) rather than silent.
+ *
+ * `source` does not catch every developer row, and the gap is a filterable
+ * one rather than a labeled one: SUBTRACT `source = 'fresh' AND cutStyle =
+ * 'composable'` as well. The dev console is not the only route to an
+ * arbitrary sine config — the new-game dialog offers Composable, with H/V
+ * Frequency sliders reaching 10 (`new-game-dialog.ts`), wherever
+ * `isComposableVisible()` is true, which is `npm run dev` AND the
+ * `/puzzle/dev/` preview deploy (`cut-styles.ts`). That dialog binding is a
+ * plain `startNewGame(...)`, so it reports `'fresh'`. Those rows are still
+ * developer traffic by construction: the production build filters Composable
+ * out of the dialog, so a production player cannot select it, and the only
+ * legitimate production composable puzzle arrives from a share link — which
+ * reports `'shared'`. A production row with `source = 'fresh'` and
+ * `cutStyle = 'composable'` therefore means a saved Composable *preference*
+ * replayed through the save-less boot path (`boot-sequence.ts`), which only
+ * someone who used dev-deploy can have set (the two share an origin, so they
+ * share localStorage). Note this subtraction covers `cutStyle` `'composable'`
+ * only: `'wavy'` and `'triangles'` are composable-backed but ship as fixed
+ * production presets, so their `'fresh'` rows are real players.
+ *
+ * Unlike the other `source`/`cutStyle` rules here, that one is COMPOUND — it
+ * names two properties of the same row, and the two must be correlated per
+ * event. (The `delta` note above is the other compound reading in this block:
+ * `actual < expected` is likewise two properties of one row.) Do not
+ * substitute two independent subtractions: removing `source = 'fresh'` and
+ * then `cutStyle = 'composable'` takes out their UNION, not their
+ * intersection, which over-subtracts and undercounts real incidents (every
+ * genuine `'fresh'` Wavy row goes with it). Count this one from a per-event
+ * view, where a single row carries both properties — the same export the
+ * `delta` note above needs for the same reason — not by combining the two
+ * per-property totals.
  *
  * That subtraction is sound only while Composable stays dev-only. Shipping it
  * to production — `isComposableVisible()` returning true for a production
@@ -490,75 +564,261 @@ export interface NewGameFailedData {
  * silently discarding genuine incidents. Delete it in the same change, and
  * label the dev routes some other way if they still need excluding.
  *
+ * A residual neither rule removes: a composable share link CREATED on a dev
+ * build and opened on `/puzzle/dev/` reports `'shared'` like any other
+ * recipient, and dev-deploy shares production's website ID — the page path
+ * (`/puzzle/` vs `/puzzle/dev/`, as above) is the only thing separating the
+ * two. Since an extreme sine config mismatches on essentially
+ * every seed, one review link opened a few times reads as several field
+ * incidents. Slice by `url` before treating a cluster of `'shared'` +
+ * `'composable'` rows as production. Left as a query caveat on purpose: the
+ * code cannot tell a dev-built link from a real one at open time, and a
+ * `source` that tried to would suppress genuine preview signal.
+ *
  * Not every row is a bug: exotic composable configs (e.g. sine `hf`/`vf` = 10
  * on a small grid) can self-intersect and carve genuine island faces, so the
- * real face count legitimately exceeds the declared one without a fused- or
- * dropped-piece defect behind it. Treat this event as a lead to replay and
- * inspect, not an automatic incident count.
+ * real face count legitimately exceeds the declared one — always `actual >
+ * expected`, by anything from a couple of faces to a factor of a hundred —
+ * without a fused- or dropped-piece defect behind it. Treat this event as a
+ * lead to replay and inspect, not an automatic incident count.
+ *
+ * A small positive delta has a second, even more benign explanation worth
+ * ruling out first: sub-pixel sliver faces left over from curve-intersection
+ * rounding. Those are real extra faces in the DCEL, so they count in `actual`
+ * — the auto-group pass merges them into a neighbour's starting group but
+ * never removes them (`auto-group.ts`: "leaves the topology untouched"), so
+ * where the check sits relative to that pass makes no difference to this
+ * number. What the pass does change is visibility: a sliver the player never
+ * sees as a separate piece still shows up here. The area floor below which
+ * one gets absorbed is per style (`avgPieceArea / 4` for Classic and Wavy,
+ * `DEFAULT_MIN_PIECE_AREA` for a composable game that sets none), so a puzzle
+ * with a handful of sub-threshold faces is unremarkable. Replay before
+ * reading a small overshoot as a defect.
  */
 export interface PieceCountMismatchData {
     /** The cut style the player chose. */
     cutStyle: string;
     /**
-     * The base-cut generator that declared the expectation — `'sine'` today.
-     * NOT derivable from `cutStyle`: classic, wavy, triangles and composable
-     * all sit on the sine base cut, so the mismatch is a property of the base
-     * cut rather than the style.
+     * The base-cut generator that declared the expectation — `'sine'` on
+     * every row today, because sine is the only generator that implements
+     * `expectedPieceCount` (`plugin-types.ts` explains why Venn and the
+     * triangular lattice are exempt rather than permanently false-positive).
+     *
+     * NOT derivable from `cutStyle`, and the mapping is not onto: the
+     * mismatch is a property of the base cut, and only THREE cut styles reach
+     * a checked one. Sine-based Classic (i.e. a puzzle carrying
+     * `classicConfig.traceSetVersion`), Wavy, and a Composable game left on
+     * its default `'sine'` base cut. The rest are structurally exempt and can
+     * never appear here, which matters because their absence is silence
+     * rather than health:
+     *
+     * - `triangles` — the shipped preset hardcodes `baseCutGenerator:
+     *   'triangular'` (`cut-style-strategies.ts`), which declares no expected
+     *   count. Zero Triangles rows says nothing about Triangles.
+     * - `fractal` — a different generator entirely; it never reaches the
+     *   topology pipeline.
+     * - legacy `classic` (no `classicConfig`) — runs `generateProceduralPuzzle`
+     *   and produces no topology result to check.
+     * - `composable` with `baseCutGenerator: 'triangular'` — same exemption as
+     *   Triangles.
+     * - `composable` with `baseCutGenerator: 'venn'` — the other registered
+     *   base cut that declares no expected count (`generator.test.ts` pins
+     *   both). Reachable from `__startVennPuzzle` (`dev-hooks.ts`, so
+     *   `source: 'dev'`) and from a share link, since the decoder's
+     *   `isValidComposableCf` accepts any registered base-cut id.
      */
     baseCut: string;
     /** Faces the base cut intended to produce. Pre-strip, generation-grid. */
     expected: number;
     /** Faces the pipeline actually yielded. Pre-strip, generation-grid. */
     actual: number;
-    /** Repro param: the puzzle's PRNG seed (uint32). */
+    /**
+     * Repro param: the puzzle's PRNG seed, normalized to a uint32 by the
+     * payload builder. `generateSeed` already produces one, but the share-link
+     * decoder only checks that `s` is a number, so a crafted link can arrive
+     * carrying a fraction or a value past `DECIMAL(19,4)`'s range — which
+     * Umami would round or reject. The normalization is a no-op for every real
+     * seed and preserves the PRNG stream for the crafted ones, so the value
+     * here always replays the puzzle it describes. It is therefore NOT
+     * guaranteed to equal the seed the info modal's "Reproduction parameters"
+     * block prints for the same puzzle — the modal prints `state.seed` raw.
+     * They agree on every real and every legitimate share-link seed; they can
+     * disagree only on a crafted one, and both still replay the same puzzle.
+     *
+     * `-1` is a sentinel, not a seed — see the note on sentinels below.
+     */
     seed: number;
-    /** Repro param: the USER grid — see the note above. */
+    /** Repro param: the USER grid — see the note above. `-1` is a sentinel. */
     cols: number;
-    /** Repro param: the USER grid — see the note above. */
+    /** Repro param: the USER grid — see the note above. `-1` is a sentinel. */
     rows: number;
-    /** Repro param: image width. Part of the geometry contract, not decoration. */
+    /**
+     * Repro param: image width. Part of the geometry contract, not
+     * decoration.
+     *
+     * SENTINEL — applies to `seed`, `cols`, `rows`, `imageWidth` and
+     * `imageHeight`: `-1` means the field was missing from the state the
+     * payload was built from, NOT a real value. It is unreachable for a
+     * generated puzzle (`createNewGame` always sets seed, grid and image
+     * size), so a `-1` row is a bug in the payload builder rather than
+     * something about the puzzle — and it is deliberately reported instead of
+     * dropping the event, because a diagnostic that silently declines to
+     * report is worse than one carrying an obviously impossible value. Such a
+     * row is not replayable; exclude `-1` when aggregating these fields, and
+     * treat any occurrence as a defect to investigate.
+     *
+     * `cutStyle` and `rotationMode` carry NO sentinel, and that is not an
+     * oversight: absence of either has a defined meaning in this codebase — a
+     * state with no cut style is classic, one with no rotation mode is
+     * `'none'` — so the builder falls back to that meaning rather than to an
+     * impossible value. There is no equivalent reading of a missing seed,
+     * grid or image size.
+     */
     imageWidth: number;
-    /** Repro param: image height. Part of the geometry contract, not decoration. */
+    /** Repro param: image height. Part of the geometry contract, not decoration. `-1` is a sentinel. */
     imageHeight: number;
     /** Repro param: rotation mode. */
     rotationMode: string;
     /**
-     * Repro param: compact JSON of whichever per-style config block the puzzle
-     * carries. One property rather than four mutually-exclusive flattened
-     * shapes, and exactly what `reproParamsToPayload` needs to rebuild the
-     * payload. Absent when the puzzle carries no per-style block (e.g. legacy
-     * Classic, whose absence is itself load-bearing — it selects the legacy
-     * generator), and also absent — in favor of
-     * {@link PieceCountMismatchData.styleConfigOmitted} — when the
-     * serialized block would exceed Umami's 500-char string limit.
+     * Repro param: compact JSON of the per-style config block belonging to
+     * this row's own `cutStyle` — `classicConfig` for `'classic'`,
+     * `wavyConfig` for `'wavy'`, and so on. One property rather than four
+     * mutually-exclusive flattened shapes, and exactly what
+     * `reproParamsToPayload` needs to rebuild the payload: reassemble it
+     * under the key that matches `cutStyle`, unambiguously, with no guessing
+     * from the JSON's shape.
+     *
+     * The builder gates on `cutStyle` rather than taking whichever block the
+     * state happens to carry, so a state with a stray FOREIGN block — a
+     * crafted share link, a hand-edited save — cannot have another style's
+     * config attributed to it and produce a row that reads as replayable and
+     * isn't.
+     *
+     * Absent in two cases, and {@link
+     * PieceCountMismatchData.styleConfigOmitted} is what tells them apart:
+     * - the puzzle genuinely carries no block for its own style — a wavy or
+     *   composable share link that arrived without `wf`/`cf`
+     *   (`share-payload-to-init.ts`), which replays on the generator's
+     *   defaults. No flag;
+     * - the block serialized past Umami's 500-char string limit. Flag set.
+     *
+     * The builder has two further branches that drop the field, and NEITHER
+     * can produce a row — don't read one into an export:
+     * - the `cutStyle` gate discarding a FOREIGN block. `createNewGame` writes
+     *   only the block matching the style's `configKey` and `undefined` for
+     *   the other four (`game/init.ts`), and both call sites pass its return
+     *   value straight to the builder — so on every state this app builds, "a
+     *   stray foreign block" is the first case above. The gate is structural
+     *   safety against a state this app doesn't build, not a cause an operator
+     *   can observe;
+     * - the block failing to serialize at all (`JSON.stringify` throws on a
+     *   circular or BigInt-bearing config and overflows on a deeply-nested
+     *   one), which would also set the flag. Both flows call
+     *   `deps.persistNewPuzzle(state)` BEFORE they `track` this event
+     *   (`app/start-new-game.ts`, `app/load-shared-puzzle.ts`), and
+     *   `saveGeometry` hands the same `composableConfig` to an unguarded
+     *   `JSON.stringify` (`persistence/storage.ts`) — so a config that cannot
+     *   serialize throws out of the save first and the event never fires. That
+     *   covers a crafted link's deeply-nested config as much as the dev-console
+     *   `__newComposableGame` live object — the live object is the one source
+     *   that can construct a CIRCULAR config, but being `JSON.parse` output
+     *   bounds neither depth nor size: the parser accepts nesting far past the
+     *   point `JSON.stringify` overflows at, and `isValidComposableCf` checks
+     *   only that `bgc`/`tgc` are non-null objects (`sharing/share-link.ts`).
+     *   The save's stringify walks the same chain one level deeper —
+     *   `serializeStatic` nests `composableConfig` under a wrapper object
+     *   (`persistence/serialization.ts`) — so it overflows on a SHALLOWER
+     *   config than the builder's would, and still throws first. The builder's
+     *   `try` is defense in depth against that ordering changing.
+     *
+     * So every `styleConfigOmitted` row an operator can see is over-limit,
+     * whatever its `source`.
+     *
+     * Legacy Classic — whose *absence* of `classicConfig` is load-bearing,
+     * selecting the legacy generator — cannot produce this event at all: it
+     * runs `generateProceduralPuzzle` and never reaches a checked base cut.
+     *
      * Mutually exclusive with `styleConfigOmitted`: at most one of the two is
      * ever present, so the event never carries more than the 12 documented
      * properties.
+     *
+     * Unlike every other field here, this one is not validated against the
+     * redaction convention {@link TracedChunkLoadFailedData} follows:
+     * composable's `baseCutConfig`/`tabConfig` pass through from the share
+     * link's wire format unvalidated (see `styleConfigOmitted` below), so a
+     * crafted link can place an arbitrary string under 500 chars in here —
+     * e.g. `{ u: "https://..." }` — and it ships verbatim. That the OTHER four
+     * blocks cannot do the same is a property of the decoder, not of their
+     * types: every field they reconstruct from is type-checked or clamped on
+     * decode (`ff.bl`/`wf.bl` must be booleans; `wf.tv`/`tf.tv`/`clf.tv` are
+     * clamped to a known trace-set version or dropped). Loosen any of those
+     * and this field's exposure widens beyond composable — and a `wavy` or
+     * `triangles` row lands OUTSIDE the `cutStyle = 'composable'` filter an
+     * operator would reach for. Two things not to understate about that: the
+     * trigger is reliable rather than incidental (an extreme sine config
+     * mismatches on essentially every seed, so one opened link puts a chosen
+     * string in the dataset on demand), and "never rendered" is true of the
+     * app, not of the Umami dashboard, which is where an operator actually
+     * reads this. Impact is still bounded — 500 chars of attacker-authored
+     * text, no victim data, landing only in our own dataset — so the gap is
+     * left open deliberately: filtering keys here would silently change what
+     * a legitimate composable repro carries, which would break the replay
+     * guarantee this event exists for.
+     * Validating the composable config's shape belongs with the share-link
+     * decoder (#491), not with this payload builder.
      */
     styleConfig?: string;
     /**
      * Set instead of `styleConfig` when the puzzle's per-style config
-     * serializes past Umami's 500-char string limit. A row with this flag is
-     * **not** replayable as-is through `__reproPuzzle` — the config needed to
-     * regenerate the exact cut is missing — but every other repro field
-     * (`seed`, `cols`, `rows`, `imageWidth`, `imageHeight`, `rotationMode`) is
-     * still valid and the `expected`/`actual` counts are unaffected.
+     * serializes past Umami's 500-char string limit. The builder also sets it
+     * when the config does not serialize at all, but no such row can reach
+     * Umami — the save on the way to this event stringifies the same config
+     * first and throws, see the absence list on {@link
+     * PieceCountMismatchData.styleConfig} — so read this flag as "over-limit".
+     * A row with this flag is **not** replayable as-is through `__reproPuzzle`
+     * — the config needed to regenerate the exact cut is missing — but every
+     * other repro field (`seed`, `cols`, `rows`, `imageWidth`, `imageHeight`,
+     * `rotationMode`) is still valid and the `expected`/`actual` counts are
+     * unaffected.
      *
      * In practice this means `cutStyle: 'composable'`: `composableConfig`'s
      * `baseCutConfig`/`tabConfig` are opaque `Record<string, unknown>`
      * (`model/types.ts`), and the share-link decoder only checks that they
      * are non-null objects — no size or shape bound — so a crafted share
      * link can produce a config large enough to cross the limit. None of the
-     * other four per-style config blocks are open-ended enough to approach
-     * it. Truncating instead of omitting was rejected: truncated JSON does
-     * not parse, so a truncated `styleConfig` would look replayable and not
-     * be — the same reasoning that keeps `imageUrl` off this event entirely.
+     * other four per-style config blocks can be driven there from a share
+     * link: they carry only booleans and clamped trace-set versions, and the
+     * decoder enforces exactly that — see the note on {@link
+     * PieceCountMismatchData.styleConfig}, which depends on the same
+     * enforcement. Truncating instead of omitting was rejected: truncated
+     * JSON does not parse, so a truncated `styleConfig` would look replayable
+     * and not be — the same reasoning that keeps `imageUrl` off this event
+     * entirely.
      *
-     * Never `false`; absent when the config fit. As everywhere else in this
-     * schema, absence is what a query filters on, not a boolean value.
+     * Never `false`; absent on every row not dropped for size. Query it the
+     * way this schema treats every optional property: PRESENCE is the filter —
+     * `styleConfigOmitted = true` selects exactly the dropped-config rows. The
+     * complement is arithmetic, not a filter: rows NOT dropped for size are
+     * total `piece-count-mismatch` minus that. `styleConfigOmitted != true`
+     * does not express it — the property's only value is `true`, so that
+     * filter joins on the key and then excludes every row it matched, i.e. it
+     * returns nothing at all. (Sharper than the same absence problem {@link
+     * SharedLoadFailedData}'s `source` has: there the two-valued field at
+     * least matches the rows that carry it.) Note the complement is "not
+     * dropped for size", not "carried a config": it also contains the rows
+     * documented two paragraphs above on {@link
+     * PieceCountMismatchData.styleConfig}, where the puzzle genuinely had no
+     * block for its own style — a wavy or composable link that arrived
+     * without `wf`/`cf` replays on the generator's defaults and can mismatch
+     * like any other.
      */
     styleConfigOmitted?: true;
-    /** How the puzzle started. See the note above on excluding `'repro'`. */
+    /**
+     * How the puzzle started. See the note above on excluding `'repro'` and
+     * `'dev'` from the incident count. `'dev'` is never `'repro'` — a fresh
+     * dev-console game is not a replay of anything — so the two stay
+     * separately queryable even though both are non-player traffic.
+     */
     source: 'fresh' | 'shared' | 'repro' | 'dev';
 }
 
