@@ -67,9 +67,11 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('stays inside Umami event-data limits for every production cut style', () => {
-        // Strings <=500 chars, <=50 properties. Numbers carry at most 4
-        // decimals. The export shows 102 chars as the longest string shipping
-        // today; nothing currently holds that, so this does.
+        // Strings <=500 chars, <=50 properties. The loop below only checks
+        // finiteness on numbers — 4-decimal precision is pinned separately,
+        // for imageWidth/imageHeight only, by the rounding test below. The
+        // export shows 102 chars as the longest string shipping today;
+        // nothing currently holds that, so this does.
         const styles: Array<Partial<GameState>> = [
             { cutStyle: 'classic', classicConfig: { traceSetVersion: 1 } },
             { cutStyle: 'classic', classicConfig: undefined },
@@ -92,6 +94,54 @@ describe('buildPieceCountMismatchData', () => {
                 }
             }
         }
+    });
+
+    it('omits an oversized composable styleConfig and flags styleConfigOmitted instead', () => {
+        // A crafted share link can give composable's baseCutConfig/tabConfig
+        // (opaque Record<string, unknown>, unbounded by the decoder) enough
+        // bulk to cross Umami's 500-char string limit. Build one that does.
+        const oversizedBaseCutConfig: Record<string, number> = {};
+        for (let i = 0; i < 60; i++) {
+            oversizedBaseCutConfig[`param${i}`] = i;
+        }
+        const data = buildPieceCountMismatchData(
+            stateFixture({
+                cutStyle: 'composable',
+                classicConfig: undefined,
+                composableConfig: {
+                    baseCutGenerator: 'sine',
+                    baseCutConfig: oversizedBaseCutConfig,
+                    tabGenerator: 'classic',
+                },
+            }),
+            MISMATCH, 'fresh');
+
+        expect(JSON.stringify(oversizedBaseCutConfig).length).toBeGreaterThan(500);
+        expect(data.styleConfig).toBeUndefined();
+        expect(data.styleConfigOmitted).toBe(true);
+        expect(Object.keys(data).length).toBeLessThanOrEqual(50);
+        for (const [key, value] of Object.entries(data)) {
+            if (typeof value === 'string') {
+                expect(value.length, key).toBeLessThanOrEqual(500);
+            }
+        }
+    });
+
+    it('carries no styleConfigOmitted key at all for a normal-sized config', () => {
+        const data = buildPieceCountMismatchData(
+            stateFixture({
+                cutStyle: 'composable',
+                classicConfig: undefined,
+                composableConfig: {
+                    baseCutGenerator: 'sine',
+                    baseCutConfig: { ha: 0.15, hf: 1.5, va: 0.15, vf: 1.5 },
+                    tabGenerator: 'classic',
+                },
+            }),
+            MISMATCH, 'fresh');
+
+        expect(data.styleConfig).toBeDefined();
+        expect(Object.keys(data)).not.toContain('styleConfigOmitted');
     });
 
     it('rounds fractional image dimensions to Umami number precision', () => {
