@@ -444,8 +444,11 @@ export interface NewGameFailedData {
  *
  * The event exists to be ACTED on, not just counted: `seed`, `cols`, `rows`,
  * `imageWidth`, `imageHeight`, `rotationMode` and `styleConfig` are exactly
- * the repro params the info modal prints, so a row here can be replayed
- * locally through `__reproPuzzle` and turned into a regression test.
+ * the repro params the info modal prints, so a row here can normally be
+ * replayed locally through `__reproPuzzle` and turned into a regression
+ * test — the exception is the rare row where the per-style config didn't
+ * fit and `styleConfig` was replaced by
+ * {@link PieceCountMismatchData.styleConfigOmitted}.
  *
  * `expected` and `actual` are PRE-STRIP, GENERATION-GRID counts, while
  * `cols`/`rows` are the USER grid. For a borderless puzzle these legitimately
@@ -459,10 +462,19 @@ export interface NewGameFailedData {
  * `imageUrl` is deliberately absent. Cut geometry is a function of the seed,
  * the grid, the image SIZE, the style and the style config — the image bytes
  * do not enter it, and `reproParamsToPayload` defaults a missing image to the
- * blank canvas, so a replay is geometrically identical without it. It is also
- * the only repro field that could approach Umami's 500-char string limit, and
- * shipping it would be the first exception to the redaction rule
+ * blank canvas, so a replay is geometrically identical without it. Shipping
+ * it in any form would also be the first exception to the redaction rule
  * {@link TracedChunkLoadFailedData} follows.
+ *
+ * `imageUrl` and `styleConfig` are the two fields this schema treats as
+ * capable of running long, and each is handled by the mechanism that fits
+ * it: `imageUrl` cannot be usefully shortened — a truncated URL is a broken
+ * one — so it is dropped unconditionally, at build time. `styleConfig` is
+ * usually a handful of numbers but occasionally unbounded (see
+ * {@link PieceCountMismatchData.styleConfigOmitted}), so it is checked and
+ * dropped only at runtime, only on the rows that actually cross Umami's
+ * 500-char string limit. Both follow the same principle: never ship
+ * something that looks replayable and isn't.
  *
  * `source` separates real players from developer investigation: replaying a
  * known-bad puzzle through `__reproPuzzle` re-runs generation and re-fires
@@ -510,8 +522,9 @@ export interface PieceCountMismatchData {
      * shapes, and exactly what `reproParamsToPayload` needs to rebuild the
      * payload. Absent when the puzzle carries no per-style block (e.g. legacy
      * Classic, whose absence is itself load-bearing — it selects the legacy
-     * generator), and also absent — in favor of {@link styleConfigOmitted} —
-     * when the serialized block would exceed Umami's 500-char string limit.
+     * generator), and also absent — in favor of
+     * {@link PieceCountMismatchData.styleConfigOmitted} — when the
+     * serialized block would exceed Umami's 500-char string limit.
      * Mutually exclusive with `styleConfigOmitted`: at most one of the two is
      * ever present, so the event never carries more than the 12 documented
      * properties.
