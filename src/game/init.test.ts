@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
     createNewGame,
     createInitialGroups,
@@ -429,5 +429,40 @@ describe('randomizePositions', () => {
         // With different random values, positions should differ
         const uniqueX = new Set(positions.map((p) => p.x));
         expect(uniqueX.size).toBeGreaterThan(1);
+    });
+});
+
+describe('createNewGame piece-count mismatch reporting', () => {
+    it('does not call the callback for a healthy puzzle', () => {
+        const onPieceCountMismatch = vi.fn();
+        createNewGame('img.jpg', { width: 400, height: 400 },
+            { width: 800, height: 600 }, { cols: 2, rows: 2 },
+            { seed: 1, cutStyle: 'classic', onPieceCountMismatch });
+        expect(onPieceCountMismatch).not.toHaveBeenCalled();
+    });
+
+    it('is optional — a reported mismatch with no callback still generates', () => {
+        // The `?.` on `options.onPieceCountMismatch?.(…)` is the "a diagnostic
+        // must never block a game start" invariant. Exercising it needs a run
+        // that actually REPORTS a mismatch while omitting the callback: on
+        // legacy Classic the guarded line never executes, so dropping the `?.`
+        // would leave the suite green — which is why this installs the same
+        // fake strategy the test below uses instead of running a real
+        // generator.
+        const fakeStrategy: CutStyleStrategy = {
+            scaleGrid: (grid) => grid,
+            inscribePuzzleSize: (imageSize) => imageSize,
+            generatePieces: () => ({
+                pieces: [],
+                pieceCountMismatch: { expected: 4, actual: 3, baseCutId: 'fake' },
+            }),
+        };
+        vi.mocked(getCutStyleStrategy).mockImplementationOnce(() => fakeStrategy);
+
+        expect(() =>
+            createNewGame('img.jpg', { width: 400, height: 400 },
+                { width: 800, height: 600 }, { cols: 2, rows: 2 },
+                { seed: 1, cutStyle: 'classic' }),
+        ).not.toThrow();
     });
 });

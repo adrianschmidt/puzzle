@@ -33,6 +33,7 @@ import { generateComposablePuzzle } from '../puzzle/composable-generator.js';
 import type { TabDebugSession, TabDebugReport } from '../puzzle/topology/tab-debug.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
+import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import type { CutStyle } from './cut-styles.js';
 import {
     estimateTriangleFaceCount,
@@ -72,6 +73,12 @@ export interface StrategyPuzzle {
     autoGroups?: AutoGroup[];
     /** Tab-debug report produced when `ctx.tabDebug` was set. */
     tabDebugReport?: TabDebugReport;
+    /**
+     * Set when the style's generator declared an expected piece count and
+     * produced a different one. Styles that `return generateComposablePuzzle(...)`
+     * directly get this for free — the topology result already carries it.
+     */
+    pieceCountMismatch?: PieceCountMismatch;
 }
 
 export interface CutStyleStrategy {
