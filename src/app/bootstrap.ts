@@ -345,7 +345,13 @@ export function bootstrap(
         onGameAnalytics: (data) => {
             currentGameAnalytics = data;
         },
-        hasCurrentGame: () => session.current() !== undefined,
+        // `hasGame()`, not `current() !== undefined`: the same distinction
+        // `boot-sequence.ts` makes for its fallback gate. `install` makes the
+        // state current *before* it renders and wires interaction, so
+        // `current()` can be non-undefined over a blank canvas — and Cancel's
+        // promise ("return to your current puzzle") is the interactive-puzzle
+        // question, not the reference-assigned one.
+        hasCurrentGame: () => session.hasGame(),
     };
 
     /**
@@ -449,6 +455,7 @@ export function bootstrap(
         persistNewPuzzle: startNewGameDeps.persistNewPuzzle,
         backgroundColor,
         onGameAnalytics: startNewGameDeps.onGameAnalytics,
+        hasCurrentGame: startNewGameDeps.hasCurrentGame,
     };
 
     /**

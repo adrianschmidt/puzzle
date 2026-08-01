@@ -12,23 +12,30 @@
  *  1. {@link needsTracedTabChunk} decides, before anything else runs,
  *     whether this payload needs the lazy traced-tab chunk — a plain
  *     Classic link never pays the fetch.
- *  2. `yieldForPaint()` runs before `createNewGame`, so the loading overlay
- *     paints before the synchronous piece-generation burst.
+ *  2. `yieldForPaint()` runs before generation (off-thread when possible;
+ *     the yield still covers the sync fallback), so the loading overlay
+ *     paints before it.
  *  3. Progress that fails to apply toasts rather than failing the load: the
  *     puzzle still installs, just without the merges.
  *  4. `hideLoadingOverlay()` runs in a `finally`, so it fires even when
- *     generation throws.
+ *     generation throws or is cancelled.
  *
- * None of this may add, remove, or reorder a call reaching `createNewGame`:
+ * None of this may add, remove, or reorder a call reaching `createNewGameAsync`:
  * a share link (and an `__reproPuzzle` reproduction of one) replays a
  * puzzle by re-running this seeded PRNG sequence from the seed alone.
+ *
+ * Cancellation: the only async step ahead of generation here is the traced-
+ * tab chunk preload, and it carries no download report to guard the way
+ * `startNewGame`'s Unsplash fetch does — so there is no separate abort
+ * checkpoint to add. A cancelled load unwinds entirely from inside
+ * `createNewGameAsync`'s own signal handling, straight to the `catch` below.
  */
 
 import type { GameState } from '../model/types.js';
 import type { SharePayload } from '../sharing/index.js';
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint, showToast } from '../ui/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
-import { createNewGame } from '../game/index.js';
+import { createNewGameAsync, GenerationCancelledError } from '../game/index.js';
 import { applyProgress } from '../game/reconstruct-groups.js';
 import { track } from '../analytics/index.js';
 import type { NewGameData } from '../analytics/index.js';
@@ -69,6 +76,13 @@ export interface LoadSharedPuzzleDeps {
     backgroundColor: BackgroundColorControl;
     /** Record the payload as the current game's analytics. */
     onGameAnalytics: (data: NewGameData) => void;
+    /**
+     * Whether a puzzle is currently installed. Gates the overlay's Cancel
+     * affordance: cancelling means "return to your current puzzle", so for
+     * a share-link load, "nothing to return to" is a first visit with no
+     * installed game.
+     */
+    hasCurrentGame: () => boolean;
 }
 
 /**
@@ -80,8 +94,9 @@ export interface LoadSharedPuzzleDeps {
  * field untouched.
  * @param deps - Collaborators; see {@link LoadSharedPuzzleDeps}.
  * @param source - `'shared'` for a real `#p=` link, `'repro'` for a
- * `__reproPuzzle` replay. Only affects the `piece-count-mismatch` event's
- * `source` field — it separates real field incidents from a developer
+ * `__reproPuzzle` replay. Only affects the `source` field of the
+ * `piece-count-mismatch` and `generation-cancelled` events — it separates
+ * real field incidents, and real recipient abandonment, from a developer
  * replaying a known-bad puzzle while investigating one (#512). Defaults to
  * `'shared'`; the composition root passes `'repro'` explicitly on the one
  * binding it hands to `__reproPuzzle`.
@@ -96,7 +111,12 @@ export async function loadSharedPuzzle(
     deps: LoadSharedPuzzleDeps,
     source: 'shared' | 'repro' = 'shared',
 ): Promise<void> {
-    showLoadingOverlay();
+    const startedAt = performance.now();
+    const controller = new AbortController();
+    showLoadingOverlay(
+        undefined,
+        deps.hasCurrentGame() ? { onCancel: () => controller.abort() } : {},
+    );
     try {
         // A share link with `cf.tg: "traced"` needs the lazy chunk before
         // generation runs. The await is short on warm caches and fits
@@ -118,14 +138,15 @@ export async function loadSharedPuzzle(
             height: deps.container.clientHeight || window.innerHeight,
         };
 
-        // Let the overlay paint before the synchronous piece-generation burst.
+        // Let the overlay paint before generation starts. Off-thread when
+        // possible, but the yield still matters for the sync fallback.
         await yieldForPaint();
 
-        // The callback fires synchronously during `createNewGame`, while the
+        // The callback fires synchronously during generation, while the
         // state is still being built — captured here so it can be reported
         // below, once the state exists to report it against.
         let pieceCountMismatch: PieceCountMismatch | undefined;
-        const state = createNewGame(
+        const { state, generation } = await createNewGameAsync(
             imageUrl,
             imageSize,
             viewport,
@@ -134,6 +155,7 @@ export async function loadSharedPuzzle(
                 ...shareInitOptions(payload),
                 onPieceCountMismatch: (m) => { pieceCountMismatch = m; },
             },
+            controller.signal,
         );
 
         if (payload.a) {
@@ -169,7 +191,7 @@ export async function loadSharedPuzzle(
             includesProgress: payload.pr !== undefined,
             recipientHadSavedState,
             sharedColor,
-            generation: { mode: 'sync-fallback', durationMs: 0 }, // replaced in the async swap
+            generation,
         });
         deps.onGameAnalytics(data);
         track('new-game-started', data);
@@ -186,6 +208,26 @@ export async function loadSharedPuzzle(
             // `/puzzle/dev/` preview included — can print it.
             diagnostics.warn('[piece-count] repro params', mismatchData);
         }
+    } catch (err) {
+        if (err instanceof GenerationCancelledError) {
+            track('generation-cancelled', {
+                // The real source, not a hardcoded 'shared': `__reproPuzzle`
+                // is installed in production builds too, and a developer
+                // cancelling a replay must not read as a recipient
+                // abandoning a real link (#512).
+                source,
+                cutStyle: payload.c,
+                // Already post-transpose — the link stores the oriented
+                // grid — so this matches `new-game-started`'s cols/rows
+                // without conversion, as the fresh path's does after
+                // orienting.
+                cols: payload.g[0],
+                rows: payload.g[1],
+                elapsedMs: Math.round(performance.now() - startedAt),
+            });
+            return;
+        }
+        throw err;
     } finally {
         hideLoadingOverlay();
     }
