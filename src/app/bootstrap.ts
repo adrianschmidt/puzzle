@@ -345,6 +345,7 @@ export function bootstrap(
         onGameAnalytics: (data) => {
             currentGameAnalytics = data;
         },
+        hasCurrentGame: () => session.current() !== undefined,
     };
 
     /**
