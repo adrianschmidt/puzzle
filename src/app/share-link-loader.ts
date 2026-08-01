@@ -38,7 +38,7 @@ import {
     clearRescueAttempt,
     type RescueOutcome,
 } from '../pwa/share-link-rescue.js';
-import { loadState, clearSavedState } from '../persistence/index.js';
+import { loadState } from '../persistence/index.js';
 import { showToast, showLoadingOverlay, hideLoadingOverlay } from '../ui/index.js';
 import { runWithErrorReport } from './run-with-error-report.js';
 import { track } from '../analytics/index.js';
@@ -177,8 +177,9 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
         // An unreadable save reads as no progress here, so its recovery
         // blobs are not offered for download on this path — corrupt-save
         // recovery is deliberately startup-only. The user is explicitly
-        // navigating to a new puzzle, and clearSavedState() below would
-        // overwrite the blobs anyway.
+        // navigating to a new puzzle, and a successful load's
+        // `persistNewPuzzle` (called inside `deps.loadShared`, once
+        // generation succeeds) overwrites the blobs anyway.
         const hasExistingProgress = !!loadState();
         if (hasExistingProgress) {
             const ok = confirmDiscard('Load shared puzzle? Your current progress will be lost.');
@@ -188,8 +189,32 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
             }
         }
 
-        clearSavedState();
         history.replaceState(null, '', window.location.pathname + window.location.search);
+        // The previous save is deliberately left alone here — it is not
+        // wiped until `deps.loadShared` actually replaces it. That happens
+        // inside `loadSharedPuzzle`'s `persistNewPuzzle` call, which only
+        // runs once generation has fully succeeded, so the three outcomes
+        // below all land correctly:
+        //  - success: the new puzzle's `persistNewPuzzle` overwrites the
+        //    previous geometry/progress, same end state as clearing first.
+        //  - cancel (the loading overlay's Cancel affordance, #489): a
+        //    cancelled `loadSharedPuzzle` resolves without ever reaching
+        //    `persistNewPuzzle`, so the previous save survives — matching
+        //    the in-memory puzzle the player actually returns to. Clearing
+        //    unconditionally up front used to destroy that save on every
+        //    cancel, the one path whose entire point is "return to your
+        //    current puzzle".
+        //  - throw: same reasoning — nothing overwrote the slot, so the
+        //    previous puzzle stays loadable on the next reload instead of
+        //    silently losing it under a load that never landed.
+        //
+        // A fourth outcome those three don't cover: a shared puzzle whose
+        // geometry exceeds the storage quota. `saveNewPuzzle` writes nothing
+        // at all then (#399), so the previous puzzle stays on disk under the
+        // shared one on screen and a reload resumes it. The failure toasts
+        // either way; noted so "overwrite-on-success" isn't read as
+        // exhaustive.
+        //
         // Surface-shape validation (`isValidComposableCf` etc.) catches most
         // malformed payloads at decode time, but a link can still satisfy
         // the schema and then trip the topology pipeline — e.g. a config
