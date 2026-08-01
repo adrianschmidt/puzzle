@@ -12,6 +12,7 @@ vi.mock('./cut-style-strategies.js', async (importOriginal) => {
 
 import {
     createNewGame,
+    createNewGameAsync,
     createInitialGroups,
     randomizePositions,
     DEFAULT_COLS,
@@ -19,6 +20,7 @@ import {
     VIEWPORT_MARGIN,
 } from './init.js';
 import { getCutStyleStrategy, type CutStyleStrategy } from './cut-style-strategies.js';
+import { GenerationCancelledError } from './generate-async.js';
 import type { GridSize, Piece, Size } from '../model/types.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
@@ -522,5 +524,75 @@ describe('createNewGame piece-count mismatch reporting', () => {
 
         expect(onPieceCountMismatch).toHaveBeenCalledTimes(1);
         expect(onPieceCountMismatch).toHaveBeenCalledWith(mismatch);
+    });
+});
+
+describe('createNewGameAsync', () => {
+    // jsdom has no Worker, so this exercises the sync-fallback path with
+    // real generation — worker-path mechanics are generate-async.test.ts's job.
+    afterEach(() => {
+        // Same leak guard as the `createNewGame piece-count mismatch
+        // reporting` describe above: a `mockImplementationOnce` left
+        // unconsumed (e.g. a test failing before the call) must not leak
+        // into a later test.
+        vi.mocked(getCutStyleStrategy).mockImplementation(realGetCutStyleStrategy);
+    });
+
+    const viewport: Size = { width: 800, height: 600 };
+    const imageSize: Size = { width: 1080, height: 720 };
+
+    it('resolves to the same state createNewGame builds for the same seed', async () => {
+        const options = { seed: 123, cutStyle: 'classic' as const };
+        const { state, generation } = await createNewGameAsync(
+            'img.jpg', imageSize, viewport, { cols: 4, rows: 3 }, options,
+        );
+        const sync = createNewGame('img.jpg', imageSize, viewport, { cols: 4, rows: 3 }, options);
+
+        expect(state.pieces).toEqual(sync.pieces);
+        expect(state.seed).toBe(123);
+        expect(generation.mode).toBe('sync-fallback');
+        expect(generation.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('does not fire onPieceCountMismatch for a healthy classic generation', async () => {
+        const onPieceCountMismatch = vi.fn();
+        await createNewGameAsync('img.jpg', imageSize, viewport, { cols: 4, rows: 3 },
+            { seed: 1, onPieceCountMismatch });
+
+        expect(onPieceCountMismatch).not.toHaveBeenCalled();
+    });
+
+    it('fires onPieceCountMismatch (before resolving) for a mismatch a strategy reports', async () => {
+        // Reuses the fake-strategy fixture from the `createNewGame`
+        // mismatch tests above to pin that `createNewGameAsync` forwards a
+        // reported mismatch the same way the sync path does, and that the
+        // callback has already run by the time the returned promise
+        // resolves (`onPieceCountMismatch` fires inside `assembleGameState`,
+        // which runs after the `await`).
+        const mismatch: PieceCountMismatch = { expected: 4, actual: 3, baseCutId: 'fake' };
+        const fakeStrategy: CutStyleStrategy = {
+            scaleGrid: (grid) => grid,
+            inscribePuzzleSize: (imageSize) => imageSize,
+            generatePieces: () => ({ pieces: [], pieceCountMismatch: mismatch }),
+        };
+        vi.mocked(getCutStyleStrategy).mockImplementationOnce(() => fakeStrategy);
+
+        const onPieceCountMismatch = vi.fn();
+        await createNewGameAsync('img.jpg', { width: 400, height: 400 },
+            { width: 800, height: 600 }, { cols: 2, rows: 2 },
+            { seed: 1, cutStyle: 'classic', onPieceCountMismatch });
+
+        expect(onPieceCountMismatch).toHaveBeenCalledTimes(1);
+        expect(onPieceCountMismatch).toHaveBeenCalledWith(mismatch);
+    });
+
+    it('rejects with GenerationCancelledError on an aborted signal', async () => {
+        const controller = new AbortController();
+        controller.abort();
+
+        await expect(createNewGameAsync(
+            'img.jpg', imageSize, viewport, { cols: 4, rows: 3 }, { seed: 1 },
+            controller.signal,
+        )).rejects.toBeInstanceOf(GenerationCancelledError);
     });
 });
