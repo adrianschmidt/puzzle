@@ -6,6 +6,14 @@
 // `src/ui/` are fine — those are internal collaborators (e.g.
 // `share-section` is consumed only by `info-modal`).
 //
+// Types follow the same rule with one refinement: an options/parameter
+// type is re-exported alongside the function that takes it, because a
+// caller may need to name it to build the argument (`CompletionOverlayOptions`,
+// `UpdateAvailableIndicatorOptions`, `ShowLoadingOverlayOptions` — none of
+// which has an importer today either). A type a caller only ever receives —
+// an inferred result type, a string-literal union written as a literal — is
+// not, since naming it buys nothing.
+//
 // Exception: `preference-store.ts` is intentionally not re-exported.
 // It is shared infrastructure that `game/` modules use directly, and
 // some of those modules are loaded transitively by UI dialogs through
@@ -203,6 +211,7 @@ export {
     hideLoadingOverlay,
     yieldForPaint,
 } from './loading-overlay.js';
+export type { ShowLoadingOverlayOptions } from './loading-overlay.js';
 
 export {
     OFFSET_DRAG_KEY,

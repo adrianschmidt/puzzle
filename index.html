@@ -13,9 +13,13 @@
   </head>
   <body>
     <div id="app"></div>
-    <div class="loading-overlay" role="status" aria-live="polite">
+    <!-- The live region is the text, not the overlay: showLoadingOverlay may
+         append a Cancel button here, and an interactive control must not sit
+         inside a role="status" announcement. Keep in sync with
+         src/ui/loading-overlay.ts, which builds the same structure. -->
+    <div class="loading-overlay">
       <div class="loading-overlay__spinner"></div>
-      <div class="loading-overlay__text">Building puzzle…</div>
+      <div class="loading-overlay__text" role="status" aria-live="polite">Building puzzle…</div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
