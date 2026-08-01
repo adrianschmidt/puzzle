@@ -18,8 +18,8 @@ vi.mock('../ui/index.js', async (importOriginal) => ({
     yieldForPaint: vi.fn(async () => {}),
     showToast: vi.fn(),
 }));
-// `createNewGame` below runs for real for a plain Classic payload (no lazy
-// chunk needed), and its generator registry imports `tracedTabGeneratorStub`
+// `createNewGameAsync` below runs for real for a plain Classic payload (no
+// lazy chunk needed), and its generator registry imports `tracedTabGeneratorStub`
 // from this same module — replacing the whole module (rather than passing
 // through the rest via `importOriginal`) would leave the registry without
 // it and break that generation.
@@ -34,19 +34,21 @@ vi.mock('./blank-canvas.js', () => ({
     createBlankImageDataUrl: vi.fn(() => 'data:image/png;base64,blank'),
 }));
 // Plain `vi.spyOn` can't intercept the call `load-shared-puzzle.ts` makes to
-// `createNewGame` imported from another module under Vite; wrap the real
-// implementation via `vi.mock` passthrough so tests can override it for
-// payloads the real generator can't handle in this file (traced-tab styles),
-// while the plain-Classic tests still exercise real generation.
+// `createNewGameAsync` imported from another module under Vite; wrap the
+// real implementation via `vi.mock` passthrough so tests can override it for
+// payloads the real generator can't handle in this file (traced-tab styles)
+// and so the cancel tests below can inspect/react to the signal it's called
+// with, while the plain-Classic tests still exercise real generation.
+// `GenerationCancelledError` is spread through untouched via `...actual`.
 vi.mock('../game/index.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../game/index.js')>();
-    return { ...actual, createNewGame: vi.fn(actual.createNewGame) };
+    return { ...actual, createNewGameAsync: vi.fn(actual.createNewGameAsync) };
 });
 
-import { showToast } from '../ui/index.js';
+import { showLoadingOverlay, hideLoadingOverlay, showToast } from '../ui/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import { createBlankImageDataUrl } from './blank-canvas.js';
-import { createNewGame } from '../game/index.js';
+import { createNewGameAsync, GenerationCancelledError } from '../game/index.js';
 import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './load-shared-puzzle.js';
 
 /**
@@ -56,7 +58,7 @@ import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './load-shared-puzzl
  * override a single test set — without this restore, a stub installed by
  * one test would silently leak into every test declared after it.
  */
-const realCreateNewGame = vi.mocked(createNewGame).getMockImplementation()!;
+const realCreateNewGameAsync = vi.mocked(createNewGameAsync).getMockImplementation()!;
 
 /**
  * Minimal decoded payload, matching the base literal used across
@@ -99,7 +101,7 @@ describe('loadSharedPuzzle', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(preloadTracedTabGenerator).mockResolvedValue(undefined);
-        vi.mocked(createNewGame).mockImplementation(realCreateNewGame);
+        vi.mocked(createNewGameAsync).mockImplementation(realCreateNewGameAsync);
 
         umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
@@ -116,6 +118,7 @@ describe('loadSharedPuzzle', () => {
             persistNewPuzzle,
             backgroundColor: { adopt },
             onGameAnalytics,
+            hasCurrentGame: () => false,
         };
     });
 
@@ -135,7 +138,7 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('preloads the traced chunk only when the payload needs it', async () => {
-        vi.mocked(createNewGame).mockReturnValue(makeGameState());
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
         // A plain Classic link must not pay a chunk fetch.
         await loadSharedPuzzle(payload({ c: 'classic' }), false, deps);
@@ -147,14 +150,15 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('regenerates the blank canvas at the recorded dimensions', async () => {
-        vi.mocked(createNewGame).mockReturnValue(makeGameState());
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
         await loadSharedPuzzle(payload({ i: 'blank', is: [777, 555] }), false, deps);
 
         expect(createBlankImageDataUrl).toHaveBeenCalledWith({ width: 777, height: 555 });
-        expect(createNewGame).toHaveBeenCalledWith(
+        expect(createNewGameAsync).toHaveBeenCalledWith(
             'data:image/png;base64,blank',
             { width: 777, height: 555 },
+            expect.anything(),
             expect.anything(),
             expect.anything(),
             expect.anything(),
@@ -186,7 +190,7 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('reports new-game-started with source shared and recipientHadSavedState', async () => {
-        vi.mocked(createNewGame).mockReturnValue(makeGameState());
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
         await loadSharedPuzzle(payload({ pr: { m: [] } }), true, deps);
 
@@ -200,7 +204,7 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('reports sharedColor none when the link carried no color', async () => {
-        vi.mocked(createNewGame).mockReturnValue(makeGameState());
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
         await loadSharedPuzzle(payload(), false, deps);
 
@@ -211,7 +215,7 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('adopts a shared background color and reports the outcome', async () => {
-        vi.mocked(createNewGame).mockReturnValue(makeGameState());
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
         // 'invalid' rather than 'adopted': proves the reported outcome is
         // whatever `adopt` returns, not a value `loadSharedPuzzle` assumes.
         adopt.mockReturnValue('invalid');
@@ -225,10 +229,7 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('hides the loading overlay even when generation throws', async () => {
-        vi.mocked(createNewGame).mockImplementation(() => {
-            throw new Error('generation boom');
-        });
-        const { hideLoadingOverlay } = await import('../ui/index.js');
+        vi.mocked(createNewGameAsync).mockRejectedValue(new Error('generation boom'));
 
         await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('generation boom');
         expect(hideLoadingOverlay).toHaveBeenCalled();
@@ -238,11 +239,12 @@ describe('loadSharedPuzzle', () => {
         // Drive the callback directly rather than constructing a genuinely
         // broken puzzle: the detector itself is covered in generator.test.ts,
         // and what this test owns is the wiring — that the callback is passed,
-        // captured, and reported against the state that createNewGame returned.
+        // captured, and reported against the state that createNewGameAsync
+        // resolved.
         warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
-        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+        vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
-            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+            return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
         await loadSharedPuzzle(payload(), false, deps);
@@ -281,9 +283,9 @@ describe('loadSharedPuzzle', () => {
         // Spied purely to silence it; the branch's console copy is asserted
         // once above.
         warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
-        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+        vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
-            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+            return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
         await loadSharedPuzzle(payload(), false, deps, 'repro');
@@ -293,4 +295,86 @@ describe('loadSharedPuzzle', () => {
             expect.objectContaining({ source: 'repro' }),
         );
     });
+
+    it('stamps generationMode and generationMs on new-game-started', async () => {
+        await loadSharedPuzzle(payload(), false, deps);
+
+        expect(umamiTrack).toHaveBeenCalledWith('new-game-started', expect.objectContaining({
+            generationMode: 'sync-fallback', // jsdom has no Worker
+            generationMs: expect.any(Number),
+        }));
+    });
+
+    it('passes onCancel to the overlay only when a game is installed', async () => {
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
+
+        await loadSharedPuzzle(payload(), false, { ...deps, hasCurrentGame: () => true });
+        expect(vi.mocked(showLoadingOverlay).mock.calls[0][1]?.onCancel).toBeTypeOf('function');
+
+        vi.mocked(showLoadingOverlay).mockClear();
+        await loadSharedPuzzle(payload(), false, { ...deps, hasCurrentGame: () => false });
+        expect(vi.mocked(showLoadingOverlay).mock.calls[0][1]?.onCancel).toBeUndefined();
+    });
+
+    // A cancellation observed by `createNewGameAsync` itself — this file adds
+    // no synchronous abort checkpoint of its own (see the doc comment above
+    // `loadSharedPuzzle`), so this is the only way a load can unwind on
+    // cancel. No install, no `new-game-started`; the overlay still comes
+    // down.
+    it('cancel unwinds silently: no install, no new-game-started, overlay hidden', async () => {
+        // Make the generation await hang until the test cancels mid-flight,
+        // mirroring how the real worker client reacts to an aborted signal.
+        vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            if (signal?.aborted) throw new GenerationCancelledError();
+            return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
+        });
+
+        const promise = loadSharedPuzzle(payload(), false, { ...deps, hasCurrentGame: () => true });
+        const onCancel = vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!;
+        onCancel();
+
+        await expect(promise).resolves.toBeUndefined(); // resolves, does not reject
+        expect(install).not.toHaveBeenCalled();
+        expect(umamiTrack).not.toHaveBeenCalledWith('new-game-started', expect.anything());
+        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+            source: 'shared',
+            cutStyle: 'classic',
+            cols: 8,
+            rows: 6,
+            elapsedMs: expect.any(Number),
+        }));
+        expect(hideLoadingOverlay).toHaveBeenCalled();
+    });
+
+    it("reports a cancelled __reproPuzzle replay as source 'repro', not 'shared'", async () => {
+        // `__reproPuzzle` is installed in production builds and dev-deploy
+        // reports to production's Umami website ID, so a hardcoded 'shared'
+        // would file a developer abandoning a replay as a real recipient
+        // abandoning a real link — the conflation #512 split `source` to
+        // prevent, and the reason `piece-count-mismatch` already does this.
+        vi.mocked(createNewGameAsync).mockImplementation(async (_u, _s, _v, _g, _o, signal) => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            if (signal?.aborted) throw new GenerationCancelledError();
+            throw new Error('expected the cancel to win');
+        });
+
+        const promise = loadSharedPuzzle(
+            payload(), false, { ...deps, hasCurrentGame: () => true }, 'repro',
+        );
+        vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!();
+        await promise;
+
+        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+            source: 'repro',
+        }));
+    });
 });
+
+/**
+ * A resolved `createNewGameAsync` result wrapping a real (or stubbed) state,
+ * for tests that need to stub generation but don't care how it "ran".
+ */
+function makeAsyncGenerationResult(state: GameState = makeGameState()) {
+    return { state, generation: { mode: 'sync-fallback' as const, durationMs: 0 } };
+}
