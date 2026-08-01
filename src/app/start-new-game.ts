@@ -19,14 +19,20 @@
  *     the Unsplash download report (see the comment above `tracedTabs`
  *     below) — a start that is about to throw must not report a "download"
  *     for a photo it discards.
- *  4. `yieldForPaint()` runs before `createNewGame`, so the loading overlay
- *     paints before the synchronous piece-generation burst.
+ *  4. `yieldForPaint()` runs before generation (off-thread when possible;
+ *     the yield still covers the sync fallback), so the loading overlay
+ *     paints before it.
  *  5. `hideLoadingOverlay()` runs in a `finally`, so it fires even when
- *     generation throws.
+ *     generation throws or is cancelled.
  *
- * None of this may add, remove, or reorder a call reaching `createNewGame`:
+ * None of this may add, remove, or reorder a call reaching `createNewGameAsync`:
  * share links and saves replay a puzzle by re-running this seeded PRNG
  * sequence from the seed alone.
+ *
+ * Cancellation: an abort check sits right after the chunk-outcome collection
+ * from point 3, still ahead of the Unsplash download report — same spot,
+ * same reason. A start that is about to unwind, cancelled or otherwise,
+ * must not report a "download" for a photo it discards.
  */
 
 import type { GameState, GridSize } from '../model/types.js';
@@ -37,7 +43,7 @@ import type { FractalDialogConfig, WavyDialogConfig } from '../ui/index.js';
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint } from '../ui/index.js';
 import { getUnsplashAccessKey, triggerPhotoDownload } from '../images/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
-import { createNewGame } from '../game/index.js';
+import { createNewGameAsync, GenerationCancelledError } from '../game/index.js';
 import { diagnostics } from '../diagnostics.js';
 import { track } from '../analytics/index.js';
 import type { NewGameData } from '../analytics/index.js';
@@ -103,6 +109,13 @@ export interface StartNewGameDeps {
     persistNewPuzzle: (state: GameState) => void;
     /** Record the payload as the current game's analytics. */
     onGameAnalytics: (data: NewGameData) => void;
+    /**
+     * Whether a puzzle is currently installed. Gates the overlay's Cancel
+     * affordance: cancelling means "return to your current puzzle", so
+     * with nothing installed (boot, first-visit share link) there is
+     * nothing to offer.
+     */
+    hasCurrentGame: () => boolean;
 }
 
 /**
@@ -149,7 +162,12 @@ export async function startNewGame(
         pickedImage,
         bootFallback = false,
     } = options;
-    showLoadingOverlay();
+    const startedAt = performance.now();
+    const controller = new AbortController();
+    showLoadingOverlay(
+        undefined,
+        deps.hasCurrentGame() ? { onCancel: () => controller.abort() } : {},
+    );
     try {
         // Reset viewport transform so pieces are randomized in unzoomed coordinates
         deps.resetViewport();
@@ -266,6 +284,11 @@ export async function startNewGame(
             );
         }
 
+        // A cancelled start must not report an Unsplash "download" for a
+        // photo it discards — same principle, and the same reason, as the
+        // `tracedTabs.kind === 'fail'` throw above.
+        if (controller.signal.aborted) throw new GenerationCancelledError();
+
         // Unsplash guidelines: report a "download" when a photo is actually
         // used. Fire-and-forget — a failure must never block the game.
         if (accessKey && downloadLocation) {
@@ -281,21 +304,26 @@ export async function startNewGame(
             tracedTabsOk: tracedTabs.kind === 'ok',
         });
 
-        // Let the overlay paint before the synchronous piece-generation burst.
+        // Let the overlay paint before generation starts. Off-thread when
+        // possible, but the yield still matters for the sync fallback.
         await yieldForPaint();
 
-        // The callback fires synchronously during `createNewGame`, while the
+        // The callback fires synchronously during generation, while the
         // state is still being built — captured here so it can be reported
         // below, once the state exists to report it against.
         let pieceCountMismatch: PieceCountMismatch | undefined;
-        const state = createNewGame(imageUrl, imageSize, viewport, oriented, {
-            cutStyle,
-            composableConfig,
-            ...generatorConfigs,
-            rotationMode,
-            seed,
-            onPieceCountMismatch: (m) => { pieceCountMismatch = m; },
-        });
+        const { state, generation } = await createNewGameAsync(
+            imageUrl, imageSize, viewport, oriented,
+            {
+                cutStyle,
+                composableConfig,
+                ...generatorConfigs,
+                rotationMode,
+                seed,
+                onPieceCountMismatch: (m) => { pieceCountMismatch = m; },
+            },
+            controller.signal,
+        );
 
         if (attribution) {
             state.attribution = attribution;
@@ -317,7 +345,7 @@ export async function startNewGame(
             pickedImage,
             chunkDegraded,
             bootFallback,
-            generation: { mode: 'sync-fallback', durationMs: 0 }, // replaced in the async swap
+            generation,
         });
         deps.onGameAnalytics(data);
         track('new-game-started', data);
@@ -348,6 +376,18 @@ export async function startNewGame(
             // than leaning on the console copy.
             diagnostics.warn('[piece-count] repro params', mismatchData);
         }
+    } catch (err) {
+        if (err instanceof GenerationCancelledError) {
+            track('generation-cancelled', {
+                source: 'fresh',
+                cutStyle: requestedCutStyle,
+                cols: gridSize.cols,
+                rows: gridSize.rows,
+                elapsedMs: Math.round(performance.now() - startedAt),
+            });
+            return;
+        }
+        throw err;
     } finally {
         hideLoadingOverlay();
     }

@@ -38,20 +38,22 @@ vi.mock('../puzzle/topology/traced-tab-loader.js', async (importOriginal) => {
 // also gives the "no second API call" test below something to assert on.
 vi.mock('./resolve-image.js', () => ({ resolveUnsplashImage: vi.fn() }));
 // Plain `vi.spyOn` can't intercept the call `start-new-game.ts` makes to
-// `createNewGame` imported from another module under Vite; wrap the real
-// implementation via `vi.mock` passthrough so the paint-before-generation
-// ordering test below can see when it actually ran, while every other test
-// still gets a real generated puzzle.
+// `createNewGameAsync` imported from another module under Vite; wrap the
+// real implementation via `vi.mock` passthrough so the paint-before-
+// generation ordering test below can see when it actually ran (and the
+// cancel tests below can inspect/react to the signal it's called with),
+// while every other test still gets a real generated puzzle.
+// `GenerationCancelledError` is spread through untouched via `...actual`.
 vi.mock('../game/index.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../game/index.js')>();
-    return { ...actual, createNewGame: vi.fn(actual.createNewGame) };
+    return { ...actual, createNewGameAsync: vi.fn(actual.createNewGameAsync) };
 });
 
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint } from '../ui/index.js';
 import { getUnsplashAccessKey, triggerPhotoDownload } from '../images/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import { resolveUnsplashImage } from './resolve-image.js';
-import { createNewGame } from '../game/index.js';
+import { createNewGameAsync, GenerationCancelledError } from '../game/index.js';
 import { startNewGame, type StartNewGameDeps, type StartNewGameOptions } from './start-new-game.js';
 
 /**
@@ -62,7 +64,7 @@ import { startNewGame, type StartNewGameDeps, type StartNewGameOptions } from '.
  * one test (e.g. the falsy-rejection test below) would silently leak into
  * every test declared after it.
  */
-const realCreateNewGame = vi.mocked(createNewGame).getMockImplementation()!;
+const realCreateNewGameAsync = vi.mocked(createNewGameAsync).getMockImplementation()!;
 
 /**
  * Options for a start that must complete real piece generation without
@@ -101,7 +103,7 @@ describe('startNewGame', () => {
         vi.mocked(getUnsplashAccessKey).mockReturnValue(undefined);
         vi.mocked(preloadTracedTabGenerator).mockResolvedValue(undefined);
         vi.mocked(resolveUnsplashImage).mockResolvedValue(null);
-        vi.mocked(createNewGame).mockImplementation(realCreateNewGame);
+        vi.mocked(createNewGameAsync).mockImplementation(realCreateNewGameAsync);
 
         umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
@@ -118,6 +120,7 @@ describe('startNewGame', () => {
             fitView,
             persistNewPuzzle,
             onGameAnalytics,
+            hasCurrentGame: () => false,
         };
     });
 
@@ -138,7 +141,7 @@ describe('startNewGame', () => {
         // during the start — otherwise pieces could be randomized against
         // whatever transform the previous game left behind.
         const resetOrder = vi.mocked(resetViewport).mock.invocationCallOrder[0];
-        const createOrder = vi.mocked(createNewGame).mock.invocationCallOrder[0];
+        const createOrder = vi.mocked(createNewGameAsync).mock.invocationCallOrder[0];
         expect(resetOrder).toBeLessThan(createOrder);
     });
 
@@ -252,7 +255,7 @@ describe('startNewGame', () => {
         // the flag. The degraded case above needs no stub — falling back to
         // the legacy cut is exactly what makes it generable here.
         warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
-        vi.mocked(createNewGame).mockReturnValue(makeGameState());
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
         await startNewGame(
             { cols: 2, rows: 2 },
@@ -287,14 +290,14 @@ describe('startNewGame', () => {
     // Falsy-rejection defaulting: `null` is the await site's success
     // sentinel, so a chunk-fetch rejection whose reason is itself `null`
     // must be defaulted to a real Error, or it reads as "the chunk loaded
-    // fine" and lets generation proceed. `createNewGame` is stubbed to
+    // fine" and lets generation proceed. `createNewGameAsync` is stubbed to
     // succeed regardless of traced-tab availability, so a wrongly-read
     // success reaches `install` instead of merely throwing for the
     // unrelated reason that the real chunk was never loaded in this file —
     // otherwise this test would pass whether or not the default is applied.
     it('treats a null chunk-fetch rejection as a real failure, not the success sentinel', async () => {
         vi.mocked(preloadTracedTabGenerator).mockRejectedValue(null);
-        vi.mocked(createNewGame).mockReturnValue(makeGameState());
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
         await expect(
             startNewGame({ cols: 2, rows: 2 }, { cutStyle: 'wavy', imageSource: 'blank' }, deps),
@@ -355,20 +358,21 @@ describe('startNewGame', () => {
             release();
             return null;
         });
-        vi.mocked(createNewGame).mockReturnValue(makeGameState());
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
         await startNewGame({ cols: 2, rows: 2 }, { cutStyle: 'wavy' }, deps);
 
         expect(resolveUnsplashImage).toHaveBeenCalled();
     });
 
-    // Pins ordering step 4: the loading overlay gets a paint before the
-    // synchronous piece-generation burst.
-    it('yields for paint before the synchronous piece-generation burst', async () => {
+    // Pins ordering step 4: the loading overlay gets a paint before
+    // generation starts (off-thread when possible; the yield still matters
+    // for the synchronous fallback jsdom exercises here).
+    it('yields for paint before generation starts', async () => {
         await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
 
         const yieldOrder = vi.mocked(yieldForPaint).mock.invocationCallOrder[0];
-        const createOrder = vi.mocked(createNewGame).mock.invocationCallOrder[0];
+        const createOrder = vi.mocked(createNewGameAsync).mock.invocationCallOrder[0];
         expect(yieldOrder).toBeLessThan(createOrder);
     });
 
@@ -376,11 +380,12 @@ describe('startNewGame', () => {
         // Drive the callback directly rather than constructing a genuinely
         // broken puzzle: the detector itself is covered in generator.test.ts,
         // and what this test owns is the wiring — that the callback is passed,
-        // captured, and reported against the state that createNewGame returned.
+        // captured, and reported against the state that createNewGameAsync
+        // resolved.
         warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
-        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+        vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
-            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+            return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
         await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
@@ -417,9 +422,9 @@ describe('startNewGame', () => {
         // repro params to the console, and `diagnostics` is enabled under
         // Vitest, so an unstubbed run prints them on every suite run.
         warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
-        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+        vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
-            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+            return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
         await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps, 'dev');
@@ -433,9 +438,9 @@ describe('startNewGame', () => {
     it('never reports the image URL on the mismatch event', async () => {
         // Silencing again, as above.
         warnSpy = vi.spyOn(diagnostics, 'warn').mockImplementation(() => {});
-        vi.mocked(createNewGame).mockImplementation((imageUrl, imageSize, viewport, grid, options) => {
+        vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
             options?.onPieceCountMismatch?.({ expected: 4, actual: 2, baseCutId: 'sine' });
-            return realCreateNewGame(imageUrl, imageSize, viewport, grid, options);
+            return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
         // A player-picked photo, so the state carries a real `https://` URL.
@@ -464,6 +469,103 @@ describe('startNewGame', () => {
         const names = umamiTrack.mock.calls.map(([name]) => name);
         expect(names).not.toContain('piece-count-mismatch');
     });
+
+    it('stamps generationMode and generationMs on new-game-started', async () => {
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+
+        expect(umamiTrack).toHaveBeenCalledWith('new-game-started', expect.objectContaining({
+            generationMode: 'sync-fallback', // jsdom has no Worker
+            generationMs: expect.any(Number),
+        }));
+    });
+
+    it('passes onCancel to the overlay only when a game is installed', async () => {
+        await startNewGame(
+            { cols: 2, rows: 2 },
+            noTracedTabsOptions(),
+            { ...deps, hasCurrentGame: () => true },
+        );
+        expect(vi.mocked(showLoadingOverlay).mock.calls[0][1]?.onCancel).toBeTypeOf('function');
+
+        vi.mocked(showLoadingOverlay).mockClear();
+        await startNewGame(
+            { cols: 2, rows: 2 },
+            noTracedTabsOptions(),
+            { ...deps, hasCurrentGame: () => false },
+        );
+        expect(vi.mocked(showLoadingOverlay).mock.calls[0][1]?.onCancel).toBeUndefined();
+    });
+
+    // A cancellation observed by `createNewGameAsync` itself (rather than the
+    // earlier synchronous abort check — see the test below for that path)
+    // must unwind quietly: no install, no `new-game-started`, and the
+    // overlay still comes down.
+    it('cancel unwinds silently: no install, no new-game-started, overlay hidden', async () => {
+        // Make the generation await hang until the test cancels mid-flight,
+        // mirroring how the real worker client reacts to an aborted signal.
+        vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            if (signal?.aborted) throw new GenerationCancelledError();
+            return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
+        });
+
+        const promise = startNewGame(
+            { cols: 2, rows: 2 },
+            noTracedTabsOptions(),
+            { ...deps, hasCurrentGame: () => true },
+        );
+        const onCancel = vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!;
+        onCancel();
+
+        await expect(promise).resolves.toBeUndefined(); // resolves, does not reject
+        expect(install).not.toHaveBeenCalled();
+        expect(umamiTrack).not.toHaveBeenCalledWith('new-game-started', expect.anything());
+        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+            source: 'fresh',
+            cutStyle: 'composable',
+            cols: 2,
+            rows: 2,
+            elapsedMs: expect.any(Number),
+        }));
+        expect(hideLoadingOverlay).toHaveBeenCalled();
+    });
+
+    // Pins the new cancel rule (mirrors the "throws first" ordering test
+    // above, but for cancellation rather than a chunk-fetch failure): the
+    // abort check sits before the download-report block, so a cancelled
+    // start never credits a download for a photo it discards. Cancels from
+    // inside the awaited image resolution — the last async step before that
+    // check — rather than via a fabricated signal, so this exercises the
+    // real ordering rather than asserting on a mock.
+    it('does not report an Unsplash download when cancelled before the download report', async () => {
+        vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
+        vi.mocked(resolveUnsplashImage).mockImplementation(async () => {
+            // `showLoadingOverlay` already ran synchronously earlier in this
+            // same call, so its `onCancel` is on the mock's call record.
+            vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!();
+            return {
+                imageUrl: 'https://images.unsplash.com/random.jpg',
+                imageSize: { width: 400, height: 300 },
+                attribution: {
+                    photographerName: 'A Photographer',
+                    photographerUrl: 'https://unsplash.com/@photographer',
+                    photoUrl: 'https://unsplash.com/photos/random',
+                },
+                downloadLocation: 'https://api.unsplash.com/photos/random/download',
+            };
+        });
+
+        await startNewGame(
+            { cols: 2, rows: 2 },
+            { cutStyle: 'wavy' },
+            { ...deps, hasCurrentGame: () => true },
+        );
+
+        expect(triggerPhotoDownload).not.toHaveBeenCalled();
+        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+            cutStyle: 'wavy',
+        }));
+    });
 });
 
 /** A fully-populated player-picked candidate, for the "picked image" paths. */
@@ -479,4 +581,12 @@ function makeCandidateImage() {
         downloadLocation: 'https://api.unsplash.com/photos/abc123/download',
         thumbUrl: 'https://images.unsplash.com/picked-thumb.jpg',
     };
+}
+
+/**
+ * A resolved `createNewGameAsync` result wrapping a real (or stubbed) state,
+ * for tests that need to stub generation but don't care how it "ran".
+ */
+function makeAsyncGenerationResult(state: GameState = makeGameState()) {
+    return { state, generation: { mode: 'sync-fallback' as const, durationMs: 0 } };
 }
