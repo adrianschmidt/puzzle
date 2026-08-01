@@ -1,12 +1,15 @@
 export {
     createNewGame,
+    createNewGameAsync,
     createInitialGroups,
     randomizePositions,
     DEFAULT_COLS,
     DEFAULT_ROWS,
     VIEWPORT_MARGIN,
 } from './init.js';
-export type { InitOptions } from './init.js';
+export type { InitOptions, GenerationOutcome } from './init.js';
+
+export { GenerationCancelledError } from './generate-async.js';
 
 export {
     PUZZLE_SIZE_OPTIONS,

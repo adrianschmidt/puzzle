@@ -19,6 +19,8 @@ import type { CutStyle } from './cut-styles.js';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
 import { runGeneration } from './generation-core.js';
 import type { GenerationRequest, GenerationResult } from './generation-core.js';
+import { generatePiecesOffThread } from './generate-async.js';
+import type { OffThreadGeneration } from './generate-async.js';
 
 /**
  * Read-once URL-param check for the tab-debug session opt-in. Returns
@@ -100,6 +102,66 @@ export function createNewGame(
     const seed = options.seed ?? generateSeed();
     const result = runGeneration(buildGenerationRequest(gridSize, imageSize, seed, options));
     return assembleGameState(imageUrl, viewport, gridSize, options, seed, result);
+}
+
+/**
+ * How one generation ran, for the `new-game-started` analytics fields.
+ *
+ * Named and exported rather than spelled inline at each site: it is
+ * produced here and consumed by both payload builders in
+ * `app/new-game-payload.ts`, so a new field has one place to be added
+ * and the builders go red instead of silently ignoring it.
+ *
+ * Derived from {@link OffThreadGeneration} rather than redeclaring its
+ * `mode`/`fallbackKind`/`fallbackReason` triple: `createNewGameAsync`
+ * rebuilds the object to attach `durationMs`, and with two independent
+ * declarations a new *optional* field added to both would be dropped by
+ * that rebuild with nothing going red (excess-property checking doesn't
+ * catch a missing optional).
+ */
+export type GenerationOutcome = Omit<OffThreadGeneration, 'result'> & { durationMs: number };
+
+/** What {@link createNewGameAsync} resolves to: the state plus how its
+ * generation ran, for the `new-game-started` analytics fields. */
+export interface CreateNewGameAsyncResult {
+    state: GameState;
+    generation: GenerationOutcome;
+}
+
+/**
+ * Async counterpart of {@link createNewGame}: identical inputs and
+ * resulting state, but the expensive generate phase runs in a Web
+ * Worker when the environment provides one (`generate-async.ts`),
+ * falling back to the synchronous path otherwise. The orchestrators
+ * (`app/start-new-game.ts`, `app/load-shared-puzzle.ts`) call this;
+ * everything else — tests included — can keep using the sync function.
+ *
+ * `options.onPieceCountMismatch` fires before the promise resolves, so
+ * callers that capture into a local and read it after the await behave
+ * exactly as they did around the sync call.
+ *
+ * Rejects with {@link GenerationCancelledError} when `signal` aborts.
+ */
+export async function createNewGameAsync(
+    imageUrl: string,
+    imageSize: Size,
+    viewport: Size,
+    gridSize: GridSize = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
+    options: InitOptions = {},
+    signal?: AbortSignal,
+): Promise<CreateNewGameAsyncResult> {
+    const seed = options.seed ?? generateSeed();
+    const startedAt = performance.now();
+    // Rest spread, not a field-by-field copy: a field added to
+    // `OffThreadGeneration` reaches analytics without this line knowing
+    // about it, and absent optionals stay absent.
+    const { result, ...ranAs } = await generatePiecesOffThread(
+        buildGenerationRequest(gridSize, imageSize, seed, options),
+        signal,
+    );
+    const durationMs = Math.round(performance.now() - startedAt);
+    const state = assembleGameState(imageUrl, viewport, gridSize, options, seed, result);
+    return { state, generation: { ...ranAs, durationMs } };
 }
 
 function buildGenerationRequest(
