@@ -137,12 +137,15 @@ describe('startNewGame', () => {
         expect(fitView).toHaveBeenCalled();
         expect(persistNewPuzzle).toHaveBeenCalled();
         expect(resetViewport).toHaveBeenCalled();
-        // The viewport is reset before generation, not merely at some point
-        // during the start — otherwise pieces could be randomized against
-        // whatever transform the previous game left behind.
-        const resetOrder = vi.mocked(resetViewport).mock.invocationCallOrder[0];
+        // The viewport is reset only after generation has resolved, and
+        // before the new state is installed — not any earlier, so a
+        // cancelled or throwing start (see the cancel tests below) never
+        // touches the current puzzle's pan/zoom.
         const createOrder = vi.mocked(createNewGameAsync).mock.invocationCallOrder[0];
-        expect(resetOrder).toBeLessThan(createOrder);
+        const resetOrder = vi.mocked(resetViewport).mock.invocationCallOrder[0];
+        const installOrder = vi.mocked(install).mock.invocationCallOrder[0];
+        expect(createOrder).toBeLessThan(resetOrder);
+        expect(resetOrder).toBeLessThan(installOrder);
     });
 
     it('shows the loading overlay and always hides it', async () => {
@@ -498,8 +501,11 @@ describe('startNewGame', () => {
 
     // A cancellation observed by `createNewGameAsync` itself (rather than the
     // earlier synchronous abort check — see the test below for that path)
-    // must unwind quietly: no install, no `new-game-started`, and the
-    // overlay still comes down.
+    // must unwind quietly: no install, no `new-game-started`, the overlay
+    // still comes down, and — critically — the current puzzle's pan/zoom is
+    // never touched (`resetViewport` now runs after generation resolves,
+    // right before install, specifically so a cancelled start never reaches
+    // it; see the doc comment on `StartNewGameDeps.resetViewport`).
     it('cancel unwinds silently: no install, no new-game-started, overlay hidden', async () => {
         // Make the generation await hang until the test cancels mid-flight,
         // mirroring how the real worker client reacts to an aborted signal.
@@ -519,6 +525,7 @@ describe('startNewGame', () => {
 
         await expect(promise).resolves.toBeUndefined(); // resolves, does not reject
         expect(install).not.toHaveBeenCalled();
+        expect(resetViewport).not.toHaveBeenCalled();
         expect(umamiTrack).not.toHaveBeenCalledWith('new-game-started', expect.anything());
         expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
             source: 'fresh',
@@ -528,6 +535,55 @@ describe('startNewGame', () => {
             elapsedMs: expect.any(Number),
         }));
         expect(hideLoadingOverlay).toHaveBeenCalled();
+    });
+
+    it('reports a cancel with the post-transpose grid, matching new-game-started', async () => {
+        // Every `PUZZLE_SIZE_OPTIONS` entry is landscape-normalized, and
+        // `new-game-started` reports the grid *after* orientation. Reporting
+        // the requested grid on the cancel event would file every portrait
+        // cancel under a bucket no completed start ever lands in, so "cancel
+        // rate by grid" would divide two disjoint populations.
+        const container = document.createElement('div');
+        Object.defineProperty(container, 'clientWidth', { value: 400 });
+        Object.defineProperty(container, 'clientHeight', { value: 800 });
+
+        await startNewGame(
+            { cols: 4, rows: 3 },
+            noTracedTabsOptions(),
+            { ...deps, container, hasCurrentGame: () => true },
+            'dev',
+        );
+        const started = umamiTrack.mock.calls
+            .find(([name]) => name === 'new-game-started')![1] as { cols: number; rows: number };
+        expect(started).toMatchObject({ cols: 3, rows: 4 });
+
+        umamiTrack.mockClear();
+        vi.mocked(showLoadingOverlay).mockClear();
+        vi.mocked(createNewGameAsync).mockImplementation(async (_u, _s, _v, _g, _o, signal) => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            if (signal?.aborted) throw new GenerationCancelledError();
+            throw new Error('expected the cancel to win');
+        });
+
+        const promise = startNewGame(
+            { cols: 4, rows: 3 },
+            noTracedTabsOptions(),
+            { ...deps, container, hasCurrentGame: () => true },
+            'dev',
+        );
+        vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!();
+        await promise;
+
+        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+            // Same grid the completed start above reported.
+            cols: 3,
+            rows: 4,
+            // And the real source, not a hardcoded 'fresh': `installDevHooks`
+            // ships in production builds, so a developer cancelling a
+            // `__newComposableGame` start must not read as an impatient
+            // player (#512).
+            source: 'dev',
+        }));
     });
 
     // Pins the new cancel rule (mirrors the "throws first" ordering test
