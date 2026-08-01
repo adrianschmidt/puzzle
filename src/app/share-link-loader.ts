@@ -198,7 +198,7 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
         //  - success: the new puzzle's `persistNewPuzzle` overwrites the
         //    previous geometry/progress, same end state as clearing first.
         //  - cancel (the loading overlay's Cancel affordance, #489): a
-        //    cancelled `loadSharedPuzzle` resolves without ever reaching
+        //    canceled `loadSharedPuzzle` resolves without ever reaching
         //    `persistNewPuzzle`, so the previous save survives — matching
         //    the in-memory puzzle the player actually returns to. Clearing
         //    unconditionally up front used to destroy that save on every

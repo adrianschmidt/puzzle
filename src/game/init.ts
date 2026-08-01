@@ -140,7 +140,7 @@ export interface CreateNewGameAsyncResult {
  * callers that capture into a local and read it after the await behave
  * exactly as they did around the sync call.
  *
- * Rejects with {@link GenerationCancelledError} when `signal` aborts.
+ * Rejects with {@link GenerationCanceledError} when `signal` aborts.
  */
 export async function createNewGameAsync(
     imageUrl: string,

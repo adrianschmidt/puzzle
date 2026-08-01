@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     generatePiecesOffThread,
-    GenerationCancelledError,
+    GenerationCanceledError,
 } from './generate-async.js';
 import { runGeneration, type GenerationRequest } from './generation-core.js';
 import { sanitizeErrorReason } from '../analytics/sanitize-error-reason.js';
@@ -169,7 +169,7 @@ describe('generatePiecesOffThread', () => {
         expect(outcome.mode).toBe('sync-fallback');
         expect(outcome.fallbackKind).toBe('worker-error');
         expect(StubWorker.instances[0].terminated).toBe(true);
-        // Uncancelled, the worker's error event is re-reported on the
+        // Uncanceled, the worker's error event is re-reported on the
         // parent's global scope, so a failure handled gracefully here would
         // also ship a spurious `unhandled-error` analytics event.
         expect(preventDefault).toHaveBeenCalledOnce();
@@ -215,7 +215,7 @@ describe('generatePiecesOffThread', () => {
         const controller = new AbortController();
         const promise = generatePiecesOffThread(REQUEST, controller.signal);
         controller.abort();
-        await expect(promise).rejects.toBeInstanceOf(GenerationCancelledError);
+        await expect(promise).rejects.toBeInstanceOf(GenerationCanceledError);
         expect(StubWorker.instances[0].terminated).toBe(true);
     });
 
@@ -246,7 +246,7 @@ describe('generatePiecesOffThread', () => {
         const promise = generatePiecesOffThread(REQUEST, controller.signal);
         StubWorker.instances[0].onerror!({ message: 'boom', preventDefault: vi.fn() });
         controller.abort();
-        await expect(promise).rejects.toBeInstanceOf(GenerationCancelledError);
+        await expect(promise).rejects.toBeInstanceOf(GenerationCanceledError);
     });
 
     it('honors a Cancel that lands during the synchronous fallback generation', async () => {
@@ -259,7 +259,7 @@ describe('generatePiecesOffThread', () => {
         const controller = new AbortController();
         setTimeout(() => controller.abort(), 0);
         await expect(generatePiecesOffThread(REQUEST, controller.signal))
-            .rejects.toBeInstanceOf(GenerationCancelledError);
+            .rejects.toBeInstanceOf(GenerationCanceledError);
     });
 
     it('an already-aborted signal throws before spawning anything', async () => {
@@ -267,7 +267,7 @@ describe('generatePiecesOffThread', () => {
         const controller = new AbortController();
         controller.abort();
         await expect(generatePiecesOffThread(REQUEST, controller.signal))
-            .rejects.toBeInstanceOf(GenerationCancelledError);
+            .rejects.toBeInstanceOf(GenerationCanceledError);
         expect(StubWorker.instances).toHaveLength(0);
     });
 });

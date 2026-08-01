@@ -179,7 +179,7 @@ describe('openNewGameDialog', () => {
 
     // --- previous save handling --------------------------------------------
 
-    it('leaves the previous save intact when the start is cancelled (or throws)', () => {
+    it('leaves the previous save intact when the start is canceled (or throws)', () => {
         // `start` (the real `startNewGame`) only replaces the save once
         // generation has fully succeeded — a cancel (the loading overlay's
         // Cancel affordance, #489, gated on a puzzle already being

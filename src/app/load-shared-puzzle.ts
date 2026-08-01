@@ -18,7 +18,7 @@
  *  3. Progress that fails to apply toasts rather than failing the load: the
  *     puzzle still installs, just without the merges.
  *  4. `hideLoadingOverlay()` runs in a `finally`, so it fires even when
- *     generation throws or is cancelled.
+ *     generation throws or is canceled.
  *
  * None of this may add, remove, or reorder a call reaching `createNewGameAsync`:
  * a share link (and an `__reproPuzzle` reproduction of one) replays a
@@ -27,7 +27,7 @@
  * Cancellation: the only async step ahead of generation here is the traced-
  * tab chunk preload, and it carries no download report to guard the way
  * `startNewGame`'s Unsplash fetch does — so there is no separate abort
- * checkpoint to add. A cancelled load unwinds entirely from inside
+ * checkpoint to add. A canceled load unwinds entirely from inside
  * `createNewGameAsync`'s own signal handling, straight to the `catch` below.
  */
 
@@ -35,7 +35,7 @@ import type { GameState } from '../model/types.js';
 import type { SharePayload } from '../sharing/index.js';
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint, showToast } from '../ui/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
-import { createNewGameAsync, GenerationCancelledError } from '../game/index.js';
+import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { applyProgress } from '../game/reconstruct-groups.js';
 import { track } from '../analytics/index.js';
 import type { NewGameData } from '../analytics/index.js';
@@ -78,7 +78,7 @@ export interface LoadSharedPuzzleDeps {
     onGameAnalytics: (data: NewGameData) => void;
     /**
      * Whether a puzzle is currently installed. Gates the overlay's Cancel
-     * affordance: cancelling means "return to your current puzzle", so for
+     * affordance: canceling means "return to your current puzzle", so for
      * a share-link load, "nothing to return to" is a first visit with no
      * installed game.
      */
@@ -95,7 +95,7 @@ export interface LoadSharedPuzzleDeps {
  * @param deps - Collaborators; see {@link LoadSharedPuzzleDeps}.
  * @param source - `'shared'` for a real `#p=` link, `'repro'` for a
  * `__reproPuzzle` replay. Only affects the `source` field of the
- * `piece-count-mismatch` and `generation-cancelled` events — it separates
+ * `piece-count-mismatch` and `generation-canceled` events — it separates
  * real field incidents, and real recipient abandonment, from a developer
  * replaying a known-bad puzzle while investigating one (#512). Defaults to
  * `'shared'`; the composition root passes `'repro'` explicitly on the one
@@ -209,18 +209,20 @@ export async function loadSharedPuzzle(
             diagnostics.warn('[piece-count] repro params', mismatchData);
         }
     } catch (err) {
-        if (err instanceof GenerationCancelledError) {
-            track('generation-cancelled', {
+        if (err instanceof GenerationCanceledError) {
+            track('generation-canceled', {
                 // The real source, not a hardcoded 'shared': `__reproPuzzle`
                 // is installed in production builds too, and a developer
-                // cancelling a replay must not read as a recipient
+                // canceling a replay must not read as a recipient
                 // abandoning a real link (#512).
                 source,
                 cutStyle: payload.c,
                 // Already post-transpose — the link stores the oriented
                 // grid — so this matches `new-game-started`'s cols/rows
                 // without conversion, as the fresh path's does after
-                // orienting.
+                // orienting, and `orientation` is the same taller-than-wide
+                // test `buildSharedGameData` runs on that grid.
+                orientation: payload.g[1] > payload.g[0] ? 'portrait' : 'landscape',
                 cols: payload.g[0],
                 rows: payload.g[1],
                 elapsedMs: Math.round(performance.now() - startedAt),

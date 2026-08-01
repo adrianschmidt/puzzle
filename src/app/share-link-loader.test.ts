@@ -265,10 +265,10 @@ describe('createShareLinkLoader', () => {
         expect(loadState()?.imageUrl).toBe('shared-puzzle.jpg');
     });
 
-    it('leaves the previous save intact when the shared load is cancelled', async () => {
+    it('leaves the previous save intact when the shared load is canceled', async () => {
         // The loading overlay's Cancel affordance (#489) makes `loadShared`
         // (real `loadSharedPuzzle`) resolve normally without ever calling
-        // `persistNewPuzzle` — cancelling means "return to your current
+        // `persistNewPuzzle` — canceling means "return to your current
         // puzzle", so its save must still be there afterwards. The default
         // `loadShared` stub (a no-op `async () => {}`) models exactly that:
         // it resolves without touching storage.

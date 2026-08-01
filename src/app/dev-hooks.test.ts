@@ -204,10 +204,10 @@ describe('installDevHooks', () => {
         expect(loadShared).toHaveBeenCalledWith(expect.anything(), true);
     });
 
-    it('__reproPuzzle leaves the previous save intact when the replay is cancelled', async () => {
+    it('__reproPuzzle leaves the previous save intact when the replay is canceled', async () => {
         // The loading overlay's Cancel affordance (#489) makes `loadShared`
         // (real `loadSharedPuzzle`) resolve normally without ever calling
-        // `persistNewPuzzle` — cancelling means "return to your current
+        // `persistNewPuzzle` — canceling means "return to your current
         // puzzle", so its save must still be there afterwards. The default
         // `loadShared` stub (a no-op `async () => {}`) models exactly that.
         saveNewPuzzle(makeSavedGameState());

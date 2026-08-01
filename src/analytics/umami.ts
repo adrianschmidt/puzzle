@@ -44,7 +44,7 @@ const DEFAULT_SCRIPT_URL = 'https://cloud.umami.is/script.js';
  *
  * That share-link success-rate query also has a third outcome neither term
  * counts, since #489: a shared load the recipient cancels from the loading
- * overlay emits `generation-cancelled[source=shared]` and neither of the two
+ * overlay emits `generation-canceled[source=shared]` and neither of the two
  * events above. Add it to the denominator (or exclude it explicitly) rather
  * than assuming started + failed covers every attempt. Bounded — Cancel is
  * only offered when a puzzle is already installed, so a first-visit
@@ -285,7 +285,17 @@ export interface NewGameData {
         | 'worker-infrastructure';
     /**
      * Why generation fell back to the main thread, as free text: the
-     * literal `'no-worker'`, or a sanitized worker-path error message.
+     * literal `'no-worker'`, or a sanitized worker-path error rendered as
+     * `'<ErrorName>: <message>'` whenever the thrown value carried a name
+     * other than the default `'Error'`, and as the bare message otherwise.
+     * So group with a prefix match rather than equality, and expect the
+     * prefix unevenly across kinds: `'worker-infrastructure'` and
+     * `'spawn-failed'` rows usually carry one (`'TypeError: …'`,
+     * `'DataCloneError: …'`), while the strings synthesized here rather
+     * than thrown never do — every `'worker-error'` row, and the
+     * `'message-error'` rows that come from a failed deserialization
+     * (the ones from a throw while reading the payload do carry it).
+     *
      * Only present when `generationMode` is `'sync-fallback'`. Pair it
      * with `generationFallbackKind` above, which buckets the same
      * outcomes — filter on the kind, read this for the detail.
@@ -433,7 +443,18 @@ export interface UnhandledErrorData {
  * Data attached to `shared-load-failed` — a puzzle payload satisfied
  * surface-shape validation but failed while building the puzzle (e.g. a
  * config combination the current build's topology pipeline doesn't support).
- * `reason` is the sanitized error message.
+ *
+ * `reason` is the sanitized error message, and as of the generation worker it
+ * has two shapes for one underlying bug: a generation failure raised inside
+ * the worker arrives as `'<ErrorName>: <message>'` — the worker-side type is
+ * folded into the message, the only field `sanitizeErrorReason` reads —
+ * while every other producer arrives bare, including the synchronous fallback
+ * running the SAME failing generation for a client with no usable Worker. The
+ * two never compare equal, so a per-bug figure has to tolerate the optional
+ * prefix; note also that the length cap applies after it is composed, so a
+ * long message truncates slightly earlier in the prefixed form. A worker-side
+ * name of the default `'Error'` is dropped rather than prefixed, as
+ * `generationFallbackReason` above describes.
  *
  * `source` separates the two producers, whose base rates differ sharply.
  * `'shared'` is a real recipient opening a `#p=` link and seeing a
@@ -485,7 +506,9 @@ export interface ImageFetchFailedData {
  * both events; there is no guaranteed 1-to-1 correlation (topology and other
  * errors reach this catch without a chunk event). This event captures the
  * outcome that the inner event does not. `reason` is the sanitized error
- * message.
+ * message, in the same two shapes {@link SharedLoadFailedData}'s `reason`
+ * describes: a worker-path generation failure usually carries an
+ * `'<ErrorName>: '` prefix, every other producer never does.
  *
  * What the player saw depends on `phase`, and only the dialog path shows the
  * "Couldn't start new game" toast this event used to be synonymous with. A
@@ -1200,18 +1223,18 @@ export interface ShareLinkRescueResultData {
 }
 
 /**
- * A game start was cancelled from the loading overlay (#489). The Cancel
+ * A game start was canceled from the loading overlay (#489). The Cancel
  * affordance only exists while a puzzle is already installed, so every
  * event here means "returned to the previous puzzle".
  *
  * `source` uses the same four-way split as {@link PieceCountMismatchData}
  * rather than collapsing to fresh/shared: `installDevHooks` runs in
  * production builds and dev-deploy reports to production's Umami website
- * ID, so a developer cancelling a `__newComposableGame` or `__reproPuzzle`
+ * ID, so a developer canceling a `__newComposableGame` or `__reproPuzzle`
  * start would otherwise be indistinguishable from a real player losing
  * patience (#512). Filter to `'fresh'`/`'shared'` for the player question.
  *
- * `cutStyle` is the style the cancelled start *requested* (for
+ * `cutStyle` is the style the canceled start *requested* (for
  * `source: 'shared'`/`'repro'`, the link's style).
  *
  * `cols`/`rows` are the POST-TRANSPOSE grid, matching `NewGameData`'s
@@ -1220,11 +1243,14 @@ export interface ShareLinkRescueResultData {
  * buckets. (The fresh path's requested grid is always landscape-
  * normalized — see `PUZZLE_SIZE_OPTIONS` — so reporting it raw would put
  * every portrait cancel in a bucket no `new-game-started` ever lands in.)
+ * `orientation` rides along for the same reason it does on `NewGameData`:
+ * "cancel rate by orientation" is a segment filter on both events rather
+ * than a `rows > cols` comparison computed per event.
  *
  * `elapsedMs` is overlay-shown → cancel, so it includes image fetch time,
- * not just generation — it measures the canceller's patience, not
+ * not just generation — it measures the canceler's patience, not
  * generator speed. It is timestamped at unwind, not at the click:
- * cancelling only takes effect at the next abort checkpoint, so a click
+ * canceling only takes effect at the next abort checkpoint, so a click
  * during an in-flight step with none of its own — the Unsplash image
  * fetch and the traced-tab chunk fetch today — isn't observed until that
  * step settles, and `elapsedMs` runs past the actual time-to-click by
@@ -1232,17 +1258,19 @@ export interface ShareLinkRescueResultData {
  * `source: 'shared'` cancel too: a shared load has no Unsplash fetch, but
  * still awaits the chunk when the link needs one, so the missing Unsplash
  * leg does not make a shared cancel's `elapsedMs` click-accurate. A click
- * landing during a `generationMode: 'sync-fallback'` generation — which
- * blocks the main thread, so the click cannot even be dispatched until it
- * finishes — is honored (`generate-async.ts` yields to the task queue
- * before its post-generation abort check) but is late by the remainder of
- * that generation.
+ * landing during a synchronous main-thread generation — which blocks the
+ * thread, so the click cannot even be dispatched until it finishes — is
+ * honored (`generate-async.ts` yields to the task queue before its
+ * post-generation abort check) but is late by the remainder of that
+ * generation. That subset is not separable here: this event carries no
+ * `generationMode`, and a cancel emits no `new-game-started` to join to.
  *
- * No completion-side pair: a cancelled start emits no `new-game-started`.
+ * No completion-side pair: a canceled start emits no `new-game-started`.
  */
-export interface GenerationCancelledData {
+export interface GenerationCanceledData {
     source: 'fresh' | 'dev' | 'shared' | 'repro';
     cutStyle: string;
+    orientation: Orientation;
     cols: number;
     rows: number;
     elapsedMs: number;
@@ -1310,7 +1338,7 @@ export function track(name: 'pwa-update-apply-failed', data: PwaUpdateApplyFaile
 export function track(name: 'pwa-register-failed', data: PwaRegisterFailedData): void;
 export function track(name: 'share-link-rescue-attempted', data: ShareLinkRescueAttemptedData): void;
 export function track(name: 'share-link-rescue-result', data: ShareLinkRescueResultData): void;
-export function track(name: 'generation-cancelled', data: GenerationCancelledData): void;
+export function track(name: 'generation-canceled', data: GenerationCanceledData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);

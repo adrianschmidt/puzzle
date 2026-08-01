@@ -23,7 +23,7 @@
  *     the yield still covers the sync fallback), so the loading overlay
  *     paints before it.
  *  5. `hideLoadingOverlay()` runs in a `finally`, so it fires even when
- *     generation throws or is cancelled.
+ *     generation throws or is canceled.
  *
  * None of this may add, remove, or reorder a call reaching `createNewGameAsync`:
  * share links and saves replay a puzzle by re-running this seeded PRNG
@@ -31,7 +31,7 @@
  *
  * Cancellation: an abort check sits right after the chunk-outcome collection
  * from point 3, still ahead of the Unsplash download report — same spot,
- * same reason. A start that is about to unwind, cancelled or otherwise,
+ * same reason. A start that is about to unwind, canceled or otherwise,
  * must not report a "download" for a photo it discards.
  */
 
@@ -43,7 +43,7 @@ import type { FractalDialogConfig, WavyDialogConfig } from '../ui/index.js';
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint } from '../ui/index.js';
 import { getUnsplashAccessKey, triggerPhotoDownload } from '../images/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
-import { createNewGameAsync, GenerationCancelledError } from '../game/index.js';
+import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { diagnostics } from '../diagnostics.js';
 import { track } from '../analytics/index.js';
 import type { NewGameData } from '../analytics/index.js';
@@ -112,7 +112,7 @@ export interface StartNewGameDeps {
     onGameAnalytics: (data: NewGameData) => void;
     /**
      * Whether a puzzle is currently installed. Gates the overlay's Cancel
-     * affordance: cancelling means "return to your current puzzle", so
+     * affordance: canceling means "return to your current puzzle", so
      * with nothing installed (boot, first-visit share link) there is
      * nothing to offer.
      */
@@ -130,7 +130,7 @@ export interface StartNewGameDeps {
  * @param source - `'fresh'` for a real player start (the new-game dialog or
  * the boot path), `'dev'` for a start kicked off from the dev console (e.g.
  * `__newComposableGame`). Only affects the `source` field of the
- * `piece-count-mismatch` and `generation-cancelled` events — it keeps a
+ * `piece-count-mismatch` and `generation-canceled` events — it keeps a
  * developer poking at cut parameters out of the field-incident signal, and
  * out of the cancel-rate signal, the same distinction `loadSharedPuzzle`'s
  * `source` already draws for `__reproPuzzle` (#512). Defaults to `'fresh'`; the
@@ -289,10 +289,10 @@ export async function startNewGame(
             );
         }
 
-        // A cancelled start must not report an Unsplash "download" for a
+        // A canceled start must not report an Unsplash "download" for a
         // photo it discards — same principle, and the same reason, as the
         // `tracedTabs.kind === 'fail'` throw above.
-        if (controller.signal.aborted) throw new GenerationCancelledError();
+        if (controller.signal.aborted) throw new GenerationCanceledError();
 
         // Unsplash guidelines: report a "download" when a photo is actually
         // used. Fire-and-forget — a failure must never block the game.
@@ -338,7 +338,7 @@ export async function startNewGame(
         // actually produced a puzzle to show, and before installing it, so
         // the new puzzle never renders under the previous game's zoom. Not
         // any earlier: every cancellation checkpoint above this line must be
-        // able to unwind without ever touching the transform, or cancelling
+        // able to unwind without ever touching the transform, or canceling
         // would blow away the current puzzle's pan/zoom for nothing.
         deps.resetViewport();
         deps.session.install(state);
@@ -389,16 +389,17 @@ export async function startNewGame(
             diagnostics.warn('[piece-count] repro params', mismatchData);
         }
     } catch (err) {
-        if (err instanceof GenerationCancelledError) {
-            track('generation-cancelled', {
+        if (err instanceof GenerationCanceledError) {
+            track('generation-canceled', {
                 // The real source, not a hardcoded 'fresh': `installDevHooks`
                 // runs in production builds and dev-deploy shares
-                // production's Umami website ID, so a developer cancelling a
+                // production's Umami website ID, so a developer canceling a
                 // `__newComposableGame` start would otherwise read as a
                 // player losing patience — the exact conflation #512
                 // established this split to prevent.
                 source,
                 cutStyle: requestedCutStyle,
+                orientation,
                 // Post-transpose, like `new-game-started`'s cols/rows: the
                 // requested grid is always landscape-normalized, so
                 // reporting it raw would file every portrait cancel under a

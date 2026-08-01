@@ -20,7 +20,7 @@ import {
     VIEWPORT_MARGIN,
 } from './init.js';
 import { getCutStyleStrategy, type CutStyleStrategy } from './cut-style-strategies.js';
-import { GenerationCancelledError } from './generate-async.js';
+import { GenerationCanceledError } from './generate-async.js';
 import type { GridSize, Piece, Size } from '../model/types.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
@@ -586,13 +586,13 @@ describe('createNewGameAsync', () => {
         expect(onPieceCountMismatch).toHaveBeenCalledWith(mismatch);
     });
 
-    it('rejects with GenerationCancelledError on an aborted signal', async () => {
+    it('rejects with GenerationCanceledError on an aborted signal', async () => {
         const controller = new AbortController();
         controller.abort();
 
         await expect(createNewGameAsync(
             'img.jpg', imageSize, viewport, { cols: 4, rows: 3 }, { seed: 1 },
             controller.signal,
-        )).rejects.toBeInstanceOf(GenerationCancelledError);
+        )).rejects.toBeInstanceOf(GenerationCanceledError);
     });
 });

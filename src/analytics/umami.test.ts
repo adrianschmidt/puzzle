@@ -264,25 +264,27 @@ describe('track', () => {
         });
     });
 
-    it('forwards generation-cancelled with the typed payload', () => {
+    it('forwards generation-canceled with the typed payload', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
 
         // `'repro'` rather than `'fresh'`: the schema has to be able to
         // express the dev-console sources, or the widening is decorative.
-        track('generation-cancelled', {
+        track('generation-canceled', {
             source: 'repro',
             cutStyle: 'wavy',
-            cols: 8,
-            rows: 6,
+            orientation: 'portrait',
+            cols: 6,
+            rows: 8,
             elapsedMs: 340,
         });
 
-        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', {
+        expect(umamiTrack).toHaveBeenCalledWith('generation-canceled', {
             source: 'repro',
             cutStyle: 'wavy',
-            cols: 8,
-            rows: 6,
+            orientation: 'portrait',
+            cols: 6,
+            rows: 8,
             elapsedMs: 340,
         });
     });
