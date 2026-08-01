@@ -374,6 +374,55 @@ describe('bootstrap', () => {
         expect(devSolve).toBe(toolbarSolve);
     });
 
+    it("wires both start/share deps objects' hasCurrentGame to the session", () => {
+        // `startNewGame` and `loadSharedPuzzle` are both replaced outright
+        // (see the module doc at the top of this file), so the third
+        // argument each mocked call captures *is* the real `startNewGameDeps`
+        // / `sharedDeps` object bootstrap built — not a copy — letting
+        // `hasCurrentGame` be called directly rather than only through a
+        // downstream effect. Both bindings are reached through
+        // `installDevHooks`, mirroring "hands the background-color handle to
+        // the share-link load path" below.
+        bootstrap(root);
+        const session = createdSession();
+
+        const { start, loadShared } = vi.mocked(installDevHooks).mock.calls[0][0];
+        void start({ cols: 2, rows: 2 }, {});
+        void loadShared({} as SharePayload, false);
+
+        const startNewGameDeps = vi.mocked(startNewGame).mock.calls.at(-1)![2];
+        const sharedDeps = vi.mocked(loadSharedPuzzle).mock.calls.at(-1)![2];
+
+        expect(startNewGameDeps.hasCurrentGame(), 'startNewGameDeps: nothing installed yet').toBe(false);
+        expect(sharedDeps.hasCurrentGame(), 'sharedDeps: nothing installed yet').toBe(false);
+
+        session.install(makeGameState());
+
+        expect(startNewGameDeps.hasCurrentGame(), 'startNewGameDeps: a game is now installed').toBe(true);
+        expect(sharedDeps.hasCurrentGame(), 'sharedDeps: a game is now installed').toBe(true);
+
+        // One binding, not two spellings — the point of the deps objects,
+        // and the thing the three adjacent `sharedDeps` lines already do.
+        expect(sharedDeps.hasCurrentGame).toBe(startNewGameDeps.hasCurrentGame);
+
+        // And it asks `hasGame()`, not `current() !== undefined`: `install`
+        // makes the state current before it renders and wires interaction,
+        // so the two disagree over a blank canvas (#488) — where Cancel's
+        // "return to your current puzzle" must read false. The predicates
+        // only diverge inside `install`, so pin the call rather than a
+        // state this test cannot construct.
+        const hasGameSpy = vi.spyOn(session, 'hasGame');
+        const currentSpy = vi.spyOn(session, 'current');
+        try {
+            startNewGameDeps.hasCurrentGame();
+            expect(hasGameSpy).toHaveBeenCalled();
+            expect(currentSpy).not.toHaveBeenCalled();
+        } finally {
+            hasGameSpy.mockRestore();
+            currentSpy.mockRestore();
+        }
+    });
+
     it('keeps the background-color control between deselect and Info', () => {
         // Every one of these controls is absolutely positioned in one visual
         // top-to-bottom stack, so DOM order alone sets keyboard tab order
