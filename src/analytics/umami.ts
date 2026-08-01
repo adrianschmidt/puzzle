@@ -41,6 +41,14 @@ const DEFAULT_SCRIPT_URL = 'https://cloud.umami.is/script.js';
  * no matching denominator here, because a dev-console start lands in
  * `new-game-started[source=fresh]` while its mismatch lands in
  * `piece-count-mismatch[source=dev]`. Count mismatches, don't rate them.
+ *
+ * That share-link success-rate query also has a third outcome neither term
+ * counts, since #489: a shared load the recipient cancels from the loading
+ * overlay emits `generation-cancelled[source=shared]` and neither of the two
+ * events above. Add it to the denominator (or exclude it explicitly) rather
+ * than assuming started + failed covers every attempt. Bounded — Cancel is
+ * only offered when a puzzle is already installed, so a first-visit
+ * recipient cannot produce one.
  */
 export interface NewGameData {
     source: 'fresh' | 'shared';
@@ -202,10 +210,24 @@ export interface NewGameData {
      * How the generate phase ran: `'worker'` = off the main thread in the
      * generation Web Worker (the normal path since #489), `'sync-fallback'`
      * = synchronously on the main thread because the worker path was
-     * unavailable or failed (see `generationFallbackReason`). Fallback games
-     * froze the main thread for ~`generationMs`, worker games did not.
+     * unavailable or failed (see `generationFallbackReason`). A `'no-worker'`
+     * fallback froze the main thread for ~`generationMs`; a fallback that
+     * followed a worker failure froze it for less than that, since part of
+     * `generationMs` there is the failed (non-blocking) worker attempt —
+     * see `generationMs`'s own doc. Worker games did not freeze it at all.
      * Present on every `new-game-started` from the off-thread release on;
      * absent on events from older clients (PWA caches).
+     *
+     * This field and the other three generation fields — `generationMs`,
+     * `generationFallbackKind`, `generationFallbackReason` — also ride
+     * along on `puzzle-completed`, which spreads the cached
+     * `new-game-started` payload — but only for a puzzle completed in the
+     * session that started it. After a reload the cache is gone (it is
+     * telemetry, not saved state), so a resumed completion carries none of
+     * them. Averaging `generationMs` over `puzzle-completed` therefore
+     * measures a completion-survivorship-biased, same-session-only subset;
+     * `new-game-started` is the unbiased denominator. Same caveat, and the
+     * same reason, as `tracedChunkDegraded` and `bootFallback` below.
      */
     generationMode: 'worker' | 'sync-fallback';
     /**
@@ -215,16 +237,58 @@ export interface NewGameData {
      * and result transfer — or around the synchronous call on the fallback
      * path. This is the wait a player actually experienced under the
      * loading overlay for the generation step (image fetch excluded).
+     *
+     * A `sync-fallback` that followed a worker failure (`generationFallbackKind`
+     * other than `'no-worker'`) is not a sync-only measurement: the timer
+     * starts before the worker is even spawned, so it spans the failed
+     * worker round trip PLUS the synchronous rerun that followed it, not the
+     * rerun alone. Only that rerun actually blocks the main thread, so on
+     * this path `generationMs` overstates the freeze the player sat through
+     * (though not the player's total wait, which is the whole span).
      */
     generationMs: number;
     /**
-     * Why generation fell back to the main thread. Only present when
-     * `generationMode` is `'sync-fallback'`. `'no-worker'` means the
-     * environment has no `Worker` constructor; anything else is a
-     * sanitized worker-path error (spawn failure, worker-side generation
-     * error, a failed traced-chunk fetch inside the worker — the
-     * worker-side copy of the chunk emits no `traced-chunk-*` events, so
-     * this field is where those failures surface).
+     * Which class of worker-path failure sent generation to the main
+     * thread. Only present when `generationMode` is `'sync-fallback'`.
+     * Low-cardinality, so it is the field to segment on; the free-text
+     * `generationFallbackReason` beside it is for reading individual
+     * cases. Same split, and the same reason, as
+     * {@link TracedChunkLoadFailedData}'s `kind` / `reason` pair.
+     *
+     *  - `'no-worker'` — no `Worker` constructor in this environment.
+     *  - `'spawn-failed'` — `new Worker(...)` or the request `postMessage`
+     *    threw synchronously (e.g. a `DataCloneError`).
+     *  - `'worker-error'` — the worker fired `error`. Per the HTML spec a
+     *    worker whose script fails to fetch fires a plain `Event` with no
+     *    `message`, so worker-chunk-missing-from-precache, a CSP-blocked
+     *    worker and a build without module-worker support all land here
+     *    with an unhelpful `generationFallbackReason`. That is exactly
+     *    why this field exists — but it does not separate them from each
+     *    other either; nothing in the browser does.
+     *  - `'message-error'` — the response could not be used: it failed to
+     *    deserialize, or reading the delivered payload threw.
+     *  - `'worker-infrastructure'` — the worker reported a failure of its
+     *    own plumbing: a traced-chunk fetch that failed (or a chunk never
+     *    loaded) inside the worker, or a reply that could not be posted.
+     *    The worker-side copy of the chunk emits no `traced-chunk-*`
+     *    events, so this bucket is where those failures surface.
+     *
+     * A worker-side generation error is deliberately NOT in this list: it
+     * is deterministic, so it is rethrown rather than retried, and lands
+     * as `new-game-failed` / `shared-load-failed` instead.
+     */
+    generationFallbackKind?:
+        | 'no-worker'
+        | 'spawn-failed'
+        | 'worker-error'
+        | 'message-error'
+        | 'worker-infrastructure';
+    /**
+     * Why generation fell back to the main thread, as free text: the
+     * literal `'no-worker'`, or a sanitized worker-path error message.
+     * Only present when `generationMode` is `'sync-fallback'`. Pair it
+     * with `generationFallbackKind` above, which buckets the same
+     * outcomes — filter on the kind, read this for the detail.
      */
     generationFallbackReason?: string;
 }
@@ -264,6 +328,13 @@ export interface BackgroundColorChangedData {
  * makes abandonment observable — a started event with no matching
  * settle means the user left mid-fetch. `attempt` matches the counter
  * on the settling event.
+ *
+ * Counts only the main thread's chunk: the generation worker has its own
+ * copy (a separate Rollup graph, `generation-worker-core.ts`) and never
+ * emits this family, so a worker-side fetch/failure is invisible here. To
+ * count those, filter `new-game-started` on
+ * `generationFallbackKind = 'worker-infrastructure'`; the accompanying
+ * `generationFallbackReason` carries the message.
  */
 export interface TracedChunkPreloadStartedData {
     attempt: number;
@@ -288,6 +359,9 @@ export interface TracedChunkPreloadStartedData {
  * `attempt` is the 1-based attempt counter for this client session, so
  * a retry after a failure is distinguishable from an unrelated cold
  * load.
+ *
+ * Main-thread-only, like every `traced-chunk-*` event — see
+ * `TracedChunkPreloadStartedData`.
  */
 export interface TracedChunkLoadedData {
     durationMs: number;
@@ -308,6 +382,12 @@ export interface TracedChunkLoadedData {
  * high-cardinality.
  *
  * `attempt` is the 1-based attempt counter for this client session.
+ *
+ * Main-thread-only, like every `traced-chunk-*` event — see
+ * `TracedChunkPreloadStartedData`. A worker-side chunk failure is not here:
+ * it lands on `new-game-started` as
+ * `generationFallbackKind = 'worker-infrastructure'`, with the message in
+ * `generationFallbackReason`.
  */
 export interface TracedChunkLoadFailedData {
     reason: string;
@@ -1120,17 +1200,48 @@ export interface ShareLinkRescueResultData {
 }
 
 /**
- * A player cancelled a game start from the loading overlay (#489). The
- * Cancel affordance only exists while a puzzle is already installed, so
- * every event here means "returned to their previous puzzle". `cutStyle`
- * is the style the cancelled start *requested* (for `source: 'shared'`,
- * the link's style). `elapsedMs` is overlay-shown → cancel, so it
- * includes image fetch time, not just generation — it measures player
- * patience, not generator speed. No completion-side pair: a cancelled
- * start emits no `new-game-started`.
+ * A game start was cancelled from the loading overlay (#489). The Cancel
+ * affordance only exists while a puzzle is already installed, so every
+ * event here means "returned to the previous puzzle".
+ *
+ * `source` uses the same four-way split as {@link PieceCountMismatchData}
+ * rather than collapsing to fresh/shared: `installDevHooks` runs in
+ * production builds and dev-deploy reports to production's Umami website
+ * ID, so a developer cancelling a `__newComposableGame` or `__reproPuzzle`
+ * start would otherwise be indistinguishable from a real player losing
+ * patience (#512). Filter to `'fresh'`/`'shared'` for the player question.
+ *
+ * `cutStyle` is the style the cancelled start *requested* (for
+ * `source: 'shared'`/`'repro'`, the link's style).
+ *
+ * `cols`/`rows` are the POST-TRANSPOSE grid, matching `NewGameData`'s
+ * `cols`/`rows` and `orientation`: a portrait 192-piece puzzle is 12×16
+ * on both events, so "cancel rate by grid" divides two comparable
+ * buckets. (The fresh path's requested grid is always landscape-
+ * normalized — see `PUZZLE_SIZE_OPTIONS` — so reporting it raw would put
+ * every portrait cancel in a bucket no `new-game-started` ever lands in.)
+ *
+ * `elapsedMs` is overlay-shown → cancel, so it includes image fetch time,
+ * not just generation — it measures the canceller's patience, not
+ * generator speed. It is timestamped at unwind, not at the click:
+ * cancelling only takes effect at the next abort checkpoint, so a click
+ * during an in-flight step with none of its own — the Unsplash image
+ * fetch and the traced-tab chunk fetch today — isn't observed until that
+ * step settles, and `elapsedMs` runs past the actual time-to-click by
+ * however long was left on it. The chunk fetch alone can precede a
+ * `source: 'shared'` cancel too: a shared load has no Unsplash fetch, but
+ * still awaits the chunk when the link needs one, so the missing Unsplash
+ * leg does not make a shared cancel's `elapsedMs` click-accurate. A click
+ * landing during a `generationMode: 'sync-fallback'` generation — which
+ * blocks the main thread, so the click cannot even be dispatched until it
+ * finishes — is honored (`generate-async.ts` yields to the task queue
+ * before its post-generation abort check) but is late by the remainder of
+ * that generation.
+ *
+ * No completion-side pair: a cancelled start emits no `new-game-started`.
  */
 export interface GenerationCancelledData {
-    source: 'fresh' | 'shared';
+    source: 'fresh' | 'dev' | 'shared' | 'repro';
     cutStyle: string;
     cols: number;
     rows: number;
