@@ -10,14 +10,18 @@
     <title>Puzzle</title>
     <link rel="icon" href="/puzzle/favicon-48.png" type="image/png" />
     <link rel="apple-touch-icon" href="/puzzle/apple-touch-icon.png" />
-    <script type="module" crossorigin src="/puzzle/dev/assets/index-C7BgWfND.js"></script>
+    <script type="module" crossorigin src="/puzzle/dev/assets/index-Bm-dZwOf.js"></script>
     <link rel="stylesheet" crossorigin href="/puzzle/dev/assets/index--08r-ulu.css">
   <link rel="manifest" href="/puzzle/dev/manifest.webmanifest"></head>
   <body>
     <div id="app"></div>
-    <div class="loading-overlay" role="status" aria-live="polite">
+    <!-- The live region is the text, not the overlay: showLoadingOverlay may
+         append a Cancel button here, and an interactive control must not sit
+         inside a role="status" announcement. Keep in sync with
+         src/ui/loading-overlay.ts, which builds the same structure. -->
+    <div class="loading-overlay">
       <div class="loading-overlay__spinner"></div>
-      <div class="loading-overlay__text">Building puzzle…</div>
+      <div class="loading-overlay__text" role="status" aria-live="polite">Building puzzle…</div>
     </div>
   </body>
 </html>
