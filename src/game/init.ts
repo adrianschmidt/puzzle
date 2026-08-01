@@ -14,12 +14,11 @@ import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { AutoGroup } from '../puzzle/topology/auto-group.js';
 import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import { buildGroupIndexes, buildPiecesById } from '../model/helpers.js';
-import { quantizePieceGeometry } from '../model/quantize-geometry.js';
-import { sealPieceGeometry } from '../model/seal-geometry.js';
 import { generateSeed } from '../puzzle/seeded-random.js';
 import type { CutStyle } from './cut-styles.js';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
-import { TabDebugSession } from '../puzzle/topology/tab-debug.js';
+import { runGeneration } from './generation-core.js';
+import type { GenerationRequest, GenerationResult } from './generation-core.js';
 
 /**
  * Read-once URL-param check for the tab-debug session opt-in. Returns
@@ -99,38 +98,49 @@ export function createNewGame(
     options: InitOptions = {},
 ): GameState {
     const seed = options.seed ?? generateSeed();
-    const cutStyle = options.cutStyle ?? 'classic';
-    const rotationMode = options.rotationMode ?? 'none';
+    const result = runGeneration(buildGenerationRequest(gridSize, imageSize, seed, options));
+    return assembleGameState(imageUrl, viewport, gridSize, options, seed, result);
+}
 
-    const strategy = getCutStyleStrategy(cutStyle);
-    const tabDebug = tabDebugEnabled() ? new TabDebugSession() : undefined;
-    const ctx = {
+function buildGenerationRequest(
+    gridSize: GridSize,
+    imageSize: Size,
+    seed: number,
+    options: InitOptions,
+): GenerationRequest {
+    return {
+        cutStyle: options.cutStyle ?? 'classic',
+        gridSize,
+        imageSize,
+        seed,
         fractalConfig: options.fractalConfig,
         composableConfig: options.composableConfig,
         wavyConfig: options.wavyConfig,
         trianglesConfig: options.trianglesConfig,
         classicConfig: options.classicConfig,
-        tabDebug,
+        tabDebug: tabDebugEnabled(),
     };
+}
 
-    const generationGrid = strategy.scaleGrid(gridSize, imageSize, ctx);
-    const puzzleSize = strategy.inscribePuzzleSize(imageSize, generationGrid, ctx);
-    const { pieces: rawPieces, autoGroups, tabDebugReport, pieceCountMismatch } =
-        strategy.generatePieces(generationGrid, puzzleSize, seed, ctx);
+function assembleGameState(
+    imageUrl: string,
+    viewport: Size,
+    gridSize: GridSize,
+    options: InitOptions,
+    seed: number,
+    result: GenerationResult,
+): GameState {
+    const cutStyle = options.cutStyle ?? 'classic';
+    const rotationMode = options.rotationMode ?? 'none';
+    // Quantize/seal rationale (why generated geometry is rounded and
+    // stripped of dense curve samples before it becomes game state) now
+    // lives in `generation-core.ts`, alongside `runGeneration` where that
+    // work actually happens.
+    const { pieces, puzzleSize, autoGroups, tabDebugReport, pieceCountMismatch } = result;
 
     if (pieceCountMismatch) {
         options.onPieceCountMismatch?.(pieceCountMismatch);
     }
-
-    // Round generated coordinates to the precision the app actually uses, so
-    // the geometry we play, save, and regenerate from a share link is one set
-    // of numbers — and so the coordinates the blob still stores cost two
-    // decimals rather than ~17 (`model/quantize-geometry.ts` carries the size
-    // history). Sealing then freezes each piece's bounds and drops the dense
-    // curve samples those bounds were computed from — post-composition nothing
-    // else reads them, and they dominated the persisted blob. Both run before
-    // the groups are built so the groups describe the geometry we keep.
-    const pieces = sealPieceGeometry(quantizePieceGeometry(rawPieces));
 
     if (tabDebugReport) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -145,6 +155,7 @@ export function createNewGame(
     );
     const { groupsById, pieceToGroup } = buildGroupIndexes(groups);
 
+    const strategy = getCutStyleStrategy(cutStyle);
     return {
         pieces,
         groups,
