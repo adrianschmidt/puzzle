@@ -1657,6 +1657,25 @@ details.info-section[open] > .info-section-summary {
 .loading-overlay__text {
   opacity: 0.85;
 }
+/* `--ui-backdrop` has no dark override, so this sits on the same dark
+   surface in both schemes and must draw from a token that stays light in
+   both. `--color-gray-light` darkens to #adadad, which over a bright photo
+   showing through the backdrop lands around 3.6:1 — below AA. */
+.loading-overlay__cancel {
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--color-gray-lighter);
+  background: color-mix(in srgb, var(--color-gray-lighter) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-gray-lighter) 25%, transparent);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.loading-overlay__cancel:hover {
+  background: color-mix(in srgb, var(--color-gray-lighter) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-gray-lighter) 40%, transparent);
+}
 @keyframes loading-overlay-spin {
   to { transform: rotate(360deg); }
 }
