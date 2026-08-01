@@ -43,6 +43,27 @@ describe('runGeneration', () => {
         expect(structuredClone(result)).toEqual(result);
     });
 
+    it('survives structuredClone losslessly with autoGroups and tabDebugReport populated', () => {
+        // Legacy classic leaves autoGroups/tabDebugReport undefined, which
+        // clones trivially. Wavy always routes through the composable
+        // pipeline (autoGroups is populated whenever minPieceArea is set,
+        // which the wavy strategy always does) and tabDebug:true forces a
+        // TabDebugSession, so this request exercises both non-trivial
+        // fields' clone-ability, not just their absence.
+        const request: GenerationRequest = {
+            cutStyle: 'wavy',
+            gridSize: { cols: 4, rows: 3 },
+            imageSize: IMAGE,
+            seed: 12345,
+            wavyConfig: { borderless: false },
+            tabDebug: true,
+        };
+        const result = runGeneration(request);
+        expect(result.autoGroups?.length).toBeGreaterThan(0);
+        expect(Object.keys(result.tabDebugReport ?? {}).length).toBeGreaterThan(0);
+        expect(structuredClone(result)).toEqual(result);
+    });
+
     it('different seeds produce different geometry', () => {
         const a = runGeneration(legacyClassicRequest(1));
         const b = runGeneration(legacyClassicRequest(2));

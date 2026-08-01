@@ -31,7 +31,16 @@ export interface GenerationRequest {
     imageSize: Size;
     seed: number;
     fractalConfig?: FractalConfig;
-    composableConfig?: ComposableConfig;
+    /**
+     * `ComposableConfig` minus `tabDebug`: a live `TabDebugSession` is a
+     * class instance carrying a function property, so it can't cross
+     * `structuredClone`/`postMessage`. The request's own `tabDebug: boolean`
+     * carries that intent across the wire instead, and `runGeneration`
+     * builds the real session locally. Same reasoning as
+     * `GameState.composableConfig` (`model/types.ts`), which inlines an
+     * equivalent tabDebug-free shape.
+     */
+    composableConfig?: Omit<ComposableConfig, 'tabDebug'>;
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
     trianglesConfig?: { traceSetVersion?: number };
     classicConfig?: { traceSetVersion?: number };
