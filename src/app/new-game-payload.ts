@@ -8,6 +8,7 @@
 
 import type { GameState, GridSize, Orientation } from '../model/types.js';
 import type { NewGameData } from '../analytics/index.js';
+import type { GenerationOutcome } from '../game/index.js';
 import type { CandidateImage } from './unsplash-display-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './classify-image-source.js';
 import { traceSetVersionOf } from './trace-set-version.js';
@@ -27,10 +28,11 @@ export function buildFreshGameData(opts: {
     pickedImage?: CandidateImage;
     chunkDegraded: boolean;
     bootFallback: boolean;
+    generation: GenerationOutcome;
 }): NewGameData {
     const {
         state, cutStyle, rotationMode, orientation, oriented,
-        imageSource, imageCategory, vibrant, pickedImage, chunkDegraded, bootFallback,
+        imageSource, imageCategory, vibrant, pickedImage, chunkDegraded, bootFallback, generation,
     } = opts;
 
     const data: NewGameData = {
@@ -45,7 +47,15 @@ export function buildFreshGameData(opts: {
         // classifyImageSource can't distinguish from a fallback-after-
         // failed-fetch (both reuse the bundled URL).
         imageSource: resolveNewGameImageSource(imageSource, state.imageUrl),
+        generationMode: generation.mode,
+        generationMs: generation.durationMs,
     };
+    if (generation.fallbackKind !== undefined) {
+        data.generationFallbackKind = generation.fallbackKind;
+    }
+    if (generation.fallbackReason !== undefined) {
+        data.generationFallbackReason = generation.fallbackReason;
+    }
     // Same reader as the shared-link path, so the derivation has one
     // spelling in this file. `createNewGame` stored whichever of the four
     // configs `generatorConfigsForNewGame` (`generator-configs.ts`) emitted
@@ -89,8 +99,9 @@ export function buildSharedGameData(opts: {
     includesProgress: boolean;
     recipientHadSavedState: boolean;
     sharedColor: NonNullable<NewGameData['sharedColor']>;
+    generation: GenerationOutcome;
 }): NewGameData {
-    const { state, includesProgress, recipientHadSavedState, sharedColor } = opts;
+    const { state, includesProgress, recipientHadSavedState, sharedColor, generation } = opts;
 
     const data: NewGameData = {
         source: 'shared',
@@ -108,7 +119,15 @@ export function buildSharedGameData(opts: {
         includesProgress,
         recipientHadSavedState,
         sharedColor,
+        generationMode: generation.mode,
+        generationMs: generation.durationMs,
     };
+    if (generation.fallbackKind !== undefined) {
+        data.generationFallbackKind = generation.fallbackKind;
+    }
+    if (generation.fallbackReason !== undefined) {
+        data.generationFallbackReason = generation.fallbackReason;
+    }
     // Read off the generated state rather than off the payload: the link's
     // config blocks have already been through `createNewGame`, which keeps
     // only the one matching the selected cut style, so the crafted-link

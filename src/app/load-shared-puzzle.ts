@@ -169,6 +169,7 @@ export async function loadSharedPuzzle(
             includesProgress: payload.pr !== undefined,
             recipientHadSavedState,
             sharedColor,
+            generation: { mode: 'sync-fallback', durationMs: 0 }, // replaced in the async swap
         });
         deps.onGameAnalytics(data);
         track('new-game-started', data);

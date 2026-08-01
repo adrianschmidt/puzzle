@@ -317,6 +317,7 @@ export async function startNewGame(
             pickedImage,
             chunkDegraded,
             bootFallback,
+            generation: { mode: 'sync-fallback', durationMs: 0 }, // replaced in the async swap
         });
         deps.onGameAnalytics(data);
         track('new-game-started', data);

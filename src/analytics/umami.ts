@@ -198,6 +198,35 @@ export interface NewGameData {
      * when source === 'shared'.
      */
     sharedColor?: 'adopted' | 'kept-own' | 'invalid' | 'none';
+    /**
+     * How the generate phase ran: `'worker'` = off the main thread in the
+     * generation Web Worker (the normal path since #489), `'sync-fallback'`
+     * = synchronously on the main thread because the worker path was
+     * unavailable or failed (see `generationFallbackReason`). Fallback games
+     * froze the main thread for ~`generationMs`, worker games did not.
+     * Present on every `new-game-started` from the off-thread release on;
+     * absent on events from older clients (PWA caches).
+     */
+    generationMode: 'worker' | 'sync-fallback';
+    /**
+     * Wall-clock milliseconds the generate phase took (rounded), measured
+     * on the main thread around the whole off-thread round trip — worker
+     * spawn, traced-chunk load inside the worker where needed, generation,
+     * and result transfer — or around the synchronous call on the fallback
+     * path. This is the wait a player actually experienced under the
+     * loading overlay for the generation step (image fetch excluded).
+     */
+    generationMs: number;
+    /**
+     * Why generation fell back to the main thread. Only present when
+     * `generationMode` is `'sync-fallback'`. `'no-worker'` means the
+     * environment has no `Worker` constructor; anything else is a
+     * sanitized worker-path error (spawn failure, worker-side generation
+     * error, a failed traced-chunk fetch inside the worker — the
+     * worker-side copy of the chunk emits no `traced-chunk-*` events, so
+     * this field is where those failures surface).
+     */
+    generationFallbackReason?: string;
 }
 
 /**
@@ -1091,6 +1120,24 @@ export interface ShareLinkRescueResultData {
 }
 
 /**
+ * A player cancelled a game start from the loading overlay (#489). The
+ * Cancel affordance only exists while a puzzle is already installed, so
+ * every event here means "returned to their previous puzzle". `cutStyle`
+ * is the style the cancelled start *requested* (for `source: 'shared'`,
+ * the link's style). `elapsedMs` is overlay-shown → cancel, so it
+ * includes image fetch time, not just generation — it measures player
+ * patience, not generator speed. No completion-side pair: a cancelled
+ * start emits no `new-game-started`.
+ */
+export interface GenerationCancelledData {
+    source: 'fresh' | 'shared';
+    cutStyle: string;
+    cols: number;
+    rows: number;
+    elapsedMs: number;
+}
+
+/**
  * Inject the Umami tracking script if a website ID is configured.
  *
  * Call exactly once, early in app startup, before any rendering.
@@ -1152,6 +1199,7 @@ export function track(name: 'pwa-update-apply-failed', data: PwaUpdateApplyFaile
 export function track(name: 'pwa-register-failed', data: PwaRegisterFailedData): void;
 export function track(name: 'share-link-rescue-attempted', data: ShareLinkRescueAttemptedData): void;
 export function track(name: 'share-link-rescue-result', data: ShareLinkRescueResultData): void;
+export function track(name: 'generation-cancelled', data: GenerationCancelledData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);
