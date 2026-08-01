@@ -111,12 +111,30 @@ let preloadPromise: Promise<void> | null = null;
 let realGenerator: TabGenerator | null = null;
 let attemptCount = 0;
 
-function ensureLoaded(): TabGenerator {
-    if (!realGenerator) {
-        throw new Error(
+/**
+ * Thrown when traced generation runs before {@link preloadTracedTabGenerator}
+ * has resolved in this realm.
+ *
+ * Its own class rather than a bare `Error` so a caller can tell it apart from
+ * a genuine generation fault. The distinction matters across a worker
+ * boundary: this error says the chunk is missing *here*, which is a property
+ * of the realm rather than of the request — the main thread loads the chunk
+ * on its own predicate and may well have it. `generation-worker-core.ts`
+ * classifies it as an infrastructure failure for exactly that reason.
+ */
+export class TracedTabLibraryNotLoadedError extends Error {
+    constructor() {
+        super(
             'Traced tab library not loaded. '
             + 'Call preloadTracedTabGenerator() before generating traced tabs.',
         );
+        this.name = 'TracedTabLibraryNotLoadedError';
+    }
+}
+
+function ensureLoaded(): TabGenerator {
+    if (!realGenerator) {
+        throw new TracedTabLibraryNotLoadedError();
     }
     return realGenerator;
 }
