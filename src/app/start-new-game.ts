@@ -98,10 +98,11 @@ export interface StartNewGameDeps {
      */
     session: Pick<GameSession, 'install'>;
     /**
-     * Reset the viewport transform to identity and push it to the renderer,
-     * before generation starts, so pieces are randomized in unzoomed
-     * coordinates and the new puzzle doesn't briefly render under the
-     * previous game's zoom.
+     * Reset the viewport transform to identity and push it to the renderer.
+     * Called once generation has resolved, right before the new state is
+     * installed — not any earlier — so the new puzzle never renders under
+     * the previous game's zoom, and so a start that cancels or throws before
+     * that point leaves the current puzzle's pan/zoom untouched.
      */
     resetViewport: () => void;
     /** Gather and zoom-to-fit the freshly installed puzzle. */
@@ -128,10 +129,11 @@ export interface StartNewGameDeps {
  * @param deps - Collaborators; see {@link StartNewGameDeps}
  * @param source - `'fresh'` for a real player start (the new-game dialog or
  * the boot path), `'dev'` for a start kicked off from the dev console (e.g.
- * `__newComposableGame`). Only affects the `piece-count-mismatch` event's
- * `source` field — it keeps a developer poking at cut parameters out of the
- * field-incident signal, the same distinction `loadSharedPuzzle`'s `source`
- * already draws for `__reproPuzzle` (#512). Defaults to `'fresh'`; the
+ * `__newComposableGame`). Only affects the `source` field of the
+ * `piece-count-mismatch` and `generation-cancelled` events — it keeps a
+ * developer poking at cut parameters out of the field-incident signal, and
+ * out of the cancel-rate signal, the same distinction `loadSharedPuzzle`'s
+ * `source` already draws for `__reproPuzzle` (#512). Defaults to `'fresh'`; the
  * composition root passes `'dev'` explicitly on the one binding it hands to
  * `installDevHooks`.
  *
@@ -168,10 +170,25 @@ export async function startNewGame(
         undefined,
         deps.hasCurrentGame() ? { onCancel: () => controller.abort() } : {},
     );
-    try {
-        // Reset viewport transform so pieces are randomized in unzoomed coordinates
-        deps.resetViewport();
 
+    const viewport = {
+        width: deps.container.clientWidth || window.innerWidth,
+        height: deps.container.clientHeight || window.innerHeight,
+    };
+
+    // Match the puzzle to the shape of the screen it's created on. This is
+    // the only place orientation is decided; the resulting grid and image
+    // size flow into the save/share payload, so replay reproduces it
+    // without re-reading the viewport.
+    //
+    // Computed above the `try` rather than inside it so the cancel branch
+    // in the `catch` can report the same post-transpose grid
+    // `new-game-started` does. Nothing here can throw or consume
+    // randomness, so hoisting it changes no behaviour.
+    const orientation = orientationForViewport(viewport);
+    const oriented = orientGridSize(gridSize, orientation);
+
+    try {
         // Traced tabs live in a lazy chunk. `planTracedTabs` decides
         // whether this start needs it and which cut style is actually
         // generated; the boot fallback forces legacy Classic and skips the
@@ -205,18 +222,6 @@ export async function startNewGame(
                 (error: unknown) => error ?? new Error('Traced tab chunk failed to load'),
             )
             : null;
-
-        const viewport = {
-            width: deps.container.clientWidth || window.innerWidth,
-            height: deps.container.clientHeight || window.innerHeight,
-        };
-
-        // Match the puzzle to the shape of the screen it's created on. This is
-        // the only place orientation is decided; the resulting grid and image
-        // size flow into the save/share payload, so replay reproduces it
-        // without re-reading the viewport.
-        const orientation = orientationForViewport(viewport);
-        const oriented = orientGridSize(gridSize, orientation);
 
         const bundled = pickBundledImage(orientation);
         let imageUrl: string = bundled.url;
@@ -329,6 +334,13 @@ export async function startNewGame(
             state.attribution = attribution;
         }
 
+        // Reset the viewport transform to identity now that generation has
+        // actually produced a puzzle to show, and before installing it, so
+        // the new puzzle never renders under the previous game's zoom. Not
+        // any earlier: every cancellation checkpoint above this line must be
+        // able to unwind without ever touching the transform, or cancelling
+        // would blow away the current puzzle's pan/zoom for nothing.
+        deps.resetViewport();
         deps.session.install(state);
         deps.fitView(state);
         deps.persistNewPuzzle(state);
@@ -379,10 +391,20 @@ export async function startNewGame(
     } catch (err) {
         if (err instanceof GenerationCancelledError) {
             track('generation-cancelled', {
-                source: 'fresh',
+                // The real source, not a hardcoded 'fresh': `installDevHooks`
+                // runs in production builds and dev-deploy shares
+                // production's Umami website ID, so a developer cancelling a
+                // `__newComposableGame` start would otherwise read as a
+                // player losing patience — the exact conflation #512
+                // established this split to prevent.
+                source,
                 cutStyle: requestedCutStyle,
-                cols: gridSize.cols,
-                rows: gridSize.rows,
+                // Post-transpose, like `new-game-started`'s cols/rows: the
+                // requested grid is always landscape-normalized, so
+                // reporting it raw would file every portrait cancel under a
+                // grid no completed start ever reports.
+                cols: oriented.cols,
+                rows: oriented.rows,
                 elapsedMs: Math.round(performance.now() - startedAt),
             });
             return;
