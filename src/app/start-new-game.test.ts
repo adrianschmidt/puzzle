@@ -43,7 +43,7 @@ vi.mock('./resolve-image.js', () => ({ resolveUnsplashImage: vi.fn() }));
 // generation ordering test below can see when it actually ran (and the
 // cancel tests below can inspect/react to the signal it's called with),
 // while every other test still gets a real generated puzzle.
-// `GenerationCancelledError` is spread through untouched via `...actual`.
+// `GenerationCanceledError` is spread through untouched via `...actual`.
 vi.mock('../game/index.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../game/index.js')>();
     return { ...actual, createNewGameAsync: vi.fn(actual.createNewGameAsync) };
@@ -53,7 +53,7 @@ import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint } from '../ui/ind
 import { getUnsplashAccessKey, triggerPhotoDownload } from '../images/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import { resolveUnsplashImage } from './resolve-image.js';
-import { createNewGameAsync, GenerationCancelledError } from '../game/index.js';
+import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { startNewGame, type StartNewGameDeps, type StartNewGameOptions } from './start-new-game.js';
 
 /**
@@ -139,7 +139,7 @@ describe('startNewGame', () => {
         expect(resetViewport).toHaveBeenCalled();
         // The viewport is reset only after generation has resolved, and
         // before the new state is installed — not any earlier, so a
-        // cancelled or throwing start (see the cancel tests below) never
+        // canceled or throwing start (see the cancel tests below) never
         // touches the current puzzle's pan/zoom.
         const createOrder = vi.mocked(createNewGameAsync).mock.invocationCallOrder[0];
         const resetOrder = vi.mocked(resetViewport).mock.invocationCallOrder[0];
@@ -504,14 +504,14 @@ describe('startNewGame', () => {
     // must unwind quietly: no install, no `new-game-started`, the overlay
     // still comes down, and — critically — the current puzzle's pan/zoom is
     // never touched (`resetViewport` now runs after generation resolves,
-    // right before install, specifically so a cancelled start never reaches
+    // right before install, specifically so a canceled start never reaches
     // it; see the doc comment on `StartNewGameDeps.resetViewport`).
     it('cancel unwinds silently: no install, no new-game-started, overlay hidden', async () => {
         // Make the generation await hang until the test cancels mid-flight,
         // mirroring how the real worker client reacts to an aborted signal.
         vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
             await new Promise((resolve) => setTimeout(resolve, 0));
-            if (signal?.aborted) throw new GenerationCancelledError();
+            if (signal?.aborted) throw new GenerationCanceledError();
             return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
@@ -527,7 +527,7 @@ describe('startNewGame', () => {
         expect(install).not.toHaveBeenCalled();
         expect(resetViewport).not.toHaveBeenCalled();
         expect(umamiTrack).not.toHaveBeenCalledWith('new-game-started', expect.anything());
-        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+        expect(umamiTrack).toHaveBeenCalledWith('generation-canceled', expect.objectContaining({
             source: 'fresh',
             cutStyle: 'composable',
             cols: 2,
@@ -554,14 +554,15 @@ describe('startNewGame', () => {
             'dev',
         );
         const started = umamiTrack.mock.calls
-            .find(([name]) => name === 'new-game-started')![1] as { cols: number; rows: number };
-        expect(started).toMatchObject({ cols: 3, rows: 4 });
+            .find(([name]) => name === 'new-game-started')![1] as
+            { cols: number; rows: number; orientation: string };
+        expect(started).toMatchObject({ cols: 3, rows: 4, orientation: 'portrait' });
 
         umamiTrack.mockClear();
         vi.mocked(showLoadingOverlay).mockClear();
         vi.mocked(createNewGameAsync).mockImplementation(async (_u, _s, _v, _g, _o, signal) => {
             await new Promise((resolve) => setTimeout(resolve, 0));
-            if (signal?.aborted) throw new GenerationCancelledError();
+            if (signal?.aborted) throw new GenerationCanceledError();
             throw new Error('expected the cancel to win');
         });
 
@@ -574,12 +575,15 @@ describe('startNewGame', () => {
         vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!();
         await promise;
 
-        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
-            // Same grid the completed start above reported.
+        expect(umamiTrack).toHaveBeenCalledWith('generation-canceled', expect.objectContaining({
+            // Same grid and orientation the completed start above reported,
+            // so both are segment filters across the two events rather than
+            // a comparison computed per event.
             cols: 3,
             rows: 4,
+            orientation: 'portrait',
             // And the real source, not a hardcoded 'fresh': `installDevHooks`
-            // ships in production builds, so a developer cancelling a
+            // ships in production builds, so a developer canceling a
             // `__newComposableGame` start must not read as an impatient
             // player (#512).
             source: 'dev',
@@ -588,12 +592,12 @@ describe('startNewGame', () => {
 
     // Pins the new cancel rule (mirrors the "throws first" ordering test
     // above, but for cancellation rather than a chunk-fetch failure): the
-    // abort check sits before the download-report block, so a cancelled
+    // abort check sits before the download-report block, so a canceled
     // start never credits a download for a photo it discards. Cancels from
     // inside the awaited image resolution — the last async step before that
     // check — rather than via a fabricated signal, so this exercises the
     // real ordering rather than asserting on a mock.
-    it('does not report an Unsplash download when cancelled before the download report', async () => {
+    it('does not report an Unsplash download when canceled before the download report', async () => {
         vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
         vi.mocked(resolveUnsplashImage).mockImplementation(async () => {
             // `showLoadingOverlay` already ran synchronously earlier in this
@@ -618,7 +622,7 @@ describe('startNewGame', () => {
         );
 
         expect(triggerPhotoDownload).not.toHaveBeenCalled();
-        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+        expect(umamiTrack).toHaveBeenCalledWith('generation-canceled', expect.objectContaining({
             cutStyle: 'wavy',
         }));
     });

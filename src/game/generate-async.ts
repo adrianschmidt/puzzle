@@ -17,7 +17,7 @@
  * caller, whose failure event is where it surfaces.
  *
  * Cancellation: an aborted signal terminates the worker and rejects
- * with {@link GenerationCancelledError}. Cancel never falls back —
+ * with {@link GenerationCanceledError}. Cancel never falls back —
  * the user asked for no puzzle, not a slower one.
  */
 
@@ -32,11 +32,11 @@ import {
 } from './generation-core.js';
 import type { GenerationResponse } from './generation-worker-core.js';
 
-/** Rejection sentinel for a cancelled generation. */
-export class GenerationCancelledError extends Error {
+/** Rejection sentinel for a canceled generation. */
+export class GenerationCanceledError extends Error {
     constructor() {
-        super('Puzzle generation cancelled');
-        this.name = 'GenerationCancelledError';
+        super('Puzzle generation canceled');
+        this.name = 'GenerationCanceledError';
     }
 }
 
@@ -106,7 +106,7 @@ export async function generatePiecesOffThread(
     request: GenerationRequest,
     signal?: AbortSignal,
 ): Promise<OffThreadGeneration> {
-    if (signal?.aborted) throw new GenerationCancelledError();
+    if (signal?.aborted) throw new GenerationCanceledError();
 
     if (typeof Worker === 'undefined') {
         return runOnMainThread(request, signal, 'no-worker', 'no-worker');
@@ -116,14 +116,14 @@ export async function generatePiecesOffThread(
         const result = await runInWorker(request, signal);
         return { result, mode: 'worker' };
     } catch (err) {
-        if (err instanceof GenerationCancelledError) throw err;
+        if (err instanceof GenerationCanceledError) throw err;
         // Generation is a pure function of the request, so a worker-side
         // throw from `runGeneration` reproduces exactly here. Falling back
         // would buy a second full generation's freeze and then surface the
         // same error, so surface it now instead.
         if (err instanceof WorkerGenerationError) throw err;
         diagnostics.warn('Generation worker failed; falling back to main thread:', err);
-        if (signal?.aborted) throw new GenerationCancelledError();
+        if (signal?.aborted) throw new GenerationCanceledError();
         const kind = err instanceof WorkerPathError ? err.kind : 'spawn-failed';
         return runOnMainThread(request, signal, kind, sanitizedReasonWithErrorName(err));
     }
@@ -180,10 +180,10 @@ async function runOnMainThread(
     // Generation just blocked the main thread, so a Cancel click made
     // during it is still queued as an undispatched task. Yield to it
     // before reading the signal: without this the click is dropped
-    // outright — the puzzle installs anyway and no `generation-cancelled`
+    // outright — the puzzle installs anyway and no `generation-canceled`
     // is emitted — in exactly the population whose freeze is longest.
     await yieldToTaskQueue();
-    if (signal?.aborted) throw new GenerationCancelledError();
+    if (signal?.aborted) throw new GenerationCanceledError();
 
     return { result, mode: 'sync-fallback', fallbackKind, fallbackReason };
 }
@@ -221,7 +221,7 @@ function runInWorker(
                 ));
             }
         };
-        const onAbort = () => settle(() => reject(new GenerationCancelledError()));
+        const onAbort = () => settle(() => reject(new GenerationCanceledError()));
         signal?.addEventListener('abort', onAbort);
         worker.onmessage = (event: MessageEvent<GenerationResponse>) => settle(() => {
             const response = event.data;

@@ -9,7 +9,7 @@ export {
 } from './init.js';
 export type { InitOptions, GenerationOutcome } from './init.js';
 
-export { GenerationCancelledError } from './generate-async.js';
+export { GenerationCanceledError } from './generate-async.js';
 
 export {
     PUZZLE_SIZE_OPTIONS,

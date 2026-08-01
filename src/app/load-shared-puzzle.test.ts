@@ -39,7 +39,7 @@ vi.mock('./blank-canvas.js', () => ({
 // payloads the real generator can't handle in this file (traced-tab styles)
 // and so the cancel tests below can inspect/react to the signal it's called
 // with, while the plain-Classic tests still exercise real generation.
-// `GenerationCancelledError` is spread through untouched via `...actual`.
+// `GenerationCanceledError` is spread through untouched via `...actual`.
 vi.mock('../game/index.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../game/index.js')>();
     return { ...actual, createNewGameAsync: vi.fn(actual.createNewGameAsync) };
@@ -48,7 +48,7 @@ vi.mock('../game/index.js', async (importOriginal) => {
 import { showLoadingOverlay, hideLoadingOverlay, showToast } from '../ui/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import { createBlankImageDataUrl } from './blank-canvas.js';
-import { createNewGameAsync, GenerationCancelledError } from '../game/index.js';
+import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './load-shared-puzzle.js';
 
 /**
@@ -326,7 +326,7 @@ describe('loadSharedPuzzle', () => {
         // mirroring how the real worker client reacts to an aborted signal.
         vi.mocked(createNewGameAsync).mockImplementation(async (imageUrl, imageSize, viewport, grid, options, signal) => {
             await new Promise((resolve) => setTimeout(resolve, 0));
-            if (signal?.aborted) throw new GenerationCancelledError();
+            if (signal?.aborted) throw new GenerationCanceledError();
             return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
@@ -337,9 +337,13 @@ describe('loadSharedPuzzle', () => {
         await expect(promise).resolves.toBeUndefined(); // resolves, does not reject
         expect(install).not.toHaveBeenCalled();
         expect(umamiTrack).not.toHaveBeenCalledWith('new-game-started', expect.anything());
-        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+        expect(umamiTrack).toHaveBeenCalledWith('generation-canceled', expect.objectContaining({
             source: 'shared',
             cutStyle: 'classic',
+            // 8×6 is wider than it is tall, and the link stores the grid
+            // already oriented — the same test `buildSharedGameData` runs
+            // for `new-game-started`.
+            orientation: 'landscape',
             cols: 8,
             rows: 6,
             elapsedMs: expect.any(Number),
@@ -347,7 +351,7 @@ describe('loadSharedPuzzle', () => {
         expect(hideLoadingOverlay).toHaveBeenCalled();
     });
 
-    it("reports a cancelled __reproPuzzle replay as source 'repro', not 'shared'", async () => {
+    it("reports a canceled __reproPuzzle replay as source 'repro', not 'shared'", async () => {
         // `__reproPuzzle` is installed in production builds and dev-deploy
         // reports to production's Umami website ID, so a hardcoded 'shared'
         // would file a developer abandoning a replay as a real recipient
@@ -355,7 +359,7 @@ describe('loadSharedPuzzle', () => {
         // prevent, and the reason `piece-count-mismatch` already does this.
         vi.mocked(createNewGameAsync).mockImplementation(async (_u, _s, _v, _g, _o, signal) => {
             await new Promise((resolve) => setTimeout(resolve, 0));
-            if (signal?.aborted) throw new GenerationCancelledError();
+            if (signal?.aborted) throw new GenerationCanceledError();
             throw new Error('expected the cancel to win');
         });
 
@@ -365,7 +369,7 @@ describe('loadSharedPuzzle', () => {
         vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!();
         await promise;
 
-        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', expect.objectContaining({
+        expect(umamiTrack).toHaveBeenCalledWith('generation-canceled', expect.objectContaining({
             source: 'repro',
         }));
     });

@@ -238,7 +238,7 @@ export function installDevHooks(deps: DevHooksDeps): void {
      * re-offers it. Decline the prompt and the replay survives.
      *
      * Same as the share path: the previous save is left alone until
-     * `deps.loadShared`'s own `persistNewPuzzle` replaces it, so cancelling
+     * `deps.loadShared`'s own `persistNewPuzzle` replaces it, so canceling
      * the loading overlay (shown here too, since a console repro almost
      * always has a puzzle already installed) or a failing replay leaves the
      * previous save intact rather than destroyed underneath it.
@@ -246,10 +246,10 @@ export function installDevHooks(deps: DevHooksDeps): void {
      * Resolves `true` once the puzzle is on screen and `false` on any
      * failure (matching the share-link loader's `tryLoad`), so
      * `await __reproPuzzle(...)` reports the outcome instead of resolving
-     * before generation starts. Cancelling is neither: a cancelled replay
+     * before generation starts. Canceling is neither: a canceled replay
      * unwinds without throwing, so it also resolves `true` — with nothing
      * installed and the previous puzzle still on screen. Don't read `true`
-     * as "these params generated"; a cancel emits `generation-cancelled`
+     * as "these params generated"; a cancel emits `generation-canceled`
      * (`source: 'repro'`) and no `new-game-started`.
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -299,7 +299,7 @@ export function installDevHooks(deps: DevHooksDeps): void {
         // until `deps.loadShared` (`loadSharedPuzzle`) actually replaces it
         // via its own `persistNewPuzzle`, once generation succeeds. Same
         // fix as `share-link-loader.ts`'s `tryLoad`: an eager clear here
-        // used to destroy the previous save on a cancelled or failing
+        // used to destroy the previous save on a canceled or failing
         // replay too, not just a successful one.
         return runWithErrorReport({
             run: async () => {

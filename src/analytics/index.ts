@@ -23,5 +23,5 @@ export type {
     PwaRegisterFailedData,
     ShareLinkRescueAttemptedData,
     ShareLinkRescueResultData,
-    GenerationCancelledData,
+    GenerationCanceledData,
 } from './umami.js';
