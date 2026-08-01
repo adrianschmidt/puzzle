@@ -180,19 +180,43 @@ describe('installDevHooks', () => {
         expect(showToast).toHaveBeenCalledWith("Couldn't load repro puzzle");
     });
 
-    it('__reproPuzzle clears the saved state but leaves the address bar alone', async () => {
+    it('__reproPuzzle replaces the saved state on a successful replay, but leaves the address bar alone', async () => {
         saveNewPuzzle(makeSavedGameState());
         expect(loadState()).not.toBeUndefined();
         history.replaceState(null, '', '/#p=something');
+        // Production's `loadShared` is `loadSharedPuzzle`, which persists the
+        // new puzzle itself (via `persistNewPuzzle`) once generation
+        // succeeds — `dev-hooks.ts` no longer clears storage on its own, so
+        // the stub has to model that side effect to exercise "replaced".
+        loadShared.mockImplementation(async () => {
+            saveNewPuzzle({ ...makeSavedGameState(), imageUrl: 'repro-puzzle.jpg' });
+        });
 
         installDevHooks(deps());
         await hooks().__reproPuzzle(validReproParams());
 
         // A `#p=` link must stay reloadable after a replay.
         expect(window.location.hash).toBe('#p=something');
-        expect(loadState()).toBeUndefined();
-        // `recipientHadSavedState` reflects the pre-clear read.
+        // The previous save is gone, replaced by the repro's own — not
+        // merely cleared: `loadShared`'s own persist is what did it.
+        expect(loadState()?.imageUrl).toBe('repro-puzzle.jpg');
+        // `recipientHadSavedState` reflects the pre-replace read.
         expect(loadShared).toHaveBeenCalledWith(expect.anything(), true);
+    });
+
+    it('__reproPuzzle leaves the previous save intact when the replay is cancelled', async () => {
+        // The loading overlay's Cancel affordance (#489) makes `loadShared`
+        // (real `loadSharedPuzzle`) resolve normally without ever calling
+        // `persistNewPuzzle` — cancelling means "return to your current
+        // puzzle", so its save must still be there afterwards. The default
+        // `loadShared` stub (a no-op `async () => {}`) models exactly that.
+        saveNewPuzzle(makeSavedGameState());
+
+        installDevHooks(deps());
+        const result = await hooks().__reproPuzzle(validReproParams());
+
+        expect(result).toBe(true);
+        expect(loadState()?.imageUrl).toBe('test-image.jpg');
     });
 
     it('__startVennPuzzle starts a single-cell composable venn puzzle', () => {

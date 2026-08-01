@@ -25,7 +25,7 @@ import {
     reproParamsToPayload,
     type ReproParams,
 } from '../sharing/index.js';
-import { loadState, clearSavedState } from '../persistence/index.js';
+import { loadState } from '../persistence/index.js';
 import { loadImageSourcePreference } from '../game/image-source.js';
 import {
     loadImageCategoryPreference,
@@ -232,15 +232,25 @@ export function installDevHooks(deps: DevHooksDeps): void {
      * `imageSize` values are floored by the codec's clamps, and attribution
      * and background color are not part of the params, so a replayed
      * Unsplash puzzle loses its credit. Replaces the current game and save
-     * without confirmation, but leaves the address bar alone: a `#p=` link
-     * stays put — as declining its confirm dialog does — so the original
-     * link remains reloadable, and a reload re-offers it. Decline the prompt
-     * and the replay survives.
+     * without confirmation once the replay actually lands, but leaves the
+     * address bar alone: a `#p=` link stays put — as declining its confirm
+     * dialog does — so the original link remains reloadable, and a reload
+     * re-offers it. Decline the prompt and the replay survives.
+     *
+     * Same as the share path: the previous save is left alone until
+     * `deps.loadShared`'s own `persistNewPuzzle` replaces it, so cancelling
+     * the loading overlay (shown here too, since a console repro almost
+     * always has a puzzle already installed) or a failing replay leaves the
+     * previous save intact rather than destroyed underneath it.
      *
      * Resolves `true` once the puzzle is on screen and `false` on any
      * failure (matching the share-link loader's `tryLoad`), so
      * `await __reproPuzzle(...)` reports the outcome instead of resolving
-     * before generation starts.
+     * before generation starts. Cancelling is neither: a cancelled replay
+     * unwinds without throwing, so it also resolves `true` — with nothing
+     * installed and the previous puzzle still on screen. Don't read `true`
+     * as "these params generated"; a cancel emits `generation-cancelled`
+     * (`source: 'repro'`) and no `new-game-started`.
      */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__reproPuzzle = async (params: ReproParams): Promise<boolean> => {
@@ -285,7 +295,12 @@ export function installDevHooks(deps: DevHooksDeps): void {
         // share path: `recipientHadSavedState` means "had a *readable* save".
         // The decompress is affordable for a one-shot manual dev action.
         const hadSavedState = !!loadState();
-        clearSavedState();
+        // The previous save is deliberately left alone here — not wiped
+        // until `deps.loadShared` (`loadSharedPuzzle`) actually replaces it
+        // via its own `persistNewPuzzle`, once generation succeeds. Same
+        // fix as `share-link-loader.ts`'s `tryLoad`: an eager clear here
+        // used to destroy the previous save on a cancelled or failing
+        // replay too, not just a successful one.
         return runWithErrorReport({
             run: async () => {
                 await deps.loadShared(validated, hadSavedState);
