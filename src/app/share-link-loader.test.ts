@@ -245,6 +245,13 @@ describe('createShareLinkLoader', () => {
         const hashBody = encodePayload(payload);
         saveNewPuzzle(makeSavedGameState());
         history.replaceState(null, '', '/#p=' + hashBody);
+        // Production's `loadShared` is `loadSharedPuzzle`, which persists the
+        // new puzzle itself (via `persistNewPuzzle`) once generation succeeds
+        // — `share-link-loader.ts` no longer clears storage on its own, so
+        // the stub has to model that side effect to exercise "replaced".
+        loadShared.mockImplementation(async () => {
+            saveNewPuzzle({ ...makeSavedGameState(), imageUrl: 'shared-puzzle.jpg' });
+        });
 
         const handled = await make(true).tryLoad();
 
@@ -253,14 +260,34 @@ describe('createShareLinkLoader', () => {
         // so it has to be the real "had progress" reading, not a hardcoded
         // constant.
         expect(loadShared).toHaveBeenCalledWith(payload, true);
-        // The existing save is cleared once the player accepts the overwrite.
-        expect(loadState()).toBeUndefined();
+        // The previous save is gone, replaced by the shared puzzle's own —
+        // not merely cleared: `loadShared`'s own persist is what did it.
+        expect(loadState()?.imageUrl).toBe('shared-puzzle.jpg');
     });
 
-    it('reports a generation failure and toasts', async () => {
+    it('leaves the previous save intact when the shared load is cancelled', async () => {
+        // The loading overlay's Cancel affordance (#489) makes `loadShared`
+        // (real `loadSharedPuzzle`) resolve normally without ever calling
+        // `persistNewPuzzle` — cancelling means "return to your current
+        // puzzle", so its save must still be there afterwards. The default
+        // `loadShared` stub (a no-op `async () => {}`) models exactly that:
+        // it resolves without touching storage.
+        const payload = decodablePayload();
+        const hashBody = encodePayload(payload);
+        saveNewPuzzle(makeSavedGameState());
+        history.replaceState(null, '', '/#p=' + hashBody);
+
+        const handled = await make(true).tryLoad();
+
+        expect(handled).toBe(true);
+        expect(loadState()?.imageUrl).toBe('test-image.jpg');
+    });
+
+    it('reports a generation failure and toasts, leaving the previous save intact', async () => {
         // A link can satisfy the schema and still trip the topology pipeline.
         const payload = decodablePayload();
         const hashBody = encodePayload(payload);
+        saveNewPuzzle(makeSavedGameState());
         loadShared.mockRejectedValue(new Error('topology boom'));
         history.replaceState(null, '', '/#p=' + hashBody);
 
@@ -272,8 +299,11 @@ describe('createShareLinkLoader', () => {
             'shared-load-failed',
             expect.objectContaining({ source: 'shared' }),
         );
-        // The hash is stripped and any prior save cleared before the load is
-        // attempted, regardless of whether generation goes on to succeed.
+        // The hash is stripped before the load is attempted, regardless of
+        // whether generation goes on to succeed.
         expect(window.location.hash).toBe('');
+        // A throw never reaches `persistNewPuzzle`, so the previous save
+        // survives — matching the previous puzzle still on screen.
+        expect(loadState()?.imageUrl).toBe('test-image.jpg');
     });
 });
