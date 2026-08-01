@@ -76,6 +76,8 @@ describe('track', () => {
             rows: 6,
             pieceCount: 48,
             imageSource: 'unsplash',
+            generationMode: 'worker',
+            generationMs: 120,
         });
 
         expect(umamiTrack).toHaveBeenCalledOnce();
@@ -88,6 +90,8 @@ describe('track', () => {
             rows: 6,
             pieceCount: 48,
             imageSource: 'unsplash',
+            generationMode: 'worker',
+            generationMs: 120,
         });
     });
 
@@ -106,6 +110,8 @@ describe('track', () => {
             cols: 8,
             rows: 6,
             pieceCount: 48,
+            generationMode: 'worker',
+            generationMs: 120,
         });
 
         expect(umamiTrack).toHaveBeenCalledWith('new-game-started', {
@@ -117,6 +123,8 @@ describe('track', () => {
             cols: 8,
             rows: 6,
             pieceCount: 48,
+            generationMode: 'worker',
+            generationMs: 120,
         });
     });
 
@@ -253,6 +261,29 @@ describe('track', () => {
         expect(umamiTrack).toHaveBeenCalledWith('share-failed', {
             source: 'completion-overlay',
             reason: 'No share mechanism available',
+        });
+    });
+
+    it('forwards generation-cancelled with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        // `'repro'` rather than `'fresh'`: the schema has to be able to
+        // express the dev-console sources, or the widening is decorative.
+        track('generation-cancelled', {
+            source: 'repro',
+            cutStyle: 'wavy',
+            cols: 8,
+            rows: 6,
+            elapsedMs: 340,
+        });
+
+        expect(umamiTrack).toHaveBeenCalledWith('generation-cancelled', {
+            source: 'repro',
+            cutStyle: 'wavy',
+            cols: 8,
+            rows: 6,
+            elapsedMs: 340,
         });
     });
 });

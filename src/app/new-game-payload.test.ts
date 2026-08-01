@@ -24,6 +24,18 @@ function freshOpts(overrides = {}) {
         vibrant: false,
         chunkDegraded: false,
         bootFallback: false,
+        generation: { mode: 'worker' as const, durationMs: 120 },
+        ...overrides,
+    };
+}
+
+function sharedOpts(overrides = {}) {
+    return {
+        state: makeGameState({ gridSize: { cols: 4, rows: 7 } }),
+        includesProgress: false,
+        recipientHadSavedState: false,
+        sharedColor: 'none' as const,
+        generation: { mode: 'worker' as const, durationMs: 120 },
         ...overrides,
     };
 }
@@ -100,16 +112,51 @@ describe('buildFreshGameData', () => {
         // legacy-generator case, which must not carry the key at all.
         expect('traceSetVersion' in buildFreshGameData(freshOpts())).toBe(false);
     });
+
+    it('stamps generation mode and duration', () => {
+        const data = buildFreshGameData(freshOpts({
+            generation: { mode: 'worker', durationMs: 250 },
+        }));
+        expect(data.generationMode).toBe('worker');
+        expect(data.generationMs).toBe(250);
+        expect(data.generationFallbackReason).toBeUndefined();
+    });
+
+    it('stamps the fallback kind and reason only when falling back', () => {
+        const data = buildFreshGameData(freshOpts({
+            generation: {
+                mode: 'sync-fallback',
+                durationMs: 900,
+                fallbackKind: 'worker-error',
+                fallbackReason: 'Generation worker error',
+            },
+        }));
+        expect(data.generationMode).toBe('sync-fallback');
+        // The kind is the low-cardinality field an operator segments on;
+        // the reason is free text for reading individual cases.
+        expect(data.generationFallbackKind).toBe('worker-error');
+        expect(data.generationFallbackReason).toBe('Generation worker error');
+    });
+
+    it('omits the fallback fields rather than setting them undefined', () => {
+        // Umami cannot filter on absence, so an explicit `undefined` would
+        // become a value in the dashboard rather than a missing key.
+        const data = buildFreshGameData(freshOpts({
+            generation: { mode: 'worker', durationMs: 250 },
+        }));
+        expect('generationFallbackKind' in data).toBe(false);
+        expect('generationFallbackReason' in data).toBe(false);
+    });
 });
 
 describe('buildSharedGameData', () => {
     it('marks the source shared and reads geometry off the generated state', () => {
-        const data = buildSharedGameData({
+        const data = buildSharedGameData(sharedOpts({
             state: makeGameState({ gridSize: { cols: 4, rows: 7 } }),
             includesProgress: true,
             recipientHadSavedState: false,
             sharedColor: 'adopted',
-        });
+        }));
         expect(data.source).toBe('shared');
         expect(data.cols).toBe(4);
         expect(data.rows).toBe(7);
@@ -120,15 +167,13 @@ describe('buildSharedGameData', () => {
     it('derives orientation from the post-transpose grid, squares reading landscape', () => {
         // The link stores the post-transpose grid, matching orientGridSize's
         // normalization.
-        expect(buildSharedGameData({
+        expect(buildSharedGameData(sharedOpts({
             state: makeGameState({ gridSize: { cols: 4, rows: 9 } }),
-            includesProgress: false, recipientHadSavedState: false, sharedColor: 'none',
-        }).orientation).toBe('portrait');
+        })).orientation).toBe('portrait');
 
-        expect(buildSharedGameData({
+        expect(buildSharedGameData(sharedOpts({
             state: makeGameState({ gridSize: { cols: 5, rows: 5 } }),
-            includesProgress: false, recipientHadSavedState: false, sharedColor: 'none',
-        }).orientation).toBe('landscape');
+        })).orientation).toBe('landscape');
     });
 
     it('includes traceSetVersion when the generated state carries one', () => {
@@ -136,9 +181,7 @@ describe('buildSharedGameData', () => {
             cutStyle: 'classic',
             classicConfig: { traceSetVersion: 5 },
         });
-        const data = buildSharedGameData({
-            state, includesProgress: false, recipientHadSavedState: false, sharedColor: 'none',
-        });
+        const data = buildSharedGameData(sharedOpts({ state }));
         expect(data.traceSetVersion).toBe(5);
     });
 
@@ -147,9 +190,42 @@ describe('buildSharedGameData', () => {
         // block) must not carry the key at all — the fresh path's absence
         // reading is what this matches.
         const state = makeGameState({ gridSize: { cols: 4, rows: 7 } });
-        const data = buildSharedGameData({
-            state, includesProgress: false, recipientHadSavedState: false, sharedColor: 'none',
-        });
+        const data = buildSharedGameData(sharedOpts({ state }));
         expect('traceSetVersion' in data).toBe(false);
+    });
+
+    it('stamps generation mode and duration', () => {
+        const data = buildSharedGameData(sharedOpts({
+            generation: { mode: 'worker', durationMs: 250 },
+        }));
+        expect(data.generationMode).toBe('worker');
+        expect(data.generationMs).toBe(250);
+        expect(data.generationFallbackReason).toBeUndefined();
+    });
+
+    it('stamps the fallback kind and reason only when falling back', () => {
+        const data = buildSharedGameData(sharedOpts({
+            generation: {
+                mode: 'sync-fallback',
+                durationMs: 900,
+                fallbackKind: 'worker-error',
+                fallbackReason: 'Generation worker error',
+            },
+        }));
+        expect(data.generationMode).toBe('sync-fallback');
+        // The kind is the low-cardinality field an operator segments on;
+        // the reason is free text for reading individual cases.
+        expect(data.generationFallbackKind).toBe('worker-error');
+        expect(data.generationFallbackReason).toBe('Generation worker error');
+    });
+
+    it('omits the fallback fields rather than setting them undefined', () => {
+        // Umami cannot filter on absence, so an explicit `undefined` would
+        // become a value in the dashboard rather than a missing key.
+        const data = buildSharedGameData(sharedOpts({
+            generation: { mode: 'worker', durationMs: 250 },
+        }));
+        expect('generationFallbackKind' in data).toBe(false);
+        expect('generationFallbackReason' in data).toBe(false);
     });
 });
