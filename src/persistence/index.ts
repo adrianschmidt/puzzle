@@ -21,7 +21,6 @@ export {
     saveNewPuzzle,
     loadState,
     loadSavedGame,
-    clearSavedState,
     createDebouncedSave,
     installGeometryTokenInvalidation,
     STORAGE_KEY,
