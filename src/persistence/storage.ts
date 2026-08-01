@@ -551,15 +551,6 @@ export function loadState(): GameState | undefined {
 }
 
 /**
- * Clear any saved game state from localStorage.
- */
-export function clearSavedState(): void {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(PROGRESS_KEY);
-    localStorage.removeItem(GEOMETRY_SEED_KEY);
-}
-
-/**
  * Create a debounced save function.
  *
  * Returns a function that, when called with a GameState,

@@ -36,7 +36,6 @@ import {
     saveNewPuzzle,
     loadState,
     loadSavedGame,
-    clearSavedState,
     createDebouncedSave,
     installGeometryTokenInvalidation,
     STORAGE_KEY,
@@ -364,25 +363,6 @@ describe('saveNewPuzzle / loadSavedGame selection', () => {
     });
 });
 
-describe('clearSavedState', () => {
-    beforeEach(() => {
-        localStorage.clear();
-    });
-
-    it('removes the saved state', () => {
-        const state = makeGameState();
-        saveNewPuzzle(state);
-        expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
-
-        clearSavedState();
-        expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-    });
-
-    it('is safe to call when nothing is saved', () => {
-        expect(() => clearSavedState()).not.toThrow();
-    });
-});
-
 describe('split storage', () => {
     beforeEach(() => localStorage.clear());
 
@@ -478,13 +458,6 @@ describe('split storage', () => {
         expect(loaded.selection).toEqual([0]); // from progress, not the legacy blob
         expect(loaded.state.pieces).toEqual(state.pieces); // geometry from the legacy static blob
         expect(loaded.state.groups.length).toBe(state.groups.length); // groups recombined from progress
-    });
-
-    it('clearSavedState removes both keys', () => {
-        saveNewPuzzle(makeGameState({ seed: 5 }), [1]);
-        clearSavedState();
-        expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-        expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
     });
 
     it('reports "empty" for an orphaned progress key when geometry is missing', () => {
@@ -759,15 +732,6 @@ describe('geometry seed token (#490)', () => {
         // fast path comes back on its own.
         expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490012');
         warnSpy.mockRestore();
-    });
-
-    it('clearSavedState removes the token along with the other keys', () => {
-        saveNewPuzzle(makeGameState({ seed: 490014 }), []);
-        clearSavedState();
-
-        expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-        expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
-        expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
     });
 
     /**
