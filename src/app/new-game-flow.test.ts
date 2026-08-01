@@ -37,6 +37,8 @@ import { loadFractalConfigPreference } from '../game/fractal-config.js';
 import { loadWavyConfigPreference } from '../game/wavy-config.js';
 import { loadImageSourcePreference } from '../game/image-source.js';
 import { loadImageCategoryPreference, loadVibrantPreference } from '../game/image-categories.js';
+import { loadState, saveNewPuzzle } from '../persistence/index.js';
+import { makeSavedGameState } from '../test-helpers/fixtures.js';
 import { openNewGameDialog } from './new-game-flow.js';
 
 describe('openNewGameDialog', () => {
@@ -175,12 +177,37 @@ describe('openNewGameDialog', () => {
         expect(loadVibrantPreference()).toBe(true);
     });
 
-    // --- clearSavedState -------------------------------------------------
+    // --- previous save handling --------------------------------------------
 
-    it('clears the saved game before starting a new one', () => {
-        localStorage.setItem('puzzle-game-state', '{}');
+    it('leaves the previous save intact when the start is cancelled (or throws)', () => {
+        // `start` (the real `startNewGame`) only replaces the save once
+        // generation has fully succeeded — a cancel (the loading overlay's
+        // Cancel affordance, #489, gated on a puzzle already being
+        // installed — true for essentially every dialog-started game) or a
+        // throw resolves/rejects without ever reaching its own
+        // `persistNewPuzzle`. The default `start` stub (a no-op
+        // `async () => {}`) models exactly that: it never touches storage.
+        saveNewPuzzle(makeSavedGameState());
+
         selectWith();
-        expect(localStorage.getItem('puzzle-game-state')).toBeNull();
+
+        expect(loadState()?.imageUrl).toBe('test-image.jpg');
+    });
+
+    it('replaces the previous save once the start actually succeeds', () => {
+        // Production's `start` is `startNewGame`, which persists the new
+        // puzzle itself (via `persistNewPuzzle`) once generation succeeds —
+        // `new-game-flow.ts` no longer clears storage on its own, so the
+        // stub has to model that side effect to exercise "replaced" rather
+        // than merely "cleared".
+        saveNewPuzzle(makeSavedGameState());
+        start.mockImplementation(async () => {
+            saveNewPuzzle({ ...makeSavedGameState(), imageUrl: 'new-puzzle.jpg' });
+        });
+
+        selectWith();
+
+        expect(loadState()?.imageUrl).toBe('new-puzzle.jpg');
     });
 
     // --- start() wiring ----------------------------------------------------
