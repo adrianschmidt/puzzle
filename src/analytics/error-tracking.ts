@@ -124,11 +124,32 @@ export function initErrorTracking(): () => void {
         report('error', event.error ?? event.message);
     };
 
+    // A CSP refusal is not an error event at all — it has its own event, and
+    // the `error` listener above deliberately skips the capture phase where
+    // failed resource loads surface. Without this, `index.html`'s `img-src`
+    // policy blocking an image is invisible: the SVG `<image>` has no error
+    // handler, so the puzzle just renders transparent pieces.
+    const onCspViolation = (event: SecurityPolicyViolationEvent): void => {
+        // Keyed on the directive rather than the URI so a page blocking one
+        // image per piece cannot exhaust the session budget by itself.
+        const reason = `csp:${event.effectiveDirective}`;
+        if (!reportingAllowed(reason)) return;
+        diagnostics.warn('CSP violation:', event.effectiveDirective, event.blockedURI);
+        track('csp-violation', {
+            directive: event.effectiveDirective,
+            // Already stripped by the browser: `'data'` for a data: URL, and
+            // scheme/host/port for a cross-origin one. See CspViolationData.
+            blockedUri: event.blockedURI,
+        });
+    };
+
     window.addEventListener('unhandledrejection', onRejection);
     window.addEventListener('error', onError);
+    window.addEventListener('securitypolicyviolation', onCspViolation);
 
     return () => {
         window.removeEventListener('unhandledrejection', onRejection);
         window.removeEventListener('error', onError);
+        window.removeEventListener('securitypolicyviolation', onCspViolation);
     };
 }
