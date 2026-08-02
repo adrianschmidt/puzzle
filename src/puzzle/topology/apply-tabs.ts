@@ -238,7 +238,13 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
     //    can later identify the splice range that the bump replaces.
     let firstFar = -1;
     let lastFar = -1;
-    const tOnParentBySample: number[] = new Array(n + 1);
+    // Float64Array rather than the `new Array(n)` this wants, which
+    // `unicorn/no-new-array` forbids: every index is written before any
+    // is read, and this runs once per tab candidate per internal edge (~3.5k
+    // times on a 192-piece traced puzzle). `Array.from({length})` walks the
+    // array-like protocol — measurably ~30x the cost of a sized allocation —
+    // and its `number[]` annotation would claim contents it does not yet have.
+    const tOnParentBySample = new Float64Array(n + 1);
     for (let i = 0; i <= n; i++) {
         const t = i / n;
         const p = candidate.pointAt(t);

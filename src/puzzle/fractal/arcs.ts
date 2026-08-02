@@ -83,7 +83,12 @@ export function addArcs(
         case 1: newarc = makeArc(makeTile(con.p1.x - 1, con.p1.y), rad, frameOffset, 0, 1); break;
         case 2: newarc = makeArc(makeTile(con.p1.x, con.p1.y + 1), rad, frameOffset, 1, 1); break;
         case 3: newarc = makeArc(makeTile(con.p1.x + 1, con.p1.y), rad, frameOffset, 2, 1); break;
-        default: throw new Error(`Invalid quad: ${con.quad}`);
+        // `String(...)` only here, not in the identical throw above: the first
+        // switch's throwing default narrows `con.quad` to 0|1|2|3, so by this
+        // one TypeScript sees `never` and rejects interpolating it directly.
+        // The guard is kept anyway — unreachable per the types is not the same
+        // as unreachable per a future edit between the two switches.
+        default: throw new Error(`Invalid quad: ${String(con.quad)}`);
     }
     arcs.push(newarc);
 

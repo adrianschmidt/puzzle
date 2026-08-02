@@ -41,7 +41,7 @@ export interface DiagnosticLog {
 // Singleton diagnostic log
 // ---------------------------------------------------------------------------
 
-let _enabled = Boolean(import.meta.env.DEV);
+let _enabled = import.meta.env.DEV;
 const _entries: DiagnosticEntry[] = [];
 
 export const diagnostics: DiagnosticLog = {

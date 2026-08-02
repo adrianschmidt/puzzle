@@ -15,8 +15,8 @@ export class CellGrid {
     constructor(nrow: number, ncol: number) {
         this.nrow = nrow;
         this.ncol = ncol;
-        this.visited = new Array(ncol * nrow).fill(false);
-        this.cellmap = new Array((ncol - 1) * (nrow - 1)).fill(false);
+        this.visited = Array.from({ length: ncol * nrow }, () => false);
+        this.cellmap = Array.from({ length: (ncol - 1) * (nrow - 1) }, () => false);
         this._nunvisited = ncol * nrow;
     }
 

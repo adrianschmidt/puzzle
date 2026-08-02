@@ -13,7 +13,21 @@
  */
 
 import type { CutStyle } from '../game/cut-styles.js';
+
+
 import { createIdPreferenceStore } from './preference-store.js';
+
+/**
+ * A known cut style, or any other string.
+ *
+ * `CutStyle | string` collapses to `string` — the linter is right about that —
+ * so the `& {}` is what keeps the union from being flattened, preserving
+ * autocomplete on the four known styles while still accepting the bare
+ * `string` that `GameState.cutStyle` is declared as. Plain `string` also
+ * satisfies the linter, so deleting the `CutStyle |` half looks free and is
+ * not: it silently drops the only place naming the intended domain.
+ */
+export type CutStyleOrOther = CutStyle | (string & {});
 
 /**
  * A merge tolerance preset.
@@ -126,7 +140,7 @@ const STYLE_SNAP_MULTIPLIERS: Record<string, number> = {
 /**
  * Get the snap distance multiplier for a given cut style.
  */
-export function getStyleSnapMultiplier(style: CutStyle | string): number {
+export function getStyleSnapMultiplier(style: CutStyleOrOther): number {
     return STYLE_SNAP_MULTIPLIERS[style] ?? 1.0;
 }
 
@@ -146,7 +160,7 @@ export function getReferencePieceWidth(
 export function getActiveTolerance(
     imageWidth: number,
     cols: number,
-    cutStyle: CutStyle | string = 'classic',
+    cutStyle: CutStyleOrOther = 'classic',
 ): number {
     const preset = getTolerancePreset(loadTolerancePreference());
     const pieceWidth = getReferencePieceWidth(imageWidth, cols);

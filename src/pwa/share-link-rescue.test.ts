@@ -21,11 +21,20 @@ function fakeStorage(): Storage {
     };
 }
 
-/** Storage whose writes throw (private mode / quota). */
+/**
+ * Storage whose writes throw (private mode / quota).
+ *
+ * Built member by member rather than spreading `fakeStorage()`: a spread
+ * evaluates `length`'s getter once and copies the value, so the copy would
+ * report a frozen size instead of tracking the map.
+ */
 function throwingStorage(): Storage {
     const base = fakeStorage();
     return {
-        ...base,
+        get length() { return base.length; },
+        clear: () => base.clear(),
+        key: (i: number) => base.key(i),
+        removeItem: (k: string) => { base.removeItem(k); },
         setItem: () => { throw new Error('quota'); },
         getItem: () => { throw new Error('quota'); },
     };
