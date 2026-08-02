@@ -17,7 +17,7 @@ import {
 import { clampGridDim } from '../puzzle/topology/grid-dim.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 import { CURRENT_TRACE_SET_VERSION, normalizeTraceSetVersion } from '../puzzle/composable/traces/trace-set-version.js';
-import { isSafeHttpUrl } from './safe-url.js';
+import { isSafeHttpUrl, isSafeImageUrl } from './safe-url.js';
 
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
@@ -306,7 +306,18 @@ export function decodePayload(encoded: string): SharePayload | null {
                 translated.wf.tv = clamped;
             }
         }
-        if (translated.c === 'triangles' && translated.tf) {
+        // Both blocks are normalized whatever `c` says, matching the ungated
+        // shape check in `isValidTraceSetBlock`. Gating these on the cut style
+        // (as the `wf` branch above still does, and as these two did) leaves a
+        // foreign block un-normalized: `{ c: 'classic', tf: { tv: 'x' } }`
+        // passes the shape check, skips a triangles-gated clamp, and decodes to
+        // a `SharePayload` whose `tf` contradicts its declared `{ tv: number }`
+        // — the type-honesty gap #491 exists to close, moved rather than shut.
+        // Nothing downstream reads a foreign block (`assembleGameState` drops
+        // blocks that don't match the selected style), so this costs nothing
+        // today; it means a future `payload.tf.tv` reader gets a number or
+        // nothing, for all five cut styles.
+        if (translated.tf) {
             const clamped = clampTraceSetVersion(translated.tf.tv);
             // No legacy-classic fallback here (contrast wf.tv): an invalid tv
             // drops the whole block and the strategy substitutes the current
@@ -317,7 +328,7 @@ export function decodePayload(encoded: string): SharePayload | null {
                 translated.tf.tv = clamped;
             }
         }
-        if (translated.c === 'classic' && translated.clf) {
+        if (translated.clf) {
             const clamped = clampTraceSetVersion(translated.clf.tv);
             // An invalid tv drops the block, so the puzzle reproduces with the
             // legacy generator (contrast triangles, which keeps the composable
@@ -388,9 +399,16 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (!isCutStyle(p.c)) return false;
     if (typeof p.s !== 'number') return false;
     if (!isRotationMode(p.r)) return false;
+    // After the cheap field checks: `i` is the one unbounded field on the wire
+    // (a blank puzzle's canvas PNG is 6-20 KB, a crafted one is capped only by
+    // the URL length limit), and parsing it is the most expensive check here.
+    // No reason to pay that for a payload a 3-byte `c` would have rejected.
+    if (!isSafeImageUrl(p.i)) return false;
     if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
     if (p.ff !== undefined && !isValidBorderlessBlock(p.ff)) return false;
     if (p.wf !== undefined && !isValidBorderlessBlock(p.wf)) return false;
+    if (p.tf !== undefined && !isValidTraceSetBlock(p.tf)) return false;
+    if (p.clf !== undefined && !isValidTraceSetBlock(p.clf)) return false;
     if (p.pr !== undefined && !isValidProgress(p.pr)) return false;
     if (p.bgc !== undefined && typeof p.bgc !== 'string') return false;
     if (p.a !== undefined && !isValidAttribution(p.a)) return false;
@@ -449,6 +467,37 @@ function isValidPayload(x: unknown): x is SharePayload {
 function isValidBorderlessBlock(x: unknown): boolean {
     if (!x || typeof x !== 'object') return false;
     return typeof (x as Record<string, unknown>).bl === 'boolean';
+}
+
+/**
+ * Validate the triangles (`tf`) and classic (`clf`) config blocks, whose only
+ * field is the trace-set version.
+ *
+ * Shape only — `tv` is deliberately NOT checked here, exactly as `wf.tv` isn't
+ * one function up. `decodePayload` clamps it through `clampTraceSetVersion`,
+ * and an unusable value drops the block and falls back rather than losing the
+ * whole link. Type-checking `tv` here would upgrade that graceful fallback into
+ * an outright rejection, which is a worse outcome for a link whose only fault
+ * is a trace set this build doesn't have.
+ *
+ * What the object check buys is the case the clamp cannot reach: the clamp
+ * blocks are guarded on plain truthiness (`translated.clf && ...`), so before
+ * this existed a *falsy* non-object — `clf: null`, `clf: 0` — skipped the clamp
+ * entirely and survived decode. `decodePayload` then returned a `SharePayload`
+ * whose `clf` was `null` while its declared type said `{ tv: number }`, one
+ * `payload.clf.tv` away from a throw on a crafted link (#491). A truthy
+ * non-object was always handled: it reached the clamp, `.tv` read `undefined`,
+ * and the block was deleted.
+ *
+ * Ungated by `p.c` like {@link isValidBorderlessBlock}, but note the two are
+ * not equivalent: that sibling fully enforces its declared shape (`bl` must be
+ * a boolean) for every style, whereas leaving `tv` to the clamp means this one
+ * cannot. `decodePayload` closes the difference from the other end by running
+ * both clamps ungated too, so a block that survives validation is always
+ * normalized or dropped whatever `c` says.
+ */
+function isValidTraceSetBlock(x: unknown): boolean {
+    return !!x && typeof x === 'object';
 }
 
 /**

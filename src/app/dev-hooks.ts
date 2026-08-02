@@ -273,8 +273,13 @@ export function installDevHooks(deps: DevHooksDeps): void {
             // The two throwing steps above name the field for every hand-typing
             // mistake they can see (unknown cutStyle/rotationMode; a non-numeric
             // imageSize/gridSize/seed throws from assertPayloadNumbersFinite), so
-            // what still reaches this branch is a non-string `imageUrl` or a
-            // `composableConfig` the decoder rejects.
+            // what still reaches this branch is a `composableConfig` the decoder
+            // rejects, or an `imageUrl` that is not a string, is empty, or
+            // carries a scheme `isSafeImageUrl` refuses — `file:///…`, `blob:`,
+            // `data:text/…`, or a protocol-relative `//host/x.png`. The scheme
+            // case is the likeliest of these to be hand-typed: an absolute
+            // local path pasted from a file browser lands here, not on a
+            // named error.
             //
             // A non-boolean `wavyConfig.borderless`/`fractalConfig.borderless`
             // is deliberately NOT in that list: `applyStyleConfigs` coerces it
