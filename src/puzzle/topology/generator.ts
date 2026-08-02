@@ -169,7 +169,7 @@ export function generateTopologyPuzzle(
     // grid-dim.ts). A strict no-op for every legitimate puzzle (dims are already
     // <= the UI/decoder ceiling).
     const baseCutCfg = {
-        ...(config?.baseCutConfig ?? {}),
+        ...config?.baseCutConfig,
         cols: clampGridDim(cols),
         rows: clampGridDim(rows),
         borderless: applyBorderless,
@@ -200,7 +200,7 @@ export function generateTopologyPuzzle(
     // config-construction site can forget to set it.
     const tabConfig =
         baseCutId === 'triangular'
-            ? { ...(config?.tabConfig ?? {}), deepResolve: true }
+            ? { ...config?.tabConfig, deepResolve: true }
             : config?.tabConfig;
     applyTabs(graph, tabGenerator, random, {
         tabConfig,

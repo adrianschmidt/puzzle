@@ -19,7 +19,7 @@ function makeBackgroundColor(): BackgroundColorControl {
  * no game). Only `current` — the narrowed dependency is what stops a fake
  * from having to guess at `hasGame`'s stricter meaning.
  */
-function makeSession(state: GameState | undefined = undefined): Pick<GameSession, 'current'> {
+function makeSession(state?: GameState): Pick<GameSession, 'current'> {
     return { current: () => state };
 }
 
