@@ -3,12 +3,24 @@ name: CI
 on:
   pull_request:
 
+# Matches the four sibling workflows, which all declare their scope. This job
+# only checks out and runs npm, so read is all it needs — and it executes a
+# good deal of third-party code (npm ci, oxlint's and vite's native bindings,
+# vitest), which `actions/checkout` hands a token to via `persist-credentials`.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step here runs a git operation, so the token this would
+          # otherwise leave in .git/config is pure exposure — readable by
+          # every npm binary the job goes on to execute.
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -16,6 +28,14 @@ jobs:
           cache: npm
 
       - run: npm ci --legacy-peer-deps
+
+      # Deliberately a step in this job rather than a job of its own. Required
+      # status checks are named in the "Protect main" ruleset, not inferred
+      # from workflow files (see dependabot-auto-merge.yml), so a new job would
+      # be an ungated check until someone edited the ruleset by hand. As a step
+      # it inherits the existing `test` context. Placed before the build so a
+      # lint failure surfaces without waiting for tsc and vite.
+      - run: npm run lint
 
       - run: npm run build
         env:
