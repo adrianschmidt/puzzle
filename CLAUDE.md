@@ -76,6 +76,36 @@ while suppressions quietly resumed accumulating.
 `lint:fix` is a local convenience, not something CI runs. It is safe under the
 committed config, but `npm run build` and `npm test` are the backstop.
 
+## Planning docs are historical — don't propose updates to them
+
+Everything under `docs/superpowers/` — specs, plans, design docs — records what
+was **intended before the work happened**. None of it is a maintained artifact.
+
+- **Do read them when reviewing.** They carry the *why* a diff cannot: the
+  problem being solved, the alternatives rejected and on what grounds, the
+  constraints in force. That is how you tell a deliberate choice from an
+  accidental one.
+- **Never propose editing them.** Not "the spec's line citations are stale",
+  not "§2 doesn't record this change", not "the numbers in the design doc no
+  longer match". Drift between a plan and the merged code is the *expected*
+  end state, not a defect. The PR conversation already records the divergence,
+  and it is the durable record.
+
+**Specs are not exempt.** "The plan is historical but the spec is maintained"
+is a tempting distinction and a wrong one. Both are planning docs.
+
+`CLAUDE.md` is the opposite case and the reason the distinction matters: it is
+live instruction loaded into every session, so keeping it accurate *is* the
+job. Fix it whenever a change makes it wrong.
+
+Worth naming the failure mode, because it recurs: doc-vs-code mismatches are
+unusually easy to spot and easy to state precisely, which makes them attractive
+filler for a review that is otherwise coming up clean. A findings list that is
+mostly "the doc says X, the code does Y" is a signal the review has run out of
+real material. On PR #516 seven of nine final recommendations were doc-update
+proposals, and several earlier rounds had already produced fixup commits doing
+that work — all of it waste, and it crowded out the genuine findings.
+
 ## Keep the in-app help text correct
 
 The info modal (`src/ui/info-modal.ts`) is the only in-app place where the
