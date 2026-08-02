@@ -15,9 +15,17 @@
          `img-src` only, deliberately: a `default-src` would need script/style/
          connect/font policy worked out alongside it. `data:` is required —
          a blank puzzle's share link carries the painted canvas as a PNG.
-         The wildcard matches Unsplash subdomains (images./plus.), not the
-         bare apex, which images never come from. `api.unsplash.com` is a
-         fetch, governed by `connect-src`, so it is unaffected. -->
+         The wildcard is a hedge, not a fix for an observed case: every
+         Unsplash image this app has loaded came from `images.unsplash.com`
+         (analytics through 2026-08-02 show zero `imageSource: 'fallback'`
+         across 358 Unsplash games, and `classifyImageSource` sends any
+         other host to that bucket — so pinning would have been correct
+         too). It is wildcarded because the error is asymmetric: a CDN host
+         we cannot predict blanks every puzzle for every player, while the
+         extra breadth is one vendor's own subdomains. Matches subdomains
+         but not the bare apex, which images never come from.
+         `api.unsplash.com` is a fetch, governed by `connect-src`, so it is
+         unaffected. -->
     <meta http-equiv="Content-Security-Policy"
           content="img-src 'self' data: https://*.unsplash.com" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
@@ -28,7 +36,7 @@
     <title>Puzzle</title>
     <link rel="icon" href="/puzzle/favicon-48.png" type="image/png" />
     <link rel="apple-touch-icon" href="/puzzle/apple-touch-icon.png" />
-    <script type="module" crossorigin src="/puzzle/dev/assets/index-3yc1e00p.js"></script>
+    <script type="module" crossorigin src="/puzzle/dev/assets/index-DwM5lr33.js"></script>
     <link rel="stylesheet" crossorigin href="/puzzle/dev/assets/index-BtDUAgwa.css">
   <link rel="manifest" href="/puzzle/dev/manifest.webmanifest"></head>
   <body>
