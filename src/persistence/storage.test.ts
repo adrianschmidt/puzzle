@@ -986,7 +986,7 @@ describe('unreadable save carries the raw blobs for download', () => {
         expect(localStorage.getItem(PROGRESS_KEY)).toBe(progressBefore);
         const touchedKeys = Array.from({ length: localStorage.length }, (_, i) =>
             localStorage.key(i),
-        ).filter((key) => key !== GEOMETRY_SEED_KEY);
+        ).filter((key): key is string => key !== null && key !== GEOMETRY_SEED_KEY);
         expect(touchedKeys.sort()).toEqual([STORAGE_KEY, PROGRESS_KEY].sort());
     });
 

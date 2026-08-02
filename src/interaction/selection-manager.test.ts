@@ -97,7 +97,7 @@ describe('SelectionManager', () => {
             const added = mgr.selectMany([1, 2, 3]);
 
             expect(added).toBe(true);
-            expect([...mgr.selectedGroupIds].sort()).toEqual([1, 2, 3]);
+            expect([...mgr.selectedGroupIds].sort((a, b) => a - b)).toEqual([1, 2, 3]);
             expect(listener).toHaveBeenCalledTimes(1);
         });
 
@@ -109,7 +109,7 @@ describe('SelectionManager', () => {
 
             mgr.selectMany([1, 2]);
 
-            expect([...mgr.selectedGroupIds].sort()).toEqual([1, 2, 9]);
+            expect([...mgr.selectedGroupIds].sort((a, b) => a - b)).toEqual([1, 2, 9]);
             expect(listener).toHaveBeenCalledTimes(1);
         });
 
@@ -122,7 +122,7 @@ describe('SelectionManager', () => {
             const added = mgr.selectMany([1, 2]);
 
             expect(added).toBe(true);
-            expect([...mgr.selectedGroupIds].sort()).toEqual([1, 2]);
+            expect([...mgr.selectedGroupIds].sort((a, b) => a - b)).toEqual([1, 2]);
             expect(listener).toHaveBeenCalledTimes(1);
         });
 

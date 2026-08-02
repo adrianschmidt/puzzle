@@ -83,7 +83,7 @@ describe('composePuzzle', () => {
 
     it('preserves piece IDs', () => {
         const pieces = composePuzzle(pieceDefs, template, createSeededRandom(42));
-        expect(pieces.map(p => p.id).sort()).toEqual([0, 1, 2, 3]);
+        expect(pieces.map(p => p.id).sort((a, b) => a - b)).toEqual([0, 1, 2, 3]);
     });
 
     it('preserves imageOffset', () => {

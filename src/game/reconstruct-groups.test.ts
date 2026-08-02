@@ -91,7 +91,7 @@ describe('applyProgress', () => {
         expect(state.groups.length).toBe(originalGroupCount - 1);
         const merged = state.groups.find((g) => g.pieces.size === 2);
         expect(merged).toBeDefined();
-        expect([...merged!.pieces.keys()].sort()).toEqual([0, 1]);
+        expect([...merged!.pieces.keys()].sort((a, b) => a - b)).toEqual([0, 1]);
     });
 
     it('restores merged-group rotation when rotation mode is on', () => {

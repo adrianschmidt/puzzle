@@ -215,7 +215,7 @@ describe('getBorderEdges', () => {
         );
 
         expect(borders).toHaveLength(2);
-        expect(borders.map((b) => b.piece.id).sort()).toEqual([0, 1]);
+        expect(borders.map((b) => b.piece.id).sort((a, b) => a - b)).toEqual([0, 1]);
     });
 });
 

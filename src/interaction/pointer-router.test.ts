@@ -368,7 +368,7 @@ describe('PointerRouter — pinch (from idle)', () => {
 
         expect(h.callbacks.onPinch.start).toHaveBeenCalledTimes(1);
         const [a, b] = h.callbacks.onPinch.start.mock.calls[0];
-        expect([a.pointerId, b.pointerId].sort()).toEqual([1, 2]);
+        expect([a.pointerId, b.pointerId].sort((x, y) => x - y)).toEqual([1, 2]);
     });
 
     it('does not start a pinch from mouse + touch', () => {

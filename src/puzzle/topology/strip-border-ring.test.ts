@@ -20,7 +20,7 @@ describe('stripBorderRing', () => {
 
         const { pieces } = stripBorderRing([p0, p1, p2, p3], []);
 
-        expect(pieces.map((p) => p.id).sort()).toEqual([1, 2]);
+        expect(pieces.map((p) => p.id).sort((a, b) => a - b)).toEqual([1, 2]);
     });
 
     it('re-marks a survivor edge that pointed at a removed piece as a border edge', () => {
@@ -58,7 +58,7 @@ describe('stripBorderRing', () => {
             { id: 1, pieceIds: [2, 3] }, // both survive → kept
         ];
         const { pieces, autoGroups } = stripBorderRing([p0, p1, p2, p3], groups);
-        expect(pieces.map((p) => p.id).sort()).toEqual([1, 2, 3]);
+        expect(pieces.map((p) => p.id).sort((a, b) => a - b)).toEqual([1, 2, 3]);
         expect(autoGroups).toEqual([{ id: 1, pieceIds: [2, 3] }]);
     });
 
@@ -66,6 +66,6 @@ describe('stripBorderRing', () => {
         const p1 = piece(1, [edge(10, 2, 20)]);
         const p2 = piece(2, [edge(20, 1, 10)]);
         const { pieces } = stripBorderRing([p1, p2], []);
-        expect(pieces.map((p) => p.id).sort()).toEqual([1, 2]);
+        expect(pieces.map((p) => p.id).sort((a, b) => a - b)).toEqual([1, 2]);
     });
 });
