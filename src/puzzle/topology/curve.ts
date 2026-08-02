@@ -135,7 +135,10 @@ export class Curve {
      * stale all three together.
      */
     private reducedSegment(index: number): Bezier[] {
-        this._reducedSegments ??= new Array<Bezier[] | undefined>(this.segments.length);
+        // Not pre-sized: this cache is only ever indexed, never measured, so
+        // its length is immaterial and `[]` is both simpler and cheaper than
+        // the `new Array(n)` that `unicorn/no-new-array` forbids.
+        this._reducedSegments ??= [];
         return (this._reducedSegments[index] ??= completeReduction(this.beziers[index]));
     }
 

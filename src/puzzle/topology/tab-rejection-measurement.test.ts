@@ -78,7 +78,7 @@ describe('traced-tab rejection measurement', () => {
         let accepted = 0;
         // Deep ladder has 10 rungs (see deepRungs in traced-tab-generator.ts):
         // scale x invert for 1.0/0.8/0.64/0.512, then 0.512 center upright/invert.
-        const rungCommits = new Array(10).fill(0);
+        const rungCommits = Array.from({ length: 10 }, () => 0);
         for (let s = 0; s < SEEDS; s++) {
             const random = createSeededRandom(s);
             const curves = triangularCutGenerator.generate(frame, random, {

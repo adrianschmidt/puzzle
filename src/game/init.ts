@@ -205,8 +205,7 @@ function assembleGameState(
     }
 
     if (tabDebugReport) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (globalThis as any).__tabDebug = tabDebugReport;
+        (globalThis as { __tabDebug?: unknown }).__tabDebug = tabDebugReport;
         // eslint-disable-next-line no-console
         console.info('[tabDebug] report attached to window.__tabDebug',
             { pieceCount: Object.keys(tabDebugReport).length });

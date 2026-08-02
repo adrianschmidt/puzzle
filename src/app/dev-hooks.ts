@@ -109,8 +109,7 @@ export interface DevHooksDeps {
 export function installDevHooks(deps: DevHooksDeps): void {
     // Debug helper: solve the puzzle by placing all pieces in their correct
     // positions. The same reference the info modal's Solve button calls.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__solvePuzzle = deps.solve;
+    (window as { __solvePuzzle?: unknown }).__solvePuzzle = deps.solve;
 
     /**
      * Dev-console hook for visual smoke-testing the experimental two-circle
@@ -126,7 +125,7 @@ export function installDevHooks(deps: DevHooksDeps): void {
      * only the in-memory render is meaningful. After the page reloads, the
      * autosaved state falls back to sine defaults.
      */
-    (window as any).__startVennPuzzle = (overrides?: {
+    (window as { __startVennPuzzle?: unknown }).__startVennPuzzle = (overrides?: {
         leftCenter?: { x: number; y: number };
         leftRadius?: number;
         rightCenter?: { x: number; y: number };
@@ -171,8 +170,7 @@ export function installDevHooks(deps: DevHooksDeps): void {
      * defaults, classic tabs, no rotation, current saved image-source
      * preference. Seed defaults to a fresh random value each call.
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__newComposableGame = (overrides?: {
+    (window as { __newComposableGame?: unknown }).__newComposableGame = (overrides?: {
         cols?: number;
         rows?: number;
         baseCutGenerator?: string;
@@ -252,8 +250,7 @@ export function installDevHooks(deps: DevHooksDeps): void {
      * as "these params generated"; a cancel emits `generation-canceled`
      * (`source: 'repro'`) and no `new-game-started`.
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__reproPuzzle = async (params: ReproParams): Promise<boolean> => {
+    (window as { __reproPuzzle?: unknown }).__reproPuzzle = async (params: ReproParams): Promise<boolean> => {
         let payload: SharePayload;
         let decoded: SharePayload | null;
         try {

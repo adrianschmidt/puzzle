@@ -77,7 +77,7 @@ export function attachShareSection(
 
     // Wiring
     const progressAvailable = hasShareableProgress(state);
-    const completed = !!state.completed;
+    const completed = state.completed;
     if (!progressAvailable && completed) {
         checkbox.disabled = true;
         hint.textContent = 'Puzzle is already complete.';

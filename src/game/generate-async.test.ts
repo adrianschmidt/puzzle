@@ -58,7 +58,13 @@ class ThrowingPostMessageWorker extends StubWorker {
     }
 }
 
-/** A `new Worker(...)` that throws, e.g. a blocked or missing worker script. */
+/**
+ * A `new Worker(...)` that throws, e.g. a blocked or missing worker script.
+ *
+ * Has to be a class, not a factory: production reaches it through
+ * `new Worker(...)`, so the throw must happen during construction.
+ */
+// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class ThrowingConstructorWorker {
     constructor() { throw new Error('worker script blocked'); }
 }

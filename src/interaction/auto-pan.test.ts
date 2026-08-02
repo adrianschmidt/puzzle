@@ -104,10 +104,10 @@ describe('AutoPanController', () => {
 
         // Ensure RAF/CAF exist on globalThis (missing in some test environments)
         if (!globalThis.requestAnimationFrame) {
-            (globalThis as any).requestAnimationFrame = () => 0;
+            (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame = () => 0;
         }
         if (!globalThis.cancelAnimationFrame) {
-            (globalThis as any).cancelAnimationFrame = () => {};
+            (globalThis as { cancelAnimationFrame?: unknown }).cancelAnimationFrame = () => {};
         }
 
         callbacks = {
