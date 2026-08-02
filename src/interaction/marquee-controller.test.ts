@@ -122,7 +122,7 @@ describe('MarqueeController', () => {
         c.start(evt(0, 0));
         c.end(evt(20, 20));
 
-        expect([...selection.selectedGroupIds].sort()).toEqual([1, 9]);
+        expect([...selection.selectedGroupIds].sort((a, b) => a - b)).toEqual([1, 9]);
     });
 
     it('does not commit when the box matches nothing new', () => {

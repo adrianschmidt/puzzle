@@ -615,7 +615,7 @@ describe('detectMerges', () => {
         // Should find both neighbors
         expect(candidates).toHaveLength(2);
 
-        const targetGroupIds = candidates.map((c) => c.targetGroup.id).sort();
+        const targetGroupIds = candidates.map((c) => c.targetGroup.id).sort((a, b) => a - b);
         expect(targetGroupIds).toEqual([1, 2]);
     });
 
