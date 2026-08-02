@@ -54,9 +54,7 @@ describe('traced-tab rejection measurement', () => {
         }
         const rejectPct = (100 * (total - accepted)) / total;
         const [base, flip, shrink, shrinkCenter] = rungCommits;
-        // eslint-disable-next-line no-console
         console.log(`eligible=${total} accepted=${accepted} flat=${(total - accepted)} reject=${rejectPct.toFixed(1)}%`);
-        // eslint-disable-next-line no-console
         console.log(`per-rung commits: base=${base} flip=${flip} shrink=${shrink} shrink+center=${shrinkCenter}`);
         expect(total).toBeGreaterThan(0);
         // MANUAL-ONLY guard: this whole test is it.skip in CI (runs only
@@ -99,9 +97,7 @@ describe('traced-tab rejection measurement', () => {
             });
         }
         const rejectPct = (100 * (total - accepted)) / total;
-        // eslint-disable-next-line no-console
         console.log(`[triangular] eligible=${total} accepted=${accepted} flat=${total - accepted} reject=${rejectPct.toFixed(1)}%`);
-        // eslint-disable-next-line no-console
         console.log(`[triangular] per-rung commits: ${rungCommits.join(',')}`);
         expect(total).toBeGreaterThan(0);
     });

@@ -1,5 +1,81 @@
 # Repo conventions for Claude
 
+## The oxlint config's disabled rules are load-bearing
+
+`npm run lint` runs oxlint with type-aware rules. Ten rules are switched off in
+`.oxlintrc.jsonc`, each with an inline reason. **Five are noise** — high hit
+counts with no defect behind them (`no-underscore-dangle`,
+`consistent-function-scoping`, `no-unsafe-type-assertion`, `unbound-method`,
+and `unicorn/no-array-sort`, whose 27 hits contained zero real defects).
+
+**The other five were verified to be actively wrong here**, and these are the
+ones worth knowing before you touch the config:
+
+- `typescript/no-unnecessary-boolean-literal-compare` **silently removes a
+  security guard.** Its fix rewrote `cf.bl = c.borderless === true` to
+  `cf.bl = c.borderless` in `share-link.ts`, dropping a coercion on a value
+  decoded from an untrusted share link. It compiles fine — only a test caught
+  it. This is the dangerous one.
+- `typescript/no-unnecessary-type-assertion` **breaks the build**, removing a
+  cast `tsc` requires in `sw-error-bridge.ts` (2× TS2769).
+- `unicorn/no-array-reverse` fires on `Curve.reverse()`, a custom method that
+  returns a new `Curve` rather than mutating.
+- `unicorn/require-post-message-target-origin` fires on `Worker` and
+  ServiceWorker-`Client` `postMessage`, which take `(message, transfer?)` and
+  have no `targetOrigin` at all. Its fix would throw at runtime.
+- `typescript/consistent-return` fires on exhaustive enum switches; satisfying
+  it means adding a `default` that *removes* the compile error a newly-added
+  enum member would otherwise cause.
+
+Do not re-enable one to "fix more things" without reading
+`docs/superpowers/specs/2026-08-02-oxlint-adoption-design.md` first.
+
+Separately, `oxc/approx-constant` is **enabled for all source** and disabled
+only for `**/*.test.ts`, because the decimal fixtures there — `3.14159265`,
+`2.71828182` — are deliberately awkward quantization inputs, not
+approximations of pi. A stray `3.14159` anywhere under `src/`, `diagnostics.ts`
+included, is still flagged. That scoping is why `overrides` has **two** entries
+rather than one with a merged `files` list: `no-console` is off for tests *and*
+`diagnostics.ts`, `approx-constant` for tests only. Collapsing them silently
+widens `approx-constant` onto a source file — which is exactly what happened
+once here.
+
+**Never add `--type-check` (or `options.typeCheck`).** `src/pwa/sw.ts` is
+excluded from `tsconfig.json`, so tsgolint resolves it against a project
+without the WebWorker lib and emits ten bogus errors. Worth knowing that the
+underlying seam survives the prohibition: `sw.ts` is linted with type-aware
+rules resolved against a project that does not contain it, so its worker types
+and `import.meta.env` don't resolve. (`self` itself is fine — the file declares
+it as `ServiceWorkerGlobalScope` at `src/pwa/sw.ts:30`, shadowing the global.)
+Nothing fires there today, but the constraint is "sw.ts sits outside the
+linter's type universe", not "one flag is cursed".
+
+Lint scope is `src`, matching `tsconfig.json`'s `include`, so a new top-level
+directory is not silently opted in. Note the one gap that follows from the
+paragraph above rather than contradicting it: `src/pwa/sw.ts` is inside that
+scope but *excluded* from `tsconfig.json`, so it is the one linted file whose
+type-aware rules run against a project it does not belong to.
+
+Rules and severities live in `.oxlintrc.jsonc` rather than the npm scripts, and `ignorePatterns` covers the directories no tsconfig owns
+— so a single-file `npx oxlint src/foo.ts`, a bare `npx oxlint`, or an editor
+run agree with CI on *what is checked and how hard it fails*.
+
+They do **not** agree on config discovery, and cannot. `--disable-nested-config`
+and `-c .oxlintrc.jsonc` have no `options` equivalent — they choose which
+config files load, so by construction they can only be flags — and both sit on
+the `lint`/`lint:fix` scripts. If you find yourself moving them into `options`
+to satisfy the paragraph above: there is no such key, and deleting them instead
+reopens a nested `src/**/.oxlintrc.json` silencing an entire subtree. The
+reason is recorded beside the `options` block itself.
+
+`src/lint-config.test.ts` pins both `options` keys and the script's scope.
+`reportUnusedDisableDirectives` is the one setting with no self-protection —
+deleting it leaves every existing directive valid, so CI would stay green
+while suppressions quietly resumed accumulating.
+
+`lint:fix` is a local convenience, not something CI runs. It is safe under the
+committed config, but `npm run build` and `npm test` are the backstop.
+
 ## Keep the in-app help text correct
 
 The info modal (`src/ui/info-modal.ts`) is the only in-app place where the

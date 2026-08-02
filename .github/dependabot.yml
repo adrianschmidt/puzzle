@@ -25,6 +25,26 @@ updates:
         patterns:
           - "vitest"
           - "@vitest/*"
+      # oxlint-tsgolint embeds a specific TypeScript release rather than
+      # resolving the one in this package.json — 7.0.2001 is TS 7.0.2, matching
+      # the `typescript` pin.
+      #
+      # Grouping BATCHES whatever members have an update in the same run; it
+      # does not hold a lone `typescript` bump until tsgolint ships a matching
+      # release, so it cannot guarantee the two stay in step. What it buys is
+      # that when both do move together they land in one PR instead of two
+      # racing ones. Both carry `~`, so drift is bounded to the same TS
+      # minor rather than to a single patch — the linter's embedded compiler
+      # can sit a few 7.0.x patches from the one `tsc` uses. An exact pin would
+      # fight the unattended merges this repo relies on, and any behavioural
+      # consequence turns the required `test` check red.
+      typescript:
+        patterns:
+          - "typescript"
+          - "oxlint"
+          - "oxlint-tsgolint"
+          - "@oxlint/*"
+          - "@oxlint-tsgolint/*"
       workbox:
         patterns:
           - "workbox-*"
