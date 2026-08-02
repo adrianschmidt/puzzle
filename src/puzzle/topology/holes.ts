@@ -86,7 +86,7 @@ function findContainingFace(
     graph: TopologyGraph,
     excludeComponent: Component,
 ): Face | null {
-    const excluded = new Set([...excludeComponent.faces]);
+    const excluded = new Set(excludeComponent.faces);
     let best: Face | null = null;
     let bestArea = Infinity;
 

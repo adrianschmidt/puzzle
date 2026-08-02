@@ -277,8 +277,8 @@ export class Curve {
                 return [Curve.line(this.start, this.start), this];
             }
             return [
-                new Curve([...this.segments.slice(0, segmentIndex)]),
-                new Curve([...this.segments.slice(segmentIndex)]),
+                new Curve(this.segments.slice(0, segmentIndex)),
+                new Curve(this.segments.slice(segmentIndex)),
             ];
         }
         if (localT >= 1 - 1e-10) {
@@ -287,8 +287,8 @@ export class Curve {
                 return [this, Curve.line(this.end, this.end)];
             }
             return [
-                new Curve([...this.segments.slice(0, segmentIndex + 1)]),
-                new Curve([...this.segments.slice(segmentIndex + 1)]),
+                new Curve(this.segments.slice(0, segmentIndex + 1)),
+                new Curve(this.segments.slice(segmentIndex + 1)),
             ];
         }
 
