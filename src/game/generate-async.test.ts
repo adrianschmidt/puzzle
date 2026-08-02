@@ -17,14 +17,29 @@ const REQUEST: GenerationRequest = {
 /** Minimal Worker stand-in driven by each test. */
 class StubWorker {
     static instances: StubWorker[] = [];
-    onmessage: ((e: { data: unknown }) => void) | null = null;
-    onerror: ((e: { message?: string; preventDefault: () => void }) => void) | null = null;
-    onmessageerror: (() => void) | null = null;
+    messageHandler: ((e: { data: unknown }) => void) | null = null;
+    errorHandler: ((e: { message?: string; preventDefault: () => void }) => void) | null = null;
+    messageErrorHandler: (() => void) | null = null;
     posted: unknown[] = [];
     terminated = false;
     constructor() { StubWorker.instances.push(this); }
     postMessage(msg: unknown) { this.posted.push(msg); }
     terminate() { this.terminated = true; }
+
+    /**
+     * Production registers with `addEventListener`; the tests below drive the
+     * captured handlers directly. Route registrations into those slots so both
+     * sides stay simple — the stub models one handler per type, which is all
+     * production installs.
+     */
+    addEventListener(type: string, handler: (event: never) => void): void {
+        if (type === 'message') this.messageHandler = handler as StubWorker['messageHandler'];
+        else if (type === 'error') this.errorHandler = handler as StubWorker['errorHandler'];
+        else if (type === 'messageerror') this.messageErrorHandler = handler as StubWorker['messageErrorHandler'];
+        // Throw rather than drop: silently accepting a type this stub does not
+        // model would leave a real handler unwired with every test still green.
+        else throw new Error(`StubWorker: unmodeled event type '${type}'`);
+    }
 }
 
 /**
@@ -71,7 +86,7 @@ describe('generatePiecesOffThread', () => {
         const worker = StubWorker.instances[0];
         expect(worker.posted).toEqual([REQUEST]);
         const result = runGeneration(REQUEST);
-        worker.onmessage!({ data: { ok: true, result } });
+        worker.messageHandler!({ data: { ok: true, result } });
         const outcome = await promise;
         expect(outcome).toEqual({ result, mode: 'worker' });
         expect(worker.terminated).toBe(true);
@@ -80,7 +95,7 @@ describe('generatePiecesOffThread', () => {
     it('falls back to sync generation when the worker reports an infrastructure error', async () => {
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
-        StubWorker.instances[0].onmessage!({
+        StubWorker.instances[0].messageHandler!({
             data: { ok: false, kind: 'infrastructure', error: 'boom', name: 'Error' },
         });
         const outcome = await promise;
@@ -98,7 +113,7 @@ describe('generatePiecesOffThread', () => {
         // `postMessage` would be dropped before it gets there.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
-        StubWorker.instances[0].onmessage!({
+        StubWorker.instances[0].messageHandler!({
             data: {
                 ok: false,
                 kind: 'infrastructure',
@@ -113,7 +128,7 @@ describe('generatePiecesOffThread', () => {
     it('does not spend the reason budget on a bare Error name', async () => {
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
-        StubWorker.instances[0].onmessage!({
+        StubWorker.instances[0].messageHandler!({
             data: { ok: false, kind: 'infrastructure', error: 'boom', name: 'Error' },
         });
         const outcome = await promise;
@@ -126,7 +141,7 @@ describe('generatePiecesOffThread', () => {
         // Load-bearing: with a fallback the assertion below would resolve.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
-        StubWorker.instances[0].onmessage!({
+        StubWorker.instances[0].messageHandler!({
             data: {
                 ok: false,
                 kind: 'generation',
@@ -153,18 +168,18 @@ describe('generatePiecesOffThread', () => {
         // with the fallback branch's assertions still green.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
-        StubWorker.instances[0].onmessage!({
+        StubWorker.instances[0].messageHandler!({
             data: { ok: false, kind: 'generation', error: 'boom', name: 'Error' },
         });
         const rejection: unknown = await promise.then(() => null, (err: unknown) => err);
         expect(sanitizeErrorReason(rejection)).toBe('boom');
     });
 
-    it('falls back when the worker itself errors (onerror), and cancels the event', async () => {
+    it('falls back when the worker itself errors (error event), and cancels the event', async () => {
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
         const preventDefault = vi.fn();
-        StubWorker.instances[0].onerror!({ message: 'script failed to load', preventDefault });
+        StubWorker.instances[0].errorHandler!({ message: 'script failed to load', preventDefault });
         const outcome = await promise;
         expect(outcome.mode).toBe('sync-fallback');
         expect(outcome.fallbackKind).toBe('worker-error');
@@ -175,10 +190,10 @@ describe('generatePiecesOffThread', () => {
         expect(preventDefault).toHaveBeenCalledOnce();
     });
 
-    it('falls back when the response fails to deserialize (onmessageerror)', async () => {
+    it('falls back when the response fails to deserialize (messageerror event)', async () => {
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
-        StubWorker.instances[0].onmessageerror!();
+        StubWorker.instances[0].messageErrorHandler!();
         const outcome = await promise;
         expect(outcome.mode).toBe('sync-fallback');
         expect(outcome.fallbackKind).toBe('message-error');
@@ -201,7 +216,7 @@ describe('generatePiecesOffThread', () => {
         // all, leaving the loading overlay up until the page is reloaded.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
-        StubWorker.instances[0].onmessage!({ data: null });
+        StubWorker.instances[0].messageHandler!({ data: null });
         const outcome = await promise;
         expect(outcome.mode).toBe('sync-fallback');
         // Bucketed as an unusable response, not as `'spawn-failed'` — the
@@ -244,7 +259,7 @@ describe('generatePiecesOffThread', () => {
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const controller = new AbortController();
         const promise = generatePiecesOffThread(REQUEST, controller.signal);
-        StubWorker.instances[0].onerror!({ message: 'boom', preventDefault: vi.fn() });
+        StubWorker.instances[0].errorHandler!({ message: 'boom', preventDefault: vi.fn() });
         controller.abort();
         await expect(promise).rejects.toBeInstanceOf(GenerationCanceledError);
     });

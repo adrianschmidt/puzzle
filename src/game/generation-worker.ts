@@ -2,7 +2,7 @@
  * Worker entry for off-thread puzzle generation. Kept to a bare
  * message-loop shell — all logic lives in `generation-worker-core.ts`,
  * which the tests import instead (importing this file in jsdom would
- * assign `self.onmessage` on the shared window).
+ * register a message listener on the shared window).
  */
 
 import { handleGenerationRequest, describeFailure } from './generation-worker-core.js';
@@ -12,20 +12,23 @@ import type { GenerationResponse } from './generation-worker-core.js';
 /**
  * This file runs in a `DedicatedWorkerGlobalScope`, but it is type-checked
  * by the app's tsconfig, whose `lib` is the DOM — so `self` is typed as
- * `Window` here and neither `onmessage`'s payload type nor `postMessage`'s
- * single-argument worker overload lines up. The cast narrows `self` to the
- * two members this file actually uses, with the types the real worker scope
- * has. (`tsconfig.sw.json` solves the same problem properly for
+ * `Window` here and neither the message event's payload type nor
+ * `postMessage`'s single-argument worker overload lines up. The cast narrows
+ * `self` to the two members this file actually uses, with the types the real
+ * worker scope has. (`tsconfig.sw.json` solves the same problem properly for
  * `src/pwa/sw.ts` by type-checking it under `lib: WebWorker`; that is not
  * an option here because this entry's import graph reaches
  * `analytics/umami.ts`, which is legitimately DOM-typed.)
  */
 const workerScope = self as unknown as {
-    onmessage: ((event: MessageEvent<GenerationRequest>) => void) | null;
+    addEventListener(
+        type: 'message',
+        listener: (event: MessageEvent<GenerationRequest>) => void,
+    ): void;
     postMessage(message: GenerationResponse): void;
 };
 
-workerScope.onmessage = (event) => {
+workerScope.addEventListener('message', (event) => {
     void handleGenerationRequest(event.data)
         .then((response) => {
             workerScope.postMessage(response);
@@ -43,4 +46,4 @@ workerScope.onmessage = (event) => {
             // the client already routes to its main-thread fallback.
             workerScope.postMessage(describeFailure('infrastructure', err));
         });
-};
+});

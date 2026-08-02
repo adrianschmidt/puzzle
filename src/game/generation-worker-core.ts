@@ -1,7 +1,7 @@
 /**
  * The generation worker's message handler, separated from the worker
  * entry (`generation-worker.ts`) so it can be unit-tested: importing
- * the entry in jsdom would assign `self.onmessage` on the shared
+ * the entry in jsdom would register a `message` listener on the shared
  * window and leak across tests.
  *
  * Runs in worker context in production. `track()` calls made by the

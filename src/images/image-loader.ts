@@ -22,16 +22,16 @@ export function loadImageDimensions(url: string): Promise<Size> {
         const img = new Image();
         img.crossOrigin = 'anonymous';
 
-        img.onload = () => {
+        img.addEventListener('load', () => {
             resolve({
                 width: img.naturalWidth,
                 height: img.naturalHeight,
             });
-        };
+        });
 
-        img.onerror = () => {
+        img.addEventListener('error', () => {
             reject(new Error(`Failed to load image: ${url}`));
-        };
+        });
 
         img.src = url;
     });
