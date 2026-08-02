@@ -440,6 +440,53 @@ export interface UnhandledErrorData {
 }
 
 /**
+ * Data attached to `csp-violation` — the browser refused to load something
+ * under `index.html`'s Content-Security-Policy.
+ *
+ * The policy is `img-src` only, so in practice this fires for a blocked
+ * image. It exists because a wrong `img-src` is otherwise **invisible**: the
+ * SVG `<image>` the puzzle renders through carries no `error` handler, and
+ * `initErrorTracking`'s `error` listener deliberately omits the capture
+ * phase, so a blocked image produces transparent pieces while
+ * `new-game-started` still reports a healthy `imageSource`. Nothing else in
+ * the app would notice.
+ *
+ * The failure this is for is drift the repo cannot see: the policy names
+ * `https://*.unsplash.com`, so an Unsplash CDN move to another domain blocks
+ * every puzzle image with `index.html` unchanged. `src/index-html.test.ts`
+ * pins the tag against *edits*; only this event covers the outside world
+ * changing under it.
+ *
+ * So the alert is on the event existing at all: any sustained non-zero rate
+ * of `csp-violation` means images are failing to load for real players.
+ * Split on `blockedUri` to tell an Unsplash CDN change (a single new host,
+ * all sessions) from a crafted share link (scattered one-off hosts, one
+ * session each) — the latter is the policy working as designed and is
+ * expected to be rare but non-zero.
+ *
+ * `directive` is the violated directive (`effectiveDirective`), so the event
+ * stays meaningful if the policy ever grows past `img-src`.
+ *
+ * `blockedUri` is NOT a full URL, by specification rather than by our
+ * redaction: browsers report the literal `'data'` for a `data:` URL and strip
+ * a cross-origin URL to scheme/host/port. That is what makes it safe to send
+ * — it can carry neither the multi-KB blank-canvas PNG nor an Unsplash photo
+ * ID, which is the rule {@link PieceCountMismatchData} states for image URLs.
+ * Do not write queries expecting a path or query string.
+ *
+ * Shares `initErrorTracking`'s per-session rate limiter with
+ * `unhandled-error`, so a page that violates the policy once per piece
+ * reports a bounded number of events — and a flood of violations consumes
+ * the same budget uncaught exceptions draw on. Counts are therefore a
+ * floor, not a total; treat a rate-limited session as one signal, not as a
+ * measurement of how many images were blocked.
+ */
+export interface CspViolationData {
+    directive: string;
+    blockedUri: string;
+}
+
+/**
  * Data attached to `shared-load-failed` — a puzzle payload satisfied
  * surface-shape validation but failed while building the puzzle (e.g. a
  * config combination the current build's topology pipeline doesn't support).
@@ -1320,6 +1367,7 @@ export function track(name: 'traced-chunk-preload-started', data: TracedChunkPre
 export function track(name: 'traced-chunk-loaded', data: TracedChunkLoadedData): void;
 export function track(name: 'traced-chunk-load-failed', data: TracedChunkLoadFailedData): void;
 export function track(name: 'unhandled-error', data: UnhandledErrorData): void;
+export function track(name: 'csp-violation', data: CspViolationData): void;
 export function track(name: 'shared-load-failed', data: SharedLoadFailedData): void;
 export function track(name: 'image-fetch-failed', data: ImageFetchFailedData): void;
 export function track(name: 'new-game-failed', data: NewGameFailedData): void;

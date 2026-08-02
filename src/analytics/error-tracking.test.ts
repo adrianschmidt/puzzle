@@ -127,6 +127,40 @@ describe('initErrorTracking', () => {
         expect(umamiTrack).not.toHaveBeenCalled();
     });
 
+    function violate(directive: string, blockedURI: string): void {
+        // jsdom has no SecurityPolicyViolationEvent constructor, so build the
+        // shape the listener reads. The real event carries far more; these two
+        // fields are all `csp-violation` reports.
+        const event = new Event('securitypolicyviolation') as Event & {
+            effectiveDirective?: string;
+            blockedURI?: string;
+        };
+        event.effectiveDirective = directive;
+        event.blockedURI = blockedURI;
+        window.dispatchEvent(event);
+    }
+
+    it('reports a CSP violation with its directive and blocked URI', () => {
+        violate('img-src', 'https://evil.example');
+
+        expect(umamiTrack).toHaveBeenCalledWith('csp-violation', {
+            directive: 'img-src',
+            blockedUri: 'https://evil.example',
+        });
+    });
+
+    it('rate-limits CSP violations by directive, not by blocked URI', () => {
+        // A wrong img-src blocks one image per piece — hundreds per puzzle.
+        // Keying the limiter on the URI would let a single bad policy drain
+        // the whole session budget that uncaught exceptions also draw on.
+        for (let i = 0; i < 20; i++) {
+            violate('img-src', `https://evil-${i}.example`);
+        }
+
+        const reported = umamiTrack.mock.calls.filter(([name]) => name === 'csp-violation');
+        expect(reported).toHaveLength(5);
+    });
+
     it('reports each distinct reason at most 5 times per session', () => {
         for (let i = 0; i < 8; i++) {
             rejectWith(new Error('looping boom'));
