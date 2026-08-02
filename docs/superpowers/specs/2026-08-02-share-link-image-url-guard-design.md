@@ -103,10 +103,24 @@ Coverage verified against the app's actual image loads:
   unaffected by an `img-src`-only policy.
 
 `https://*.unsplash.com` matches subdomains but not the bare apex — correct
-here, since images never come from `unsplash.com` itself. The wildcard is chosen
-over pinning `images.unsplash.com` so that Unsplash CDN host variation (e.g.
-`plus.unsplash.com`) does not silently break image loading; it blocks
-attacker-controlled hosts just as effectively.
+here, since images never come from `unsplash.com` itself.
+
+The wildcard is chosen over pinning `images.unsplash.com` as a **hedge, not a
+fix for an observed case**. Checked against production analytics (2026-04-25 →
+2026-08-02): `imageSource: 'fallback'` appears **zero** times across 358
+Unsplash games, and `classifyImageSource` routes any host other than
+`images.unsplash.com` to that bucket — so no other Unsplash host has ever
+served this app, and pinning would have worked. It is wildcarded because the
+error is asymmetric: a CDN host we cannot predict blanks every puzzle for every
+player, while the extra breadth is one vendor's own subdomains. It blocks
+attacker-controlled hosts just as effectively either way.
+
+That measurement also settles a review finding that `classifyImageSource`
+(which pins `images.unsplash.com`) is miscounting Unsplash+ images as
+`'fallback'`. It is not — the bucket is empty. No classifier change is
+warranted, and the apparent inconsistency between the CSP's wildcard and the
+classifier's pin is deliberate: they have different jobs, and a security
+boundary should err loose where an analytics classifier should err precise.
 
 This is what actually closes the tracking-pixel vector, and it does so for every
 image load — resumed saves included — not just share links.
