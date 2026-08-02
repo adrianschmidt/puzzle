@@ -183,7 +183,7 @@ describe('composePuzzle', () => {
             // triangle loop (also chain-connected internally, but its
             // first edge does NOT pick up where the rectangle's last
             // edge ended). buildShape should emit one M..Z per loop.
-            const pieceDefs: PieceDefinition[] = [{
+            const twoLoopPieceDefs: PieceDefinition[] = [{
                 id: 0,
                 edges: [
                     // outer rectangle 0,0 → 100,0 → 100,100 → 0,100 → 0,0
@@ -199,7 +199,7 @@ describe('composePuzzle', () => {
                 imageOffset: { x: 0, y: 0 },
             }];
 
-            const pieces = composePuzzle(pieceDefs, template, createSeededRandom(1), { disableTabs: true });
+            const pieces = composePuzzle(twoLoopPieceDefs, template, createSeededRandom(1), { disableTabs: true });
             expect(pieces).toHaveLength(1);
             // The shape path should contain two `M ... Z` sub-paths.
             expect(pieces[0].shape).toMatch(/M.*Z.*M.*Z/);
