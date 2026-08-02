@@ -34,8 +34,8 @@ export default defineConfig({
   // supported; on a browser without module-worker support, per the
   // WHATWG HTML spec the script fetch/execution failure surfaces
   // asynchronously as an `error` event on the Worker (not a synchronous
-  // throw from the constructor), which generate-async.ts's `worker.onerror`
-  // handler already turns into the synchronous main-thread fallback — so
+  // throw from the constructor), which generate-async.ts's `error` listener
+  // already turns into the synchronous main-thread fallback — so
   // there's no new failure mode to handle.
   worker: { format: 'es' },
   test: {

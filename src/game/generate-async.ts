@@ -223,7 +223,7 @@ function runInWorker(
         };
         const onAbort = () => settle(() => reject(new GenerationCanceledError()));
         signal?.addEventListener('abort', onAbort);
-        worker.onmessage = (event: MessageEvent<GenerationResponse>) => settle(() => {
+        worker.addEventListener('message', (event: MessageEvent<GenerationResponse>) => settle(() => {
             const response = event.data;
             if (response.ok) resolve(response.result);
             else if (response.kind === 'generation') {
@@ -233,12 +233,12 @@ function runInWorker(
                     'worker-infrastructure', response.error, response.name,
                 ));
             }
-        });
-        worker.onerror = (event) => {
+        }));
+        worker.addEventListener('error', (event) => {
             // Cancel the event. Per the HTML spec an uncaught worker
             // exception whose `error` event is not canceled is re-reported
             // in the parent's global scope, where `error-tracking.ts`'s
-            // `window.onerror` listener picks it up — so a failure this
+            // window `error` listener picks it up — so a failure this
             // client handles gracefully would ALSO ship a spurious
             // `unhandled-error` event (`isIgnorableErrorEvent` won't filter
             // it: the filename is the worker chunk, not an extension URL).
@@ -246,10 +246,10 @@ function runInWorker(
             settle(() => reject(new WorkerPathError(
                 'worker-error', event.message || 'Generation worker error',
             )));
-        };
-        worker.onmessageerror = () => settle(() => reject(new WorkerPathError(
+        });
+        worker.addEventListener('messageerror', () => settle(() => reject(new WorkerPathError(
             'message-error', 'Generation worker response failed to deserialize',
-        )));
+        ))));
         try {
             worker.postMessage(request);
         } catch (err) {

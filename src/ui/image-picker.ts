@@ -170,7 +170,10 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
             tile.appendChild(img);
 
             // Property assignment (not addEventListener) so each refresh
-            // replaces the previous candidate's handler.
+            // replaces the previous candidate's handler. Tiles are reused
+            // across refreshes, so accumulating listeners would fire onPick
+            // once per stale candidate as well as the current one.
+            // eslint-disable-next-line unicorn/prefer-add-event-listener
             tile.onclick = () => options.onPick({ kind: 'photo', photo: candidate });
 
             // The photographer URL already carries the utm_source=puzzle

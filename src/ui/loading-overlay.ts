@@ -44,6 +44,10 @@ function onOverlayKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') cancelHandler?.();
 }
 
+function onCancelClick(): void {
+    cancelHandler?.();
+}
+
 /**
  * The overlay is modal to the pointer (it covers the page and takes every
  * event) but has no focus trap, so Shift+Tab off Cancel would otherwise
@@ -118,13 +122,22 @@ function syncCancelButton(
         button.className = CANCEL_CLASS;
         button.textContent = 'Cancel';
         overlay.appendChild(button);
-        // Move focus to it. The overlay covers the page and takes every
-        // pointer event, so nothing else here is actionable — and without
-        // this the only way to discover the affordance without sight is to
-        // guess that Escape works. Focusing also makes Enter/Space cancel.
+        // Creation only, deliberately. The overlay covers the page and takes
+        // every pointer event, so nothing else is actionable — without this the
+        // only way to discover Cancel without sight is to guess that Escape
+        // works, and focusing also makes Enter/Space cancel. It cannot be
+        // hoisted next to the listener below: `does not steal focus again when
+        // the overlay is re-shown` pins that a re-show leaves focus where the
+        // user put it.
         button.focus();
     }
-    button.onclick = () => cancelHandler?.();
+    // Both listeners register unconditionally: the callbacks are stable
+    // module-level references reading module-level state, so a duplicate
+    // addEventListener with the same type/callback/capture is a spec no-op.
+    // Registering the click handler inside the creation branch instead would
+    // leave the button inert if `index.html` ever pre-renders it the way it
+    // already pre-renders the overlay around it.
+    button.addEventListener('click', onCancelClick);
     document.addEventListener('keydown', onOverlayKeydown);
 }
 

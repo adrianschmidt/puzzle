@@ -17,11 +17,11 @@ const { registerSW, capturedOptions } = vi.hoisted(() => {
     const captured: { current: RegisterSWOptions | undefined } = {
         current: undefined,
     };
-    const mock = vi.fn((options?: RegisterSWOptions) => {
+    const registerSWMock = vi.fn((options?: RegisterSWOptions) => {
         captured.current = options;
         return vi.fn();
     });
-    return { registerSW: mock, capturedOptions: captured };
+    return { registerSW: registerSWMock, capturedOptions: captured };
 });
 vi.mock('virtual:pwa-register', () => ({ registerSW }));
 

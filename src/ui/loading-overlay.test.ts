@@ -73,6 +73,51 @@ describe('loading-overlay', () => {
         expect(onCancel).toHaveBeenCalledOnce();
     });
 
+    it('wires a Cancel button that was already in the markup', () => {
+        // index.html pre-renders the overlay and its spinner/text, and says it
+        // mirrors this module's structure — so it may one day pre-render the
+        // Cancel button too. Registering the click handler only in the
+        // creation branch would leave such a button inert — clicking it would
+        // do nothing. Focus is deliberately NOT hoisted with it: `does not
+        // steal focus again when the overlay is re-shown` pins the opposite
+        // invariant, so a pre-rendered button would be clickable but unfocused.
+        const overlay = document.createElement('div');
+        overlay.className = 'loading-overlay';
+        const button = document.createElement('button');
+        button.className = 'loading-overlay__cancel';
+        overlay.appendChild(button);
+        document.body.appendChild(overlay);
+
+        const onCancel = vi.fn();
+        showLoadingOverlay(undefined, { onCancel });
+
+        document.querySelector<HTMLButtonElement>('.loading-overlay__cancel')!.click();
+        expect(onCancel).toHaveBeenCalledOnce();
+    });
+
+    it('re-showing the overlay repoints Cancel at the new handler', () => {
+        // The click listener is registered once, in the button-creation
+        // branch, and reads the module-level `cancelHandler` rather than
+        // capturing the `onCancel` it was created with. That is what keeps a
+        // reused button from accumulating one listener per show — but it means
+        // a re-show has to repoint the existing button at the new callback.
+        //
+        // Both directions matter: the second handler fires, and the first does
+        // not. A per-call capture would call `first` here; a per-call
+        // `addEventListener` would call both.
+        const first = vi.fn();
+        const second = vi.fn();
+        showLoadingOverlay(undefined, { onCancel: first });
+        showLoadingOverlay(undefined, { onCancel: second });
+
+        const buttons = document.querySelectorAll('.loading-overlay__cancel');
+        expect(buttons).toHaveLength(1);
+
+        document.querySelector<HTMLButtonElement>('.loading-overlay__cancel')!.click();
+        expect(second).toHaveBeenCalledOnce();
+        expect(first).not.toHaveBeenCalled();
+    });
+
     it('focuses the Cancel button and keeps it out of the live region', () => {
         // The overlay covers the page and swallows every pointer event, so
         // nothing else is actionable while it is up. Without focus the only
