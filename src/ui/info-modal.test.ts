@@ -418,9 +418,6 @@ describe('createInfoModal — Piece outline setting', () => {
     });
 
     it('toggles the marquee-contain preference from the settings checkbox', () => {
-        const container = document.createElement('div');
-        document.body.appendChild(container);
-
         createInfoModal({ container });
 
         const checkbox = container.querySelector<HTMLInputElement>(

@@ -3,12 +3,12 @@ import { generateFractalPuzzle, scaleFractalGrid } from './index.js';
 
 describe('generateFractalPuzzle', () => {
     const imageSize = { width: 400, height: 300 };
-    const seed = 42;
+    const defaultSeed = 42;
 
     test('generates pieces with valid structure', () => {
         const cols = 4;
         const rows = 3;
-        const pieces = generateFractalPuzzle(cols, rows, imageSize, seed);
+        const pieces = generateFractalPuzzle(cols, rows, imageSize, defaultSeed);
 
         // Should generate pieces (exact count may vary due to organic nature)
         expect(pieces.length).toBeGreaterThan(0);

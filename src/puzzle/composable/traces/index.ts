@@ -91,9 +91,9 @@ export function assertTracedTemplate(raw: unknown, label: string): TracedTemplat
 
     if (!t.landmarks || typeof t.landmarks !== 'object') fail('missing landmarks');
     const lm = t.landmarks as Record<string, unknown>;
-    const finiteAt = (path: string, v: unknown): void => {
+    const finiteAt = (key: string, v: unknown): void => {
         if (typeof v !== 'number' || !Number.isFinite(v)) {
-            fail(`landmarks.${path} is not a finite number`);
+            fail(`landmarks.${key} is not a finite number`);
         }
     };
     finiteAt('apex_y', lm.apex_y);

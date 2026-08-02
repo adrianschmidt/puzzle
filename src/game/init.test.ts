@@ -572,7 +572,7 @@ describe('createNewGameAsync', () => {
         const mismatch: PieceCountMismatch = { expected: 4, actual: 3, baseCutId: 'fake' };
         const fakeStrategy: CutStyleStrategy = {
             scaleGrid: (grid) => grid,
-            inscribePuzzleSize: (imageSize) => imageSize,
+            inscribePuzzleSize: (size) => size,
             generatePieces: () => ({ pieces: [], pieceCountMismatch: mismatch }),
         };
         vi.mocked(getCutStyleStrategy).mockImplementationOnce(() => fakeStrategy);

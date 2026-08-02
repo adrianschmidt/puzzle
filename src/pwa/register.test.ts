@@ -14,14 +14,14 @@ import type { RegisterSWOptions } from 'vite-plugin-pwa/types';
 // `virtual:pwa-register`. Mock it to capture the options object passed to
 // `registerSW` (so we can drive the callbacks) and return a stub `updateSW`.
 const { registerSW, capturedOptions } = vi.hoisted(() => {
-    const capturedOptions: { current: RegisterSWOptions | undefined } = {
+    const captured: { current: RegisterSWOptions | undefined } = {
         current: undefined,
     };
-    const registerSW = vi.fn((options?: RegisterSWOptions) => {
-        capturedOptions.current = options;
+    const mock = vi.fn((options?: RegisterSWOptions) => {
+        captured.current = options;
         return vi.fn();
     });
-    return { registerSW, capturedOptions };
+    return { registerSW: mock, capturedOptions: captured };
 });
 vi.mock('virtual:pwa-register', () => ({ registerSW }));
 
