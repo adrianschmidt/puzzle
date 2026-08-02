@@ -35,3 +35,8 @@ debug-*.png
 # the spike branches keep their sources. Adding a *new* file on one of those
 # branches needs `git add -f`.
 spike/
+
+# Fixture dirs from src/lint-config.test.ts, if a run is interrupted before
+# its cleanup. Deliberately not in oxlint ignorePatterns — that would make the
+# gate tests vacuous.
+src/.oxlint-gate-*/

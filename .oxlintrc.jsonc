@@ -1,0 +1,120 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    // These live here rather than in package.json's scripts so that EVERY
+    // invocation agrees with CI. With them on the CLI, `npx oxlint src/foo.ts`
+    // while iterating on one file — or an editor integration — silently drops
+    // every type-aware rule (only-throw-error, require-array-sort-compare,
+    // no-misused-spread, restrict-template-expressions, …) and reports a false
+    // green that CI then contradicts.
+    "options": {
+        "typeAware": true,
+        // `error`, not the default warning severity. A stale suppression has to
+        // fail the required `test` check; at warning severity oxlint exits 0 and
+        // the only trace is a line in a green build log nobody opens — which is
+        // precisely how the 16 inert comments in #502 accumulated.
+        "reportUnusedDisableDirectives": "error"
+    },
+    // Two flags CANNOT live here, and both are on the npm scripts instead:
+    // `--disable-nested-config` and `-c`. Neither has an `options` key — they
+    // decide which config files get loaded, so by construction they cannot be
+    // expressed in one. That is the exception to the paragraph above: a bare
+    // `npx oxlint` or an editor run matches CI on rules and severities, but
+    // not on config discovery. Do not "fix" their absence from `options` by
+    // deleting them from the scripts — `src/lint-config.test.ts` will go red,
+    // and the hole they close is a nested config silencing a whole subtree.
+    // CI's scope comes from the explicit `src` path in the lint script; this
+    // list is what makes a bare `npx oxlint` or an editor/LSP session agree
+    // with it. Without it a rootless run reports 20 no-console errors in the
+    // one-off diag scripts, and a bare `oxlint --fix` would touch files no one
+    // verified --fix safe on. No tsconfig covers these, so type-aware rules
+    // would judge them against an inferred project.
+    "ignorePatterns": ["/scripts/", "/tools/", "/docs/", "/*.config.ts"],
+    "categories": {
+        "correctness": "error",
+        "suspicious": "error"
+    },
+    "rules": {
+        // The three rules the codebase's existing eslint-disable comments assume.
+        "no-console": "error",
+        "typescript/no-explicit-any": "error",
+        "typescript/only-throw-error": "error",
+
+        // --- Off: noise, at a volume that would drown the signal. ---
+        // 77 hits. The `__reproPuzzle` / `__newComposableGame` dev-console hooks
+        // are deliberately underscore-prefixed to mark them as non-API.
+        "no-underscore-dangle": "off",
+        // 71 hits, overwhelmingly on helpers that are clearer where they are.
+        "unicorn/consistent-function-scoping": "off",
+        // 335 hits — flags every `as`, including the guarded decode casts.
+        "typescript/no-unsafe-type-assertion": "off",
+        // 81 hits, almost all on vi.fn()/spy references in tests.
+        "typescript/unbound-method": "off",
+
+        // --- Off: verified to produce WRONG fixes on this codebase. ---
+        // Removed a cast tsc requires at sw-error-bridge.ts:87 (2x TS2769).
+        "typescript/no-unnecessary-type-assertion": "off",
+        // Rewrote `cf.bl = c.borderless === true` to `cf.bl = c.borderless` in
+        // share-link.ts. That `=== true` is a deliberate coercion guard: the
+        // value is decoded from an untrusted share link, so its declared
+        // `boolean` type is a claim, not a fact. Turned a share-link test red.
+        //
+        // This is a CLASS, not one rule. `typescript/no-unnecessary-type-
+        // conversion` stays ON via `suspicious` and reasons the same way — it
+        // is what removed `Boolean(import.meta.env.DEV)` and `!!state.completed`
+        // here, both verifiably inert. The house form for a real decode-boundary
+        // guard is `x === true`, which neither rule touches *as configured* —
+        // no-unnecessary-boolean-literal-compare is precisely the rule that
+        // would, which is why it is off above. If you find
+        // yourself writing `Boolean(x)`/`!!x` on a value already narrowed to
+        // boolean at a boundary, that rule will push you to delete it.
+        "typescript/no-unnecessary-boolean-literal-compare": "off",
+
+        // --- Off: noise — high hit counts with no defect behind them. ---
+        // Zero real defects in 27 hits: every source site already sorts a fresh
+        // copy (.filter().sort(), [...x].sort()) or a Map discarded two lines
+        // later. toSorted() would add allocations to geometry paths.
+        "unicorn/no-array-sort": "off",
+
+        // --- Off: false positives on this codebase's domain types. ---
+        // Three source hits. Two are `Curve.reverse(): Curve` (curve.ts:532),
+        // which builds and returns a NEW Curve rather than mutating — the rule
+        // is non-type-aware and matches on the method name, and `toReversed()`
+        // does not exist on Curve. The third (compose.ts:168) IS a real
+        // Array#reverse, but on a fresh `[...curvePoints]` spread, so it
+        // mutates nothing anyone else holds.
+        "unicorn/no-array-reverse": "off",
+        // All 4 hits are Worker / ServiceWorker-Client postMessage, whose
+        // signature is (message, transfer?) — there is no targetOrigin
+        // parameter; only window.postMessage has one. The suggested fix would
+        // pass a string where a transfer list is expected and throw at runtime.
+        "unicorn/require-post-message-target-origin": "off",
+        // All 5 hits are exhaustive switches over an enum with a declared
+        // return type; tsc already proves every path returns. Satisfying this
+        // rule means dead code, and adding a `default` REMOVES the compile
+        // error that a newly added enum member would otherwise cause.
+        "typescript/consistent-return": "off"
+    },
+    // Two entries, not one with a merged `files` list: the two exemptions have
+    // different scopes, and collapsing them silently widened approx-constant to
+    // a source file while three separate comments claimed it was source-only.
+    "overrides": [
+        {
+            // 30 of 31 hits are console stubs and spies in tests; the last is
+            // diagnostics.ts, where console output is the feature. Source keeps
+            // a strict global no-console.
+            "files": ["**/*.test.ts", "src/diagnostics.ts"],
+            "rules": { "no-console": "off" }
+        },
+        {
+            // Tests only. All 9 hits are deliberately awkward decimal
+            // fixtures — 4x 3.14159265 and 4x 2.71828182 across
+            // quantize-geometry.test.ts, plus 3.14159 in build-shape.test.ts —
+            // exercising coordinate quantization and formatting. They are not
+            // approximations of pi or e; rewriting them to Math.PI would change
+            // the inputs under test. Stays ON for source, diagnostics.ts
+            // included — a stray 3.14159 there would be real.
+            "files": ["**/*.test.ts"],
+            "rules": { "oxc/approx-constant": "off" }
+        }
+    ]
+}
