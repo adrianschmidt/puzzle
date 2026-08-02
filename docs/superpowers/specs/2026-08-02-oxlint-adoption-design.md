@@ -144,16 +144,60 @@ three rules the codebase already assumes, minus six with stated reasons:
 | `typescript/unbound-method` | 81 | off — noise |
 | `typescript/no-unnecessary-type-assertion` | 46 | off — breaks `tsc` (above) |
 | `typescript/no-unnecessary-boolean-literal-compare` | 1 | off — wrong fix (above) |
+| `unicorn/no-array-sort` | 27 | off — see false positives below |
+| `unicorn/no-array-reverse` | 8 | off — false-positives on `Curve.reverse()` |
+| `unicorn/require-post-message-target-origin` | 4 | off — fix would break the worker path |
+| `typescript/consistent-return` | 5 | off — fix would weaken exhaustiveness |
 
-**Overrides.** One `overrides` block, `["**/*.test.ts", "src/diagnostics.ts"]`,
-turning off three rules — each for its own stated reason rather than a blanket
-"tests are exempt":
+### Five false-positive families
+
+Every violation was inspected rather than counted. Five rule families fire on
+this codebase's domain types and are wrong in every instance. The shared cause
+is that the `suspicious` category is largely **non-type-aware**, so it matches
+on method *names* and syntax without knowing the receiver's type:
+
+1. **`unicorn/no-array-reverse` on `Curve.reverse()`.** `Curve` is a class
+   (`src/puzzle/topology/curve.ts:532`) whose `reverse(): Curve` builds and
+   returns a *new* Curve — it does not mutate. The rule reads the name and
+   assumes `Array#reverse()`. Both source hits (`dcel.ts:688`,
+   `apply-tabs.ts:125`) are bogus; `toReversed()` does not exist on `Curve`.
+
+2. **`unicorn/require-post-message-target-origin` on worker messaging.** All 4
+   hits are `workerScope.postMessage()`, `worker.postMessage()` and SW
+   `client.postMessage()` — whose signature is `(message, transfer?)`, with no
+   `targetOrigin` parameter. Only `window.postMessage()` has one. The rule's
+   suggested fix, `, workerScope.location.origin`, would pass a string where a
+   transfer list is expected: **a runtime TypeError on the generation-worker
+   path.** The most dangerous fix found in this evaluation.
+
+3. **`typescript/consistent-return` on exhaustive switches.** All 5 hits
+   (`procedural-generator.ts` ×4, `generation-core.ts`) are switches over an
+   enum where every member returns, with a declared return type. `tsc` proves
+   exhaustiveness under `strict`. Satisfying the rule means adding either dead
+   code or a `default` branch — and a `default` *removes* the compile error
+   that a newly-added `Dir` member would otherwise cause. The fix trades a
+   compile-time guarantee for runtime dead code.
+
+4. **`oxc/approx-constant` on decimal fixtures.** All 9 hits are test data —
+   `3.14159265`, `2.71828182`, `99.999999`, `-1.23456` — chosen as awkward
+   decimals to exercise coordinate quantization and number formatting, not as
+   approximations of π or e. Rewriting them to `Math.PI` would change the
+   inputs under test.
+
+5. **`unicorn/no-array-sort` finds no real defect.** Its signal is in-place
+   mutation of an array someone else holds. Of 5 source hits, 4 already sort a
+   fresh copy (`.filter().sort()`, `[...x].sort()`), and the fifth
+   (`auto-group.ts:113`) sorts arrays inside a `Map` constructed two lines
+   above and discarded immediately. 27 further hits are in tests. Zero
+   defects in 32 violations, and `toSorted()` would add an allocation to
+   geometry paths that deliberately spread when they want a copy.
+
+**Overrides.** One `overrides` block, `["**/*.test.ts", "src/diagnostics.ts"]`:
 
 - `no-console` — 26 of the 27 hits are console stubs and spies in tests; the
   1 remaining is `src/diagnostics.ts`, where console output is the feature.
-- `unicorn/no-array-sort`, `unicorn/no-array-reverse` — a test mutating an
-  array it just constructed is not a defect. Excludes 27 hits and keeps the 8
-  source-level in-place mutations visible, which is the part worth auditing.
+- `oxc/approx-constant` — family 4 above; all 9 hits are test fixtures. Left
+  enabled for source, where a stray `3.14159` would be worth flagging.
 
 Stating the policy once beats 35 inline comments, which is the accretion
 pattern the issue objects to.
@@ -197,46 +241,43 @@ reading the actual diagnostics corrected it:
   `.test.ts` files; zero in source.** Production code already passes a
   comparator everywhere it sorts.
 
-So there is no latent geometry bug class here. What remains is worth doing but
-is a smaller, honest claim:
+So there is no latent geometry bug class here. Auditing all 8 source sites
+(detailed as family 5 and family 1 above) found **zero real defects**: four
+already sort a fresh copy, one sorts a Map discarded two lines later, and the
+remaining three are `Curve.reverse()` false positives. `unicorn/no-array-sort`
+and `unicorn/no-array-reverse` are therefore off entirely, not merely
+overridden in tests.
 
-- 13 test-file sorts gain an explicit comparator — cheap, strictly better.
-- 8 source sites (`no-array-sort` ×5 in `share-link.ts`, `auto-group.ts`,
-  `merge-tolerance.ts`; `no-array-reverse` ×3 in `dcel.ts`, `apply-tabs.ts`,
-  `compose.ts`) sort or reverse **in place**, so each is worth one look for
-  whether it mutates an array a caller still holds. That is a real aliasing
-  question, just an 8-site one rather than a 40-site one.
+What survives from this area is one genuine, modest item: **13 test-file sorts
+gain an explicit comparator.** `typescript/require-array-sort-compare` is
+type-aware, which is exactly why it is the one rule of the group that does not
+misfire.
 
-The risk direction also inverts from the earlier draft. Converting `.sort()`
-to `.toSorted()` is what could move behavior — if any of those three geometry
-sites relies on the in-place mutation, the copy silently stops updating the
-original. `dcel-broad-phase-equivalence.test.ts` is the gate for
-`dcel.ts`/`apply-tabs.ts`/`compose.ts`: red means **stop and report, do not
-re-record the digest** — per CLAUDE.md, `vitest -u` rewrites all 11 silently
+The geometry-digest concern raised in earlier drafts is moot — no geometry
+source is modified by this PR. `dcel-broad-phase-equivalence.test.ts` remains
+the gate for the full suite run in Task 5, and a red digest still means **stop
+and report, never `vitest -u`** — per CLAUDE.md it rewrites all 11 silently
 and takes the alarm with it.
 
-The 27 test-file hits of these two mutation rules are excluded by override: a
-test mutating an array it just built is not a defect, and 27 suppressions to
-say so would be the accretion the issue objects to.
-
-## The 81 violations to clear
+## The 55 violations to clear
 
 Under the final config, in commit groups:
 
 | Rule | Count | Notes |
 |---|---|---|
 | `typescript/require-array-sort-compare` | 13 | test-only; add comparators |
-| `eslint/no-shadow` | 11 | review each |
-| `oxc/approx-constant` | 9 | hardcoded `Math.PI` approximations; review |
-| `unicorn/prefer-add-event-listener` | 8 | mechanical |
+| `eslint/no-shadow` | 11 | 10 tests, 1 source (`traces/index.ts:94`) |
+| `unicorn/prefer-add-event-listener` | 8 | `.onX =` clobbers prior handlers; real |
 | `unicorn/no-useless-spread` | 5 | autofixable |
 | `unicorn/no-new-array` | 5 | mechanical |
-| `unicorn/no-array-sort` | 5 | source only; aliasing audit |
-| `typescript/consistent-return` | 5 | review |
-| `unicorn/require-post-message-target-origin` | 4 | worth real attention — worker/SW messaging |
-| `unicorn/no-array-reverse` | 3 | source only; aliasing audit |
 | `typescript/no-explicit-any` | 3 | review |
-| long tail (7 rules) | 10 | |
+| `unicorn/no-useless-fallback-in-spread` | 2 | autofixable |
+| `typescript/no-unnecessary-type-conversion` | 2 | review |
+| `typescript/no-redundant-type-constituents` | 2 | `merge-tolerance.ts` |
+| long tail (4 rules, 1 each) | 4 | |
+
+Started at 28,165 for `all`; 108 after category selection; 55 after
+inspecting every violation and removing five false-positive families.
 
 ## Scripts and CI
 
