@@ -99,6 +99,132 @@ describe('share-link codec — attribution scheme validation', () => {
     });
 });
 
+describe('share-link codec — image URL scheme validation', () => {
+    const base: SharePayload = {
+        v: 1,
+        i: 'https://images.unsplash.com/photo-123?w=1080',
+        is: [1080, 720],
+        g: [8, 6],
+        c: 'classic',
+        s: 12345,
+        r: 'none',
+    };
+
+    const withImage = (i: string): SharePayload => ({ ...base, i });
+
+    it.each([
+        ['the blank sentinel', 'blank'],
+        ['a blank-canvas data: PNG', 'data:image/png;base64,iVBORw0KGgo='],
+        ['the bundled image, relative', 'first-puzzle.jpg'],
+        ['a root-relative URL', '/puzzle/first-puzzle.jpg'],
+        ['an Unsplash https URL', 'https://images.unsplash.com/photo-1?w=1080'],
+    ])('accepts %s', (_label, i) => {
+        expect(decodePayload(encodePayload(withImage(i)))?.i).toBe(i);
+    });
+
+    it.each([
+        ['javascript:', 'javascript:alert(1)'],
+        ['vbscript:', 'vbscript:msgbox(1)'],
+        ['file:', 'file:///etc/passwd'],
+        ['a non-image data: URL', 'data:text/html,<script>alert(1)</script>'],
+        ['blob:', 'blob:https://example.com/1234'],
+    ])('rejects a link whose image URL uses %s', (_label, i) => {
+        expect(decodePayload(encodePayload(withImage(i)))).toBeNull();
+    });
+
+    it('still decodes a blank puzzle\'s real share payload', () => {
+        // The regression that matters: `gameStateToPayload` does NOT collapse a
+        // blank canvas to the sentinel, so a blank puzzle's link carries the raw
+        // canvas PNG. A guard that rejected `data:` would kill every one of them.
+        const state = buildState({ imageUrl: 'data:image/png;base64,iVBORw0KGgo=' });
+        const payload = gameStateToPayload(state, { includeProgress: false });
+        expect(decodePayload(encodePayload(payload))).toEqual(payload);
+    });
+});
+
+describe('share-link codec — tf/clf block shape (#491)', () => {
+    const base = {
+        v: 1,
+        i: 'blank',
+        is: [1080, 720],
+        g: [8, 6],
+        s: 12345,
+        r: 'none',
+    };
+
+    // A falsy non-object is the case the decode-time clamp cannot reach: its
+    // guards are plain truthiness, so before validation existed these survived
+    // decode and contradicted SharePayload's declared type.
+    it.each([
+        ['tf', 'triangles', null],
+        ['tf', 'triangles', 0],
+        ['clf', 'classic', null],
+        ['clf', 'classic', 0],
+    ])('rejects a falsy non-object %s on a %s link', (key, cutStyle, value) => {
+        expect(decodePayload(encodeRaw({ ...base, c: cutStyle, [key]: value }))).toBeNull();
+    });
+
+    it.each([
+        ['tf', 'triangles', 5],
+        ['tf', 'triangles', 'x'],
+        ['clf', 'classic', 5],
+        ['clf', 'classic', 'x'],
+    ])('rejects a truthy non-object %s on a %s link', (key, cutStyle, value) => {
+        expect(decodePayload(encodeRaw({ ...base, c: cutStyle, [key]: value }))).toBeNull();
+    });
+
+    it('rejects a foreign block on an unrelated cut style, like ff/wf', () => {
+        // Ungated by `c`, matching isValidBorderlessBlock's documented choice.
+        expect(decodePayload(encodeRaw({ ...base, c: 'classic', tf: null }))).toBeNull();
+    });
+
+    it.each([
+        ['an unusable tv', { tv: 'x' }],
+        ['no tv', {}],
+        ['an array', []],
+    ])('normalizes a foreign block with %s rather than leaving it type-lying', (_label, tf) => {
+        // The shape check is ungated but the clamp used to be gated on `c`, so
+        // a triangles block on a classic link passed validation and then
+        // skipped normalization — decoding to a `tf` that contradicts its
+        // declared { tv: number }. Both clamps now run ungated.
+        const decoded = decodePayload(encodeRaw({ ...base, c: 'classic', tf }));
+        expect(decoded).not.toBeNull();
+        expect(decoded?.tf).toBeUndefined();
+    });
+
+    it('caps a foreign block carrying a valid tv instead of dropping it', () => {
+        const decoded = decodePayload(encodeRaw({
+            ...base, c: 'classic', tf: { tv: 9999 },
+        }));
+        expect(decoded?.tf).toEqual({ tv: CURRENT_TRACE_SET_VERSION });
+    });
+
+    it('still accepts a well-formed block', () => {
+        const valid = decodePayload(encodeRaw({
+            ...base, c: 'classic', clf: { tv: CURRENT_TRACE_SET_VERSION },
+        }));
+        expect(valid?.clf).toEqual({ tv: CURRENT_TRACE_SET_VERSION });
+    });
+
+    it('caps an above-current tv rather than rejecting the link', () => {
+        const capped = decodePayload(encodeRaw({ ...base, c: 'classic', clf: { tv: 9999 } }));
+        expect(capped?.clf).toEqual({ tv: CURRENT_TRACE_SET_VERSION });
+    });
+
+    it.each([
+        ['a sub-1 tv', { tv: 0 }],
+        ['a non-numeric tv', { tv: 'x' }],
+        ['no tv at all', {}],
+    ])('leaves %s to the clamp: block dropped, link survives', (_label, clf) => {
+        // The object passes the shape check, so rejection is the clamp's call —
+        // and the clamp drops the block and falls back to the legacy generator
+        // rather than killing a link whose only fault is an unusable trace set.
+        const decoded = decodePayload(encodeRaw({ ...base, c: 'classic', clf }));
+        expect(decoded).not.toBeNull();
+        expect(decoded?.clf).toBeUndefined();
+    });
+});
+
 describe('share-link codec — grid-size clamp (crafted-link DoS guard)', () => {
     it('clamps an absurd crafted grid to the max dimension', () => {
         const payload: SharePayload = {
