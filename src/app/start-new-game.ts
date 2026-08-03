@@ -54,7 +54,6 @@ import { buildPieceCountMismatchData } from './piece-count-mismatch-payload.js';
 import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import { pickBundledImage } from './bundled-image.js';
 import { resolveUnsplashImage } from './resolve-image.js';
-import { createBlankImageDataUrl } from './blank-canvas.js';
 import {
     orientationForViewport,
     orientGridSize,
@@ -224,16 +223,15 @@ export async function startNewGame(
             : null;
 
         const bundled = pickBundledImage(orientation);
-        let imageUrl: string = bundled.url;
+        let imageUrl: string | null = bundled.url;
         let imageSize = bundled.size;
         let attribution: GameState['attribution'] = bundled.attribution;
 
-        // Blank puzzle: white image, no photo. Match the puzzle orientation so
-        // a portrait screen gets a portrait blank canvas.
+        // Blank puzzle: no photo. Match the puzzle orientation so a portrait
+        // screen gets a portrait blank.
         if (imageSource === 'blank') {
-            const blankSize = blankSizeForOrientation(orientation);
-            imageUrl = createBlankImageDataUrl(blankSize);
-            imageSize = blankSize;
+            imageUrl = null;
+            imageSize = blankSizeForOrientation(orientation);
             attribution = undefined;
         }
 

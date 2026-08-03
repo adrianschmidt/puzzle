@@ -34,8 +34,8 @@ export function orientGridSize(grid: GridSize, o: Orientation): GridSize {
 }
 
 /**
- * Pixel dimensions for a blank-canvas puzzle in the given orientation, so a
- * portrait screen gets a portrait blank canvas and a landscape screen a
+ * Pixel dimensions for a blank puzzle in the given orientation, so a
+ * portrait screen gets a portrait blank and a landscape screen a
  * landscape one. Mirrors {@link pickBundledImage} for the bundled source,
  * keeping all image sources symmetric on orientation.
  */

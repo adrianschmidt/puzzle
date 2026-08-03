@@ -225,7 +225,7 @@ export function installDevHooks(deps: DevHooksDeps): void {
      * The params run through the share codec's validation and clamps and
      * then the share-link load path, so reproduction semantics match a
      * share link exactly. `imageUrl: 'blank'` — or no `imageUrl` at all —
-     * renders on the blank canvas at the recorded dimensions; geometry
+     * renders as a blank puzzle at the recorded dimensions; geometry
      * depends on the image's dimensions, not its pixels. Fractional
      * `imageSize` values are floored by the codec's clamps, and attribution
      * and background color are not part of the params, so a replayed
