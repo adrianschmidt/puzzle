@@ -27,12 +27,6 @@ vi.mock('../puzzle/topology/traced-tab-loader.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../puzzle/topology/traced-tab-loader.js')>();
     return { ...actual, preloadTracedTabGenerator: vi.fn(async () => {}) };
 });
-// jsdom has no real canvas 2D context (`getContext('2d')` returns null), so
-// the real `createBlankImageDataUrl` throws in this environment regardless
-// of what it's asked to draw — stub it rather than fight the DOM.
-vi.mock('./blank-canvas.js', () => ({
-    createBlankImageDataUrl: vi.fn(() => 'data:image/png;base64,blank'),
-}));
 // Plain `vi.spyOn` can't intercept the call `load-shared-puzzle.ts` makes to
 // `createNewGameAsync` imported from another module under Vite; wrap the
 // real implementation via `vi.mock` passthrough so tests can override it for
@@ -47,7 +41,6 @@ vi.mock('../game/index.js', async (importOriginal) => {
 
 import { showLoadingOverlay, hideLoadingOverlay, showToast } from '../ui/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
-import { createBlankImageDataUrl } from './blank-canvas.js';
 import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './load-shared-puzzle.js';
 
@@ -149,20 +142,17 @@ describe('loadSharedPuzzle', () => {
         expect(preloadTracedTabGenerator).toHaveBeenCalledTimes(1);
     });
 
-    it('regenerates the blank canvas at the recorded dimensions', async () => {
-        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
+    it('loads the blank sentinel as a puzzle with no image', async () => {
+        await loadSharedPuzzle(payload({ i: 'blank' }), false, deps);
 
-        await loadSharedPuzzle(payload({ i: 'blank', is: [777, 555] }), false, deps);
+        expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
+    });
 
-        expect(createBlankImageDataUrl).toHaveBeenCalledWith({ width: 777, height: 555 });
-        expect(createNewGameAsync).toHaveBeenCalledWith(
-            'data:image/png;base64,blank',
-            { width: 777, height: 555 },
-            expect.anything(),
-            expect.anything(),
-            expect.anything(),
-            expect.anything(),
-        );
+    it('loads a legacy data: URL as a puzzle with no image', async () => {
+        const legacy = 'data:image/png;base64,' + 'A'.repeat(64);
+        await loadSharedPuzzle(payload({ i: legacy }), false, deps);
+
+        expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
     });
 
     it('applies the attribution the link carried', async () => {

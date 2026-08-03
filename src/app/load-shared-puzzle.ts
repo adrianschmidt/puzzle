@@ -2,9 +2,8 @@
  * Load a puzzle from a decoded share-link payload — or, via the
  * `__reproPuzzle` console hook, from a reconstructed one. Preload the
  * traced-tab chunk if the payload needs it, resolve the image (the
- * payload's URL, or a locally-regenerated blank canvas for the `'blank'`
- * sentinel), generate the puzzle, apply the link's attribution and
- * progress, and install it.
+ * payload's URL, or none for a blank puzzle), generate the puzzle, apply
+ * the link's attribution and progress, and install it.
  *
  * Most of the work is delegated to extracted modules; what is left here is
  * orchestration order:
@@ -44,7 +43,6 @@ import { buildSharedGameData } from './new-game-payload.js';
 import { buildPieceCountMismatchData } from './piece-count-mismatch-payload.js';
 import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import { diagnostics } from '../diagnostics.js';
-import { createBlankImageDataUrl } from './blank-canvas.js';
 import type { BackgroundColorControl } from './install-background-color.js';
 import type { GameSession } from './game-session.js';
 
@@ -127,11 +125,10 @@ export async function loadSharedPuzzle(
 
         const imageSize = { width: payload.is[0], height: payload.is[1] };
 
-        // If the sentinel is the blank canvas, regenerate it locally.
-        let imageUrl = payload.i;
-        if (imageUrl === 'blank') {
-            imageUrl = createBlankImageDataUrl(imageSize);
-        }
+        // Legacy links carry the synthesized white PNG; both mean no image.
+        const imageUrl = payload.i === 'blank' || payload.i.startsWith('data:')
+            ? null
+            : payload.i;
 
         const viewport = {
             width: deps.container.clientWidth || window.innerWidth,

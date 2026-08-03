@@ -17,12 +17,6 @@ vi.mock('../images/index.js', () => ({
     getUnsplashAccessKey: vi.fn(),
     triggerPhotoDownload: vi.fn(async () => {}),
 }));
-// jsdom has no real canvas 2D context (`getContext('2d')` returns null), so
-// the real `createBlankImageDataUrl` throws in this environment regardless
-// of what it's asked to draw — stub it rather than fight the DOM.
-vi.mock('./blank-canvas.js', () => ({
-    createBlankImageDataUrl: vi.fn(() => 'data:image/png;base64,blank'),
-}));
 // `createNewGame` below runs for real, and its generator registry imports
 // `tracedTabGeneratorStub` from this same module — replacing the whole
 // module (rather than passing through the rest via `importOriginal`) would
@@ -128,6 +122,17 @@ describe('startNewGame', () => {
         warnSpy?.mockRestore();
         warnSpy = undefined;
         delete (window as unknown as { umami?: unknown }).umami;
+    });
+
+    it('installs a blank puzzle with no image', async () => {
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+
+        const state = install.mock.calls.at(-1)![0];
+        expect(state.imageUrl).toBeNull();
+        // The exact `blankSizeForOrientation` landscape size, not merely
+        // non-zero: the bundled fallback is 1080×722, so a loose assertion
+        // would pass even if the blank branch never ran.
+        expect(state.imageSize).toEqual({ width: 1080, height: 720 });
     });
 
     it('installs a puzzle, fits the view and persists it', async () => {
@@ -447,9 +452,8 @@ describe('startNewGame', () => {
         });
 
         // A player-picked photo, so the state carries a real `https://` URL.
-        // The blank-canvas harness the other tests here use would make the
-        // assertion below unfailable: its image URL is a `data:` URI, so
-        // "carries no http" holds whether or not the URL is redacted.
+        // A blank puzzle carries no URL at all, which would make the
+        // redaction assertion below unfailable.
         vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
         await startNewGame(
             { cols: 2, rows: 2 },
