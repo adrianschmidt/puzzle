@@ -50,7 +50,7 @@ describe('index.html Content-Security-Policy', () => {
         expect(cspContents()).toHaveLength(1);
     });
 
-    it('allows exactly the three sources images come from, and no others', () => {
+    it('allows exactly the two sources images come from, and no others', () => {
         // Equality, not membership: the whole directive is the assertion.
         // Under `toContain` checks, appending `https://evil.example` to the
         // policy passes every test in this file — and adding a source is the
@@ -72,6 +72,10 @@ describe('index.html Content-Security-Policy', () => {
     });
 
     it('does not allow data: URLs', () => {
+        // Nothing renders one any more: blank puzzles carry no image, and a
+        // legacy `data:` URL from an old save or link is collapsed to null
+        // before it reaches an href. Re-adding the source would silently
+        // reopen the only path by which link-supplied image bytes can paint.
         expect(directiveSources('img-src')).not.toContain('data:');
     });
 
