@@ -77,6 +77,11 @@ export function isSafeImageUrl(url: string): boolean {
         && parsed.pathname.slice(0, IMAGE_MIME_PREFIX.length).toLowerCase() === IMAGE_MIME_PREFIX;
 }
 
+/** Whether `url` carries the `data:` scheme, which `new URL` lowercases. */
+export function isDataUrl(url: string): boolean {
+    return url.slice(0, 5).toLowerCase() === 'data:';
+}
+
 /**
  * Whether `url` is a relative reference that resolves inside its own base.
  *

@@ -23,6 +23,7 @@ import { buildShape } from '../model/build-shape.js';
 import { sealPieceGeometry } from '../model/seal-geometry.js';
 import { DEFAULT_COLS, DEFAULT_ROWS } from '../game/init.js';
 import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
+import { isDataUrl } from '../sharing/safe-url.js';
 import type { ViewportState } from '../interaction/viewport-transform.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
@@ -753,9 +754,14 @@ function deriveImageSize(pieces: Piece[]): Size {
     return getImageDimensions(tempState);
 }
 
-/** A `data:` URL is the synthesized white PNG a v≤12 blank puzzle stored. */
+/**
+ * A `data:` URL is the synthesized white PNG a v≤12 blank puzzle stored.
+ * Collapsed at every version, unlike `validateImageUrl`'s v13 gate below:
+ * localStorage has no scheme guard upstream, so this is the only thing
+ * keeping a hand-edited blob's `data:` URL out of the `<image>` href.
+ */
 function readImageUrl(imageUrl: string | undefined): string | null {
-    return imageUrl === undefined || imageUrl.startsWith('data:')
+    return imageUrl === undefined || isDataUrl(imageUrl)
         ? null
         : imageUrl;
 }

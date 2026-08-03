@@ -155,6 +155,16 @@ describe('loadSharedPuzzle', () => {
         expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
     });
 
+    it('loads a legacy data: URL with an uppercase scheme as a puzzle with no image', async () => {
+        // `isSafeImageUrl` parses with `new URL`, which lowercases `.protocol`,
+        // so an uppercase `DATA:` link passes wire validation; the collapse
+        // must match that case-insensitively too.
+        const legacy = 'DATA:image/png;base64,' + 'A'.repeat(64);
+        await loadSharedPuzzle(payload({ i: legacy }), false, deps);
+
+        expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
+    });
+
     it('applies the attribution the link carried', async () => {
         await loadSharedPuzzle(payload({
             a: { n: 'A Photographer', u: 'https://unsplash.com/@photographer', p: 'https://unsplash.com/photos/abc123' },

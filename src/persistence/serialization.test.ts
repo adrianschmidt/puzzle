@@ -1326,6 +1326,14 @@ describe('blank puzzles', () => {
         expect(deserializeState(serialized).imageUrl).toBeNull();
     });
 
+    it('migrates a v12 synthesized white PNG with an uppercase scheme to null', () => {
+        const serialized = serializeState(makeGameState());
+        serialized.version = 12;
+        serialized.imageUrl = 'DATA:image/png;base64,' + 'A'.repeat(64);
+
+        expect(deserializeState(serialized).imageUrl).toBeNull();
+    });
+
     it('migrates a v12 synthesized white PNG in the static blob too', () => {
         const state = makeGameState();
         const s = serializeStatic(state);

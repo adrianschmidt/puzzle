@@ -32,6 +32,7 @@
 
 import type { GameState } from '../model/types.js';
 import type { SharePayload } from '../sharing/index.js';
+import { isDataUrl } from '../sharing/safe-url.js';
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint, showToast } from '../ui/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
@@ -126,7 +127,7 @@ export async function loadSharedPuzzle(
         const imageSize = { width: payload.is[0], height: payload.is[1] };
 
         // Legacy links carry the synthesized white PNG; both mean no image.
-        const imageUrl = payload.i === 'blank' || payload.i.startsWith('data:')
+        const imageUrl = payload.i === 'blank' || isDataUrl(payload.i)
             ? null
             : payload.i;
 
