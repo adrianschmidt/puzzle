@@ -32,10 +32,7 @@ describe('isSafeImageUrl', () => {
         expect(isSafeImageUrl('blank')).toBe(true);
     });
 
-    it('accepts the data: PNG a blank-canvas share link actually carries', () => {
-        // `gameStateToPayload` does NOT collapse this to the sentinel, so every
-        // blank-puzzle link ever shared has a raw canvas PNG in `i`. Rejecting
-        // `data:` would kill all of them.
+    it('accepts the data: PNG legacy blank-puzzle links carry', () => {
         expect(isSafeImageUrl('data:image/png;base64,iVBORw0KGgo=')).toBe(true);
         expect(isSafeImageUrl('data:image/jpeg;base64,/9j/4AAQ')).toBe(true);
     });

@@ -82,7 +82,7 @@ describe('reproParamsToPayload', () => {
         expect(payload.is).toEqual([1080, 1440]);
     });
 
-    it('falls back to the blank canvas and no rotation', () => {
+    it('falls back to the blank sentinel and no rotation', () => {
         const params = buildReproParams(classicTracedState());
         delete params.imageUrl;
         delete params.rotationMode;
