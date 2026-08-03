@@ -4,8 +4,12 @@ on:
   push:
     branches: [main]
 
+# Least privilege by default; the job below elevates only what it needs, as in
+# dependabot-auto-merge.yml. Kept at workflow level so a second job added here
+# later — a smoke check, a split-out build — does not inherit a write token by
+# default.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pages-prod
@@ -15,8 +19,21 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    # actions-gh-pages pushes to gh-pages with this same job token, handed to
+    # it explicitly as `github_token` rather than read from .git/config.
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job does push, but not from here: actions-gh-pages below
+          # builds its own remote URL from its `github_token` input and works
+          # in a clone of its own, never reading this checkout's .git/config.
+          # So the token persisted there would only sit where `npm ci` and the
+          # build can read it — and unlike ci.yml's, it is `contents: write` on
+          # `main`.
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
