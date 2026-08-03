@@ -130,15 +130,6 @@ describe('share-link codec — image URL scheme validation', () => {
     ])('rejects a link whose image URL uses %s', (_label, i) => {
         expect(decodePayload(encodePayload(withImage(i)))).toBeNull();
     });
-
-    it('still decodes a blank puzzle\'s real share payload', () => {
-        // The regression that matters: `gameStateToPayload` does NOT collapse a
-        // blank canvas to the sentinel, so a blank puzzle's link carries the raw
-        // canvas PNG. A guard that rejected `data:` would kill every one of them.
-        const state = buildState({ imageUrl: 'data:image/png;base64,iVBORw0KGgo=' });
-        const payload = gameStateToPayload(state, { includeProgress: false });
-        expect(decodePayload(encodePayload(payload))).toEqual(payload);
-    });
 });
 
 describe('share-link codec — tf/clf block shape (#491)', () => {
@@ -287,7 +278,7 @@ describe('share-link codec — image-size clamp (crafted-link DoS guard)', () =>
         // A non-finite number can't survive the share link's JSON round-trip:
         // JSON.stringify(Infinity/NaN) emits `null`, which `isTuple2Number`
         // rejects, so `decodePayload` returns null before the clamp runs. This
-        // pins that contract — the canvas never sees a non-finite `is`, and the
+        // pins that contract — generation never sees a non-finite `is`, and the
         // clamp's own `!Number.isFinite` guard is defense-in-depth for callers
         // that bypass the codec, not a reachable share-link path.
         const bad = {
@@ -897,7 +888,7 @@ function encodeRaw(obj: unknown): string {
 
 function buildState(partial: Partial<GameState>): GameState {
     return makeGameState({
-        imageUrl: 'blank',
+        imageUrl: null,
         imageSize: { width: 1080, height: 720 },
         gridSize: { cols: 4, rows: 3 },
         seed: 42,
@@ -915,6 +906,17 @@ describe('gameStateToPayload', () => {
             v: 1, i: 'blank', is: [1080, 720], g: [4, 3],
             c: 'classic', s: 42, r: 'none',
         });
+    });
+
+    it('emits a real image URL verbatim', () => {
+        // The other half of `i: state.imageUrl ?? 'blank'`. Without this,
+        // hardcoding `i: 'blank'` passes the whole suite while turning every
+        // photo puzzle's share link into a blank one for the recipient.
+        const url = 'https://images.unsplash.com/photo-1?w=1080';
+        const payload = gameStateToPayload(buildState({ imageUrl: url }), {
+            includeProgress: false,
+        });
+        expect(payload.i).toBe(url);
     });
 
     it('emits the blank sentinel for a puzzle with no image', () => {
