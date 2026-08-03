@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSafeHttpUrl, isSafeImageUrl } from './safe-url.js';
+import { isSafeHttpUrl, isSafeImageUrl, isDataUrl } from './safe-url.js';
 
 describe('isSafeHttpUrl', () => {
     it('accepts absolute http and https URLs', () => {
@@ -95,5 +95,28 @@ describe('isSafeImageUrl', () => {
         expect(isSafeImageUrl('/puzzle/first-puzzle.jpg')).toBe(true);
         expect(isSafeImageUrl('./first-puzzle.jpg')).toBe(true);
         expect(isSafeImageUrl('puzzle-image.jpg?v=2')).toBe(true);
+    });
+});
+
+describe('isDataUrl', () => {
+    it('accepts a lowercase data: URL', () => {
+        expect(isDataUrl('data:image/png;base64,AAAA')).toBe(true);
+    });
+
+    it('accepts an uppercase or mixed-case scheme', () => {
+        expect(isDataUrl('DATA:image/png;base64,AAAA')).toBe(true);
+        expect(isDataUrl('DaTa:image/png;base64,AAAA')).toBe(true);
+    });
+
+    it('rejects a non-data: URL', () => {
+        expect(isDataUrl('https://images.unsplash.com/photo-1?w=1080')).toBe(false);
+    });
+
+    it('rejects the blank sentinel', () => {
+        expect(isDataUrl('blank')).toBe(false);
+    });
+
+    it('rejects the empty string', () => {
+        expect(isDataUrl('')).toBe(false);
     });
 });
