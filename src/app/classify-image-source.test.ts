@@ -10,10 +10,6 @@ import {
 import { BUNDLED_IMAGE_URL, BUNDLED_PORTRAIT_IMAGE_URL } from './bundled-image.js';
 
 describe('classifyImageSource', () => {
-    it('classifies data URLs as blank', () => {
-        expect(classifyImageSource('data:image/png;base64,AAAA')).toBe('blank');
-    });
-
     it('classifies the bundled image as bundled', () => {
         expect(classifyImageSource(BUNDLED_IMAGE_URL)).toBe('bundled');
     });
@@ -40,6 +36,12 @@ describe('classifyImageSource', () => {
     it('classifies a null imageUrl as blank', () => {
         expect(classifyImageSource(null)).toBe('blank');
     });
+
+    it('classifies a data: URL as fallback, not blank', () => {
+        // Nothing produces one any more — deserialize and the share-link
+        // load path both map it to null.
+        expect(classifyImageSource('data:image/png;base64,AAAA')).toBe('fallback');
+    });
 });
 
 describe('resolveNewGameImageSource', () => {
@@ -57,6 +59,6 @@ describe('resolveNewGameImageSource', () => {
         expect(
             resolveNewGameImageSource('random', 'https://images.unsplash.com/photo-1?w=1080'),
         ).toBe('unsplash');
-        expect(resolveNewGameImageSource('blank', 'data:image/png;base64,AAAA')).toBe('blank');
+        expect(resolveNewGameImageSource('blank', null)).toBe('blank');
     });
 });

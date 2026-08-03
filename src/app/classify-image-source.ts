@@ -18,9 +18,6 @@ export function classifyImageSource(
     if (imageUrl === null) {
         return 'blank';
     }
-    if (imageUrl.startsWith('data:')) {
-        return 'blank';
-    }
     if (imageUrl === BUNDLED_IMAGE_URL || imageUrl === BUNDLED_PORTRAIT_IMAGE_URL) {
         return 'bundled';
     }
