@@ -33,12 +33,9 @@ const IMAGE_MIME_PREFIX = 'image/';
  * app itself emits:
  *
  *  - `'blank'` — the wire sentinel (see `SharePayload.i`).
- *  - `data:image/*` — a blank puzzle keeps the painted canvas in
- *    `state.imageUrl`, and `gameStateToPayload` copies it to the wire
- *    verbatim rather than collapsing it (see {@link collapseBlankImageUrl}).
- *    So every blank-puzzle link ever shared carries a multi-KB canvas PNG
- *    here. Restricted to `image/` subtypes: `data:text/html` has no business
- *    in an image href even though an `<image>` would not execute it.
+ *  - `data:image/*` — legacy blank-puzzle links carry a painted canvas PNG.
+ *    Restricted to `image/` subtypes: `data:text/html` has no business in an
+ *    image href even though an `<image>` would not execute it.
  *  - relative — `BUNDLED_IMAGE_URL` is `'first-puzzle.jpg'`, which resolves
  *    against the app origin. Note "relative" has to be *tested*, not inferred
  *    from a failed absolute parse: a protocol-relative `//evil.example/x.png`
@@ -72,11 +69,10 @@ export function isSafeImageUrl(url: string): boolean {
     }
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return true;
     // Read the MIME type off `pathname`, not off a lowercased whole `href`:
-    // a blank-canvas URL is a 6-20 KB base64 PNG (and a crafted one is bounded
-    // only by the URL length limit), so copying all of it to test an
-    // 11-character prefix is a real allocation on the boot path. `protocol` is
-    // already lowercased by the parser, which is what makes slicing safe;
-    // `pathname` is not, so `data:IMAGE/png,x` still needs the case fold.
+    // copying a long URL to test an 11-character prefix is a real allocation
+    // on the boot path. `protocol` is already lowercased by the parser, which
+    // is what makes slicing safe; `pathname` is not, so `data:IMAGE/png,x`
+    // still needs the case fold.
     return parsed.protocol === 'data:'
         && parsed.pathname.slice(0, IMAGE_MIME_PREFIX.length).toLowerCase() === IMAGE_MIME_PREFIX;
 }
