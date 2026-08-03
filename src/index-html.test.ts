@@ -57,7 +57,6 @@ describe('index.html Content-Security-Policy', () => {
         // direction that silently widens the policy.
         expect(directiveSources('img-src')).toEqual([
             "'self'",
-            'data:',
             'https://*.unsplash.com',
         ]);
     });
@@ -72,11 +71,8 @@ describe('index.html Content-Security-Policy', () => {
         expect(directiveSources('img-src')).toContain("'self'");
     });
 
-    it('allows data: for the blank puzzle canvas', () => {
-        // A blank puzzle keeps the painted canvas in `state.imageUrl` and
-        // `gameStateToPayload` copies it to the wire verbatim, so both the
-        // live puzzle and its share link render from a data: PNG.
-        expect(directiveSources('img-src')).toContain('data:');
+    it('does not allow data: URLs', () => {
+        expect(directiveSources('img-src')).not.toContain('data:');
     });
 
     it('allows Unsplash subdomains for puzzle images and picker thumbnails', () => {
