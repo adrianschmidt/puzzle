@@ -86,14 +86,14 @@ export interface InitOptions {
 /**
  * Create a new game state with randomized piece positions.
  *
- * @param imageUrl - URL of the puzzle image
+ * @param imageUrl - URL of the puzzle image, or null for a blank puzzle
  * @param imageSize - Pixel dimensions of the puzzle image
  * @param viewport - Available viewport size for positioning pieces
  * @param gridSize - Grid dimensions (cols × rows). Defaults to 8×6.
  * @param options - Optional configuration (e.g. custom RNG)
  */
 export function createNewGame(
-    imageUrl: string,
+    imageUrl: string | null,
     imageSize: Size,
     viewport: Size,
     gridSize: GridSize = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
@@ -143,7 +143,7 @@ export interface CreateNewGameAsyncResult {
  * Rejects with {@link GenerationCanceledError} when `signal` aborts.
  */
 export async function createNewGameAsync(
-    imageUrl: string,
+    imageUrl: string | null,
     imageSize: Size,
     viewport: Size,
     gridSize: GridSize = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
@@ -185,7 +185,7 @@ function buildGenerationRequest(
 }
 
 function assembleGameState(
-    imageUrl: string,
+    imageUrl: string | null,
     viewport: Size,
     gridSize: GridSize,
     options: InitOptions,

@@ -187,8 +187,11 @@ export interface GameState {
     groupsById: Map<number, PieceGroup>;
     /** pieceId → the group containing that piece. Kept in sync with `groups`. */
     pieceToGroup: Map<number, PieceGroup>;
-    /** URL of the puzzle image. */
-    imageUrl: string;
+    /**
+     * URL of the puzzle image, or `null` for a blank puzzle — one with no
+     * photo, whose pieces the renderer paints flat white.
+     */
+    imageUrl: string | null;
     /** Pixel dimensions of the puzzle image. */
     imageSize: Size;
     /** Grid dimensions used to generate this puzzle. */

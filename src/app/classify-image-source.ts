@@ -13,8 +13,11 @@ import { BUNDLED_IMAGE_URL, BUNDLED_PORTRAIT_IMAGE_URL } from './bundled-image.j
  * old saves/links plus anything unrecognized.
  */
 export function classifyImageSource(
-    imageUrl: string,
+    imageUrl: string | null,
 ): 'unsplash' | 'blank' | 'bundled' | 'fallback' {
+    if (imageUrl === null) {
+        return 'blank';
+    }
     if (imageUrl.startsWith('data:')) {
         return 'blank';
     }
@@ -43,7 +46,7 @@ export function classifyImageSource(
  */
 export function resolveNewGameImageSource(
     imageSource: string | undefined,
-    imageUrl: string,
+    imageUrl: string | null,
 ): 'first-run' | ReturnType<typeof classifyImageSource> {
     return imageSource === 'first-run'
         ? 'first-run'

@@ -98,7 +98,7 @@ export interface SerializedGameState {
     version: number;
     pieces: SerializedPiece[];
     groups: SerializedPieceGroup[];
-    imageUrl: string;
+    imageUrl?: string;
     imageSize?: Size;
     gridSize?: GridSize;
     completed: boolean;
@@ -157,7 +157,7 @@ export interface SerializedGameState {
 export interface SerializedStaticState {
     version: number;
     pieces: SerializedPiece[];
-    imageUrl: string;
+    imageUrl?: string;
     imageSize?: Size;
     gridSize?: GridSize;
     attribution?: ImageAttribution;
@@ -240,11 +240,14 @@ export function serializeState(
         version: STATE_VERSION,
         pieces: state.pieces.map(serializePiece),
         groups: state.groups.map(serializeGroup),
-        imageUrl: state.imageUrl,
         imageSize: state.imageSize,
         gridSize: state.gridSize,
         completed: state.completed,
     };
+
+    if (state.imageUrl !== null) {
+        serialized.imageUrl = state.imageUrl;
+    }
 
     if (selection !== undefined) {
         const ids = [...selection];
@@ -297,10 +300,12 @@ export function serializeStatic(state: GameState): SerializedStaticState {
     const s: SerializedStaticState = {
         version: STATE_VERSION,
         pieces: state.pieces.map(serializePiece),
-        imageUrl: state.imageUrl,
         imageSize: state.imageSize,
         gridSize: state.gridSize,
     };
+    if (state.imageUrl !== null) {
+        s.imageUrl = state.imageUrl;
+    }
     if (state.attribution) s.attribution = state.attribution;
     if (state.seed !== undefined) s.seed = state.seed;
     if (state.cutStyle) s.cutStyle = state.cutStyle;
@@ -479,7 +484,7 @@ export function deserializeState(data: SerializedGameState): GameState {
         piecesById: buildPiecesById(pieces),
         groupsById,
         pieceToGroup,
-        imageUrl: data.imageUrl,
+        imageUrl: data.imageUrl ?? null,
         imageSize,
         gridSize,
         completed: data.completed,
@@ -568,7 +573,7 @@ export function recombine(
         piecesById: buildPiecesById(pieces),
         groupsById,
         pieceToGroup,
-        imageUrl: staticData.imageUrl,
+        imageUrl: staticData.imageUrl ?? null,
         imageSize,
         gridSize,
         completed: progress.completed,
@@ -738,7 +743,7 @@ function deriveImageSize(pieces: Piece[]): Size {
         piecesById: buildPiecesById(pieces),
         groupsById: new Map(),
         pieceToGroup: new Map(),
-        imageUrl: '',
+        imageUrl: null,
         imageSize: { width: 0, height: 0 },
         gridSize: { cols: DEFAULT_COLS, rows: DEFAULT_ROWS },
         completed: false,

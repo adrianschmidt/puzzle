@@ -741,9 +741,7 @@ export function gameStateToPayload(
 
     const payload: SharePayload = {
         v: 1,
-        // Verbatim, including a blank puzzle's multi-KB `data:` canvas: see
-        // `collapseBlankImageUrl` for why the share path doesn't collapse it.
-        i: state.imageUrl,
+        i: state.imageUrl ?? 'blank',
         is: [state.imageSize.width, state.imageSize.height],
         g: [state.gridSize.cols, state.gridSize.rows],
         c: cutStyle,
