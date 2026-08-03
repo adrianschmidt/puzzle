@@ -1,7 +1,7 @@
 /**
  * SVG/DOM renderer implementation.
  *
- * Each piece = `<svg>` element with an `<image>` clipped by the piece's shape.
+ * Each piece = `<svg>` element.
  * Groups are absolutely positioned `<div>` containers with CSS transforms.
  *
  * Coordinate system:
@@ -9,8 +9,6 @@
  *   (origin at piece's top-left corner, before tabs/blanks extend beyond)
  * - `piece.imageOffset` positions the full puzzle image behind the clip-path
  * - Groups position pieces in world space via `group.position + piece.groupOffset`
- *
- * The puzzle image is loaded once and referenced by all piece elements.
  */
 
 import { getPieceBounds } from '../model/derive.js';
@@ -240,8 +238,8 @@ export class SvgDomRenderer implements Renderer {
      * Remove all cached group and piece DOM elements.
      *
      * Called when the puzzle image (or grid size) changes so that every
-     * SVG piece element is recreated with the correct `<image>` href,
-     * clip-path, and dimensions.
+     * SVG piece element is recreated with the correct clip-path and
+     * dimensions.
      */
     private clearAllElements(): void {
         for (const el of this.groupElements.values()) {
