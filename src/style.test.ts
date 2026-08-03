@@ -96,3 +96,17 @@ describe('selection glow CSS', () => {
         }
     });
 });
+
+describe('blank-piece debug CSS', () => {
+    it('applies the debug opacity slider to blank pieces too', () => {
+        expect(ruleBody(styleCss, '[data-piece-blank]')).toMatch(
+            /opacity:\s*var\(--piece-opacity\)/,
+        );
+    });
+
+    it('hides blank pieces when the debug piece view is on', () => {
+        expect(ruleBody(styleCss, '.show-debug-pieces [data-piece-blank]')).toMatch(
+            /display:\s*none/,
+        );
+    });
+});
