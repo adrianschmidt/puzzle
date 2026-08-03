@@ -35,16 +35,10 @@ describe('buildReproParams', () => {
         expect(buildReproParams(state)).not.toHaveProperty('classicConfig');
     });
 
-    it('collapses a blank canvas data URL to the blank sentinel', () => {
+    it('omits imageUrl for a puzzle with no image', () => {
         const state = classicTracedState();
-        // What app/blank-canvas.ts produces for a blank puzzle, stored as-is:
-        // the painted canvas itself.
-        state.imageUrl = 'data:image/png;base64,' + 'A'.repeat(6000);
-        const params = buildReproParams(state);
-        expect(params.imageUrl).toBe('blank');
-        // The whole point: no part of the multi-KB URL reaches the printed
-        // block, whatever else the builder carries through.
-        expect(JSON.stringify(params)).not.toContain('data:');
+        state.imageUrl = null;
+        expect(buildReproParams(state)).not.toHaveProperty('imageUrl');
     });
 
     it('omits imageUrl and imageSize rather than emitting undefined keys', () => {
@@ -80,9 +74,9 @@ describe('reproParamsToPayload', () => {
         expect(reproParamsToPayload(params)).not.toHaveProperty('clf');
     });
 
-    it('replays a collapsed blank canvas at the recorded dimensions', () => {
+    it('replays a puzzle with no image as the blank sentinel', () => {
         const state = classicTracedState();
-        state.imageUrl = 'data:image/png;base64,AAAA';
+        state.imageUrl = null;
         const payload = reproParamsToPayload(buildReproParams(state));
         expect(payload.i).toBe('blank');
         expect(payload.is).toEqual([1080, 1440]);

@@ -7,7 +7,6 @@ import {
     gameStateToPayload,
     hasShareableProgress,
     shareCfToComposableConfig,
-    collapseBlankImageUrl,
     type SharePayload,
 } from './share-link.js';
 import type { GameState } from '../model/types.js';
@@ -114,7 +113,7 @@ describe('share-link codec — image URL scheme validation', () => {
 
     it.each([
         ['the blank sentinel', 'blank'],
-        ['a blank-canvas data: PNG', 'data:image/png;base64,iVBORw0KGgo='],
+        ['a legacy data: PNG', 'data:image/png;base64,iVBORw0KGgo='],
         ['the bundled image, relative', 'first-puzzle.jpg'],
         ['a root-relative URL', '/puzzle/first-puzzle.jpg'],
         ['an Unsplash https URL', 'https://images.unsplash.com/photo-1?w=1080'],
@@ -908,29 +907,6 @@ function buildState(partial: Partial<GameState>): GameState {
     });
 }
 
-describe('collapseBlankImageUrl', () => {
-    it('collapses a blank canvas data: URL to the sentinel', () => {
-        expect(collapseBlankImageUrl('data:image/png;base64,AAAA')).toBe('blank');
-    });
-
-    it('passes the sentinel and real image URLs through unchanged', () => {
-        expect(collapseBlankImageUrl('blank')).toBe('blank');
-        const unsplash = 'https://images.unsplash.com/photo-x?w=1080';
-        expect(collapseBlankImageUrl(unsplash)).toBe(unsplash);
-        expect(collapseBlankImageUrl('/img/bundled.jpg')).toBe('/img/bundled.jpg');
-    });
-
-    it('collapses only what the app itself produces, not blob: or DATA:', () => {
-        // `toDataURL` is the sole producer and always emits lowercase `data:`.
-        // Anything else reaching here came from a crafted link or a
-        // hand-edited save, where printing the value verbatim tells a bug
-        // report more than a sentinel that would misdescribe it.
-        expect(collapseBlankImageUrl('blob:https://x/1')).toBe('blob:https://x/1');
-        const upper = 'DATA:image/png;base64,AAAA';
-        expect(collapseBlankImageUrl(upper)).toBe(upper);
-    });
-});
-
 describe('gameStateToPayload', () => {
     it('maps a starting classic puzzle to a minimal payload', () => {
         const state = buildState({});
@@ -941,15 +917,11 @@ describe('gameStateToPayload', () => {
         });
     });
 
-    it('emits a blank puzzle data: URL verbatim, without collapsing it', () => {
-        // The repro block collapses this via `collapseBlankImageUrl`; the
-        // share path deliberately must not, because that would change the
-        // payload every blank puzzle's existing link encodes.
-        const dataUrl = 'data:image/png;base64,' + 'A'.repeat(64);
-        const payload = gameStateToPayload(buildState({ imageUrl: dataUrl }), {
+    it('emits the blank sentinel for a puzzle with no image', () => {
+        const payload = gameStateToPayload(buildState({ imageUrl: null }), {
             includeProgress: false,
         });
-        expect(payload.i).toBe(dataUrl);
+        expect(payload.i).toBe('blank');
     });
 
     it('includes attribution when present', () => {

@@ -6,16 +6,12 @@
  * `imageSize` is part of the reproduction contract, not decoration:
  * generators inscribe the puzzle into the image rectangle, so the same
  * seed/grid/style cuts differently at different image dimensions.
- * `imageUrl` makes the repro visually exact, via `collapseBlankImageUrl`
- * — which owns the one image URL that would drown the printed block, and
- * documents that rule next to the wire field it targets.
  */
 
 import type { GameState, GridSize, Size } from '../model/types.js';
 import type { SharePayload, StyleConfigSource } from './share-link.js';
 import {
     applyStyleConfigs,
-    collapseBlankImageUrl,
     isCutStyle,
     isRotationMode,
 } from './share-link.js';
@@ -44,7 +40,7 @@ export function buildReproParams(state: GameState): ReproParams {
     const params: ReproParams = {};
     if (state.seed !== undefined) params.seed = state.seed;
     if (state.cutStyle) params.cutStyle = state.cutStyle;
-    if (state.imageUrl) params.imageUrl = collapseBlankImageUrl(state.imageUrl);
+    if (state.imageUrl) params.imageUrl = state.imageUrl;
     if (state.imageSize) params.imageSize = state.imageSize;
     if (state.gridSize) params.gridSize = state.gridSize;
     if (state.rotationMode) params.rotationMode = state.rotationMode;

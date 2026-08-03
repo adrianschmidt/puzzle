@@ -22,11 +22,7 @@ import { isSafeHttpUrl, isSafeImageUrl } from './safe-url.js';
 export interface SharePayload {
     /** Schema version; bumped on breaking changes. */
     v: 1;
-    /**
-     * Image URL, or the sentinel "blank" for the locally-regenerated white
-     * canvas. See {@link collapseBlankImageUrl} for which producers map a
-     * painted-canvas `data:` URL onto the sentinel and which don't.
-     */
+    /** Image URL, or the sentinel `'blank'` for a puzzle with no image. */
     i: string;
     /** Image size [width, height]. */
     is: [number, number];
@@ -132,30 +128,6 @@ export function isRotationMode(value: unknown): value is SharePayload['r'] {
         && Object.prototype.hasOwnProperty.call(ROTATION_MODES, value);
 }
 
-/**
- * Collapse a `GameState.imageUrl` onto the `'blank'` sentinel that the wire's
- * `i` field defines. Its caller writes the result to `ReproParams.imageUrl` —
- * a field the info modal prints — which reaches `i` only via
- * `reproParamsToPayload`'s `params.imageUrl ?? 'blank'`.
- *
- * A blank-canvas puzzle keeps the *painted canvas* in `state.imageUrl` — a
- * multi-KB base64 `data:` PNG from `canvas.toDataURL` — and those are the
- * only `data:`/`blob:` image URLs the app produces. `'blank'` says the same
- * thing in five characters and replays identically, because the load path
- * repaints the canvas from `is`. Sniffing the prefix is the workaround for
- * `GameState` carrying no "this is the blank canvas" flag (#496).
- *
- * `gameStateToPayload` deliberately does NOT call this. Doing so would
- * change the payload a blank puzzle's share link emits, which is a
- * wire-format change on the share path rather than the debug-surface
- * cleanup this is; the decoder has always accepted both forms, so the
- * divergence breaks nothing. Converging the two producers is a separate,
- * deliberate change.
- */
-export function collapseBlankImageUrl(imageUrl: string): string {
-    return imageUrl.startsWith('data:') ? 'blank' : imageUrl;
-}
-
 export function encodePayload(payload: SharePayload): string {
     assertPayloadNumbersFinite(payload);
     const json = JSON.stringify(payload);
@@ -193,11 +165,12 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
 
 /**
  * Upper bound on a decoded image dimension (pixels). The app delivers
- * images at 1080px wide (height scaled by aspect ratio), so this cap
- * sits several times above any real image while bounding the canvas
- * allocation a crafted `is:[1e9, 1e9]` link would otherwise attempt — a
- * multi-gigapixel buffer that hangs the tab. 8192 is also a common
- * browser canvas-dimension ceiling, so legitimate sizes stay well under.
+ * images at 1080px wide (height scaled by aspect ratio), so this cap sits
+ * several times above any real image. It bounds what a crafted
+ * `is:[1e9, 1e9]` link can drive: generators inscribe the puzzle into the
+ * image rect, and the renderer derives every piece's SVG width/height from
+ * it — so an unbounded `is` means multi-gigapixel geometry and per-piece
+ * elements sized to match, which hangs the tab.
  */
 const MAX_IMAGE_DIM = 8192;
 
@@ -283,13 +256,9 @@ export function decodePayload(encoded: string): SharePayload | null {
         // Bound the grid before it reaches the generators (O(E²) crossing
         // check). Normal grids (<= the shared grid cap) pass through unchanged.
         translated.g = [clampGridDim(translated.g[0]), clampGridDim(translated.g[1])];
-        // Bound the image size before it reaches the canvas allocation in
-        // app/blank-canvas.ts (`canvas.width/height`). Legitimate sizes (<= MAX_IMAGE_DIM)
-        // pass through unchanged; a crafted `is:[1e9, 1e9]` is capped. Note that
-        // a *fractional* `is` is not necessarily adversarial: fractal/wavy links
-        // inscribe the image to the grid aspect (cut-style-strategies.ts), so a
-        // dimension like 607.5 is a normal product of that path. The floor here
-        // only snaps it sub-pixel, which is cosmetically irrelevant downstream.
+        // A *fractional* `is` is not adversarial: fractal/wavy links inscribe
+        // the image to the grid aspect (cut-style-strategies.ts), so 607.5 is
+        // a normal product of that path and the floor only snaps it sub-pixel.
         translated.is = [clampDim(translated.is[0], MAX_IMAGE_DIM), clampDim(translated.is[1], MAX_IMAGE_DIM)];
         // Bound the sine base-cut frequency and amplitude before they reach
         // generateSineCurve; see MAX_SINE_FREQUENCY / MAX_SINE_AMPLITUDE for the
@@ -400,9 +369,8 @@ function isValidPayload(x: unknown): x is SharePayload {
     if (typeof p.s !== 'number') return false;
     if (!isRotationMode(p.r)) return false;
     // After the cheap field checks: `i` is the one unbounded field on the wire
-    // (a blank puzzle's canvas PNG is 6-20 KB, a crafted one is capped only by
-    // the URL length limit), and parsing it is the most expensive check here.
-    // No reason to pay that for a payload a 3-byte `c` would have rejected.
+    // and parsing it is the most expensive check here. No reason to pay that
+    // for a payload a 3-byte `c` would have rejected.
     if (!isSafeImageUrl(p.i)) return false;
     if (p.c === 'composable' && p.cf !== undefined && !isValidComposableCf(p.cf)) return false;
     if (p.ff !== undefined && !isValidBorderlessBlock(p.ff)) return false;
