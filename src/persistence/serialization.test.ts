@@ -701,22 +701,6 @@ describe('deserializeState', () => {
         );
     });
 
-    it('throws on missing imageUrl', () => {
-        const serialized: SerializedGameState = {
-            version: STATE_VERSION,
-            pieces: [makeRectPiece({ id: 0 })],
-            groups: [
-                { id: 0, pieces: [[0, { x: 0, y: 0 }]], position: { x: 0, y: 0 } },
-            ],
-            imageUrl: '',
-            completed: false,
-        };
-
-        expect(() => deserializeState(serialized)).toThrow(
-            'imageUrl must be a non-empty string',
-        );
-    });
-
     it('throws on invalid group position', () => {
         const serialized: SerializedGameState = {
             version: STATE_VERSION,
@@ -1359,6 +1343,17 @@ describe('blank puzzles', () => {
         delete serialized.imageUrl;
 
         expect(() => deserializeState(serialized)).toThrow(
+            'imageUrl must be a non-empty string',
+        );
+    });
+
+    it('rejects a v12 static blob with no imageUrl at all', () => {
+        const state = makeGameState();
+        const s = serializeStatic(state);
+        s.version = 12;
+        delete s.imageUrl;
+
+        expect(() => recombine(s, serializeProgress(state))).toThrow(
             'imageUrl must be a non-empty string',
         );
     });
