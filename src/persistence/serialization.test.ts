@@ -1292,3 +1292,75 @@ describe('viewport persistence', () => {
         expect(readViewport(data)).toBeUndefined();
     });
 });
+
+describe('blank puzzles', () => {
+    it('omits imageUrl when the puzzle has no image', () => {
+        const serialized = serializeState(makeGameState({ imageUrl: null }));
+        expect(serialized).not.toHaveProperty('imageUrl');
+    });
+
+    it('omits imageUrl from the static blob too', () => {
+        const s = serializeStatic(makeGameState({ imageUrl: null }));
+        expect(s).not.toHaveProperty('imageUrl');
+    });
+
+    it('round-trips a blank puzzle back to null', () => {
+        const state = makeGameState({ imageUrl: null });
+        expect(deserializeState(serializeState(state)).imageUrl).toBeNull();
+    });
+
+    it('round-trips a blank puzzle through the split blobs', () => {
+        const state = makeGameState({ imageUrl: null });
+        const restored = recombine(
+            serializeStatic(state),
+            serializeProgress(state),
+        );
+        expect(restored.imageUrl).toBeNull();
+    });
+
+    it('migrates a v12 synthesized white PNG to null', () => {
+        const serialized = serializeState(makeGameState());
+        serialized.version = 12;
+        serialized.imageUrl = 'data:image/png;base64,' + 'A'.repeat(64);
+
+        expect(deserializeState(serialized).imageUrl).toBeNull();
+    });
+
+    it('migrates a v12 synthesized white PNG in the static blob too', () => {
+        const state = makeGameState();
+        const s = serializeStatic(state);
+        s.version = 12;
+        s.imageUrl = 'data:image/png;base64,' + 'A'.repeat(64);
+
+        expect(recombine(s, serializeProgress(state)).imageUrl).toBeNull();
+    });
+
+    it('leaves a real image URL on an old save alone', () => {
+        const serialized = serializeState(makeGameState());
+        serialized.version = 12;
+        serialized.imageUrl = 'https://images.unsplash.com/photo-1?w=1080';
+
+        expect(deserializeState(serialized).imageUrl).toBe(
+            'https://images.unsplash.com/photo-1?w=1080',
+        );
+    });
+
+    it('rejects a v12 blob with no imageUrl at all', () => {
+        const serialized = serializeState(makeGameState());
+        serialized.version = 12;
+        delete serialized.imageUrl;
+
+        expect(() => deserializeState(serialized)).toThrow(
+            'imageUrl must be a non-empty string',
+        );
+    });
+
+    it('rejects an empty-string imageUrl on a v13 blob', () => {
+        const serialized = serializeState(makeGameState());
+        serialized.imageUrl = '';
+
+        expect(() => deserializeState(serialized)).toThrow(
+            'imageUrl must be a non-empty string',
+        );
+    });
+});

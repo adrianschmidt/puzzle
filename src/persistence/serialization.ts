@@ -26,7 +26,7 @@ import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 import type { ViewportState } from '../interaction/viewport-transform.js';
 
 /** Current schema version. Bump when the serialized shape changes. */
-export const STATE_VERSION = 12;
+export const STATE_VERSION = 13;
 
 /**
  * Supported schema versions.
@@ -59,8 +59,11 @@ export const STATE_VERSION = 12;
  *        `Z` placement, `CHAIN_EPSILON`, `fmt`) retroactively re-renders every
  *        stored v12 puzzle and requires a new version here — not just an
  *        updated unit test. `serialization.test.ts` pins the rebuilt bytes.
+ * - v13: `imageUrl` is optional; absent means a blank puzzle with no image.
+ *        v≤12 blobs stored a synthesized white PNG as a `data:` URL and
+ *        migrate to absent on load.
  */
-const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
 /** An edge as stored in a blob: v≤11 blobs may carry curve samples. */
 export interface SerializedEdge extends Edge {
@@ -484,7 +487,7 @@ export function deserializeState(data: SerializedGameState): GameState {
         piecesById: buildPiecesById(pieces),
         groupsById,
         pieceToGroup,
-        imageUrl: data.imageUrl ?? null,
+        imageUrl: readImageUrl(data.imageUrl),
         imageSize,
         gridSize,
         completed: data.completed,
@@ -556,9 +559,7 @@ export function recombine(
     if (!Array.isArray(staticData.pieces) || staticData.pieces.length === 0) {
         throw new Error('Invalid state: pieces must be a non-empty array');
     }
-    if (typeof staticData.imageUrl !== 'string' || staticData.imageUrl.length === 0) {
-        throw new Error('Invalid state: imageUrl must be a non-empty string');
-    }
+    validateImageUrl(staticData.imageUrl, staticData.version);
     const pieces = restorePieces(staticData.pieces, staticData.version);
     validateGroups(progress.groups);
 
@@ -573,7 +574,7 @@ export function recombine(
         piecesById: buildPiecesById(pieces),
         groupsById,
         pieceToGroup,
-        imageUrl: staticData.imageUrl ?? null,
+        imageUrl: readImageUrl(staticData.imageUrl),
         imageSize,
         gridSize,
         completed: progress.completed,
@@ -752,6 +753,20 @@ function deriveImageSize(pieces: Piece[]): Size {
     return getImageDimensions(tempState);
 }
 
+/** A `data:` URL is the synthesized white PNG a v≤12 blank puzzle stored. */
+function readImageUrl(imageUrl: string | undefined): string | null {
+    return imageUrl === undefined || imageUrl.startsWith('data:')
+        ? null
+        : imageUrl;
+}
+
+function validateImageUrl(imageUrl: unknown, version: number): void {
+    if (version >= 13 && imageUrl === undefined) return;
+    if (typeof imageUrl !== 'string' || imageUrl.length === 0) {
+        throw new Error('Invalid state: imageUrl must be a non-empty string');
+    }
+}
+
 /**
  * Extract a sanitized multi-select selection from a serialized state.
  *
@@ -854,9 +869,7 @@ function validateSerializedState(data: SerializedGameState): void {
         throw new Error('Invalid state: pieces must be a non-empty array');
     }
 
-    if (typeof data.imageUrl !== 'string' || data.imageUrl.length === 0) {
-        throw new Error('Invalid state: imageUrl must be a non-empty string');
-    }
+    validateImageUrl(data.imageUrl, data.version);
 
     if (typeof data.completed !== 'boolean') {
         throw new Error('Invalid state: completed must be a boolean');
