@@ -77,9 +77,22 @@ export function isSafeImageUrl(url: string): boolean {
         && parsed.pathname.slice(0, IMAGE_MIME_PREFIX.length).toLowerCase() === IMAGE_MIME_PREFIX;
 }
 
-/** Whether `url` carries the `data:` scheme, which `new URL` lowercases. */
+/**
+ * Whether `url` carries the `data:` scheme.
+ *
+ * Parses rather than comparing a prefix, so it accepts every spelling
+ * `new URL` does — uppercase, and leading whitespace or inner tab/CR/LF,
+ * all of which the URL parser strips before reading `.protocol`. Both
+ * callers decide from this whether a value is the legacy synthesized blank
+ * image, and a stricter test than the parser's would let a spelling through
+ * that the rest of the app then treats as a real image URL.
+ */
 export function isDataUrl(url: string): boolean {
-    return url.slice(0, 5).toLowerCase() === 'data:';
+    try {
+        return new URL(url).protocol === 'data:';
+    } catch {
+        return false;
+    }
 }
 
 /**

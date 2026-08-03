@@ -119,4 +119,10 @@ describe('isDataUrl', () => {
     it('rejects the empty string', () => {
         expect(isDataUrl('')).toBe(false);
     });
+
+    it('accepts a data: URL with leading whitespace, matching what isSafeImageUrl parses', () => {
+        expect(isDataUrl(' data:image/png;base64,AAAA')).toBe(true);
+        expect(isDataUrl('\tdata:image/png;base64,AAAA')).toBe(true);
+        expect(isDataUrl('da\nta:image/png;base64,AAAA')).toBe(true);
+    });
 });

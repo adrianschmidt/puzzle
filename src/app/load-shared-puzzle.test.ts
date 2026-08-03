@@ -126,6 +126,12 @@ describe('loadSharedPuzzle', () => {
 
         expect(install).toHaveBeenCalledTimes(1);
         const installedState = install.mock.calls[0][0];
+        // The pass-through arm of the blank collapse. Without this, hardcoding
+        // `imageUrl = null` passes the whole suite while every photo puzzle's
+        // share link arrives at the recipient blank.
+        expect(installedState.imageUrl).toBe(
+            'https://images.unsplash.com/photo-123?w=1080',
+        );
         expect(fitView).toHaveBeenCalledWith(installedState);
         expect(persistNewPuzzle).toHaveBeenCalledWith(installedState);
     });
@@ -155,11 +161,34 @@ describe('loadSharedPuzzle', () => {
         expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
     });
 
+    it('generates a blank puzzle at the dimensions the link recorded', async () => {
+        // `is` is part of the reproduction contract: generators inscribe the
+        // puzzle into the image rect, so a transposed or ignored `is` cuts a
+        // shared puzzle differently than the sharer saw it. Non-square on
+        // purpose — the helper's default would not catch a transposition.
+        await loadSharedPuzzle(payload({ i: 'blank', is: [777, 555] }), false, deps);
+
+        expect(vi.mocked(createNewGameAsync).mock.calls.at(-1)![1]).toEqual({
+            width: 777, height: 555,
+        });
+        expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
+    });
+
     it('loads a legacy data: URL with an uppercase scheme as a puzzle with no image', async () => {
         // `isSafeImageUrl` parses with `new URL`, which lowercases `.protocol`,
         // so an uppercase `DATA:` link passes wire validation; the collapse
         // must match that case-insensitively too.
         const legacy = 'DATA:image/png;base64,' + 'A'.repeat(64);
+        await loadSharedPuzzle(payload({ i: legacy }), false, deps);
+
+        expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
+    });
+
+    it('loads a legacy data: URL with leading whitespace as a puzzle with no image', async () => {
+        // `isSafeImageUrl` parses with `new URL`, which strips leading
+        // whitespace before reading `.protocol`, so a leading-space `data:`
+        // link passes wire validation; the collapse must match that too.
+        const legacy = ' data:image/png;base64,' + 'A'.repeat(64);
         await loadSharedPuzzle(payload({ i: legacy }), false, deps);
 
         expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
