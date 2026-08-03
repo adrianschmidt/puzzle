@@ -23,6 +23,8 @@ import { VIEWPORT_TRANSITION_MS, type Renderer } from './types.js';
  */
 const PIECE_PADDING = 30;
 
+const BLANK_PIECE_FILL = '#ffffff';
+
 /**
  * The CSS `transition` value {@link VIEWPORT_TRANSITION_MS} spells out.
  *
@@ -65,7 +67,7 @@ export class SvgDomRenderer implements Renderer {
     private imageSize = { width: 0, height: 0 };
     private pieceBaseWidth = 0;
     private pieceBaseHeight = 0;
-    private currentImageUrl = '';
+    private currentImageUrl: string | null = '';
     private currentPieceCount = -1;
     private currentShapeFingerprint = '';
 
@@ -256,7 +258,7 @@ export class SvgDomRenderer implements Renderer {
     private renderGroup(
         group: PieceGroup,
         pieceLookup: Map<number, Piece>,
-        imageUrl: string,
+        imageUrl: string | null,
     ): void {
         let groupEl = this.groupElements.get(group.id);
 
@@ -305,7 +307,7 @@ export class SvgDomRenderer implements Renderer {
         }
     }
 
-    private createPieceSvg(piece: Piece, imageUrl: string): SVGSVGElement {
+    private createPieceSvg(piece: Piece, imageUrl: string | null): SVGSVGElement {
         const svgNS = 'http://www.w3.org/2000/svg';
         const xlinkNS = 'http://www.w3.org/1999/xlink';
 
@@ -335,25 +337,32 @@ export class SvgDomRenderer implements Renderer {
         defs.appendChild(clipPath);
         svg.appendChild(defs);
 
-        // Image element clipped to the piece shape. `slice` makes the
-        // raster cover the puzzle rect with excess cropped, so when the
-        // puzzle's aspect ratio doesn't match the image file's aspect
-        // ratio (fractal tile grid), the image is uniformly cropped to
-        // fit rather than stretched — arcs stay circular.
-        const image = document.createElementNS(svgNS, 'image');
-        image.setAttributeNS(xlinkNS, 'href', imageUrl);
-        image.setAttribute('width', String(this.imageSize.width));
-        image.setAttribute('height', String(this.imageSize.height));
-        image.setAttribute('x', String(piece.imageOffset.x));
-        image.setAttribute('y', String(piece.imageOffset.y));
-        image.setAttribute('preserveAspectRatio', 'xMidYMid slice');
-        image.setAttribute(
-            'clip-path',
-            `url(#clip-piece-${piece.id})`,
-        );
-        image.setAttribute('draggable', 'false');
-        image.setAttribute('pointer-events', 'none');
-        svg.appendChild(image);
+        if (imageUrl === null) {
+            const fill = document.createElementNS(svgNS, 'path');
+            fill.setAttribute('d', piece.shape);
+            fill.setAttribute('fill', BLANK_PIECE_FILL);
+            fill.setAttribute('fill-rule', 'evenodd');
+            fill.setAttribute('pointer-events', 'none');
+            fill.dataset.pieceBlank = 'true';
+            svg.appendChild(fill);
+        } else {
+            // Image element clipped to the piece shape. `slice` makes the
+            // raster cover the puzzle rect with excess cropped, so when the
+            // puzzle's aspect ratio doesn't match the image file's aspect
+            // ratio (fractal tile grid), the image is uniformly cropped to
+            // fit rather than stretched — arcs stay circular.
+            const image = document.createElementNS(svgNS, 'image');
+            image.setAttributeNS(xlinkNS, 'href', imageUrl);
+            image.setAttribute('width', String(this.imageSize.width));
+            image.setAttribute('height', String(this.imageSize.height));
+            image.setAttribute('x', String(piece.imageOffset.x));
+            image.setAttribute('y', String(piece.imageOffset.y));
+            image.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+            image.setAttribute('clip-path', `url(#clip-piece-${piece.id})`);
+            image.setAttribute('draggable', 'false');
+            image.setAttribute('pointer-events', 'none');
+            svg.appendChild(image);
+        }
 
         // Transparent hit-area matching the piece shape — ensures pointer
         // events only fire inside the actual piece outline, not the

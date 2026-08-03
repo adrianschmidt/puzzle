@@ -610,6 +610,66 @@ describe('SvgDomRenderer', () => {
         });
     });
 
+    describe('blank puzzles', () => {
+        function makeBlankState(): GameState {
+            const state = make2x2State();
+            state.imageUrl = null;
+            return state;
+        }
+
+        it('paints each piece with a white path instead of an image', () => {
+            renderer.init(container);
+            renderer.renderState(makeBlankState());
+
+            const pieceEl = container.querySelector('[data-piece-id="0"]')!;
+            expect(pieceEl.querySelector('image')).toBeNull();
+
+            const fill = pieceEl.querySelector('[data-piece-blank]')!;
+            expect(fill.tagName).toBe('path');
+            expect(fill.getAttribute('fill')).toBe('#ffffff');
+            expect(fill.getAttribute('fill-rule')).toBe('evenodd');
+        });
+
+        it('fills the piece shape, so the silhouette matches the clip path', () => {
+            const state = makeBlankState();
+            renderer.init(container);
+            renderer.renderState(state);
+
+            const pieceEl = container.querySelector('[data-piece-id="0"]')!;
+            const fill = pieceEl.querySelector('[data-piece-blank]')!;
+            const clipPath = pieceEl.querySelector('clipPath path')!;
+            expect(fill.getAttribute('d')).toBe(state.pieces[0].shape);
+            expect(fill.getAttribute('d')).toBe(clipPath.getAttribute('d'));
+        });
+
+        it('keeps the clip path, hit area and debug overlay', () => {
+            renderer.init(container);
+            renderer.renderState(makeBlankState());
+
+            const pieceEl = container.querySelector('[data-piece-id="0"]')!;
+            expect(pieceEl.querySelector('clipPath')).not.toBeNull();
+            expect(pieceEl.querySelector('[data-hit-area]')).not.toBeNull();
+            expect(pieceEl.querySelector('[data-piece-fill]')).not.toBeNull();
+        });
+
+        it('takes no pointer events, leaving them to the hit area', () => {
+            renderer.init(container);
+            renderer.renderState(makeBlankState());
+
+            const fill = container.querySelector('[data-piece-blank]')!;
+            expect(fill.getAttribute('pointer-events')).toBe('none');
+        });
+
+        it('still renders an <image> when the puzzle has one', () => {
+            renderer.init(container);
+            renderer.renderState(make2x2State());
+
+            const pieceEl = container.querySelector('[data-piece-id="0"]')!;
+            expect(pieceEl.querySelector('[data-piece-blank]')).toBeNull();
+            expect(pieceEl.querySelector('image')).not.toBeNull();
+        });
+    });
+
     describe('destroy', () => {
         it('removes the table element', () => {
             renderer.init(container);

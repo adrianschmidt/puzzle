@@ -367,7 +367,8 @@ html, body {
 }
 
 /* Debug piece opacity — controlled via the info-modal slider */
-[data-piece-id] image {
+[data-piece-id] image,
+[data-piece-blank] {
   opacity: var(--piece-opacity);
 }
 
@@ -387,7 +388,8 @@ html, body {
   display: none;
 }
 
-.show-debug-pieces [data-piece-id] image {
+.show-debug-pieces [data-piece-id] image,
+.show-debug-pieces [data-piece-blank] {
   display: none;
 }
 

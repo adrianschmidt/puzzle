@@ -36,6 +36,10 @@ describe('classifyImageSource', () => {
         expect(classifyImageSource('https://example.com/x.jpg')).toBe('fallback');
         expect(classifyImageSource('http://[malformed')).toBe('fallback');
     });
+
+    it('classifies a null imageUrl as blank', () => {
+        expect(classifyImageSource(null)).toBe('blank');
+    });
 });
 
 describe('resolveNewGameImageSource', () => {
