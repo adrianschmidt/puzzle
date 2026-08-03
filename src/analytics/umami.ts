@@ -470,8 +470,8 @@ export interface UnhandledErrorData {
  * `blockedUri` is NOT a full URL, by specification rather than by our
  * redaction: browsers report the literal `'data'` for a `data:` URL and strip
  * a cross-origin URL to scheme/host/port. That is what makes it safe to send
- * — it can carry neither the multi-KB blank-canvas PNG nor an Unsplash photo
- * ID, which is the rule {@link PieceCountMismatchData} states for image URLs.
+ * — it can carry neither a full image URL nor an Unsplash photo ID, which is
+ * the rule {@link PieceCountMismatchData} states for image URLs.
  * Do not write queries expecting a path or query string.
  *
  * Shares `initErrorTracking`'s per-session rate limiter with
@@ -670,8 +670,8 @@ export interface NewGameFailedData {
  *
  * `imageUrl` is deliberately absent. Cut geometry is a function of the seed,
  * the grid, the image SIZE, the style and the style config — the image bytes
- * do not enter it, and `reproParamsToPayload` defaults a missing image to the
- * blank canvas, so a replay is geometrically identical without it. Shipping
+ * do not enter it, and `reproParamsToPayload` defaults a missing image to a
+ * blank puzzle, so a replay is geometrically identical without it. Shipping
  * it in any form would also be the first exception to the redaction rule
  * {@link TracedChunkLoadFailedData} follows.
  *
