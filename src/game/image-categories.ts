@@ -21,7 +21,9 @@ export type ImageCategoryId =
     | 'space'
     | 'abstract'
     | 'food'
-    | 'travel';
+    | 'travel'
+    | 'people'
+    | 'face';
 
 /**
  * A selectable image category option.
@@ -91,6 +93,18 @@ export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
         label: 'Travel',
         query: 'travel adventure',
         description: 'Travel & adventure',
+    },
+    {
+        id: 'people',
+        label: 'People',
+        query: 'people',
+        description: 'People & portraits',
+    },
+    {
+        id: 'face',
+        label: 'Faces',
+        query: 'face',
+        description: 'Close-up faces',
     },
 ] as const;
 

@@ -51,6 +51,18 @@ describe('findImageCategory', () => {
         expect(result.query).toBe('nature landscape');
     });
 
+    it('finds the people category with the bare tag query', () => {
+        const result = findImageCategory('people');
+        expect(result.id).toBe('people');
+        expect(result.query).toBe('people');
+    });
+
+    it('finds the face category with the bare tag query', () => {
+        const result = findImageCategory('face');
+        expect(result.id).toBe('face');
+        expect(result.query).toBe('face');
+    });
+
     it('returns "any" for an unknown id', () => {
         const result = findImageCategory('nonexistent');
         expect(result.id).toBe('any');
