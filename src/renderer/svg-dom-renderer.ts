@@ -1,13 +1,16 @@
 /**
  * SVG/DOM renderer implementation.
  *
- * Each piece = `<svg>` element.
+ * Each piece is an `<svg>` holding either an `<image>` clipped to the piece
+ * shape, or — for a blank puzzle, which has no image — a flat-filled `<path>`
+ * of that same shape. Only the image form builds the clip path.
  * Groups are absolutely positioned `<div>` containers with CSS transforms.
  *
  * Coordinate system:
  * - Pieces define their shapes in piece-local coordinates
  *   (origin at piece's top-left corner, before tabs/blanks extend beyond)
  * - `piece.imageOffset` positions the full puzzle image behind the clip-path
+ *   (image pieces only)
  * - Groups position pieces in world space via `group.position + piece.groupOffset`
  */
 
@@ -20,8 +23,6 @@ import { VIEWPORT_TRANSITION_MS, type Renderer } from './types.js';
  * tabs that extend beyond the base piece rectangle.
  */
 const PIECE_PADDING = 30;
-
-const BLANK_PIECE_FILL = '#ffffff';
 
 /**
  * The CSS `transition` value {@link VIEWPORT_TRANSITION_MS} spells out.
@@ -323,27 +324,28 @@ export class SvgDomRenderer implements Renderer {
         svg.style.overflow = 'visible';
         svg.dataset.pieceId = String(piece.id);
 
-        // Define clip-path
-        const defs = document.createElementNS(svgNS, 'defs');
-        const clipPath = document.createElementNS(svgNS, 'clipPath');
-        clipPath.setAttribute('id', `clip-piece-${piece.id}`);
-
-        const path = document.createElementNS(svgNS, 'path');
-        path.setAttribute('d', piece.shape);
-        path.setAttribute('fill-rule', 'evenodd');
-        clipPath.appendChild(path);
-        defs.appendChild(clipPath);
-        svg.appendChild(defs);
-
         if (imageUrl === null) {
             const fill = document.createElementNS(svgNS, 'path');
             fill.setAttribute('d', piece.shape);
-            fill.setAttribute('fill', BLANK_PIECE_FILL);
             fill.setAttribute('fill-rule', 'evenodd');
             fill.setAttribute('pointer-events', 'none');
             fill.dataset.pieceBlank = 'true';
             svg.appendChild(fill);
         } else {
+            // Clip path for the image below. Built only on this arm: filling
+            // the shape directly needs no clip, and an unreferenced one would
+            // be another copy of `piece.shape` on every piece.
+            const defs = document.createElementNS(svgNS, 'defs');
+            const clipPath = document.createElementNS(svgNS, 'clipPath');
+            clipPath.setAttribute('id', `clip-piece-${piece.id}`);
+
+            const path = document.createElementNS(svgNS, 'path');
+            path.setAttribute('d', piece.shape);
+            path.setAttribute('fill-rule', 'evenodd');
+            clipPath.appendChild(path);
+            defs.appendChild(clipPath);
+            svg.appendChild(defs);
+
             // Image element clipped to the piece shape. `slice` makes the
             // raster cover the puzzle rect with excess cropped, so when the
             // puzzle's aspect ratio doesn't match the image file's aspect
