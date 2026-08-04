@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createNewGameDialog, type ComposableSliderConfig } from './new-game-dialog.js';
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
+import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 
 /** Start the game the way the new dialog does it: click "Surprise me". */
 function pickSurprise(container: HTMLElement): void {
@@ -440,6 +441,18 @@ describe('createNewGameDialog', () => {
         createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
 
         expect(container.querySelector<HTMLElement>('.image-picker-grid')!.hidden).toBe(true);
+    });
+
+    it('renders one select option per image category', () => {
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
+
+        const categorySelect = container.querySelector<HTMLSelectElement>(
+            '.image-options-section select',
+        )!;
+        expect(categorySelect.options).toHaveLength(IMAGE_CATEGORY_OPTIONS.length);
+        expect([...categorySelect.options].map((o) => o.value)).toEqual(
+            IMAGE_CATEGORY_OPTIONS.map((c) => c.id),
+        );
     });
 });
 
