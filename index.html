@@ -23,8 +23,11 @@
          we cannot predict blanks every puzzle for every player, while the
          extra breadth is one vendor's own subdomains. Matches subdomains
          but not the bare apex, which images never come from.
-         `api.unsplash.com` is a fetch, governed by `connect-src`, so it is
-         unaffected. -->
+         API calls are not covered here at all: they are fetches, governed by
+         `connect-src`, and since #535 they go to the image-proxy Worker
+         rather than to Unsplash. Adding a `default-src` later would start
+         constraining them — that URL is the one to allowlist, not
+         `api.unsplash.com`, which the browser no longer contacts. -->
     <meta http-equiv="Content-Security-Policy"
           content="img-src 'self' https://*.unsplash.com" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
@@ -35,7 +38,7 @@
     <title>Puzzle</title>
     <link rel="icon" href="/puzzle/favicon-48.png" type="image/png" />
     <link rel="apple-touch-icon" href="/puzzle/apple-touch-icon.png" />
-    <script type="module" crossorigin src="/puzzle/assets/index-DRYYw4Hv.js"></script>
+    <script type="module" crossorigin src="/puzzle/assets/index-CyhIxbw9.js"></script>
     <link rel="stylesheet" crossorigin href="/puzzle/assets/index-CucMWuuH.css">
   <link rel="manifest" href="/puzzle/manifest.webmanifest"></head>
   <body>
