@@ -12,6 +12,14 @@ dist/
 .env.local
 .env.*.local
 
+# Wrangler's local secret store. `npx wrangler dev` reads the Unsplash key
+# from .dev.vars, so an untracked-but-unignored one is a `git add -A` away
+# from putting the key in this repo's history — the exact exposure #534
+# exists to close, only permanent this time.
+.dev.vars
+.dev.vars.*
+.wrangler/
+
 # OS
 .DS_Store
 

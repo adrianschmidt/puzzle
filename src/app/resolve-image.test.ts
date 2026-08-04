@@ -36,7 +36,7 @@ describe('resolveUnsplashImage', () => {
             downloadLocation: 'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
         });
 
-        const resolved = await resolveUnsplashImage('key', 'any', false, 'landscape', vi.fn());
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'landscape', vi.fn());
 
         expect(resolved).toEqual({
             imageUrl: 'https://images.example/photo',
@@ -57,7 +57,7 @@ describe('resolveUnsplashImage', () => {
     it('returns null and reports nothing when no image is found (4xx/5xx)', async () => {
         vi.mocked(fetchRandomImage).mockResolvedValue(undefined);
 
-        const resolved = await resolveUnsplashImage('key', 'any', false, 'landscape', vi.fn());
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'landscape', vi.fn());
 
         expect(resolved).toBeNull();
         expect(umamiTrack).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe('resolveUnsplashImage', () => {
     it('reports image-fetch-failed and returns null when the fetch throws', async () => {
         vi.mocked(fetchRandomImage).mockRejectedValue(new Error('network down'));
 
-        const resolved = await resolveUnsplashImage('key', 'any', false, 'landscape', vi.fn());
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'landscape', vi.fn());
 
         expect(resolved).toBeNull();
         expect(umamiTrack).toHaveBeenCalledWith('image-fetch-failed', {
@@ -89,7 +89,7 @@ describe('resolveUnsplashImage', () => {
         });
 
         const fetchFn = vi.fn();
-        const resolved = await resolveUnsplashImage('key', 'any', false, 'portrait', fetchFn);
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'portrait', fetchFn);
 
         // Orientation is forwarded as the 4th arg to fetchRandomImage.
         expect(vi.mocked(fetchRandomImage).mock.calls[0][3]).toBe('portrait');

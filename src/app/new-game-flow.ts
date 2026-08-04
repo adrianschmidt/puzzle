@@ -42,7 +42,7 @@ import {
     loadVibrantPreference,
     saveVibrantPreference,
 } from '../game/image-categories.js';
-import { getUnsplashAccessKey } from '../images/index.js';
+import { getImageProxyBaseUrl } from '../images/index.js';
 import { getBaseCutGenerator } from '../puzzle/topology/generator-registry.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import {
@@ -96,11 +96,11 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
         savedImageCategory,
         savedVibrant,
         fetchImageCandidates: (() => {
-            const accessKey = getUnsplashAccessKey();
-            if (!accessKey) return undefined;
+            const proxyBaseUrl = getImageProxyBaseUrl();
+            if (!proxyBaseUrl) return undefined;
             return (imageCategory: string, vibrant: boolean) =>
                 fetchCandidateImages(
-                    accessKey,
+                    proxyBaseUrl,
                     imageCategory,
                     vibrant,
                     orientationForViewport({

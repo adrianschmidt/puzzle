@@ -31,7 +31,7 @@ describe('fetchCandidateImages', () => {
     it('maps results into candidates with 1080-scaled display size', async () => {
         vi.mocked(fetchRandomImages).mockResolvedValue([makeResult(1), makeResult(2)]);
 
-        const candidates = await fetchCandidateImages('key', 'nature', false, 'landscape');
+        const candidates = await fetchCandidateImages('https://proxy.example', 'nature', false, 'landscape');
 
         expect(candidates).toHaveLength(2);
         expect(candidates![0]).toEqual({
@@ -51,10 +51,10 @@ describe('fetchCandidateImages', () => {
     it('passes the category query, count, and orientation through', async () => {
         vi.mocked(fetchRandomImages).mockResolvedValue([makeResult(1)]);
 
-        await fetchCandidateImages('key', 'nature', true, 'portrait');
+        await fetchCandidateImages('https://proxy.example', 'nature', true, 'portrait');
 
         expect(fetchRandomImages).toHaveBeenCalledWith(
-            'key',
+            'https://proxy.example',
             CANDIDATE_IMAGE_COUNT,
             fetch,
             'nature vibrant colorful',
@@ -65,20 +65,20 @@ describe('fetchCandidateImages', () => {
     it('returns null when the fetch yields nothing', async () => {
         vi.mocked(fetchRandomImages).mockResolvedValue(undefined);
 
-        expect(await fetchCandidateImages('key', 'any', false, 'landscape')).toBeNull();
+        expect(await fetchCandidateImages('https://proxy.example', 'any', false, 'landscape')).toBeNull();
     });
 
     it('returns null when the fetch returns an empty array', async () => {
         vi.mocked(fetchRandomImages).mockResolvedValue([]);
 
-        expect(await fetchCandidateImages('key', 'any', false, 'landscape')).toBeNull();
+        expect(await fetchCandidateImages('https://proxy.example', 'any', false, 'landscape')).toBeNull();
     });
 
     it('returns null and warns when the fetch throws', async () => {
         vi.mocked(fetchRandomImages).mockRejectedValue(new Error('network down'));
 
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        expect(await fetchCandidateImages('key', 'any', false, 'landscape')).toBeNull();
+        expect(await fetchCandidateImages('https://proxy.example', 'any', false, 'landscape')).toBeNull();
         expect(warnSpy).toHaveBeenCalled();
         warnSpy.mockRestore();
     });

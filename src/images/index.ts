@@ -4,8 +4,9 @@ export {
     buildRandomPhotoUrl,
     parseUnsplashResponse,
     triggerPhotoDownload,
-    getUnsplashAccessKey,
-    UNSPLASH_RANDOM_URL,
+    getImageProxyBaseUrl,
+    PROXY_RANDOM_PATH,
+    PROXY_DOWNLOAD_PATH,
 } from './unsplash.js';
 export type { UnsplashPhoto, UnsplashImageResult } from './unsplash.js';
 

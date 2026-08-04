@@ -14,7 +14,7 @@ vi.mock('../ui/index.js', async (importOriginal) => ({
     yieldForPaint: vi.fn(async () => {}),
 }));
 vi.mock('../images/index.js', () => ({
-    getUnsplashAccessKey: vi.fn(),
+    getImageProxyBaseUrl: vi.fn(),
     triggerPhotoDownload: vi.fn(async () => {}),
 }));
 // `createNewGame` below runs for real, and its generator registry imports
@@ -26,7 +26,7 @@ vi.mock('../puzzle/topology/traced-tab-loader.js', async (importOriginal) => {
     return { ...actual, preloadTracedTabGenerator: vi.fn(async () => {}) };
 });
 // `resolveUnsplashImage` is not exercised by these tests (every test either
-// picks a photo directly or has no access key), so it is stubbed rather than
+// picks a photo directly or has no image proxy configured), so it is stubbed rather than
 // left real — otherwise it would reach the real `fetchRandomImage` behind
 // the `../images/index.js` mock above, which doesn't export it. Stubbing it
 // also gives the "no second API call" test below something to assert on.
@@ -44,7 +44,7 @@ vi.mock('../game/index.js', async (importOriginal) => {
 });
 
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint } from '../ui/index.js';
-import { getUnsplashAccessKey, triggerPhotoDownload } from '../images/index.js';
+import { getImageProxyBaseUrl, triggerPhotoDownload } from '../images/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import { resolveUnsplashImage } from './resolve-image.js';
 import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
@@ -94,7 +94,7 @@ describe('startNewGame', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        vi.mocked(getUnsplashAccessKey).mockReturnValue(undefined);
+        vi.mocked(getImageProxyBaseUrl).mockReturnValue(undefined);
         vi.mocked(preloadTracedTabGenerator).mockResolvedValue(undefined);
         vi.mocked(resolveUnsplashImage).mockResolvedValue(null);
         vi.mocked(createNewGameAsync).mockImplementation(realCreateNewGameAsync);
@@ -282,7 +282,7 @@ describe('startNewGame', () => {
     // `downloadLocation` is set unconditionally on success — otherwise the
     // assertion below would pass whether or not the ordering was correct.
     it('does not report an Unsplash download when the start throws first', async () => {
-        vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
+        vi.mocked(getImageProxyBaseUrl).mockReturnValue('https://proxy.example');
         vi.mocked(preloadTracedTabGenerator).mockRejectedValue(new Error('chunk boom'));
 
         await expect(
@@ -313,18 +313,18 @@ describe('startNewGame', () => {
         expect(install).not.toHaveBeenCalled();
     });
 
-    it('skips the access-key lookup for a blank puzzle', async () => {
+    it('skips the proxy-URL lookup for a blank puzzle', async () => {
         await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
-        expect(getUnsplashAccessKey).not.toHaveBeenCalled();
+        expect(getImageProxyBaseUrl).not.toHaveBeenCalled();
     });
 
-    it('skips the access-key lookup for the first-run puzzle', async () => {
+    it('skips the proxy-URL lookup for the first-run puzzle', async () => {
         await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions({ imageSource: 'first-run' }), deps);
-        expect(getUnsplashAccessKey).not.toHaveBeenCalled();
+        expect(getImageProxyBaseUrl).not.toHaveBeenCalled();
     });
 
     it('uses a player-picked photo directly, without a second Unsplash fetch', async () => {
-        vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
+        vi.mocked(getImageProxyBaseUrl).mockReturnValue('https://proxy.example');
         const picked = makeCandidateImage();
 
         await startNewGame(
@@ -334,7 +334,10 @@ describe('startNewGame', () => {
         );
 
         expect(resolveUnsplashImage).not.toHaveBeenCalled();
-        expect(triggerPhotoDownload).toHaveBeenCalledWith(picked.downloadLocation, 'key');
+        expect(triggerPhotoDownload).toHaveBeenCalledWith(
+            picked.downloadLocation,
+            'https://proxy.example',
+        );
     });
 
     // Pins ordering step 2 (first half): the chunk preload is started
@@ -361,7 +364,7 @@ describe('startNewGame', () => {
         vi.mocked(preloadTracedTabGenerator).mockReturnValue(
             new Promise<void>((resolve) => { release = resolve; }),
         );
-        vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
+        vi.mocked(getImageProxyBaseUrl).mockReturnValue('https://proxy.example');
         vi.mocked(resolveUnsplashImage).mockImplementation(async () => {
             release();
             return null;
@@ -454,7 +457,7 @@ describe('startNewGame', () => {
         // A player-picked photo, so the state carries a real `https://` URL.
         // A blank puzzle carries no URL at all, which would make the
         // redaction assertion below unfailable.
-        vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
+        vi.mocked(getImageProxyBaseUrl).mockReturnValue('https://proxy.example');
         await startNewGame(
             { cols: 2, rows: 2 },
             noTracedTabsOptions({ imageSource: undefined, pickedImage: makeCandidateImage() }),
@@ -602,7 +605,7 @@ describe('startNewGame', () => {
     // check — rather than via a fabricated signal, so this exercises the
     // real ordering rather than asserting on a mock.
     it('does not report an Unsplash download when canceled before the download report', async () => {
-        vi.mocked(getUnsplashAccessKey).mockReturnValue('key');
+        vi.mocked(getImageProxyBaseUrl).mockReturnValue('https://proxy.example');
         vi.mocked(resolveUnsplashImage).mockImplementation(async () => {
             // `showLoadingOverlay` already ran synchronously earlier in this
             // same call, so its `onCancel` is on the mock's call record.

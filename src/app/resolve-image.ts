@@ -16,7 +16,7 @@ import type { Orientation } from '../model/types.js';
 export type ResolvedImage = DisplayImage;
 
 export async function resolveUnsplashImage(
-    accessKey: string,
+    proxyBaseUrl: string,
     imageCategory: string,
     vibrant: boolean,
     orientation: Orientation,
@@ -25,7 +25,7 @@ export async function resolveUnsplashImage(
     try {
         const category = findImageCategory(imageCategory);
         const query = buildImageQuery(category.query, vibrant);
-        const result = await fetchRandomImage(accessKey, fetchFn, query, orientation);
+        const result = await fetchRandomImage(proxyBaseUrl, fetchFn, query, orientation);
 
         if (!result) {
             return null;

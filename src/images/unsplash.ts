@@ -1,8 +1,14 @@
 /**
  * Unsplash API client for fetching random photos.
  *
- * Uses the Unsplash API free tier. The access key is provided via
- * `VITE_UNSPLASH_ACCESS_KEY` environment variable at build time.
+ * Calls go through our own proxy Worker (`src/worker/image-proxy.ts`) rather
+ * than `api.unsplash.com` directly: this is a static site, so a build-time
+ * API key would be inlined into the bundle and readable by every visitor
+ * (#534). The Worker holds the key and adds it server-side.
+ *
+ * `VITE_IMAGE_PROXY_URL` names the Worker. It is a plain URL, not a secret,
+ * so inlining it is fine — and its absence still means "no photo source",
+ * the same gate the access key used to provide.
  *
  * @see https://unsplash.com/documentation#get-a-random-photo
  */
@@ -10,8 +16,11 @@
 import { diagnostics } from '../diagnostics.js';
 import type { Orientation } from '../model/types.js';
 
-/** The API endpoint for fetching a random photo. */
-export const UNSPLASH_RANDOM_URL = 'https://api.unsplash.com/photos/random';
+/** Proxy route that forwards to Unsplash's `/photos/random`. */
+export const PROXY_RANDOM_PATH = '/random';
+
+/** Proxy route that forwards a photo's `download_location`. */
+export const PROXY_DOWNLOAD_PATH = '/download';
 
 /**
  * Relevant fields from the Unsplash random photo response.
@@ -72,20 +81,20 @@ export interface UnsplashImageResult {
 }
 
 /**
- * Build the URL for fetching a random photo from Unsplash.
+ * Build the proxy URL for fetching a random photo.
  *
- * Filters for the requested orientation.
+ * Filters for the requested orientation. Carries no credential of any kind:
+ * the Worker authenticates with an `Authorization` header it adds itself, and
+ * strips any `client_id` a caller supplies. A key in this URL would mean the
+ * key is back in the bundle, which is the whole point of routing through it.
  */
 export function buildRandomPhotoUrl(
-    accessKey: string,
+    proxyBaseUrl: string,
     query?: string,
     orientation: Orientation = 'landscape',
     count?: number,
 ): string {
-    const params = new URLSearchParams({
-        orientation,
-        client_id: accessKey,
-    });
+    const params = new URLSearchParams({ orientation });
 
     if (query) {
         params.set('query', query);
@@ -95,7 +104,7 @@ export function buildRandomPhotoUrl(
         params.set('count', String(count));
     }
 
-    return `${UNSPLASH_RANDOM_URL}?${params.toString()}`;
+    return `${proxyBaseUrl}${PROXY_RANDOM_PATH}?${params.toString()}`;
 }
 
 /**
@@ -170,40 +179,44 @@ function isUnsplashPhoto(data: unknown): data is UnsplashPhoto {
 }
 
 /**
- * Get the Unsplash access key from the build-time environment variable.
+ * Get the image-proxy base URL from the build-time environment variable.
  *
- * Returns `undefined` if the key is not configured.
+ * Returns `undefined` if no proxy is configured, which callers treat as "no
+ * photo source available" — the same gate the access key used to provide, so
+ * an unconfigured build still degrades to no picker rather than a broken one.
+ *
+ * A trailing slash is stripped so callers can append a rooted path.
  */
-export function getUnsplashAccessKey(): string | undefined {
-    const key = import.meta.env.VITE_UNSPLASH_ACCESS_KEY as string | undefined;
+export function getImageProxyBaseUrl(): string | undefined {
+    const url = import.meta.env.VITE_IMAGE_PROXY_URL as string | undefined;
 
-    if (!key || key.trim().length === 0) {
+    if (!url || url.trim().length === 0) {
         return undefined;
     }
 
-    return key.trim();
+    return url.trim().replace(/\/+$/, '');
 }
 
 /**
  * Fetch a random photo from Unsplash.
  *
- * @param accessKey - Unsplash API access key
+ * @param proxyBaseUrl - Base URL of the image-proxy Worker
  * @param fetchFn - Fetch implementation (injectable for testing)
  * @returns The image result, or `undefined` if the fetch fails
  */
 export async function fetchRandomImage(
-    accessKey: string,
+    proxyBaseUrl: string,
     fetchFn: typeof fetch = fetch,
     query?: string,
     orientation: Orientation = 'landscape',
 ): Promise<UnsplashImageResult | undefined> {
-    const url = buildRandomPhotoUrl(accessKey, query, orientation);
+    const url = buildRandomPhotoUrl(proxyBaseUrl, query, orientation);
 
     const response = await fetchFn(url);
 
     if (!response.ok) {
         diagnostics.warn(
-            `Unsplash API error: ${response.status} ${response.statusText}`,
+            `Image proxy error: ${response.status} ${response.statusText}`,
         );
 
         return undefined;
@@ -224,19 +237,19 @@ export async function fetchRandomImage(
  * @throws {Error} If the response body is not an array of photos.
  */
 export async function fetchRandomImages(
-    accessKey: string,
+    proxyBaseUrl: string,
     count: number,
     fetchFn: typeof fetch = fetch,
     query?: string,
     orientation: Orientation = 'landscape',
 ): Promise<UnsplashImageResult[] | undefined> {
-    const url = buildRandomPhotoUrl(accessKey, query, orientation, count);
+    const url = buildRandomPhotoUrl(proxyBaseUrl, query, orientation, count);
 
     const response = await fetchFn(url);
 
     if (!response.ok) {
         diagnostics.warn(
-            `Unsplash API error: ${response.status} ${response.statusText}`,
+            `Image proxy error: ${response.status} ${response.statusText}`,
         );
 
         return undefined;
@@ -261,17 +274,19 @@ export async function fetchRandomImages(
  */
 export async function triggerPhotoDownload(
     downloadLocation: string,
-    accessKey: string,
+    proxyBaseUrl: string,
     fetchFn: typeof fetch = fetch,
 ): Promise<void> {
-    const url = new URL(downloadLocation);
-    url.searchParams.set('client_id', accessKey);
+    // The Worker validates that this really is an Unsplash download location
+    // before attaching the key, so it cannot be turned into an open relay.
+    const url = `${proxyBaseUrl}${PROXY_DOWNLOAD_PATH}`
+        + `?url=${encodeURIComponent(downloadLocation)}`;
 
-    const response = await fetchFn(url.toString());
+    const response = await fetchFn(url);
 
     if (!response.ok) {
         diagnostics.warn(
-            `Unsplash download trigger failed: ${response.status} ${response.statusText}`,
+            `Image proxy error on download trigger: ${response.status} ${response.statusText}`,
         );
     }
 }

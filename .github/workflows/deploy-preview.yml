@@ -48,10 +48,30 @@ jobs:
 
       - run: npm ci --legacy-peer-deps
 
+      # Same check as deploy.yml, which carries the full reasoning. Worth
+      # having on both: the preview at /puzzle/dev/ is the surface PRs are
+      # actually reviewed on, so a misconfigured proxy shows up here first —
+      # and during a key rotation every preview would otherwise lose its
+      # picker with a green checks summary.
+      - name: Check the image proxy is configured
+        env:
+          VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
+        run: |
+          if [ -z "$VITE_IMAGE_PROXY_URL" ]; then
+            echo "::warning::VITE_IMAGE_PROXY_URL is not set — the preview will have NO photo picker."
+            exit 0
+          fi
+          status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${VITE_IMAGE_PROXY_URL%/}/download" || true)
+          case "$status" in
+            400) echo "Image proxy is live, routed, and has a key set (key validity not checked)." ;;
+            500) echo "::warning::Image proxy answered 500 — its UNSPLASH_ACCESS_KEY secret is probably unset." ;;
+            *)   echo "::warning::Image proxy at $VITE_IMAGE_PROXY_URL answered $status, expected 400 — wrong, undeployed, or route-mounted Worker?" ;;
+          esac
+
       - run: npm run build
         env:
           VITE_BASE_PATH: /puzzle/dev/
-          VITE_UNSPLASH_ACCESS_KEY: ${{ secrets.VITE_UNSPLASH_ACCESS_KEY }}
+          VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
           VITE_APP_VERSION: "PR #${{ github.event.pull_request.number }} (run ${{ github.run_number }})"
           VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
 
