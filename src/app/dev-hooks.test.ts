@@ -46,6 +46,8 @@ function validReproParams(): ReproParams {
     return {
         seed: 42,
         cutStyle: 'classic',
+        // The wire sentinel, not a `GameState` value: `ReproParams` is what
+        // a developer hand-types into `__reproPuzzle`.
         imageUrl: 'blank',
         imageSize: { width: 100, height: 100 },
         gridSize: { cols: 2, rows: 2 },

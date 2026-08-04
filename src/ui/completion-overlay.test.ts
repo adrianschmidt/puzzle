@@ -16,7 +16,7 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
                 rotation: 0,
             },
         ],
-        imageUrl: 'blank',
+        imageUrl: null,
         imageSize: { width: 1080, height: 720 },
         gridSize: { cols: 4, rows: 3 },
         completed: true,
