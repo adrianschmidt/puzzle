@@ -3,6 +3,11 @@
      Matches the default preset (indigo-darker) so there's no flash. */
   --puzzle-bg-color: #1a237e;
   --piece-opacity: 1;
+  /* Fill for a blank puzzle's pieces, which carry no image. Deliberately
+     not in palette.css: that file excludes absolute white, and this does
+     not flip with the OS theme — a blank puzzle is the photo's stand-in,
+     and a photo doesn't invert. */
+  --piece-blank-fill: #ffffff;
 
   /* UI chrome colors — dark scheme (default) */
   --ui-fg: #e0e0e0;
@@ -366,6 +371,10 @@ html, body {
   filter: var(--piece-edge-filter, drop-shadow(0 0 4px rgba(0, 0, 0, 0.35)));
 }
 
+[data-piece-blank] {
+  fill: var(--piece-blank-fill);
+}
+
 /* Debug piece opacity — controlled via the info-modal slider */
 [data-piece-id] image,
 [data-piece-blank] {
@@ -576,12 +585,6 @@ html, body {
   animation: fade-in 0.2s ease-out;
 }
 
-/*
- * Keep this base .size-picker-dialog rule ABOVE its @media duplicate below:
- * the guard tests in style.test.ts locate a rule via ruleBody(), which matches
- * the FIRST occurrence of the selector. Reordering it under the @media block
- * would retarget those assertions at the wrong rule body.
- */
 .size-picker-dialog {
   background: var(--ui-surface);
   border: 1px solid var(--ui-border-subtle);
@@ -610,10 +613,6 @@ html, body {
  * Scrollable body of the new-game dialog — the title above stays pinned.
  * Carries the dialog's horizontal + bottom padding so the scrollbar hugs
  * the dialog edge without escaping the rounded corners.
- *
- * Keep this base rule ABOVE its @media duplicate below: style.test.ts's
- * ruleBody() matches the FIRST occurrence of the selector, so reordering it
- * under the @media block would retarget those guard assertions.
  */
 .dialog-content {
   overflow-y: auto;

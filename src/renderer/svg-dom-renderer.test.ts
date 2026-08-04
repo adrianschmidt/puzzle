@@ -626,28 +626,38 @@ describe('SvgDomRenderer', () => {
 
             const fill = pieceEl.querySelector('[data-piece-blank]')!;
             expect(fill.tagName).toBe('path');
-            expect(fill.getAttribute('fill')).toBe('#ffffff');
             expect(fill.getAttribute('fill-rule')).toBe('evenodd');
+            // The color is CSS (`--piece-blank-fill`), asserted in
+            // style.test.ts — jsdom applies no stylesheet, so there is
+            // nothing to read here.
+            expect(fill.hasAttribute('fill')).toBe(false);
         });
 
-        it('fills the piece shape, so the silhouette matches the clip path', () => {
+        it('fills the exact piece shape', () => {
             const state = makeBlankState();
             renderer.init(container);
             renderer.renderState(state);
 
-            const pieceEl = container.querySelector('[data-piece-id="0"]')!;
-            const fill = pieceEl.querySelector('[data-piece-blank]')!;
-            const clipPath = pieceEl.querySelector('clipPath path')!;
+            const fill = container.querySelector('[data-piece-blank]')!;
             expect(fill.getAttribute('d')).toBe(state.pieces[0].shape);
-            expect(fill.getAttribute('d')).toBe(clipPath.getAttribute('d'));
         });
 
-        it('keeps the clip path, hit area and debug overlay', () => {
+        it('builds no clip path, which only the image arm needs', () => {
             renderer.init(container);
             renderer.renderState(makeBlankState());
 
             const pieceEl = container.querySelector('[data-piece-id="0"]')!;
-            expect(pieceEl.querySelector('clipPath')).not.toBeNull();
+            // An unreferenced clipPath would be a second copy of `piece.shape`
+            // on every piece — ~1.2 KB each on a large puzzle.
+            expect(pieceEl.querySelector('defs')).toBeNull();
+            expect(pieceEl.querySelector('clipPath')).toBeNull();
+        });
+
+        it('keeps the hit area and debug overlay', () => {
+            renderer.init(container);
+            renderer.renderState(makeBlankState());
+
+            const pieceEl = container.querySelector('[data-piece-id="0"]')!;
             expect(pieceEl.querySelector('[data-hit-area]')).not.toBeNull();
             expect(pieceEl.querySelector('[data-piece-fill]')).not.toBeNull();
         });
@@ -660,13 +670,21 @@ describe('SvgDomRenderer', () => {
             expect(fill.getAttribute('pointer-events')).toBe('none');
         });
 
-        it('still renders an <image> when the puzzle has one', () => {
+        it('still renders a clipped <image> when the puzzle has one', () => {
+            const state = make2x2State();
             renderer.init(container);
-            renderer.renderState(make2x2State());
+            renderer.renderState(state);
 
             const pieceEl = container.querySelector('[data-piece-id="0"]')!;
             expect(pieceEl.querySelector('[data-piece-blank]')).toBeNull();
-            expect(pieceEl.querySelector('image')).not.toBeNull();
+
+            const image = pieceEl.querySelector('image')!;
+            expect(image.getAttribute('clip-path')).toBe('url(#clip-piece-0)');
+            // The clip the image renders through is the same `d` the blank arm
+            // fills, which is what makes the two silhouettes identical.
+            expect(
+                pieceEl.querySelector('clipPath path')!.getAttribute('d'),
+            ).toBe(state.pieces[0].shape);
         });
     });
 
