@@ -57,7 +57,7 @@ describe('fetchCandidateImages', () => {
             'key',
             CANDIDATE_IMAGE_COUNT,
             fetch,
-            'nature landscape vibrant colorful',
+            'nature vibrant colorful',
             'portrait',
         );
     });

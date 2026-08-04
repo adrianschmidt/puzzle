@@ -38,6 +38,15 @@ describe('IMAGE_CATEGORY_OPTIONS', () => {
         }
     });
 
+    it('all non-any queries are a single word', () => {
+        // Each query is the bare Unsplash tag term the option's label names.
+        // Multi-word queries AND-narrow the search, which is how `abstract`
+        // once ended up repeating `colorful` alongside the vibrant toggle.
+        for (const opt of IMAGE_CATEGORY_OPTIONS.slice(1)) {
+            expect(opt.query).toMatch(/^\S+$/);
+        }
+    });
+
     it('all options have unique ids', () => {
         const ids = IMAGE_CATEGORY_OPTIONS.map((o) => o.id);
         expect(new Set(ids).size).toBe(ids.length);
@@ -48,7 +57,7 @@ describe('findImageCategory', () => {
     it('finds a known category by id', () => {
         const result = findImageCategory('nature');
         expect(result.id).toBe('nature');
-        expect(result.query).toBe('nature landscape');
+        expect(result.query).toBe('nature');
     });
 
     it('finds the people category with the bare tag query', () => {
