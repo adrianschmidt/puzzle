@@ -33,7 +33,7 @@ export interface ImageCategoryOption {
     id: ImageCategoryId;
     /** Display label. */
     label: string;
-    /** Search query string(s) for the Unsplash API. Undefined means no query (random). */
+    /** Search query for the Unsplash API. Undefined means no query (random). */
     query: string | undefined;
     /** Short description of the category. */
     description: string;
@@ -42,8 +42,10 @@ export interface ImageCategoryOption {
 /**
  * Available image category options.
  *
- * The `any` option preserves current behavior (no query parameter).
- * Other options pass a search query to the Unsplash `/photos/random` endpoint.
+ * `any` sends no query parameter at all, so Unsplash picks from everything.
+ * Every other option's query is the bare Unsplash tag term its label names —
+ * the same term the tag chips on a photo page link to. Keep them single
+ * words: extra words AND-narrow the search rather than broadening it.
  */
 export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
     {
@@ -55,43 +57,43 @@ export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
     {
         id: 'nature',
         label: 'Nature',
-        query: 'nature landscape',
+        query: 'nature',
         description: 'Nature & landscapes',
     },
     {
         id: 'animals',
         label: 'Animals',
-        query: 'animals wildlife',
+        query: 'animals',
         description: 'Animals & wildlife',
     },
     {
         id: 'architecture',
         label: 'Architecture',
-        query: 'architecture building',
+        query: 'architecture',
         description: 'Buildings & architecture',
     },
     {
         id: 'space',
         label: 'Space',
-        query: 'space nebula galaxy',
+        query: 'space',
         description: 'Space & astronomy',
     },
     {
         id: 'abstract',
         label: 'Abstract',
-        query: 'abstract colorful pattern',
+        query: 'abstract',
         description: 'Abstract & patterns',
     },
     {
         id: 'food',
         label: 'Food',
-        query: 'food cooking',
+        query: 'food',
         description: 'Food & cooking',
     },
     {
         id: 'travel',
         label: 'Travel',
-        query: 'travel adventure',
+        query: 'travel',
         description: 'Travel & adventure',
     },
     {
