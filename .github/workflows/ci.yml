@@ -37,8 +37,16 @@ jobs:
       # lint failure surfaces without waiting for tsc and vite.
       - run: npm run lint
 
+      # The only gate on the Worker half of the deploy. `tsc` and vitest reach
+      # src/worker/image-proxy.ts by relative path, so renaming or moving it —
+      # or breaking wrangler.jsonc — leaves lint, build and tests green while
+      # deploy-worker.yml starts failing on main. --dry-run needs no
+      # credentials, so it runs on every PR including forks. Same
+      # step-not-a-job reasoning as the lint step above.
+      - run: npm exec --no-install wrangler -- deploy --dry-run
+
       - run: npm run build
         env:
-          VITE_UNSPLASH_ACCESS_KEY: ${{ secrets.VITE_UNSPLASH_ACCESS_KEY }}
+          VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
 
       - run: npm test

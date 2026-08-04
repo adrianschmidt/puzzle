@@ -81,8 +81,8 @@ export interface NewGameDialogOptions {
     savedVibrant?: boolean;
     /**
      * Fetch candidate photos for the image picker, given the currently
-     * selected category and vibrant values. Absent when no Unsplash
-     * access key is configured — the picker hides its grid.
+     * selected category and vibrant values. Absent when no image proxy is
+     * configured — the picker hides its grid.
      */
     fetchImageCandidates?: (
         imageCategory: string,

@@ -19,7 +19,7 @@ import type { Orientation } from '../model/types.js';
 export const CANDIDATE_IMAGE_COUNT = CANDIDATE_COUNT;
 
 export async function fetchCandidateImages(
-    accessKey: string,
+    proxyBaseUrl: string,
     imageCategory: string,
     vibrant: boolean,
     orientation: Orientation,
@@ -29,7 +29,7 @@ export async function fetchCandidateImages(
         const category = findImageCategory(imageCategory);
         const query = buildImageQuery(category.query, vibrant);
         const results = await fetchRandomImages(
-            accessKey,
+            proxyBaseUrl,
             CANDIDATE_IMAGE_COUNT,
             fetchFn,
             query,

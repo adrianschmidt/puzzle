@@ -42,9 +42,45 @@ jobs:
 
       - run: npm ci --legacy-peer-deps
 
+      # GitHub substitutes an empty string for an undefined variable, so an
+      # unset or renamed VITE_IMAGE_PROXY_URL would otherwise publish a fully
+      # green deploy whose only symptom is the photo picker silently gone.
+      # Being set is not the same as reaching a live, keyed Worker. Renaming
+      # `name` in wrangler.jsonc creates a second Worker at a new URL while
+      # this variable still points at the old one, and a missing
+      # `wrangler secret put` leaves the Worker answering 500 on every request.
+      # Both look identical to a player: the picker quietly does nothing.
+      #
+      # Probes /download with no `url`, not an unrouted path: a 404 is what
+      # every host on the internet returns for a path it doesn't know, so it
+      # cannot tell our Worker from a deleted one, an unrelated host, or a
+      # Worker mounted behind a route prefix. A 400 from this exact path is
+      # ours. Neither reaches upstream, so both cost zero Unsplash quota.
+      #
+      # It cannot check that the key WORKS — only that one is set — because
+      # that would need a real /random call, spending quota on every deploy.
+      # Say so, rather than implying more. Warns rather than fails: a
+      # transient Cloudflare blip must not block a site deploy, which is also
+      # why curl's failure is swallowed (it already prints 000 itself; without
+      # `|| true` the non-zero exit would abort this step under `bash -e`).
+      - name: Check the image proxy is configured
+        env:
+          VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
+        run: |
+          if [ -z "$VITE_IMAGE_PROXY_URL" ]; then
+            echo "::warning::VITE_IMAGE_PROXY_URL is not set — deploying WITHOUT the photo picker."
+            exit 0
+          fi
+          status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${VITE_IMAGE_PROXY_URL%/}/download" || true)
+          case "$status" in
+            400) echo "Image proxy is live, routed, and has a key set (key validity not checked)." ;;
+            500) echo "::warning::Image proxy answered 500 — its UNSPLASH_ACCESS_KEY secret is probably unset." ;;
+            *)   echo "::warning::Image proxy at $VITE_IMAGE_PROXY_URL answered $status, expected 400 — wrong, undeployed, or route-mounted Worker?" ;;
+          esac
+
       - run: npm run build
         env:
-          VITE_UNSPLASH_ACCESS_KEY: ${{ secrets.VITE_UNSPLASH_ACCESS_KEY }}
+          VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
           VITE_APP_VERSION: "#${{ github.run_number }}"
           VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
 

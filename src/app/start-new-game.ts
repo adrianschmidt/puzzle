@@ -41,7 +41,7 @@ import { rotationModeForNewGame } from '../game/cut-styles.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { FractalDialogConfig, WavyDialogConfig } from '../ui/index.js';
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint } from '../ui/index.js';
-import { getUnsplashAccessKey, triggerPhotoDownload } from '../images/index.js';
+import { getImageProxyBaseUrl, triggerPhotoDownload } from '../images/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { diagnostics } from '../diagnostics.js';
@@ -238,9 +238,9 @@ export async function startNewGame(
         // Unsplash access is needed for the random fetch and for the
         // download trigger on a picked photo — but not for blank or the
         // deterministic first-run puzzle (bundled defaults set above).
-        const accessKey =
+        const proxyBaseUrl =
             imageSource !== 'blank' && imageSource !== 'first-run'
-                ? getUnsplashAccessKey()
+                ? getImageProxyBaseUrl()
                 : null;
 
         let downloadLocation: string | undefined;
@@ -252,8 +252,8 @@ export async function startNewGame(
             imageSize = pickedImage.imageSize;
             attribution = pickedImage.attribution;
             downloadLocation = pickedImage.downloadLocation;
-        } else if (accessKey) {
-            const resolved = await resolveUnsplashImage(accessKey, imageCategory ?? 'any', vibrant, orientation);
+        } else if (proxyBaseUrl) {
+            const resolved = await resolveUnsplashImage(proxyBaseUrl, imageCategory ?? 'any', vibrant, orientation);
             if (resolved) {
                 imageUrl = resolved.imageUrl;
                 imageSize = resolved.imageSize;
@@ -294,8 +294,8 @@ export async function startNewGame(
 
         // Unsplash guidelines: report a "download" when a photo is actually
         // used. Fire-and-forget — a failure must never block the game.
-        if (accessKey && downloadLocation) {
-            triggerPhotoDownload(downloadLocation, accessKey).catch(() => {});
+        if (proxyBaseUrl && downloadLocation) {
+            triggerPhotoDownload(downloadLocation, proxyBaseUrl).catch(() => {});
         }
 
         const rotationMode = rotationModeForNewGame(cutStyle, rotationEnabled);

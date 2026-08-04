@@ -2,15 +2,21 @@
  * Tests for the Unsplash API client.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
     buildRandomPhotoUrl,
     parseUnsplashResponse,
     fetchRandomImage,
     fetchRandomImages,
     triggerPhotoDownload,
-    UNSPLASH_RANDOM_URL,
+    getImageProxyBaseUrl,
+    PROXY_RANDOM_PATH,
+    PROXY_DOWNLOAD_PATH,
 } from './unsplash.js';
+import { resolveUpstream, RANDOM_PARAMS } from '../worker/image-proxy.js';
+
+/** Stand-in for the deployed Worker's base URL. */
+const PROXY = 'https://proxy.example';
 
 /** A valid Unsplash API response for testing. */
 function makeUnsplashResponse() {
@@ -37,60 +43,68 @@ function makeUnsplashResponse() {
 }
 
 describe('buildRandomPhotoUrl', () => {
-    it('builds URL with orientation=landscape and client_id', () => {
-        const url = buildRandomPhotoUrl('my-test-key');
+    it('targets the proxy route with orientation=landscape', () => {
+        const url = buildRandomPhotoUrl(PROXY);
 
-        expect(url).toContain(UNSPLASH_RANDOM_URL);
+        expect(url.startsWith(`${PROXY}${PROXY_RANDOM_PATH}?`)).toBe(true);
         expect(url).toContain('orientation=landscape');
-        expect(url).toContain('client_id=my-test-key');
     });
 
-    it('properly encodes the access key', () => {
-        const url = buildRandomPhotoUrl('key with spaces');
+    it('never carries a client_id — the Worker authenticates by header', () => {
+        // The reason this module exists in its current shape (#534). A key in
+        // this URL means the key is back in the bundle.
+        const url = buildRandomPhotoUrl(PROXY, 'nature', 'portrait', 4);
 
-        expect(url).toContain('client_id=key+with+spaces');
+        expect(url).not.toContain('client_id');
+    });
+
+    it('goes nowhere near api.unsplash.com', () => {
+        // The client must not reach Unsplash directly: an unproxied call is
+        // an unauthenticated one, and would 401 rather than fail loudly here.
+        const url = buildRandomPhotoUrl(PROXY, 'nature');
+
+        expect(url).not.toContain('api.unsplash.com');
     });
 
     it('includes query parameter when provided', () => {
-        const url = buildRandomPhotoUrl('test-key', 'nature landscape');
+        const url = buildRandomPhotoUrl(PROXY, 'nature landscape');
 
         expect(url).toContain('query=nature+landscape');
         expect(url).toContain('orientation=landscape');
-        expect(url).toContain('client_id=test-key');
     });
 
     it('omits query parameter when undefined', () => {
-        const url = buildRandomPhotoUrl('test-key', undefined);
+        const url = buildRandomPhotoUrl(PROXY, undefined);
 
         expect(url).not.toContain('query=');
     });
 
     it('omits query parameter when empty string', () => {
-        const url = buildRandomPhotoUrl('test-key', '');
+        const url = buildRandomPhotoUrl(PROXY, '');
 
         expect(url).not.toContain('query=');
     });
 
     it('uses orientation=portrait when requested', () => {
-        const url = buildRandomPhotoUrl('test-key', undefined, 'portrait');
+        const url = buildRandomPhotoUrl(PROXY, undefined, 'portrait');
 
         expect(url).toContain('orientation=portrait');
     });
 
     it('uses orientation=landscape when requested', () => {
-        const url = buildRandomPhotoUrl('test-key', undefined, 'landscape');
+        const url = buildRandomPhotoUrl(PROXY, undefined, 'landscape');
 
         expect(url).toContain('orientation=landscape');
     });
 
     it('includes count when provided', () => {
-        const url = buildRandomPhotoUrl('test-key', undefined, 'landscape', 4);
+        const url = buildRandomPhotoUrl(PROXY, undefined, 'landscape', 4);
 
         expect(url).toContain('count=4');
     });
 
     it('omits count when not provided', () => {
-        const url = buildRandomPhotoUrl('test-key');
+        const url = buildRandomPhotoUrl(PROXY);
 
         expect(url).not.toContain('count=');
     });
@@ -217,7 +231,7 @@ describe('fetchRandomImage', () => {
             json: () => Promise.resolve(responseData),
         });
 
-        const result = await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch);
+        const result = await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
 
         expect(result).toBeDefined();
         expect(result!.imageUrl).toBe(responseData.urls.regular);
@@ -230,13 +244,13 @@ describe('fetchRandomImage', () => {
             json: () => Promise.resolve(makeUnsplashResponse()),
         });
 
-        await fetchRandomImage('my-key-123', mockFetch as unknown as typeof fetch);
+        await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
 
         expect(mockFetch).toHaveBeenCalledOnce();
         const calledUrl = mockFetch.mock.calls[0][0] as string;
-        expect(calledUrl).toContain(UNSPLASH_RANDOM_URL);
-        expect(calledUrl).toContain('client_id=my-key-123');
+        expect(calledUrl.startsWith(`${PROXY}${PROXY_RANDOM_PATH}?`)).toBe(true);
         expect(calledUrl).toContain('orientation=landscape');
+        expect(calledUrl).not.toContain('client_id');
     });
 
     it('returns undefined on HTTP error', async () => {
@@ -247,7 +261,7 @@ describe('fetchRandomImage', () => {
         });
 
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const result = await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch);
+        const result = await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
 
         expect(result).toBeUndefined();
         expect(warnSpy).toHaveBeenCalledOnce();
@@ -262,7 +276,7 @@ describe('fetchRandomImage', () => {
         });
 
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const result = await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch);
+        const result = await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
 
         expect(result).toBeUndefined();
         warnSpy.mockRestore();
@@ -274,7 +288,7 @@ describe('fetchRandomImage', () => {
             json: () => Promise.resolve(makeUnsplashResponse()),
         });
 
-        await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch, 'nature landscape');
+        await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch, 'nature landscape');
 
         const calledUrl = mockFetch.mock.calls[0][0] as string;
         expect(calledUrl).toContain('query=nature+landscape');
@@ -286,7 +300,7 @@ describe('fetchRandomImage', () => {
             json: () => Promise.resolve(makeUnsplashResponse()),
         });
 
-        await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch);
+        await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
 
         const calledUrl = mockFetch.mock.calls[0][0] as string;
         expect(calledUrl).not.toContain('query=');
@@ -296,7 +310,7 @@ describe('fetchRandomImage', () => {
         const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
 
         await expect(
-            fetchRandomImage('test-key', mockFetch as unknown as typeof fetch),
+            fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch),
         ).rejects.toThrow('Network error');
     });
 
@@ -306,7 +320,7 @@ describe('fetchRandomImage', () => {
             json: () => Promise.resolve(makeUnsplashResponse()),
         });
 
-        await fetchRandomImage('test-key', mockFetch as unknown as typeof fetch, 'city', 'portrait');
+        await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch, 'city', 'portrait');
 
         const calledUrl = mockFetch.mock.calls[0][0] as string;
         expect(calledUrl).toContain('orientation=portrait');
@@ -320,7 +334,7 @@ describe('fetchRandomImages', () => {
             json: () => Promise.resolve([makeUnsplashResponse(), makeUnsplashResponse()]),
         });
 
-        const results = await fetchRandomImages('test-key', 2, mockFetch as unknown as typeof fetch);
+        const results = await fetchRandomImages(PROXY, 2, mockFetch as unknown as typeof fetch);
 
         expect(results).toHaveLength(2);
         expect(results![0].imageUrl).toBe('https://images.unsplash.com/photo-abc?w=1080');
@@ -333,7 +347,7 @@ describe('fetchRandomImages', () => {
             json: () => Promise.resolve([makeUnsplashResponse()]),
         });
 
-        await fetchRandomImages('test-key', 4, mockFetch as unknown as typeof fetch, 'nature', 'portrait');
+        await fetchRandomImages(PROXY, 4, mockFetch as unknown as typeof fetch, 'nature', 'portrait');
 
         const calledUrl = mockFetch.mock.calls[0][0] as string;
         expect(calledUrl).toContain('count=4');
@@ -349,7 +363,7 @@ describe('fetchRandomImages', () => {
         });
 
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const results = await fetchRandomImages('test-key', 4, mockFetch as unknown as typeof fetch);
+        const results = await fetchRandomImages(PROXY, 4, mockFetch as unknown as typeof fetch);
 
         expect(results).toBeUndefined();
         warnSpy.mockRestore();
@@ -362,26 +376,31 @@ describe('fetchRandomImages', () => {
         });
 
         await expect(
-            fetchRandomImages('test-key', 4, mockFetch as unknown as typeof fetch),
+            fetchRandomImages(PROXY, 4, mockFetch as unknown as typeof fetch),
         ).rejects.toThrow('Invalid Unsplash API response');
     });
 });
 
 describe('triggerPhotoDownload', () => {
-    it('calls the download location with client_id appended', async () => {
+    it('hands the download location to the proxy, intact', async () => {
         const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+        const location = 'https://api.unsplash.com/photos/abc123/download?ixid=xyz';
 
         await triggerPhotoDownload(
-            'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
-            'my-key',
+            location,
+            PROXY,
             mockFetch as unknown as typeof fetch,
         );
 
         expect(mockFetch).toHaveBeenCalledOnce();
         const calledUrl = new URL(mockFetch.mock.calls[0][0] as string);
-        expect(calledUrl.searchParams.get('client_id')).toBe('my-key');
-        expect(calledUrl.searchParams.get('ixid')).toBe('xyz');
-        expect(calledUrl.pathname).toBe('/photos/abc123/download');
+        expect(calledUrl.origin + calledUrl.pathname).toBe(
+            `${PROXY}${PROXY_DOWNLOAD_PATH}`,
+        );
+        // Round-trips whole, ixid included — the Worker re-parses it, and a
+        // mangled ixid would break Unsplash's download attribution silently.
+        expect(calledUrl.searchParams.get('url')).toBe(location);
+        expect(calledUrl.searchParams.get('client_id')).toBeNull();
     });
 
     it('warns but does not throw on HTTP error', async () => {
@@ -389,9 +408,95 @@ describe('triggerPhotoDownload', () => {
 
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         await expect(
-            triggerPhotoDownload('https://api.unsplash.com/x/download', 'k', mockFetch as unknown as typeof fetch),
+            triggerPhotoDownload('https://api.unsplash.com/x/download', PROXY, mockFetch as unknown as typeof fetch),
         ).resolves.toBeUndefined();
         expect(warnSpy).toHaveBeenCalledOnce();
         warnSpy.mockRestore();
+    });
+});
+
+describe('getImageProxyBaseUrl', () => {
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it('returns undefined when unset, which is the "no picker" gate', () => {
+        vi.stubEnv('VITE_IMAGE_PROXY_URL', '');
+        expect(getImageProxyBaseUrl()).toBeUndefined();
+    });
+
+    it('returns undefined for a whitespace-only value', () => {
+        vi.stubEnv('VITE_IMAGE_PROXY_URL', '   ');
+        expect(getImageProxyBaseUrl()).toBeUndefined();
+    });
+
+    it('strips a trailing slash so callers can append a rooted path', () => {
+        // Callers concatenate `${base}/random`. A pasted URL keeps the slash a
+        // dashboard shows, and `//random` misses the Worker's exact-path check
+        // and 404s every photo request.
+        vi.stubEnv('VITE_IMAGE_PROXY_URL', 'https://proxy.example/');
+        expect(getImageProxyBaseUrl()).toBe('https://proxy.example');
+
+        vi.stubEnv('VITE_IMAGE_PROXY_URL', 'https://proxy.example///');
+        expect(getImageProxyBaseUrl()).toBe('https://proxy.example');
+    });
+
+    it('trims surrounding whitespace', () => {
+        vi.stubEnv('VITE_IMAGE_PROXY_URL', '  https://proxy.example  ');
+        expect(getImageProxyBaseUrl()).toBe('https://proxy.example');
+    });
+});
+
+/**
+ * The client and the Worker agree on the wire format through two independent
+ * sets of string literals — `PROXY_*_PATH` and the `url` parameter here,
+ * `'/random'`/`'/download'`/`'url'` there. Nothing else tests across that
+ * boundary, so renaming a route on either side leaves both suites green and
+ * 404s every photo request in production.
+ */
+describe('client/Worker route contract', () => {
+    it('routes a URL the client builds for a random photo', () => {
+        const built = buildRandomPhotoUrl(PROXY, 'face', 'portrait', 4);
+
+        const resolved = resolveUpstream(new URL(built));
+
+        expect(resolved.ok).toBe(true);
+        const upstream = new URL((resolved as { url: string }).url);
+        expect(upstream.pathname).toBe('/photos/random');
+        expect(upstream.searchParams.get('query')).toBe('face');
+        expect(upstream.searchParams.get('orientation')).toBe('portrait');
+        expect(upstream.searchParams.get('count')).toBe('4');
+    });
+
+    it('routes the URL the client builds for a download trigger', async () => {
+        const location = 'https://api.unsplash.com/photos/abc123/download?ixid=xyz';
+        const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+
+        await triggerPhotoDownload(
+            location,
+            PROXY,
+            mockFetch as unknown as typeof fetch,
+        );
+
+        const resolved = resolveUpstream(
+            new URL(mockFetch.mock.calls[0][0] as string),
+        );
+
+        expect(resolved.ok).toBe(true);
+        const upstream = new URL((resolved as { url: string }).url);
+        expect(upstream.pathname).toBe('/photos/abc123/download');
+        expect(upstream.searchParams.get('ixid')).toBe('xyz');
+    });
+
+    it('emits exactly the parameters the Worker forwards', () => {
+        // The other half of the seam: route names are pinned above, but the
+        // parameter lists are independent too, and one added here without a
+        // matching entry in RANDOM_PARAMS is dropped in silence — a new search
+        // facet that quietly does nothing.
+        const built = new URL(buildRandomPhotoUrl(PROXY, 'face', 'portrait', 4));
+
+        expect([...built.searchParams.keys()].sort()).toEqual(
+            [...RANDOM_PARAMS].sort(),
+        );
     });
 });

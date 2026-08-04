@@ -1,0 +1,74 @@
+name: Deploy worker
+
+# Deploys the Unsplash image-proxy Worker (src/worker/image-proxy.ts).
+#
+# Separate from deploy.yml because the two have nothing to do with each other:
+# the app is a static bundle pushed to gh-pages, the Worker is a Cloudflare
+# script. Coupling them would redeploy one every time the other changed.
+#
+# Runs `wrangler` via `npm exec --no-install` from the pinned devDependency
+# rather than a third-party action, so the deploy surface is the package
+# already in the lockfile and Dependabot already tracks. The flag is the
+# load-bearing part — see the step comment below.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/worker/**'
+      - 'wrangler.jsonc'
+      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --legacy-peer-deps
+
+      # Skips rather than fails when the token is absent, so this workflow can
+      # merge before the Cloudflare account exists and start working the moment
+      # the secret is added. A missing token is a setup state, not a breakage;
+      # any OTHER deploy failure still fails the job — including a revoked or
+      # expired token, which is a non-empty string and so reaches wrangler.
+      #
+      # A warning rather than a notice because the case this cannot distinguish
+      # is the secret being deleted or renamed *after* setup: the job would
+      # stay green while Worker changes stopped reaching production. A warning
+      # is visible in the checks summary; a notice is not.
+      #
+      # CLOUDFLARE_API_TOKEN should come from Cloudflare's "Edit Cloudflare
+      # Workers" template, which is scoped to Workers on one account. A broader
+      # token would make a leak of this Actions secret reach DNS, zones and R2
+      # rather than just this Worker.
+      #
+      # `npm exec --no-install` rather than `npx`: npx silently falls back to
+      # fetching from the registry, which would defeat the lockfile-pinning
+      # this workflow's header claims. This is the only command in the repo
+      # that runs with a deploy credential in its environment.
+      - name: Deploy worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set — the Worker was NOT deployed."
+            exit 0
+          fi
+          npm exec --no-install wrangler -- deploy

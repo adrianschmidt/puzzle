@@ -1,0 +1,27 @@
+{
+    // Cloudflare Worker that proxies the app's two Unsplash calls so the API
+    // key stops shipping in the static bundle (#534).
+    //
+    // The key is NOT set here — it is a secret, held by Cloudflare:
+    //     npx wrangler secret put UNSPLASH_ACCESS_KEY
+    // Everything in this file is committed, so nothing secret belongs in it.
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "puzzle-image-proxy",
+
+    // Points into src/ deliberately. A module-format Worker uses only standard
+    // web APIs, so keeping it inside the tree tsconfig.json includes and
+    // `npm run lint` scopes to means it is type-checked and linted with no
+    // separate config — unlike src/pwa/sw.ts, which needs tsconfig.sw.json.
+    // Only `main` and what it imports are bundled, so the sibling test file
+    // does not ship.
+    "main": "src/worker/image-proxy.ts",
+    "compatibility_date": "2026-08-04",
+
+    // The only place the Worker's own error statuses are visible. A 500, a 502
+    // or a passed-through 403 all reach the client as `!response.ok`, which
+    // `fetchRandomImage` turns into an untracked `undefined` — so the Umami
+    // event named for image failures cannot see them (see ImageFetchFailedData
+    // in src/analytics/umami.ts). Captures request metadata only: this Worker
+    // makes no `console` calls, and `no-console` has no override for src/worker/.
+    "observability": { "enabled": true }
+}

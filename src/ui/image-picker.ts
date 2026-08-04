@@ -19,9 +19,9 @@ export type NewGameImageChoice =
 
 export interface ImagePickerOptions {
     /**
-     * Fetch a fresh candidate set. Absent when no Unsplash access key is
-     * configured — the grid and refresh button are then hidden and only
-     * Surprise me / Blank puzzle remain.
+     * Fetch a fresh candidate set. Absent when no image proxy is configured
+     * — the grid and refresh button are then hidden and only Surprise me /
+     * Blank puzzle remain.
      */
     fetchCandidates?: () => Promise<CandidateImage[] | null>;
     /** Called when the player picks a photo, surprise, or blank. */
