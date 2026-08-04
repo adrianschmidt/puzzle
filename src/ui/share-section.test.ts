@@ -12,7 +12,7 @@ function state(overrides: Partial<GameState> = {}): GameState {
             { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]),
               position: { x: 0, y: 0 }, rotation: 0 },
         ],
-        imageUrl: 'blank',
+        imageUrl: null,
         imageSize: { width: 1080, height: 720 },
         gridSize: { cols: 4, rows: 3 },
         seed: 1,

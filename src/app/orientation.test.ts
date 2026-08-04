@@ -42,13 +42,13 @@ describe('orientGridSize', () => {
 });
 
 describe('blankSizeForOrientation', () => {
-    it('returns a landscape canvas (wider than tall) for landscape', () => {
+    it('returns a landscape size (wider than tall) for landscape', () => {
         const size = blankSizeForOrientation('landscape');
         expect(size).toEqual({ width: 1080, height: 720 });
         expect(size.width).toBeGreaterThan(size.height);
     });
 
-    it('returns a portrait canvas (taller than wide) for portrait', () => {
+    it('returns a portrait size (taller than wide) for portrait', () => {
         const size = blankSizeForOrientation('portrait');
         expect(size).toEqual({ width: 720, height: 1080 });
         expect(size.height).toBeGreaterThan(size.width);
