@@ -13,8 +13,7 @@
          resumed saves too rather than just share links.
 
          `img-src` only, deliberately: a `default-src` would need script/style/
-         connect/font policy worked out alongside it. `data:` is required —
-         a blank puzzle's share link carries the painted canvas as a PNG.
+         connect/font policy worked out alongside it.
          The wildcard is a hedge, not a fix for an observed case: every
          Unsplash image this app has loaded came from `images.unsplash.com`
          (analytics through 2026-08-02 show zero `imageSource: 'fallback'`
@@ -27,7 +26,7 @@
          `api.unsplash.com` is a fetch, governed by `connect-src`, so it is
          unaffected. -->
     <meta http-equiv="Content-Security-Policy"
-          content="img-src 'self' data: https://*.unsplash.com" />
+          content="img-src 'self' https://*.unsplash.com" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -36,8 +35,8 @@
     <title>Puzzle</title>
     <link rel="icon" href="/puzzle/favicon-48.png" type="image/png" />
     <link rel="apple-touch-icon" href="/puzzle/apple-touch-icon.png" />
-    <script type="module" crossorigin src="/puzzle/assets/index-fkf0XDf3.js"></script>
-    <link rel="stylesheet" crossorigin href="/puzzle/assets/index-BtDUAgwa.css">
+    <script type="module" crossorigin src="/puzzle/assets/index-Dr_t8tRl.js"></script>
+    <link rel="stylesheet" crossorigin href="/puzzle/assets/index-CucMWuuH.css">
   <link rel="manifest" href="/puzzle/manifest.webmanifest"></head>
   <body>
     <div id="app"></div>
