@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-# Least privilege by default; the job below elevates only what it needs, as in
+# Least privilege by default; each job below declares the scope it needs, as in
 # dependabot-auto-merge.yml.
 permissions:
   contents: read
@@ -14,7 +14,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Split from `deploy` so the npm dependency tree and the write token never
+  # share a job — see deploy.yml's `build` job for the mechanism (#524). The
+  # stakes are higher here than on main: the sibling also holds
+  # `pull-requests: write`, and the dependency tree is a PR author's.
+  build:
     runs-on: ubuntu-latest
     # Dependabot PRs merge unattended (dependabot-auto-merge.yml) and nothing
     # tests against the dev deploy, so a preview would only clobber the single
@@ -23,22 +27,15 @@ jobs:
     # closing/reopening a Dependabot PR doesn't deploy either.
     if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' }}
 
-    # contents for actions-gh-pages' push to gh-pages, pull-requests for the
-    # preview-URL comment. Both reach the token through the Actions runtime —
-    # actions-gh-pages via its explicit `github_token` input, github-script via
-    # its `${{ github.token }}` default — rather than through .git/config.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Same as deploy.yml: neither actions-gh-pages nor github-script
-          # below reads this checkout's .git/config — each gets the token from
-          # the runtime instead. A persisted one would only be exposure,
-          # readable by every binary `npm ci` and the build execute, and this
-          # job's is `contents: write` plus `pull-requests: write`.
+          # No step here runs a git operation, so the token this would
+          # otherwise leave in .git/config is pure exposure — readable by every
+          # npm binary the job goes on to execute.
           persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -74,6 +71,41 @@ jobs:
           VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
           VITE_APP_VERSION: "PR #${{ github.event.pull_request.number }} (run ${{ github.run_number }})"
           VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
+
+      # `include-hidden-files` explained on deploy.yml's equivalent step.
+      - name: Upload the built preview
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: preview
+          path: dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # Repeated rather than relying on the `needs` cascade: this is the
+    # condition that keeps a write token away from Dependabot's PRs, and a
+    # reader of this job should not have to infer it from the job above.
+    if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' }}
+
+    # Both elevated scopes sit in the job that executes no dependency tree: no
+    # checkout, no npm, no `run:` step. contents for actions-gh-pages' push to
+    # gh-pages, pull-requests for the preview-URL comment. See deploy.yml's
+    # `deploy` job for what the split does and does not bound.
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # No checkout needed — see deploy.yml. github-script reads the PR number
+      # from the event payload.
+      - name: Download the built preview
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: preview
+          path: dist
 
       - uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
