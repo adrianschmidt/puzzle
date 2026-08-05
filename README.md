@@ -6,6 +6,11 @@ Pieces merge with each other when matching edges align — no snapping to a fixe
 
 ## Development
 
+The node version is pinned in `.nvmrc` — the same file CI reads. `fnm` picks it
+up on `cd`; with `nvm`, run `nvm use` first. The npm bundled with the node major
+is what writes `package-lock.json`, so a different major there produces a
+lockfile CI might reject.
+
 ```bash
 npm install
 npm run dev
