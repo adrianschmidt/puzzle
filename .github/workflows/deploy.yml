@@ -4,10 +4,8 @@ on:
   push:
     branches: [main]
 
-# Least privilege by default; the job below elevates only what it needs, as in
-# dependabot-auto-merge.yml. Kept at workflow level so a second job added here
-# later — a smoke check, a split-out build — does not inherit a write token by
-# default.
+# Least privilege by default; each job below declares the scope it needs, as in
+# dependabot-auto-merge.yml.
 permissions:
   contents: read
 
@@ -16,23 +14,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Split from `deploy` so the npm dependency tree and the write token never
+  # share a job (#524). Every action a job references is downloaded during
+  # "Set up job", before step 1 — so in a combined job, actions-gh-pages'
+  # JavaScript is already on disk under the same `runner` user by the time a
+  # package's postinstall runs, and the runner executes it a few steps later
+  # with the token in its environment. Pinning to a SHA does not close that:
+  # the tampering is with the local copy, after download.
+  build:
     runs-on: ubuntu-latest
 
-    # actions-gh-pages pushes to gh-pages with this same job token, handed to
-    # it explicitly as `github_token` rather than read from .git/config.
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # This job does push, but not from here: actions-gh-pages below
-          # builds its own remote URL from its `github_token` input and works
-          # in a clone of its own, never reading this checkout's .git/config.
-          # So the token persisted there would only sit where `npm ci` and the
-          # build can read it — and unlike ci.yml's, it is `contents: write` on
-          # `main`.
+          # No step here runs a git operation, so the token this would
+          # otherwise leave in .git/config is pure exposure — readable by every
+          # npm binary the job goes on to execute.
           persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -83,6 +83,44 @@ jobs:
           VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
           VITE_APP_VERSION: "#${{ github.run_number }}"
           VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
+
+      - name: Upload the built site
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site
+          path: dist
+          # actions-gh-pages copies publish_dir with `readdir`, which yields
+          # dotfiles, so anything hidden in dist has always been published.
+          # upload-artifact excludes them by default, so without this the
+          # artifact hop would quietly narrow what ships.
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # The elevated scope sits in the job that executes no dependency tree: no
+    # checkout, no npm, no `run:` step. That list is the guarantee — this job
+    # still runs actions-gh-pages, which is third-party and is what holds the
+    # token.
+    #
+    # What it does NOT bound: `build` still decides the bytes in dist and this
+    # job publishes them unexamined. The split narrows a compromised dependency
+    # from `contents: write` on the repo to the site's own content.
+    permissions:
+      contents: write
+
+    steps:
+      # No checkout needed: actions-gh-pages resolves a relative `publish_dir`
+      # against $GITHUB_WORKSPACE, which the runner creates regardless, and
+      # clones gh-pages into a work dir of its own under $HOME.
+      - name: Download the built site
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: site
+          path: dist
 
       - uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
