@@ -1,12 +1,8 @@
 /**
- * Rebuild merged-group layouts from piece-ID lists (used when loading
- * a shared puzzle that includes progress).
- *
- * Given a list of piece IDs that should be merged, walk the edge graph
- * BFS-style to compute each piece's offset relative to the group anchor
- * (piece 0 in the list). The mate-edge math mirrors the live merge flow:
- * mated edges run in opposite directions, so `edge.start` on this piece
- * meets `mateEdge.end` on the neighbour.
+ * Offsets are relative to the group anchor (piece 0 in the list). The
+ * mate-edge math mirrors the live merge flow: mated edges run in
+ * opposite directions, so `edge.start` on this piece meets
+ * `mateEdge.end` on the neighbour.
  */
 
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
@@ -109,7 +105,6 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
     // that must be multiplied by 90 to get degrees (existing wire format).
     const isFree = state.rotationMode === 'free';
 
-    // Push each reconstructed merged group.
     reconstructed.forEach((offsets, idx) => {
         const wireValue = progress.mr?.[idx] ?? 0;
         // Wire format is quarter-turn integer (v: 1); convert to degrees.
@@ -131,7 +126,6 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
     state.groupsById = indexes.groupsById;
     state.pieceToGroup = indexes.pieceToGroup;
 
-    // Apply solo rotations.
     if (progress.sr && progress.sr.length >= 2) {
         for (let i = 0; i + 1 < progress.sr.length; i += 2) {
             const pid = progress.sr[i];

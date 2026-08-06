@@ -193,7 +193,6 @@ describe('SvgDomRenderer', () => {
                 container.querySelectorAll('[data-group-id]'),
             ).toHaveLength(4);
 
-            // Merge group 0 and 1 into a new group
             const mergedGroup: PieceGroup = {
                 id: 10,
                 pieces: new Map([
@@ -214,7 +213,6 @@ describe('SvgDomRenderer', () => {
             const groups = container.querySelectorAll('[data-group-id]');
             expect(groups).toHaveLength(3);
 
-            // Old groups 0 and 1 should be gone
             expect(
                 container.querySelector('[data-group-id="0"]'),
             ).toBeNull();
@@ -222,7 +220,6 @@ describe('SvgDomRenderer', () => {
                 container.querySelector('[data-group-id="1"]'),
             ).toBeNull();
 
-            // New merged group should exist with both pieces
             const mergedEl = container.querySelector(
                 '[data-group-id="10"]',
             );
@@ -241,7 +238,6 @@ describe('SvgDomRenderer', () => {
 
             renderer.renderState(state);
 
-            // Grab a reference to the original SVG element for piece 0
             const originalSvg = container.querySelector(
                 'svg[data-piece-id="0"]',
             ) as SVGSVGElement;
@@ -253,7 +249,6 @@ describe('SvgDomRenderer', () => {
                 'href',
             )).toBe('test-puzzle.jpg');
 
-            // Render a new state with a different image URL
             const newState: GameState = {
                 ...state,
                 imageUrl: 'new-puzzle-image.jpg',
@@ -261,14 +256,12 @@ describe('SvgDomRenderer', () => {
 
             renderer.renderState(newState);
 
-            // The SVG for piece 0 should be a new element
             const newSvg = container.querySelector(
                 'svg[data-piece-id="0"]',
             ) as SVGSVGElement;
             expect(newSvg).not.toBeNull();
             expect(newSvg).not.toBe(originalSvg);
 
-            // And it should reference the new image
             const newImage = newSvg.querySelector('image')!;
             expect(newImage.getAttributeNS(
                 'http://www.w3.org/1999/xlink',
@@ -286,14 +279,12 @@ describe('SvgDomRenderer', () => {
                 'svg[data-piece-id="0"]',
             ) as SVGSVGElement;
 
-            // Re-render with same state (e.g. after a drag)
             renderer.renderState(state);
 
             const sameSvg = container.querySelector(
                 'svg[data-piece-id="0"]',
             ) as SVGSVGElement;
 
-            // Should be the exact same DOM element (not recreated)
             expect(sameSvg).toBe(originalSvg);
         });
 
@@ -306,7 +297,6 @@ describe('SvgDomRenderer', () => {
                 container.querySelectorAll('[data-group-id]'),
             ).toHaveLength(4);
 
-            // Render a new state with a different image and fewer groups
             const newState: GameState = {
                 ...state,
                 imageUrl: 'different.jpg',
@@ -316,7 +306,6 @@ describe('SvgDomRenderer', () => {
 
             renderer.renderState(newState);
 
-            // Old groups should be gone, only the new one remains
             expect(
                 container.querySelectorAll('[data-group-id]'),
             ).toHaveLength(1);
@@ -331,7 +320,6 @@ describe('SvgDomRenderer', () => {
 
             renderer.renderState(state);
 
-            // Move group 0
             state.groups[0] = {
                 ...state.groups[0],
                 position: { x: 300, y: 400 },
@@ -348,7 +336,6 @@ describe('SvgDomRenderer', () => {
         it('does nothing if init was not called', () => {
             const state = make2x2State();
 
-            // Should not throw
             renderer.renderState(state);
         });
     });
@@ -380,18 +367,15 @@ describe('SvgDomRenderer', () => {
             const svg = container.querySelector('svg[data-piece-id="0"]') as SVGSVGElement;
             expect(svg).not.toBeNull();
 
-            // Check clip-path has fill-rule=evenodd
             const clipPath = svg.querySelector('clipPath#clip-piece-0') as SVGClipPathElement;
             expect(clipPath).not.toBeNull();
             const clipPathPath = clipPath.querySelector('path') as SVGPathElement;
             expect(clipPathPath.getAttribute('fill-rule')).toBe('evenodd');
 
-            // Check hit-area has fill-rule=evenodd
             const hitArea = svg.querySelector('[data-hit-area="true"]') as SVGPathElement;
             expect(hitArea).not.toBeNull();
             expect(hitArea.getAttribute('fill-rule')).toBe('evenodd');
 
-            // Check debug fill has fill-rule=evenodd
             const debugFill = svg.querySelector('[data-piece-fill="true"]') as SVGPathElement;
             expect(debugFill).not.toBeNull();
             expect(debugFill.getAttribute('fill-rule')).toBe('evenodd');
@@ -419,7 +403,6 @@ describe('SvgDomRenderer', () => {
             const firstChild = table.firstElementChild;
             expect(firstChild!.getAttribute('data-group-id')).toBe('0');
 
-            // Bring group 0 to front — it should become the last child
             renderer.bringGroupToFront(0);
 
             const lastChild = table.lastElementChild;
@@ -431,7 +414,6 @@ describe('SvgDomRenderer', () => {
             const state = make2x2State();
             renderer.renderState(state);
 
-            // Should not throw
             renderer.bringGroupToFront(999);
         });
     });
@@ -456,7 +438,6 @@ describe('SvgDomRenderer', () => {
         });
 
         it('does nothing if init was not called', () => {
-            // Should not throw
             renderer.setViewportTransform(2, 100, 50);
         });
     });
@@ -490,7 +471,6 @@ describe('SvgDomRenderer', () => {
             const state = make2x2State();
             renderer.renderState(state);
 
-            // Should not throw
             renderer.setGroupDragging(999, true);
         });
     });
@@ -512,7 +492,6 @@ describe('SvgDomRenderer', () => {
             const state = make2x2State();
             renderer.renderState(state);
 
-            // Should not throw
             renderer.flashMergePulse(999);
         });
     });
@@ -700,7 +679,7 @@ describe('SvgDomRenderer', () => {
         it('can be called multiple times safely', () => {
             renderer.init(container);
             renderer.destroy();
-            renderer.destroy(); // should not throw
+            renderer.destroy();
         });
     });
 });

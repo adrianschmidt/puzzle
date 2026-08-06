@@ -1,11 +1,3 @@
-/**
- * Arc generation for piece boundaries.
- *
- * `makeArc` builds a single quarter-circle arc; `addArcs` walks the
- * connection graph recursively to construct the full sequence of arcs
- * that bounds a piece.
- */
-
 import type { ArcData, DiagonalConnection, Tile } from './types.js';
 import { connectionFromQuad, connectionKey, makeTile } from './tile.js';
 
@@ -35,10 +27,9 @@ export function makeArc(
 }
 
 /**
- * Recursively build arcs for the piece containing `con`. Matches the
- * original algorithm exactly — convex arcs (sign=1) bound the piece's
- * own tiles, concave arcs (sign=0) wrap around neighbouring tiles
- * that belong to other pieces.
+ * Matches the original algorithm exactly — convex arcs (sign=1) bound
+ * the piece's own tiles, concave arcs (sign=0) wrap around neighbouring
+ * tiles that belong to other pieces.
  */
 export function addArcs(
     con: DiagonalConnection,
@@ -48,7 +39,6 @@ export function addArcs(
     frameOffset: number,
     first: boolean,
 ): void {
-    // Arc on the "first" side of the connection
     let newarc: ArcData;
     switch (con.quad) {
         case 0: newarc = makeArc(makeTile(con.p1.x + 1, con.p1.y), rad, frameOffset, 1, 1); break;
@@ -59,7 +49,6 @@ export function addArcs(
     }
     arcs.push(newarc);
 
-    // Handle p2 side
     if (con.p2_taken) {
         const p2quads = [(con.quad + 3) % 4, (con.quad + 4) % 4, (con.quad + 5) % 4];
         for (const q of p2quads) {
@@ -77,7 +66,6 @@ export function addArcs(
         arcs.push(makeArc(con.p2, rad, frameOffset, (con.quad + 2) % 4, 1));
     }
 
-    // Arc on the "second" side of the connection
     switch (con.quad) {
         case 0: newarc = makeArc(makeTile(con.p1.x, con.p1.y - 1), rad, frameOffset, 3, 1); break;
         case 1: newarc = makeArc(makeTile(con.p1.x - 1, con.p1.y), rad, frameOffset, 0, 1); break;
@@ -92,7 +80,6 @@ export function addArcs(
     }
     arcs.push(newarc);
 
-    // Handle p1 side (only on first call)
     if (first) {
         const p1quads = [(con.quad + 1) % 4, (con.quad + 2) % 4, (con.quad + 3) % 4];
         for (const q of p1quads) {

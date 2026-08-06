@@ -1,10 +1,9 @@
 name: Block autosquash commits
 
-# Fails a PR while any of its commits is still an autosquash commit
-# (`fixup!`, `squash!`, or `amend!`). These are meant to be folded into the
-# commit they target via `git rebase -i --autosquash` before merge; this
-# repo merges with "Rebase and merge", which replays them verbatim onto a
-# linear `main`, so an un-squashed one would pollute the history permanently.
+# Autosquash commits (`fixup!`, `squash!`, `amend!`) are meant to be folded
+# into the commit they target before merge; this repo merges with "Rebase
+# and merge", which replays them verbatim onto a linear `main`, so an
+# un-squashed one would pollute the history permanently.
 
 on:
   pull_request:

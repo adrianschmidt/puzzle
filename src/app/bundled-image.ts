@@ -24,7 +24,6 @@ export const BUNDLED_IMAGE_ATTRIBUTION: ImageAttribution = {
         'https://unsplash.com/photos/BS-bOYlt_Lg?utm_source=puzzle&utm_medium=referral',
 };
 
-/** Portrait first-run / fallback asset (Barney Goodman, Unsplash q5BV6DBTpFM). */
 export const BUNDLED_PORTRAIT_IMAGE_URL = 'first-puzzle-portrait.jpg';
 
 export const BUNDLED_PORTRAIT_IMAGE_SIZE = { width: 1080, height: 1614 };
@@ -37,17 +36,12 @@ export const BUNDLED_PORTRAIT_IMAGE_ATTRIBUTION: ImageAttribution = {
         'https://unsplash.com/photos/q5BV6DBTpFM?utm_source=puzzle&utm_medium=referral',
 };
 
-/** A bundled first-run / fallback image: its URL, pixel size, and attribution. */
 export interface BundledImage {
     url: string;
     size: Size;
     attribution: ImageAttribution;
 }
 
-/**
- * Choose the bundled first-run / fallback image for the puzzle orientation.
- * Landscape returns the original asset; portrait returns the portrait variant.
- */
 export function pickBundledImage(orientation: Orientation): BundledImage {
     return orientation === 'portrait'
         ? {

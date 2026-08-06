@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the Info button DOM integration.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createInfoButton } from './info-button.js';
 

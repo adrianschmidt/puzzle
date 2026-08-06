@@ -22,7 +22,6 @@ function makeSeededRandom(seed: number): () => number {
     };
 }
 
-// Deterministic PRNG that counts its calls (mirrors the sine test helper).
 function countingRandom() {
     let calls = 0;
     const fn = () => { calls++; return 0.42; };

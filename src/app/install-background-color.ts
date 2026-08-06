@@ -29,7 +29,6 @@ import {
 } from '../ui/index.js';
 import { track } from '../analytics/index.js';
 
-/** The background-color module's public surface. */
 export interface BackgroundColorControl {
     /**
      * Offer a sharer's color to a recipient who never picked one. Returns
@@ -42,19 +41,13 @@ export interface BackgroundColorControl {
     adopt(id: string): SharedColorOutcome;
 }
 
-/**
- * Install the background-color picker and the piece-outline setup, and
- * return the handle the share path uses to offer a sharer's color.
- */
 export function installBackgroundColor(deps: {
     container: HTMLElement;
 }): BackgroundColorControl {
     const { container } = deps;
 
-    // Install the SVG filter used by the "Outline" piece-outline mode and
-    // apply the saved style + color preferences. The color itself flips
-    // with the OS theme via CSS, so (unlike the background) no re-apply on
-    // theme change is needed.
+    // The outline color flips with the OS theme via CSS, so (unlike the
+    // background) no re-apply on theme change is needed.
     installPieceOutlineFilter();
     applyPieceOutline(loadPieceOutlinePreference());
     applyPieceOutlineColor(loadPieceOutlineColorPreference());

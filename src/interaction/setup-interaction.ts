@@ -1,9 +1,6 @@
 /**
- * Wire PointerRouter + DragController + ViewportController + AutoPanController
- * into the running app.
- *
- * Replaces setup-drag.ts. The router owns container listeners; this file
- * builds the four collaborators and connects them via the router's hooks.
+ * The router owns container listeners; this file builds the collaborators
+ * and connects them via the router's hooks.
  */
 
 import type { GameState, Point } from '../model/types.js';
@@ -132,7 +129,6 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         })
         : null;
 
-    // Whether the in-progress background drag is a viewport pan or a marquee.
     // Decided once at drag start and held until the gesture resolves.
     let backgroundMode: 'pan' | 'marquee' = 'pan';
 
@@ -146,8 +142,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         onStateChanged();
     }
 
-    // The renderer owns the point→piece hit-test; the probe samples around a
-    // press with it. Defined once rather than per pointerdown.
+    // Defined once rather than per pointerdown.
     const probeHitTest = (p: Point): number | null => renderer.pieceIdAtPoint(p);
 
     const classifyTarget: ClassifyTarget = (target, point) => {

@@ -8,8 +8,6 @@ import {
 import type { AutoPanCallbacks } from './auto-pan.js';
 import type { Point } from '../model/types.js';
 
-// --- computeAutoPanVelocity tests ---
-
 describe('computeAutoPanVelocity', () => {
     const W = 1000;
     const H = 800;
@@ -70,9 +68,7 @@ describe('computeAutoPanVelocity', () => {
         const halfwayIn = computeAutoPanVelocity({ x: EDGE_ZONE_PX / 2, y: 400 }, W, H);
         const fullyIn = computeAutoPanVelocity({ x: 0, y: 400 }, W, H);
 
-        // At halfway, speed should be 50% of max
         expect(halfwayIn.x).toBeCloseTo(-MAX_PAN_SPEED_PX_PER_SEC * 0.5);
-        // At edge, speed should be 100% of max
         expect(fullyIn.x).toBe(-MAX_PAN_SPEED_PX_PER_SEC);
     });
 
@@ -81,14 +77,12 @@ describe('computeAutoPanVelocity', () => {
             { x: 0, y: 400 },
             W,
             H,
-            100,  // custom edge zone
-            300,  // custom max speed
+            100,
+            300,
         );
         expect(v.x).toBe(-300);
     });
 });
-
-// --- AutoPanController tests ---
 
 describe('AutoPanController', () => {
     let callbacks: AutoPanCallbacks;

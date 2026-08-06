@@ -1,26 +1,12 @@
-/**
- * SVG path-bounds parsing.
- *
- * Self-contained algorithm that parses SVG `d` attributes and computes a
- * conservative axis-aligned bounding box of every point and bezier control
- * point in the path. Control points may extend past the actual curve, so
- * the box is guaranteed to contain the rendered geometry — good enough for
- * layout spacing.
- */
-
 import type { Point } from '../model/types.js';
 
-// Match SVG path commands: a letter followed by numbers/commas/spaces.
 const COMMAND_REGEX = /([MLCSQTZHVAmlcsqtzhva])\s*([-\d.,eE\s]*)/g;
 const NUMBER_REGEX = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
 
 /**
- * Parse an SVG path string and compute the bounding box of all points
- * (including bezier control points) in the path.
- *
- * This produces a conservative bounding box — control points may extend
- * beyond the actual curve, but the result is guaranteed to contain the
- * full path geometry. Good enough for layout spacing.
+ * Conservative bounding box — bezier control points are included, so they
+ * may extend beyond the actual curve, but the result is guaranteed to
+ * contain the full path geometry. Good enough for layout spacing.
  */
 export function getPathBounds(
     path: string,
@@ -187,7 +173,6 @@ export function getPathBounds(
                 break;
             case 'Z':
             case 'z':
-                // Close path — return to start
                 curX = start.x;
                 curY = start.y;
                 break;

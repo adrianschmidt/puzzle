@@ -1,6 +1,4 @@
 /**
- * Fake {@link Renderer} for app-layer tests.
- *
  * The app layer talks to the renderer through the `Renderer` port only, so a
  * fake made of spies is enough to assert what the layer asked for — no real
  * DOM, no `SvgDomRenderer`.

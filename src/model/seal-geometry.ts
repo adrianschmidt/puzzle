@@ -1,6 +1,4 @@
 /**
- * Freeze each piece's derived geometry: stored `bounds`, no curve samples.
- *
  * Computes `bounds` from edge endpoints plus the generator's dense curve
  * samples, then drops the samples — post-composition their only consumer
  * was this very bounding box (`getPieceBounds`), while they dominated the

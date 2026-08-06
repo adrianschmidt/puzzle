@@ -10,11 +10,10 @@ describe('generateFractalPuzzle', () => {
         const rows = 3;
         const pieces = generateFractalPuzzle(cols, rows, imageSize, defaultSeed);
 
-        // Should generate pieces (exact count may vary due to organic nature)
+        // Exact count may vary due to the organic growth, so only bound it.
         expect(pieces.length).toBeGreaterThan(0);
-        expect(pieces.length).toBeLessThan(cols * rows * 2); // Reasonable upper bound
+        expect(pieces.length).toBeLessThan(cols * rows * 2);
 
-        // Each piece should have valid structure
         for (const piece of pieces) {
             expect(piece.id).toBeGreaterThanOrEqual(0);
             expect(piece.edges.length).toBeGreaterThan(0);
@@ -22,7 +21,6 @@ describe('generateFractalPuzzle', () => {
             expect(typeof piece.imageOffset.x).toBe('number');
             expect(typeof piece.imageOffset.y).toBe('number');
 
-            // Each edge should have valid properties
             for (const edge of piece.edges) {
                 expect(edge.id).toBeGreaterThanOrEqual(0);
                 expect(edge.path).toBeTruthy();
@@ -31,11 +29,9 @@ describe('generateFractalPuzzle', () => {
                 expect(typeof edge.end.x).toBe('number');
                 expect(typeof edge.end.y).toBe('number');
 
-                // Mate relationships should be consistent
                 if (edge.matePieceId !== -1) {
                     expect(edge.mateEdgeId).not.toBe(-1);
                 } else {
-                    // Border edge should have mate fields set to -1
                     expect(edge.mateEdgeId).toBe(-1);
                 }
             }
@@ -64,7 +60,6 @@ describe('generateFractalPuzzle', () => {
         const pieces1 = generateFractalPuzzle(4, 4, imageSize, 1);
         const pieces2 = generateFractalPuzzle(4, 4, imageSize, 2);
 
-        // Should be different (very unlikely to be identical with organic generation)
         const shapes1 = pieces1.map(p => p.shape).sort();
         const shapes2 = pieces2.map(p => p.shape).sort();
         expect(shapes1).not.toEqual(shapes2);
@@ -84,11 +79,9 @@ describe('generateFractalPuzzle', () => {
     });
 
     test('handles various puzzle sizes', () => {
-        // Small puzzle
         const small = generateFractalPuzzle(2, 2, { width: 200, height: 200 }, 42);
         expect(small.length).toBeGreaterThan(0);
 
-        // Large puzzle (should generate more pieces)
         const large = generateFractalPuzzle(8, 6, { width: 800, height: 600 }, 42);
         expect(large.length).toBeGreaterThan(0);
         expect(large.length).toBeGreaterThan(small.length);
@@ -96,16 +89,14 @@ describe('generateFractalPuzzle', () => {
 
     test('mate relationships are bidirectional', () => {
         const pieces = generateFractalPuzzle(3, 3, imageSize, 42);
-        
-        // Build a map of all edges
+
         const edgeMap = new Map<number, { piece: typeof pieces[0], edge: typeof pieces[0]['edges'][0] }>();
         for (const piece of pieces) {
             for (const edge of piece.edges) {
                 edgeMap.set(edge.id, { piece, edge });
             }
         }
-        
-        // Check mate relationships
+
         for (const piece of pieces) {
             for (const edge of piece.edges) {
                 if (edge.matePieceId !== -1 && edge.mateEdgeId !== -1) {
@@ -387,7 +378,6 @@ describe('scaleFractalGrid', () => {
                 imageSize.width / imageSize.height,
             );
 
-            // Generate multiple puzzles and check the average
             const counts: number[] = [];
             for (let seed = 1; seed <= 20; seed++) {
                 const pieces = generateFractalPuzzle(
@@ -397,7 +387,6 @@ describe('scaleFractalGrid', () => {
             }
             const avg = counts.reduce((a, b) => a + b) / counts.length;
 
-            // Average should be within 25% of target
             expect(avg).toBeGreaterThan(target * 0.75);
             expect(avg).toBeLessThan(target * 1.25);
         }

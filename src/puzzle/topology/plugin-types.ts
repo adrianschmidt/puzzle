@@ -1,6 +1,4 @@
 /**
- * Plug-in interfaces for the Composable framework.
- *
  * The framework owns intersection finding, topology construction,
  * tab collision rejection, and face → piece extraction. Plug-ins
  * provide the cuts (BaseCutGenerator) and the tab shapes
@@ -14,12 +12,6 @@ import type { Size } from '../../model/types.js';
 import type { TabTemplate } from '../composable/tab-shapes.js';
 
 /**
- * Produces the input cuts for a puzzle.
- *
- * Receives the puzzle frame size, a seeded PRNG, and an opaque
- * generator-specific config object. Returns the cuts (border
- * curves AND internal cut lines).
- *
  * Convention: the FIRST four curves in the returned array are
  * always the four border lines (top, right, bottom, left), in
  * that order. The framework relies on this for tab eligibility
@@ -79,7 +71,6 @@ export interface BaseCutGenerator {
      */
     expectedPieceCount?(config: unknown): number | undefined;
     /**
-     * Generate the cuts.
      * @param frame - puzzle pixel dimensions
      * @param random - seeded PRNG (call counts must be deterministic
      *   per (id, config) so share-links round-trip)
@@ -90,12 +81,9 @@ export interface BaseCutGenerator {
 }
 
 /**
- * Produces a tab shape for a single edge.
- *
- * Receives the edge's current curve (the segment between the
- * edge's two vertices) and a seeded PRNG. Returns a candidate
- * curve with the SAME endpoints as the input — the framework
- * enforces this — or null to leave the edge flat.
+ * Returns a candidate curve with the SAME endpoints as the input
+ * edge — the framework enforces this — or null to leave the edge
+ * flat.
  *
  * The candidate may protrude outside the original edge's bounding
  * box. The framework checks the candidate against all other edge
@@ -109,11 +97,6 @@ export interface BaseCutGenerator {
 export interface TabGenerator {
     /** Stable id for share-link encoding. */
     readonly id: string;
-    /**
-     * Generate a tab candidate for the given edge curve.
-     * @returns a curve with the same start/end as `edge`, or null
-     *   to leave the edge flat
-     */
     generate(edge: Curve, random: () => number, config: unknown): Curve | null;
     /**
      * Optional: yield an ordered set of candidate curves (best first) for
@@ -137,8 +120,6 @@ export interface TabGenerator {
 }
 
 /**
- * Optional eligibility filter for tab placement.
- *
  * Defaults to "all internal edges" (i.e. every edge whose twin
  * belongs to a non-outer face). A generator can supply a stricter
  * policy — e.g. skip edges shorter than some threshold — without
@@ -147,7 +128,6 @@ export interface TabGenerator {
 export type TabPolicy = (edge: TopologyEdge) => boolean;
 
 /**
- * Lightweight view of a half-edge, exposed to TabPolicy.
  * Doesn't expose neighbours or curves — keeps policies simple.
  *
  * Border edges (where one side is the outer face) are filtered out
@@ -161,8 +141,6 @@ export interface TopologyEdge {
 }
 
 /**
- * Splices a tab template onto a parent edge at a chosen placement.
- *
  * A `TabSplicer` is the "how to attach" half of tab generation: given
  * a position along the edge, a template, and a PRNG, it produces the
  * final curve that replaces the spliced section. Different splicers
@@ -183,9 +161,8 @@ export interface TabSplicer {
     /** Stable id for debug/logs; not part of any share-link contract. */
     readonly id: string;
     /**
-     * Build the spliced curve. Returns null if the placement is
-     * invalid (e.g. the tab would consume more of the edge than the
-     * placement margins allow).
+     * Returns null if the placement is invalid (e.g. the tab would
+     * consume more of the edge than the placement margins allow).
      */
     splice(
         edge: Curve,

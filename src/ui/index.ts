@@ -1,5 +1,3 @@
-// Public barrel for the UI layer.
-//
 // Convention: any UI factory or helper consumed from outside `src/ui/`
 // (app/, interaction/, …) is re-exported here, and consumers import
 // via `./ui/index.js`. Direct deep imports between files inside
@@ -8,11 +6,9 @@
 //
 // Types follow the same rule with one refinement: an options/parameter
 // type is re-exported alongside the function that takes it, because a
-// caller may need to name it to build the argument (`CompletionOverlayOptions`,
-// `UpdateAvailableIndicatorOptions`, `ShowLoadingOverlayOptions` — none of
-// which has an importer today either). A type a caller only ever receives —
-// an inferred result type, a string-literal union written as a literal — is
-// not, since naming it buys nothing.
+// caller may need to name it to build the argument. A type a caller only
+// ever receives — an inferred result type, a string-literal union written
+// as a literal — is not, since naming it buys nothing.
 //
 // Exception: `preference-store.ts` is intentionally not re-exported.
 // It is shared infrastructure that `game/` modules use directly, and
@@ -20,48 +16,32 @@
 // this barrel — routing them through here would create an import cycle.
 //
 // The convention governs *production* code; `src/app/` and
-// `src/interaction/` hold zero deep imports into `src/ui/`. Nine test
-// files there do deep-import — nine statements, each for one of two
-// reasons the barrel cannot serve:
+// `src/interaction/` hold zero deep imports into `src/ui/`. Test files
+// there deep-import only for two reasons the barrel cannot serve:
 //
-//   1. `vi.mock` targets (eight statements: six mock `'../ui/toast.js'`,
-//      one `'../ui/loading-overlay.js'`, one `'../ui/offset-drag.js'`).
-//      The leaf mock intercepts through the re-export either way: six of
-//      the eight modules under test import the name from here, and the
-//      other two — `dev-hooks.ts` and `new-game-flow.ts` — reach
-//      `showToast` only transitively, through `run-with-error-report.ts`,
-//      which does. Targeting the leaf is a preference, not a necessity:
-//      a one-export factory is enough, whereas mocking this barrel needs
-//      the `importOriginal` passthrough form (`rotation-ui.test.ts`,
-//      `new-game-flow.test.ts`) because the module under test reaches
-//      other names here too — usually transitively, which is easy to miss
-//      until the run fails with "No export is defined on the mock".
-//   2. Names the barrel does not export. `install-background-color.test.ts`
-//      reads `COLOR_PREFERENCE_KEY` from `background-color.js` to seed
-//      localStorage — test-only setup, so it stays unexported here. Its two
-//      barrel-reachable neighbors ride along in that one statement rather
-//      than being split across two imports of the same module.
+//   1. `vi.mock` targets. Targeting the leaf is a preference, not a
+//      necessity: a one-export factory is enough, whereas mocking this
+//      barrel needs the `importOriginal` passthrough form because the
+//      module under test reaches other names here too — usually
+//      transitively, which is easy to miss until the run fails with
+//      "No export is defined on the mock".
+//   2. Names the barrel does not export — test-only setup (e.g.
+//      `COLOR_PREFERENCE_KEY`), which stays unexported here.
 //
 // Anything else a test needs comes through the barrel, as production code
-// does. Mocking it is no reason to route around it: `rotation-ui.test.ts`
-// and `new-game-flow.test.ts` both mock this module and both still import
-// from it — type-only names are erased and never meet the mock at all, and
-// value names come back unchanged through the passthrough.
+// does. Mocking it is no reason to route around it: type-only names are
+// erased and never meet the mock at all, and value names come back
+// unchanged through the passthrough.
 //
-// The dependency direction is otherwise one-way (`app/` consumes `ui/`),
-// with three edges back, all to `app/unsplash-display-image.ts`:
-// `image-picker.ts` imports `CANDIDATE_COUNT` and the `CandidateImage`
-// type, `new-game-dialog.ts` the type alone, and `image-picker.test.ts`
-// the type alone. Those are the only `ui/ → app/` edges, and that module
-// imports nothing from `src/ui/`, so the graph is acyclic.
+// The dependency direction is otherwise one-way (`app/` consumes `ui/`);
+// the only `ui/ → app/` edges go to `app/unsplash-display-image.ts`,
+// which imports nothing from `src/ui/`, so the graph is acyclic.
 //
 // Return-shape convention for UI factory functions:
 //
 //   1. Default — return a cleanup function `() => void`. Use this when
 //      the component fully self-manages its state from injected
 //      dependencies (e.g. a `SelectionManager` it subscribes to).
-//      Examples: `createSelectToolButton`, `createDeselectButton`,
-//      `createNewGameButton`, `createInfoButton`.
 //
 //   2. When external collaborators legitimately need to drive component
 //      state — return a handle of shape

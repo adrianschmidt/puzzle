@@ -34,7 +34,6 @@ function makePairState(
     return makeGameState({ pieces: [piece0, piece1], groups: [group0, group1], rotationMode });
 }
 
-/** Controller wired to a manually flushable frame scheduler. */
 function makeController(state: GameState): {
     controller: SnapProximityRotationController;
     flushFrame: () => void;

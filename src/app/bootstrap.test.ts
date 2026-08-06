@@ -164,7 +164,6 @@ const atImportTime = {
     puzzleTables: document.querySelectorAll('[data-puzzle-table]').length,
 };
 
-/** The rotation UI `bootstrap` built, with `syncVisibility` spied. */
 function createdRotationUi(): { syncVisibility: Mock<(state: GameState | undefined) => void> } {
     const result = vi.mocked(createRotationUi).mock.results[0];
     expect(result.type, 'createRotationUi did not return').toBe('return');
@@ -173,7 +172,6 @@ function createdRotationUi(): { syncVisibility: Mock<(state: GameState | undefin
     };
 }
 
-/** The completion presenter `bootstrap` built, with `show` spied. */
 function createdCompletionPresenter(): { show: Mock<(state: GameState) => void> } {
     const result = vi.mocked(createCompletionPresenter).mock.results[0];
     expect(result.type, 'createCompletionPresenter did not return').toBe('return');
@@ -199,21 +197,18 @@ function makeCompletedState(): GameState {
     return makeGameState({ pieces, groups: [group] });
 }
 
-/** The session `bootstrap` built — the real one, wrapped by a recording spy. */
 function createdSession(): GameSession {
     const result = vi.mocked(createGameSession).mock.results[0];
     expect(result.type, 'createGameSession did not return').toBe('return');
     return result.value;
 }
 
-/** The share-link loader `bootstrap` built, with `tryLoad` spied. */
 function createdShareLinks(): { tryLoad: Mock<() => Promise<boolean>> } {
     const result = vi.mocked(createShareLinkLoader).mock.results[0];
     expect(result.type, 'createShareLinkLoader did not return').toBe('return');
     return result.value as unknown as { tryLoad: Mock<() => Promise<boolean>> };
 }
 
-/** Call order of the first `addEventListener(type, …)` on `window`. */
 function windowListenerOrder(spy: MockInstance<typeof window.addEventListener>, type: string): number {
     const index = spy.mock.calls.findIndex((call) => call[0] === type);
     expect(index, `window.addEventListener('${type}', …) was never called`).toBeGreaterThanOrEqual(0);

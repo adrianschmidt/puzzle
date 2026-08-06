@@ -1,6 +1,4 @@
 /**
- * Connected-component detection for a TopologyGraph.
- *
  * Two half-edges are in the same component if you can walk from one
  * to the other via .twin / .next / .prev (any combination). A free-
  * floating closed curve is its own component, separate from the frame.
@@ -9,9 +7,8 @@
 import type { TopologyGraph, HalfEdge } from './dcel.js';
 
 export interface Component {
-    /** All half-edges in this component. */
     halfEdges: HalfEdge[];
-    /** All faces touched by this component (including the global outer face if it's reachable). */
+    /** Includes the global outer face if it's reachable. */
     faces: Set<number>;
 }
 

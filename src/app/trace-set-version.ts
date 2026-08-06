@@ -1,9 +1,6 @@
 import type { GameState } from '../model/types.js';
 
 /**
- * Trace-set version of a puzzle, read from whichever per-style config its
- * cut style stores it in.
- *
  * The version survives in the per-style config on the saved state, so
  * resumed Wavy/Triangles/Classic games report it just like fresh ones (where
  * the cached new-game payload carries it). For Classic it doubles as the

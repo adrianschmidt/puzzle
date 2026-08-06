@@ -1,7 +1,3 @@
-/**
- * Tests for SVG path-bounds parsing.
- */
-
 import { describe, it, expect } from 'vitest';
 import { getPathBounds } from './path-bounds.js';
 

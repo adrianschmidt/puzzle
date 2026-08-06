@@ -1,6 +1,4 @@
 /**
- * Recorder slot for traced-tab choices.
- *
  * Lives in its own tiny module so consumers that only need the
  * recorder hook (notably {@link TabDebugSession}) don't transitively
  * pull in the 80 KB of trace JSONs that `tab-shapes-traced.ts` owns.
@@ -11,7 +9,7 @@
  */
 
 /**
- * Per-call template + transform record. Captures everything needed to
+ * Captures everything needed to
  * reproduce the curve a single tracedTabTemplate.generate() invocation
  * produced. Consumed by the dev-time {@link TabDebugSession}.
  *

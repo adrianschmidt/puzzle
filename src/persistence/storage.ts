@@ -1,19 +1,3 @@
-/**
- * Persistence layer for puzzle game state.
- *
- * Three-key model:
- * - STORAGE_KEY       ('puzzle-game-state')    — static geometry + metadata, written once per puzzle.
- * - PROGRESS_KEY      ('puzzle-progress')      — small mutable blob (groups/selection/completed),
- *                                                written on every debounced save.
- * - GEOMETRY_SEED_KEY ('puzzle-geometry-seed') — derived cache: the seed of the geometry above, so
- *                                                the cross-tab guard need not decode it (#490).
- *
- * The first two are the save; the third is rebuildable from the first and is
- * not part of the save format.
- *
- * All serialization/deserialization goes through the serialization module.
- */
-
 import { diagnostics } from '../diagnostics.js';
 import type { GameState } from '../model/types.js';
 import {
@@ -53,12 +37,9 @@ export const PROGRESS_KEY = 'puzzle-progress';
  */
 export const GEOMETRY_SEED_KEY = 'puzzle-geometry-seed';
 
-/** Debounce interval for auto-save (milliseconds). */
 export const SAVE_DEBOUNCE_MS = 500;
 
 /**
- * Outcome of a save call.
- *
  * - `'ok'` / `'ok-compressed'` — written (compressed on quota overflow).
  * - `'failed'`  — could not be written (quota even after compression).
  * - `'skipped'` — intentionally not written; see {@link saveProgress}.
@@ -90,8 +71,6 @@ export interface CorruptSaveData {
 export type UnreadableReason = 'parse-error' | 'seed-mismatch' | 'torn-write';
 
 /**
- * Outcome of a load call.
- *
  * - `ok`         — a playable state was restored.
  * - `empty`      — no save is present (the geometry key is absent).
  * - `unreadable` — a save was present but could not be turned into a playable
@@ -105,8 +84,6 @@ export type LoadOutcome =
     | { status: 'unreadable'; reason: UnreadableReason; raw: CorruptSaveData };
 
 /**
- * Write a value to a localStorage key with compress-on-overflow.
- *
  * Tries a plain write; on any throw (quota on most browsers) retries once with
  * an lz-string-compressed payload. If both throw, the previous value at `key`
  * is left intact (we never clear it first) and `'failed'` is returned.
@@ -148,9 +125,6 @@ let cachedGeometryRaw: string | null = null;
 let cachedGeometrySeed: number | undefined;
 
 /**
- * Record (or, for `undefined`, clear) the seed of the geometry now at
- * {@link STORAGE_KEY}.
- *
  * A failed write must not leave a stale token behind — that would claim the
  * slot belongs to a puzzle it doesn't, and this tab would then skip every
  * progress save for a puzzle it legitimately owns. So a throw falls back to
@@ -320,8 +294,6 @@ function currentGeometrySeed(): number | undefined {
 }
 
 /**
- * Persist the static geometry + metadata blob. Written once per puzzle.
- *
  * Records the new owner in {@link GEOMETRY_SEED_KEY} only on a successful
  * write: when the write fails the *previous* puzzle's geometry is still in the
  * slot, and the existing token still describes it correctly.
@@ -336,8 +308,6 @@ export function saveGeometry(state: GameState): SaveResult {
 }
 
 /**
- * Persist the small mutable progress blob. Written on every debounced save.
- *
  * Refuses to write (returns `'skipped'`) when the geometry currently in
  * localStorage belongs to a *different* puzzle than `state` — e.g. another tab
  * on the same origin started a new puzzle while this tab still holds the old
@@ -381,10 +351,7 @@ export function saveProgress(
     );
 }
 
-/**
- * Persist a freshly created puzzle: geometry (once) + initial progress.
- * Used on new game and share-link load. Worst sub-result wins.
- */
+/** Worst sub-result wins. */
 export function saveNewPuzzle(
     state: GameState,
     selection?: Iterable<number>,
@@ -408,9 +375,7 @@ export function saveNewPuzzle(
 }
 
 /**
- * Load the saved game and its multi-select selection.
- *
- * New split format: a STATIC blob (geometry + metadata) plus a PROGRESS blob
+ * Split format: a STATIC blob (geometry + metadata) plus a PROGRESS blob
  * (groups/selection/completed) recombined into a GameState. Falls back to the
  * legacy single-key full blob (groups inline) when no progress key exists.
  * A geometry/progress pair with mismatched seeds, or a v11 static blob with no
@@ -491,7 +456,6 @@ export function loadSavedGame(): LoadOutcome {
                 progress.seed !== undefined &&
                 staticData.seed !== progress.seed
             ) {
-                // Torn / cross-puzzle pair — don't load a mismatched puzzle.
                 diagnostics.warn(
                     'Discarding saved game: geometry/progress seeds do not match (torn or cross-puzzle write).',
                 );
@@ -537,10 +501,7 @@ export function loadSavedGame(): LoadOutcome {
 }
 
 /**
- * Load just the saved GameState, discarding any persisted selection.
- *
- * Thin wrapper over {@link loadSavedGame} for the existence check and any
- * caller that does not need the selection. The *save* is left untouched; an
+ * The *save* is left untouched; an
  * unreadable save reads as "no state" here and its recovery blobs are
  * discarded — only the startup path surfaces them for download. (The derived
  * {@link GEOMETRY_SEED_KEY} token is re-anchored, as on every load.)
@@ -551,15 +512,6 @@ export function loadState(): GameState | undefined {
 }
 
 /**
- * Create a debounced save function.
- *
- * Returns a function that, when called with a GameState,
- * schedules a progress save after SAVE_DEBOUNCE_MS. Repeated calls
- * within the interval reset the timer (only the last state is saved).
- *
- * Also returns a `flush` method to save immediately and
- * a `cancel` method to discard the pending save.
- *
  * Optional callbacks report a flushed save that did not persist:
  * - `onSaveFailed` — the write could not be persisted (quota exceeded even after
  *   compression), so the caller can warn the user their progress was not saved.
@@ -590,11 +542,9 @@ export function createDebouncedSave(
 } {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let pendingState: GameState | null = null;
-    // Snapshot of the selection captured with the pending state. `null` means
-    // "no pending save"; an empty array means "save with an empty selection".
+    // `null` means "no pending save"; an empty array means "save with an
+    // empty selection".
     let pendingSelection: number[] | null = null;
-    // Snapshot of the viewport captured with the pending state. `undefined`
-    // means "no viewport supplied with this save".
     let pendingViewport: SerializedViewport | undefined;
 
     function flushPending(): void {

@@ -82,7 +82,7 @@ describe('sharePuzzle', () => {
 
     it('treats a DOMException-style AbortError without Error inheritance as a cancel', async () => {
         // Older WebKit throws DOMException for canceled share sheets without
-        // inheriting from Error. The module should still swallow it.
+        // inheriting from Error.
         const share = vi.fn().mockRejectedValue({ name: 'AbortError', message: 'canceled' });
         const writeText = vi.fn();
         stubNavigator({ share, clipboard: { writeText } } as unknown as Navigator);

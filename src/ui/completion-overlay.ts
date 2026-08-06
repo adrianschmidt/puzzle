@@ -1,16 +1,3 @@
-/**
- * "Puzzle Complete!" overlay shown on top of the puzzle when the player
- * solves it. The overlay fades in, glows the container, and offers a
- * "challenge a friend" share button that re-uses the same share helpers
- * as the info-modal share section.
- *
- * Tap-anywhere dismissal is handled by `createDismissableOverlay`. The
- * caller drives the overlay lifecycle by calling `showCompletionOverlay`
- * and invoking the returned `hide` function (e.g. when starting a new
- * game). User-driven dismissal (tap on the overlay) fires `onDismiss`;
- * caller-driven `hide()` does not.
- */
-
 import type { GameState } from '../model/types.js';
 import { gameStateToPayload, buildShareUrl } from '../sharing/index.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
@@ -20,9 +7,8 @@ import { showToast } from './toast.js';
 import { loadColorPreference } from './background-color.js';
 
 export interface CompletionOverlayOptions {
-    /** Container the overlay is appended to (also receives the glow class). */
+    /** Also receives the glow class. */
     container: HTMLElement;
-    /** Game state snapshot used to build the share link. */
     state: GameState;
     /**
      * Fires when the user dismisses the overlay (tap-anywhere). Not

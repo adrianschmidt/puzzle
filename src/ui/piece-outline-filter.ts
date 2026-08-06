@@ -1,14 +1,7 @@
 /**
- * Inject the SVG `<filter id="piece-outline">` used by the Outline
- * mode of the Piece outline setting. The filter dilates the source
- * graphic by 1px, recolors that ring with the outline color (the
- * `--piece-outline-color` custom property, defaulting to near-black),
- * then composites the original on top — producing a sharp 1px
- * silhouette around the group `<div>` it's applied to via
- * `filter: url(#piece-outline)`.
- *
- * The filter is hosted in a zero-sized, aria-hidden `<svg>` so it
- * occupies no layout space and is excluded from a11y trees.
+ * Consumers apply the filter with `filter: url(#piece-outline)`.
+ * The host `<svg>` is zero-sized and aria-hidden so it occupies no
+ * layout space and is excluded from a11y trees.
  */
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

@@ -13,16 +13,11 @@ import type { RotationFocus } from '../interaction/index.js';
 import { showCompletionOverlay } from '../ui/index.js';
 
 export interface CompletionPresenter {
-    /** Show the overlay for `state`. No-op while one is already up. */
+    /** No-op while one is already up. */
     show(state: GameState): void;
-    /** Hide any visible overlay. */
     remove(): void;
 }
 
-/**
- * Create a presenter that shows/hides the completion overlay in `container`,
- * guarding against a second overlay stacking on top of one already shown.
- */
 export function createCompletionPresenter(deps: {
     container: HTMLElement;
     rotationFocus: RotationFocus;

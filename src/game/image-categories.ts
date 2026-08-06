@@ -1,18 +1,8 @@
-/**
- * Image category options and preference persistence.
- *
- * Defines available picture type categories for Unsplash image fetching.
- * Each category maps to a search query passed to the Unsplash API.
- */
-
 import {
     createBooleanPreference,
     createStringPreference,
 } from '../ui/preference-store.js';
 
-/**
- * Identifier for an image category.
- */
 export type ImageCategoryId =
     | 'any'
     | 'nature'
@@ -25,23 +15,15 @@ export type ImageCategoryId =
     | 'people'
     | 'face';
 
-/**
- * A selectable image category option.
- */
 export interface ImageCategoryOption {
-    /** Machine identifier. */
     id: ImageCategoryId;
-    /** Display label. */
     label: string;
-    /** Search query for the Unsplash API. Undefined means no query (random). */
+    /** Undefined means no query (random). */
     query: string | undefined;
-    /** Short description of the category. */
     description: string;
 }
 
 /**
- * Available image category options.
- *
  * `any` sends no query parameter at all, so Unsplash picks from everything.
  * Every other option's query is the bare Unsplash tag term its label names —
  * the same term the tag chips on a photo page link to. Keep them single
@@ -110,10 +92,8 @@ export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
     },
 ] as const;
 
-/** localStorage key for the saved image category preference. */
 export const IMAGE_CATEGORY_PREFERENCE_KEY = 'puzzle-image-category';
 
-/** localStorage key for the saved "vibrant images" toggle. */
 export const VIBRANT_PREFERENCE_KEY = 'puzzle-image-vibrant';
 
 /**
@@ -123,11 +103,6 @@ export const VIBRANT_PREFERENCE_KEY = 'puzzle-image-vibrant';
  */
 export const VIBRANT_QUERY_TERMS = 'vibrant colorful';
 
-/**
- * Compose the final Unsplash `query` string from a category's query
- * and the vibrant toggle. Returns `undefined` when no query should
- * be sent (any category with vibrant off).
- */
 export function buildImageQuery(
     categoryQuery: string | undefined,
     vibrant: boolean,
@@ -143,10 +118,6 @@ export function buildImageQuery(
     return `${categoryQuery} ${VIBRANT_QUERY_TERMS}`;
 }
 
-/**
- * Find an image category option by its id.
- * Returns the first option ('any') if not found.
- */
 export function findImageCategory(
     id: string,
 ): ImageCategoryOption {
@@ -161,15 +132,8 @@ const categoryStore = createStringPreference({
     defaultValue: 'any',
 });
 
-/**
- * Save the preferred image category id to localStorage.
- */
 export const saveImageCategoryPreference = categoryStore.save;
 
-/**
- * Load the preferred image category id from localStorage.
- * Returns `'any'` if no preference is saved or the value is invalid.
- */
 export const loadImageCategoryPreference = categoryStore.load;
 
 /**
@@ -183,13 +147,6 @@ const vibrantStore = createBooleanPreference({
     defaultValue: false,
 });
 
-/**
- * Save the "vibrant images" preference to localStorage.
- */
 export const saveVibrantPreference = vibrantStore.save;
 
-/**
- * Load the "vibrant images" preference from localStorage.
- * Returns `false` when nothing is saved or the stored value is invalid.
- */
 export const loadVibrantPreference = vibrantStore.load;

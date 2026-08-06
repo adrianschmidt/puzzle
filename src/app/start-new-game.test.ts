@@ -635,7 +635,6 @@ describe('startNewGame', () => {
     });
 });
 
-/** A fully-populated player-picked candidate, for the "picked image" paths. */
 function makeCandidateImage() {
     return {
         imageUrl: 'https://images.unsplash.com/picked.jpg',
@@ -650,10 +649,6 @@ function makeCandidateImage() {
     };
 }
 
-/**
- * A resolved `createNewGameAsync` result wrapping a real (or stubbed) state,
- * for tests that need to stub generation but don't care how it "ran".
- */
 function makeAsyncGenerationResult(state: GameState = makeGameState()) {
     return { state, generation: { mode: 'sync-fallback' as const, durationMs: 0 } };
 }

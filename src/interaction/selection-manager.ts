@@ -1,7 +1,4 @@
 /**
- * Selection manager — tracks which PieceGroups the user has selected
- * via the multi-select tool.
- *
  * "Selection" here is a user-created grouping for batch movement,
  * completely separate from PieceGroup (which represents physically
  * connected/merged pieces). The user taps individual pieces to add
@@ -18,10 +15,8 @@ export class SelectionManager {
     private listeners: SelectionChangeCallback[] = [];
     private toolActiveListeners: ToolActiveChangeCallback[] = [];
 
-    /** Whether the multi-select tool is currently active. */
     private _toolActive = false;
 
-    /** Whether the marquee (drag-box) gesture is currently armed. */
     private _marqueeActive = false;
     private marqueeActiveListeners: MarqueeActiveChangeCallback[] = [];
 
@@ -44,13 +39,12 @@ export class SelectionManager {
         }
     }
 
-    /** Toggle the tool on/off. Returns the new state. */
+    /** Returns the new state. */
     toggleTool(): boolean {
         this.toolActive = !this._toolActive;
         return this._toolActive;
     }
 
-    /** Register a listener for tool-active changes. */
     onToolActiveChange(callback: ToolActiveChangeCallback): () => void {
         this.toolActiveListeners.push(callback);
         return () => {
@@ -59,13 +53,12 @@ export class SelectionManager {
         };
     }
 
-    /** Whether the marquee gesture is currently armed. */
     get marqueeActive(): boolean {
         return this._marqueeActive;
     }
 
     /**
-     * Toggle the marquee gesture on/off. Returns the new state.
+     * Returns the new state.
      *
      * Enabling the marquee also enables the multi-select tool — a marquee
      * can only build a selection while the tool is on (the invariant
@@ -82,7 +75,6 @@ export class SelectionManager {
         return this._marqueeActive;
     }
 
-    /** Register a listener for marquee-active changes. */
     onMarqueeActiveChange(callback: MarqueeActiveChangeCallback): () => void {
         this.marqueeActiveListeners.push(callback);
         return () => {
@@ -99,17 +91,15 @@ export class SelectionManager {
         }
     }
 
-    /** The set of currently selected group IDs. */
     get selectedGroupIds(): ReadonlySet<number> {
         return this.selected;
     }
 
-    /** Whether a specific group is selected. */
     isSelected(groupId: number): boolean {
         return this.selected.has(groupId);
     }
 
-    /** Toggle selection of a group. Returns true if now selected. */
+    /** Returns true if now selected. */
     toggle(groupId: number): boolean {
         if (this.selected.has(groupId)) {
             this.selected.delete(groupId);
@@ -122,7 +112,6 @@ export class SelectionManager {
         }
     }
 
-    /** Select a group (no-op if already selected). */
     select(groupId: number): void {
         if (!this.selected.has(groupId)) {
             this.selected.add(groupId);
@@ -149,7 +138,6 @@ export class SelectionManager {
         return changed;
     }
 
-    /** Deselect a group (no-op if not selected). */
     deselect(groupId: number): void {
         if (this.selected.has(groupId)) {
             this.selected.delete(groupId);
@@ -157,7 +145,6 @@ export class SelectionManager {
         }
     }
 
-    /** Clear the entire selection. */
     clearAll(): void {
         if (this.selected.size > 0) {
             this.selected.clear();
@@ -165,7 +152,6 @@ export class SelectionManager {
         }
     }
 
-    /** Whether anything is selected. */
     get hasSelection(): boolean {
         return this.selected.size > 0;
     }
@@ -184,7 +170,6 @@ export class SelectionManager {
 
     /**
      * Update selection after a merge: oldGroupId was absorbed into newGroupId.
-     * If the old group was selected, the new group inherits the selection.
      */
     handleMerge(oldGroupId: number, newGroupId: number): void {
         if (this.selected.has(oldGroupId)) {
@@ -194,10 +179,7 @@ export class SelectionManager {
         }
     }
 
-    /**
-     * Remove any group IDs from the selection that no longer exist in the game.
-     * Call after major state changes (new game, etc.).
-     */
+    /** Call after major state changes (new game, etc.). */
     pruneStale(validGroupIds: Set<number>): void {
         let changed = false;
         for (const id of this.selected) {
@@ -209,7 +191,6 @@ export class SelectionManager {
         if (changed) this.notify();
     }
 
-    /** Register a listener for selection changes. */
     onChange(callback: SelectionChangeCallback): () => void {
         this.listeners.push(callback);
         return () => {

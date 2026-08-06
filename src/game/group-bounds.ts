@@ -1,19 +1,3 @@
-/**
- * Group bounds primitives.
- *
- * The core primitive is `getGroupBounds(group, pieces, options)`. It walks
- * piece offsets + edge endpoints (and bezier control points if asked), then
- * either leaves the result in un-rotated local space or rotates and
- * translates to world space.
- *
- * Three sugar wrappers cover the common shapes:
- *
- * - `getGroupOffsetBounds` — min/max of piece offsets only (no edge geometry).
- * - `getGroupLocalBounds` — un-rotated local-space AABB including tab paths.
- * - `getGroupVisualBounds` — rendered footprint, accounting for `group.rotation`,
- *   returned as offsets relative to `group.position`.
- */
-
 import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import { localToWorld } from '../model/helpers.js';
 import { getPathBounds } from './path-bounds.js';
@@ -47,9 +31,6 @@ function cachedEdgePathBounds(
     return bounds;
 }
 
-/**
- * A simple axis-aligned bounding rectangle.
- */
 export interface BoundingRect {
     minX: number;
     minY: number;
@@ -57,9 +38,6 @@ export interface BoundingRect {
     maxY: number;
 }
 
-/**
- * Options for `getGroupBounds`.
- */
 export interface GroupBoundsOptions {
     /**
      * - `'local'`: un-rotated piece-offset frame; ignores `group.rotation`
@@ -78,8 +56,6 @@ export interface GroupBoundsOptions {
 }
 
 /**
- * Compute the AABB of a group by walking its piece edge geometry.
- *
  * Single source of truth for group bounds. Pile detection (world-space,
  * endpoints only) and layout (local-space, with path geometry) both call
  * into this via `options`.
@@ -130,14 +106,9 @@ export function getGroupBounds(
 }
 
 /**
- * Compute bounding box of piece offsets within a group (group-local space).
- *
- * Returns the min/max of all piece offset coordinates. For a single-piece
- * group at offset (0,0), this returns {minX:0, minY:0, maxX:0, maxY:0}.
- *
- * Note: This uses piece offsets only (not edge geometry). For accurate
- * world-space bounding boxes that include tab shapes, use `getGroupBounds`
- * with `space: 'world'` and `includePathGeometry: true`.
+ * Uses piece offsets only (group-local space, no edge geometry). For
+ * accurate world-space bounding boxes that include tab shapes, use
+ * `getGroupBounds` with `space: 'world'` and `includePathGeometry: true`.
  */
 export function getGroupOffsetBounds(group: PieceGroup): BoundingRect {
     let minX = Infinity;

@@ -31,7 +31,6 @@ vi.mock('../interaction/index.js', async (importOriginal) => {
     };
 });
 
-/** The options object the most recent `install` handed to `setupInteraction`. */
 function lastInteractionOptions(): InteractionSetupOptions {
     const last = vi.mocked(setupInteraction).mock.calls.at(-1);
     if (!last) throw new Error('setupInteraction was never called');

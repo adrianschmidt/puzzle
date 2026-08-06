@@ -1,7 +1,4 @@
 /**
- * Load a `#p=` share link on boot and on an in-tab hash change, including
- * the stale-client rescue for a link that fails to decode.
- *
  * A `#p=` link that fails to decode may just be newer than this cached
  * build: the share format has historically grown without bumping its
  * version field. `attemptRescue` (`pwaUpdates.attemptShareLinkRescue`) runs
@@ -43,7 +40,6 @@ import { showToast, showLoadingOverlay, hideLoadingOverlay } from '../ui/index.j
 import { runWithErrorReport } from './run-with-error-report.js';
 import { track } from '../analytics/index.js';
 
-/** Handle returned by {@link createShareLinkLoader}. */
 export interface ShareLinkLoader {
     /**
      * Handle a `#p=` link if one is present. Resolves true when the boot
@@ -51,13 +47,11 @@ export interface ShareLinkLoader {
      * loaded, or a rescue reload is imminent.
      */
     tryLoad(): Promise<boolean>;
-    /** True when a rescue update was applied and a reload is pending. */
     isRescueReloadPending(): boolean;
 }
 
-/** Collaborators {@link createShareLinkLoader} cannot own itself. */
 export interface ShareLinkLoaderDeps {
-    /** Load a decoded share-link payload; `loadSharedPuzzle` bound to the composition root's deps. */
+    /** `loadSharedPuzzle` bound to the composition root's deps. */
     loadShared: (payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>;
     /** `pwaUpdates.attemptShareLinkRescue`. */
     attemptRescue: () => Promise<RescueOutcome>;
@@ -66,8 +60,8 @@ export interface ShareLinkLoaderDeps {
 }
 
 /**
- * Create a share-link loader. On load: shared-link (hash) > saved game >
- * fresh start — this handles only the first part. The boot flow calls
+ * On load: shared-link (hash) > saved game > fresh start — this handles
+ * only the first part. The boot flow calls
  * {@link ShareLinkLoader.tryLoad} once and, in its `finally`, checks
  * {@link ShareLinkLoader.isRescueReloadPending} before tearing down the
  * loading overlay; the hashchange listener calls `tryLoad` again for a
@@ -190,30 +184,17 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
         }
 
         history.replaceState(null, '', window.location.pathname + window.location.search);
-        // The previous save is deliberately left alone here — it is not
-        // wiped until `deps.loadShared` actually replaces it. That happens
-        // inside `loadSharedPuzzle`'s `persistNewPuzzle` call, which only
-        // runs once generation has fully succeeded, so the three outcomes
-        // below all land correctly:
-        //  - success: the new puzzle's `persistNewPuzzle` overwrites the
-        //    previous geometry/progress, same end state as clearing first.
-        //  - cancel (the loading overlay's Cancel affordance, #489): a
-        //    canceled `loadSharedPuzzle` resolves without ever reaching
-        //    `persistNewPuzzle`, so the previous save survives — matching
-        //    the in-memory puzzle the player actually returns to. Clearing
-        //    unconditionally up front used to destroy that save on every
-        //    cancel, the one path whose entire point is "return to your
-        //    current puzzle".
-        //  - throw: same reasoning — nothing overwrote the slot, so the
-        //    previous puzzle stays loadable on the next reload instead of
-        //    silently losing it under a load that never landed.
-        //
-        // A fourth outcome those three don't cover: a shared puzzle whose
-        // geometry exceeds the storage quota. `saveNewPuzzle` writes nothing
-        // at all then (#399), so the previous puzzle stays on disk under the
-        // shared one on screen and a reload resumes it. The failure toasts
-        // either way; noted so "overwrite-on-success" isn't read as
-        // exhaustive.
+        // The previous save is deliberately left alone here — `deps.loadShared`
+        // (`loadSharedPuzzle`) persists the new puzzle only once generation
+        // fully succeeds, so a cancel (the loading overlay's Cancel
+        // affordance, #489) or a throw leaves the previous save intact,
+        // matching the in-memory puzzle the player actually returns to.
+        // Clearing unconditionally up front used to destroy that save on
+        // every cancel — the one path whose entire point is "return to your
+        // current puzzle". Also: a shared puzzle whose geometry exceeds the
+        // storage quota writes nothing at all (#399), so the previous puzzle
+        // stays on disk under the shared one on screen and a reload resumes
+        // it.
         //
         // Surface-shape validation (`isValidComposableCf` etc.) catches most
         // malformed payloads at decode time, but a link can still satisfy

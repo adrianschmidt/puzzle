@@ -1,6 +1,4 @@
 /**
- * Quantize generated piece geometry to a fixed decimal precision.
- *
  * Runs once on the finished `GeneratedPiece[]`, immediately after generation.
  * Every coordinate the puzzle carries — edge endpoints, sampled curve points,
  * the image offset — is rounded to {@link GEOMETRY_PRECISION_DECIMALS}
@@ -37,8 +35,6 @@
 import type { GeneratedEdge, GeneratedPiece, Point } from './types.js';
 
 /**
- * Decimals retained on every stored coordinate.
- *
  * Two independent limits agree on 2:
  *
  * - `fmt` (`model/build-shape.ts`) already truncates every rendered
@@ -52,8 +48,6 @@ export const GEOMETRY_PRECISION_DECIMALS = 2;
 const FACTOR = 10 ** GEOMETRY_PRECISION_DECIMALS;
 
 /**
- * Round a coordinate to {@link GEOMETRY_PRECISION_DECIMALS} decimals.
- *
  * Coordinates are bounded by the image dimensions, far below the magnitude at
  * which `x / FACTOR` stops having a 2-decimal shortest round-trip form — so
  * `JSON.stringify` emits at most two decimals, which is where the size saving
@@ -94,9 +88,6 @@ function quantizeEdge(edge: GeneratedEdge): GeneratedEdge {
 }
 
 /**
- * Return a copy of `pieces` with every coordinate rounded to
- * {@link GEOMETRY_PRECISION_DECIMALS} decimals.
- *
  * Pure: the input pieces, edges, and points are left untouched, matching the
  * treat-pieces-as-immutable convention the rest of the model follows.
  */

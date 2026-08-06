@@ -1,10 +1,3 @@
-/**
- * Select tool toggle button — placed in the top-left corner.
- *
- * When active, tapping a piece selects/deselects its group.
- * The button stays active until pressed again.
- */
-
 import type { SelectionManager } from '../interaction/selection-manager.js';
 
 export interface SelectToolButtonOptions {
@@ -12,10 +5,6 @@ export interface SelectToolButtonOptions {
     selectionManager: SelectionManager;
 }
 
-/**
- * Create and attach the select-tool toggle button.
- * Returns a cleanup function.
- */
 export function createSelectToolButton(
     options: SelectToolButtonOptions,
 ): () => void {
@@ -27,7 +16,6 @@ export function createSelectToolButton(
     button.setAttribute('aria-label', 'Multi-select tool');
     button.setAttribute('aria-pressed', 'false');
 
-    // Lasso/selection icon (SVG)
     button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M7 3C4.239 3 2 5.216 2 8c0 2.784 2.239 5 5 5h10c2.761 0 5-2.216 5-5s-2.239-5-5-5H7z"/>
       <path d="M2 8v5c0 2.784 2.239 5 5 5"/>

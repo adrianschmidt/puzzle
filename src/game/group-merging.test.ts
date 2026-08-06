@@ -9,8 +9,6 @@ import type { MergeCandidate } from './merge-detection.js';
 import { getWorldPosition, rotatePoint } from '../model/helpers.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
-// --- Test helpers ---
-
 function makeEdge(
     id: number,
     start: Point,
@@ -113,8 +111,6 @@ function createThreePieceRow(): {
         edges: { p0Right, p1Left, p1Right, p2Left },
     };
 }
-
-// --- Tests ---
 
 describe('mergeGroups', () => {
     it('transfers pieces from moved group to target group', () => {
@@ -363,9 +359,7 @@ describe('processDrop', () => {
 
         expect(result).not.toBeNull();
         expect(result!.mergeCount).toBe(1);
-        // Only one group should remain
         expect(state.groups).toHaveLength(1);
-        // The surviving group should have both pieces
         expect(state.groups[0].pieces.size).toBe(2);
     });
 
@@ -378,7 +372,6 @@ describe('processDrop', () => {
 
         processDrop(0, state);
 
-        // Group 0 (the moved group) should be gone, group 1 (target) survives
         expect(state.groups.find((g) => g.id === 0)).toBeUndefined();
         expect(state.groups.find((g) => g.id === 1)).toBeDefined();
     });
@@ -413,7 +406,6 @@ describe('processDrop', () => {
 
         processDrop(0, state);
 
-        // After merge, piece 0 should be at exact correct offset relative to piece 1
         const survivingGroup = state.groups[0];
         const offset0 = survivingGroup.pieces.get(0)!;
         const offset1 = survivingGroup.pieces.get(1)!;
@@ -455,7 +447,6 @@ describe('processDrop', () => {
 
         const final = state.groups[0];
 
-        // Check that each piece's world position is correct
         for (const [pieceId, offset] of final.pieces) {
             const worldX = final.position.x + offset.x;
             const worldY = final.position.y + offset.y;
@@ -614,7 +605,6 @@ describe('mergeGroups with rotation snap', () => {
         expect(worldPiece0.x).toBeCloseTo(100);
         expect(worldPiece0.y).toBeCloseTo(50);
 
-        // Rotation unchanged
         expect(targetGroup.rotation).toBeCloseTo(90);
     });
 });

@@ -1,11 +1,6 @@
 /**
  * Single source of truth for container-level pointer events.
  *
- * Owns pointerdown/move/up/cancel/wheel listeners on a container, classifies
- * targets via `classifyTarget`, and emits pre-classified gesture events:
- * piece-tap, piece-drag.{start,move,end,cancel}, background-pan.{...},
- * pinch.{start,move,end}, wheel-zoom.
- *
  * See docs/superpowers/specs/2026-05-01-pointer-router-design.md for the
  * full state machine and arbitration rules.
  */
@@ -56,7 +51,7 @@ export interface PointerRouterOptions {
         end: () => void;
     };
     onWheelZoom: (evt: WheelEvent) => void;
-    /** Optional. Fired when a background pointerdown/up resolves without crossing the tap threshold. */
+    /** Fired when a background pointerdown/up resolves without crossing the tap threshold. */
     onBackgroundTap?: (evt: PointerEvent) => void;
 }
 
@@ -132,16 +127,12 @@ export class PointerRouter {
         this.container.removeEventListener('wheel', this.boundWheel);
     }
 
-    // --- Wheel ---------------------------------------------------
-
     private onWheel(evt: WheelEvent): void {
         const cls = this.classifyTarget(evt.target);
         if (cls.kind === 'ignore') return;
         evt.preventDefault();
         this.callbacks.onWheelZoom(evt);
     }
-
-    // --- Pointer ---------------------------------------------------
 
     private onPointerDown(evt: PointerEvent): void {
         const cls = this.classifyTarget(evt.target, { x: evt.clientX, y: evt.clientY });
@@ -186,8 +177,6 @@ export class PointerRouter {
             tracked.lastY = evt.clientY;
         }
 
-        // Single-pointer gesture transitions: candidate-promotes-to-drag/pan
-        // once the tap threshold is crossed; active drag/pan dispatch move events.
         if (this.state.kind === 'piece-candidate' && evt.pointerId === this.state.pointerId) {
             if (this.exceedsTapThreshold(evt, this.state.startX, this.state.startY)) {
                 const { pieceId, pointerId } = this.state;
@@ -208,7 +197,6 @@ export class PointerRouter {
             this.callbacks.onBackgroundPan.move(evt);
         }
 
-        // Pinch path — pair member moved.
         if (this.pinch.kind === 'active' &&
             (evt.pointerId === this.pinch.a || evt.pointerId === this.pinch.b)) {
             const ta = this.tracked.get(this.pinch.a);
@@ -291,7 +279,6 @@ export class PointerRouter {
         const touches = this.touchPointers();
         if (touches.length < 2) return false;
 
-        // Resolve the existing single-pointer state first.
         if (this.state.kind === 'piece-candidate') {
             this.state = { kind: 'idle' };
         } else if (this.state.kind === 'background-candidate') {
@@ -322,7 +309,6 @@ export class PointerRouter {
         return [...this.tracked.values()].filter(t => t.pointerType === 'touch');
     }
 
-    /** Synthesize a PointerEvent-shape object from a TrackedPointer's last position. */
     private toEvent(t: TrackedPointer): PointerEvent {
         return {
             pointerId: t.pointerId,
@@ -331,8 +317,6 @@ export class PointerRouter {
             clientY: t.lastY,
         } as PointerEvent;
     }
-
-    // --- Helpers ---------------------------------------------------
 
     private exceedsTapThreshold(evt: PointerEvent, startX: number, startY: number): boolean {
         const dx = evt.clientX - startX;

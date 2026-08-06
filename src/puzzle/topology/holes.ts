@@ -1,11 +1,4 @@
 /**
- * Hole assignment.
- *
- * For each non-primary component (e.g. a free-floating circle),
- * find which inner face of which other component contains it, and
- * attach the component's outer-loop start as an inner boundary on
- * the containing face.
- *
  * Only single-level hole nesting is exercised by current tests
  * (frame + free-floating circle, frame + two-circle Venn). Deeper
  * nesting (a hole containing another hole) may behave correctly via
@@ -17,8 +10,6 @@ import type { Component } from './components.js';
 import type { Point } from '../../model/types.js';
 
 export function assignHoles(graph: TopologyGraph, components: Component[]): void {
-    // Identify the "primary" component — the one containing the global
-    // outer face. Other components are candidates for hole placement.
     const primary = components.find(c => c.faces.has(graph.outerFace.id));
     if (!primary) return;
     const others = components.filter(c => c !== primary);
@@ -28,20 +19,15 @@ export function assignHoles(graph: TopologyGraph, components: Component[]): void
         const containingFace = findContainingFace(probe, graph, inner);
         if (!containingFace) continue;
 
-        // Find the LOCAL outer face of the inner component (the face
-        // with the most-negative signed area within this component —
-        // analogous to the global outer face but scoped to the
-        // component). Its bounding half-edges become the inner
-        // boundary of the containing face; the face object itself is
-        // redundant after attachment (it represents the same physical
-        // region as `containingFace`) and gets removed from the graph.
+        // The local-outer Face object is redundant after attachment —
+        // it represents the same physical region as `containingFace` —
+        // so it gets removed from the graph.
         const localOuterFace = findLocalOuterFace(inner, graph);
         if (!localOuterFace) continue;
 
         containingFace.innerBoundaries.push(localOuterFace.outerEdge);
 
-        // Retarget the loop's half-edges to point at the containing face.
-        // Without this, downstream consumers (faces-to-pieces) walk
+        // Without retargeting, downstream consumers (faces-to-pieces) walk
         // `he.twin.face` and land on the now-removed local-outer Face
         // object, which fails the faceId→pieceId lookup and produces
         // matePieceId = -1 (i.e. the system thinks the inner-boundary
@@ -58,8 +44,8 @@ export function assignHoles(graph: TopologyGraph, components: Component[]): void
 }
 
 function findLocalOuterFace(component: Component, graph: TopologyGraph): Face | null {
-    // Find the face within this component with the most-negative signed
-    // area (= the local outer face, by analogy with the global outer face).
+    // Most-negative signed area = the local outer face, by analogy with
+    // the global outer face.
     //
     // Uses SAMPLED curve points for the shoelace formula so that faces
     // whose boundaries are curved arcs with very few vertices (e.g. a
@@ -137,19 +123,16 @@ function polygonArea(polygon: Point[]): number {
 }
 
 /**
- * Compute the signed area of a face using SAMPLED points along each
- * half-edge curve, not just the half-edge endpoints. Required for faces
- * bounded by curves with few vertices (e.g. a 2-vertex circle), where
- * vertex-only shoelace collapses to zero.
+ * Uses SAMPLED points along each half-edge curve, not just the
+ * half-edge endpoints: vertex-only shoelace collapses to zero for faces
+ * bounded by curves with few vertices (e.g. a 2-vertex circle).
  */
 function sampledSignedArea(face: Face): number {
     const points: { x: number; y: number }[] = [];
     let current: HalfEdge = face.outerEdge;
     do {
-        // sample(8) returns [start, ...8 interior+end]; appending all
-        // produces a connected polyline around the boundary. Endpoints
-        // are duplicated between adjacent edges, but shoelace is robust
-        // to repeated points.
+        // Endpoints are duplicated between adjacent edges, but shoelace
+        // is robust to repeated points.
         points.push(...current.curve.sample(8));
         current = current.next;
     } while (current !== face.outerEdge);

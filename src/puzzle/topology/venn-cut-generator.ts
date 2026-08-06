@@ -1,6 +1,4 @@
 /**
- * Two-circle Venn base-cut generator.
- *
  * The framework's smoke test that non-grid topologies work. Two
  * overlapping circles inside a rectangular frame produce four
  * inner faces: the frame piece (with the circle component as

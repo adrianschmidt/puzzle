@@ -36,7 +36,7 @@ export interface SnapProximityPositionOptions {
     getState: () => GameState | undefined;
     /** Active snap tolerances for `state`; read once per gesture, at start(). */
     getTolerances: (state: GameState) => SnapTolerances;
-    /** Injectable frame scheduler for tests. Defaults to requestAnimationFrame. */
+    /** Injectable frame scheduler for tests. */
     scheduleFrame?: (cb: () => void) => void;
 }
 
@@ -55,9 +55,8 @@ export class SnapProximityPositionController {
     }
 
     /**
-     * Begin tracking a rotation of `groupId`. Cheap no-op context (null)
-     * unless the game is in free-rotation mode and the group has cross-group
-     * mates.
+     * Cheap no-op context (null) unless the game is in free-rotation mode
+     * and the group has cross-group mates.
      */
     start(groupId: number): void {
         const state = this.getState();
@@ -67,7 +66,6 @@ export class SnapProximityPositionController {
         this.gated = false;
     }
 
-    /** Evaluate after the group rotated; at most once per frame. */
     onGroupRotated(): void {
         const state = this.getState();
         if (!state || !this.ctx || this.gated) return;
@@ -81,7 +79,6 @@ export class SnapProximityPositionController {
         if (group) moveGroup(group, delta);
     }
 
-    /** End tracking (commit or cancel). Translation already applied stays. */
     stop(): void {
         this.ctx = null;
     }

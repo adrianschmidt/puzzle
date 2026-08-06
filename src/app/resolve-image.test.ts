@@ -91,7 +91,6 @@ describe('resolveUnsplashImage', () => {
         const fetchFn = vi.fn();
         const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'portrait', fetchFn);
 
-        // Orientation is forwarded as the 4th arg to fetchRandomImage.
         expect(vi.mocked(fetchRandomImage).mock.calls[0][3]).toBe('portrait');
         // 1080 wide, height derived from the 2:3 portrait aspect.
         expect(resolved?.imageSize).toEqual({ width: 1080, height: 1620 });

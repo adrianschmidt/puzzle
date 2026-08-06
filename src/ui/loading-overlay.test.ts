@@ -96,12 +96,6 @@ describe('loading-overlay', () => {
     });
 
     it('re-showing the overlay repoints Cancel at the new handler', () => {
-        // The click listener is registered once, in the button-creation
-        // branch, and reads the module-level `cancelHandler` rather than
-        // capturing the `onCancel` it was created with. That is what keeps a
-        // reused button from accumulating one listener per show — but it means
-        // a re-show has to repoint the existing button at the new callback.
-        //
         // Both directions matter: the second handler fires, and the first does
         // not. A per-call capture would call `first` here; a per-call
         // `addEventListener` would call both.

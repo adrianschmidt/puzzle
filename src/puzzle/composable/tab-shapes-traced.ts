@@ -43,7 +43,6 @@ function mirrorLandmarksX(lm: TracedLandmarks): TracedLandmarks {
 
 /**
  * Smooth bump that's 0 at y=0, peaks at y=neck.y, 0 at y=head.y, 0 above.
- * Uses two smoothstep ramps glued at the neck peak.
  */
 function neckWeight(y: number, neckY: number, headY: number): number {
     if (y <= 0 || y >= headY) return 0;

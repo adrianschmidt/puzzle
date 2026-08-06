@@ -51,7 +51,7 @@ function seededRandom(values: number[]): () => number {
 const IMAGE_SIZE: Size = { width: 800, height: 600 };
 const VIEWPORT: Size = { width: 1024, height: 768 };
 const DEFAULT_GRID: GridSize = { cols: DEFAULT_COLS, rows: DEFAULT_ROWS };
-const TOTAL_PIECES = DEFAULT_COLS * DEFAULT_ROWS; // 48
+const TOTAL_PIECES = DEFAULT_COLS * DEFAULT_ROWS;
 
 describe('createNewGame', () => {
     it('creates a game state with the correct number of pieces', () => {
@@ -193,7 +193,6 @@ describe('createInitialGroups', () => {
         const uniqueIds = new Set(groupIds);
         expect(uniqueIds.size).toBe(TOTAL_PIECES);
 
-        // Each group ID should match the piece it contains
         for (const group of state.groups) {
             const [pieceId] = group.pieces.keys();
             expect(group.id).toBe(pieceId);
@@ -277,9 +276,7 @@ describe('rotationMode', () => {
         });
 
         expect(state.rotationMode).toBe('quarter-turn');
-        // At least one group should have a non-zero rotation given varied inputs
         expect(state.groups.some((g) => g.rotation !== 0)).toBe(true);
-        // And every rotation should be a valid quarter-turn in degrees
         for (const group of state.groups) {
             expect([0, 90, 180, 270]).toContain(group.rotation);
         }
@@ -336,10 +333,8 @@ describe('rotationMode', () => {
         });
 
         expect(state.rotationMode).toBe('free');
-        // At least one group should have a non-quarter-turn rotation
         const quarterTurns = new Set([0, 90, 180, 270]);
         expect(state.groups.some((g) => !quarterTurns.has(g.rotation))).toBe(true);
-        // Every rotation should be in [0, 360)
         for (const group of state.groups) {
             expect(group.rotation).toBeGreaterThanOrEqual(0);
             expect(group.rotation).toBeLessThan(360);
@@ -364,7 +359,6 @@ describe('randomizePositions', () => {
     });
 
     it('keeps all positions within viewport bounds', () => {
-        // Use a variety of random values to test bounds
         const values = [0, 0.25, 0.5, 0.75, 0.999];
         const positions = randomizePositions(
             values.length,
@@ -451,7 +445,6 @@ describe('randomizePositions', () => {
             seededRandom([0.1, 0.5, 0.9]),
         );
 
-        // With different random values, positions should differ
         const uniqueX = new Set(positions.map((p) => p.x));
         expect(uniqueX.size).toBeGreaterThan(1);
     });

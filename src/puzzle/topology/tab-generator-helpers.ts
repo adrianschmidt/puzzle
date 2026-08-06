@@ -1,7 +1,4 @@
 /**
- * Tab placement / preparation primitives shared by all template-based
- * tab generators (classic, traced).
- *
  * The helpers know nothing about which template they're using — they
  * take a TabTemplate via parameter and produce a transformed, spliced
  * curve.
@@ -15,9 +12,6 @@ import type { BezierPath } from '../composable/bezier-path.js';
 import { mirrorBezierPathY } from '../composable/bezier-path.js';
 import type { TabSplicer } from './plugin-types.js';
 
-/**
- * Parameters controlling tab placement on edges.
- */
 export interface TabPlacementConfig {
     /** Minimum edge arc length (in pixels) to receive a tab. */
     minEdgeLength: number;
@@ -30,25 +24,15 @@ export const DEFAULT_TAB_PLACEMENT: TabPlacementConfig = {
     centerRange: [0.3, 0.7],
 };
 
-/**
- * Result of preparing a tab for merging — contains the tab curve
- * and the split pieces needed to assemble the final curve.
- */
 export interface PreparedTab {
-    /** The tab curve in world coordinates. */
+    /** In world coordinates. */
     tabCurve: Curve;
-    /** The curve segment before the tab splice point. */
     before: Curve;
-    /** The curve segment after the tab splice point. */
     after: Curve;
 }
 
 /**
- * Generate and position a tab on a curve WITHOUT assembling it.
- *
- * Returns the tab curve in world coordinates along with the before/after
- * segments needed to assemble the final curve. Returns null if the tab
- * is too wide for the edge.
+ * Returns null if the tab is too wide for the edge.
  *
  * Split out from the full tab-creation flow so the tab geometry can be
  * inspected (or rejected) before `commitTab` joins everything together.
@@ -110,7 +94,6 @@ export function prepareTabFromPath(
     const sCenterMax = 1 - margin - headOverhangRight;
 
     if (sCenterMax < sCenterMin) {
-        // Tab is too wide for this edge — skip it entirely
         return null;
     }
 
@@ -122,11 +105,9 @@ export function prepareTabFromPath(
     const sLeft = Math.max(0.001, sCenter + (templateStartX - templateMidX));
     const sRight = Math.min(0.999, sCenter + (templateEndX - templateMidX));
 
-    // Convert arc-length fractions to uniform t
     const tLeft = curve.arcLengthToT(sLeft);
     const tRight = curve.arcLengthToT(sRight);
 
-    // Get anchor points on the curve
     const pLeft = curve.pointAt(tLeft);
     const pRight = curve.pointAt(tRight);
 
@@ -149,12 +130,6 @@ export function prepareTabFromPath(
         leftResolved.segmentIndex, leftResolved.localT,
     );
 
-    // Compute the right split point relative to `rest`.
-    // `rest` starts with the right portion of the segment that was split.
-    // If tRight is in a different segment than tLeft, we need to adjust
-    // the segment index (subtract the segments consumed by `before`).
-    // If tRight is in the SAME segment as tLeft, we need to remap localT
-    // within the remaining portion of that segment.
     let restSegIndex: number;
     let restLocalT: number;
 
@@ -188,16 +163,11 @@ export function prepareTabFromPath(
     return { tabCurve, before, after };
 }
 
-/**
- * Assemble a prepared tab into a single curve.
- */
 export function commitTab(prepared: PreparedTab): Curve {
     return joinCurves([prepared.before, prepared.tabCurve, prepared.after]);
 }
 
 /**
- * Determine if and where to place a tab on an edge segment.
- *
  * **PRNG contract:** when this function returns non-null it consumes
  * exactly two `random()` calls in fixed order (tCenter, then isTab).
  * This count is part of the share-link reproducibility contract for
@@ -228,9 +198,6 @@ export function computeTabPlacement(
     return { tCenter, isTab };
 }
 
-/**
- * Join multiple curves into a single curve by concatenating segments.
- */
 function joinCurves(curves: Curve[]): Curve {
     const allSegments: BezierSegment[] = [];
     for (const c of curves) {
@@ -249,10 +216,6 @@ function joinCurves(curves: Curve[]): Curve {
 
     return new Curve(allSegments);
 }
-
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Transform a tab BezierPath from template space to world coordinates.
@@ -274,7 +237,6 @@ function transformTabToEdge(
     const dy = pRight.y - pLeft.y;
     const chordLen = Math.sqrt(dx * dx + dy * dy);
 
-    // Unit vectors along and perpendicular to the chord
     const ux = dx / chordLen;
     const uy = dy / chordLen;
     // Perpendicular — tab protrudes left of travel direction
@@ -282,22 +244,15 @@ function transformTabToEdge(
     const py = ux;
 
     // The midpoint of the chord anchors the tab center.
-    // Both x and y are edge-length fractions — scale both by edgeLength.
-    // x is positioned along the chord direction relative to the chord
-    // midpoint, y is perpendicular to it.
     const templateStartX = path[0].x;
     const templateEndX = path[path.length - 1].x;
     const templateMidX = (templateStartX + templateEndX) / 2;
 
-    // Chord midpoint in world space
     const midX = (pLeft.x + pRight.x) / 2;
     const midY = (pLeft.y + pRight.y) / 2;
 
     return path.map(p => {
-        // x offset from template center, scaled by edge length
         const alongChord = (p.x - templateMidX) * edgeLength;
-
-        // y is a fraction of edge length, scaled directly
         const perpendicular = p.y * edgeLength;
 
         return {
@@ -310,10 +265,6 @@ function transformTabToEdge(
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
 }
-
-// ---------------------------------------------------------------------------
-// Splicers
-// ---------------------------------------------------------------------------
 
 /**
  * Default splicer: standard `prepareTab` + `commitTab` with no
@@ -436,21 +387,18 @@ function alignTangentsAtSplice(prepared: PreparedTab): PreparedTab {
     const m = segs.length;
     const result: BezierSegment[] = [];
 
-    // Left end.
     if (leftRemoves) {
         result.push(buildLeftBridge(segs, firstSurvL, beforeTangent));
     } else {
         result.push(rotateFirstCp(segs[0], beforeTangent));
     }
 
-    // Surviving original middle segments.
     const midStart = leftRemoves ? firstSurvL : 1;
     const midEnd = rightRemoves ? lastSurvR - 1 : m - 2;
     for (let i = midStart; i <= midEnd; i++) {
         result.push(segs[i]);
     }
 
-    // Right end.
     if (rightRemoves) {
         result.push(buildRightBridge(segs, lastSurvR, afterTangent));
     } else {
@@ -526,7 +474,6 @@ export function computeSpliceZones(
 
     const headIndex = farthestAnchorIndex(anchors);
 
-    // Left zone: walk inward from anchor 0 while within dL.
     const leftNatural = unitVec(
         segs[0].cp1.x - segs[0].p0.x, segs[0].cp1.y - segs[0].p0.y,
         segs[0].p3.x - segs[0].p0.x, segs[0].p3.y - segs[0].p0.y,
@@ -544,7 +491,6 @@ export function computeSpliceZones(
     }
     firstSurvL = Math.min(firstSurvL, headIndex);
 
-    // Right zone: walk inward from anchor m while within dR.
     const rightNatural = unitVec(
         segs[m - 1].p3.x - segs[m - 1].cp2.x, segs[m - 1].p3.y - segs[m - 1].cp2.y,
         segs[m - 1].p3.x - segs[m - 1].p0.x, segs[m - 1].p3.y - segs[m - 1].p0.y,

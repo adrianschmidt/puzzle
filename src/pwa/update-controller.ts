@@ -15,13 +15,12 @@ import type { PwaUpdateAppliedData } from '../analytics/index.js';
 import { diagnostics } from '../diagnostics.js';
 
 /**
- * What caused an update to be applied — surfaced on the analytics event.
- * Derived from the analytics payload so the union has a single source of truth
- * (the controller already depends on analytics, so this adds no new coupling).
+ * Derived from the analytics payload so the union has a single source of
+ * truth (the controller already depends on analytics, so this adds no new
+ * coupling).
  */
 export type UpdateApplyTrigger = PwaUpdateAppliedData['trigger'];
 
-/** Minimal slice of ServiceWorkerRegistration we depend on. */
 export interface UpdatableRegistration {
     update(): Promise<unknown> | void;
 }
@@ -41,12 +40,9 @@ export interface UpdateControllerDeps {
      * `controlling` event fires). Defaults to a full-page reload.
      */
     reload?: () => void;
-    /**
-     * Schedules the fallback reload. Injectable for tests. Defaults to
-     * `globalThis.setTimeout`.
-     */
+    /** Defaults to `globalThis.setTimeout`. */
     scheduleFallback?: (handler: () => void, ms: number) => void;
-    /** Delay before the fallback reload fires. Defaults to 3000ms. */
+    /** Defaults to 3000 ms. */
     fallbackReloadMs?: number;
 }
 
@@ -55,11 +51,8 @@ export interface UpdateController {
     onNeedRefresh(): void;
     /** Supply the `updateSW` function returned by `registerSW`. */
     setUpdateSW(updateSW: (reload?: boolean) => Promise<void>): void;
-    /** Apply the update only if one is pending (e.g. on focus regain). */
     requestReloadIfPending(): void;
-    /** Apply the update now (manual indicator tap, or a share-link rescue). */
     reloadNow(trigger?: UpdateApplyTrigger): void;
-    /** Whether an update is currently waiting to be applied. */
     readonly pending: boolean;
 }
 
@@ -80,8 +73,6 @@ export function createUpdateController(
     // deferred apply still reports how it was first triggered.
     let bufferedTrigger: UpdateApplyTrigger | null = null;
 
-    // Resolve the injectable defaults once at construction rather than on
-    // every `reloadNow` call.
     const reload = deps.reload ?? (() => location.reload());
     const scheduleFallback =
         deps.scheduleFallback ??
@@ -92,8 +83,6 @@ export function createUpdateController(
 
     function apply(trigger: UpdateApplyTrigger): void {
         if (reloading) return;
-        // No waiting-worker handle yet: remember the request so it is applied
-        // the moment `setUpdateSW` supplies the handle (see `setUpdateSW`).
         if (!updateSW) {
             bufferedTrigger = trigger;
             return;
@@ -131,7 +120,6 @@ export function createUpdateController(
         },
         setUpdateSW(fn) {
             updateSW = fn;
-            // Apply any reload that was requested before the handle existed.
             if (bufferedTrigger !== null) {
                 const trigger = bufferedTrigger;
                 bufferedTrigger = null;
@@ -139,9 +127,9 @@ export function createUpdateController(
             }
         },
         requestReloadIfPending() {
-            // Note: focus-regain reload is only safe because the save
-            // coordinator (app/save-coordinator.ts) flushes the debounced save
-            // on `visibilitychange → hidden` / `pagehide`, so progress is
+            // Focus-regain reload is only safe because the save coordinator
+            // (app/save-coordinator.ts) flushes the debounced save on
+            // `visibilitychange → hidden` / `pagehide`, so progress is
             // already persisted before the app is backgrounded.
             if (pending) apply('focus-regain');
         },
@@ -162,8 +150,6 @@ export interface UpdateCheckDeps {
 }
 
 /**
- * Wire up update detection for a registered service worker.
- *
  * We deliberately run *no* background timer. Two event-driven triggers cover
  * every case without one:
  * - page load already checks for a new worker, because registering the service
@@ -225,5 +211,4 @@ export function setupUpdateChecks(
     });
 }
 
-/** Max distinct check-failure reasons reported per session (cardinality guard). */
 const MAX_CHECK_FAILURE_REASONS = 5;

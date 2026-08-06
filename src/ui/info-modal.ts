@@ -1,11 +1,4 @@
 /**
- * Info/Help modal — shows credits, project info, license, help text,
- * and settings (merge tolerance).
- *
- * A glassmorphism modal overlay with information about the app,
- * credits to algorithm inspirations, brief help for features,
- * and configurable game settings.
- *
  * The modal is composed of per-section builder functions; each owns its
  * DOM and event wiring so adding/removing a setting is a localised change.
  */
@@ -41,19 +34,11 @@ import { attachShareSection } from './share-section.js';
 import { buildReproParams } from '../sharing/index.js';
 
 export interface InfoModalOptions {
-    /** Container to append the modal to. */
     container: HTMLElement;
-    /** Called when the modal is dismissed. */
     onDismiss?: () => void;
-    /** Called when the merge tolerance preference changes. */
     onToleranceChanged?: (id: string) => void;
-    /** Called when the solve button is pressed (debug). */
     onSolve?: () => void;
-    /**
-     * Returns the current game state — used by the Debug panel to show the
-     * parameters needed to reproduce the puzzle. Optional: when absent the
-     * repro block is omitted.
-     */
+    /** Used by the Debug panel's repro block; when absent the block is omitted. */
     getState?: () => GameState | null | undefined;
     /** Current game state; when provided, a "Share this puzzle" section is rendered. */
     state?: GameState;
@@ -62,12 +47,7 @@ export interface InfoModalOptions {
 /** HTML class toggled on <html> to switch pieces into debug (white) view. */
 const DEBUG_PIECES_CLASS = 'show-debug-pieces';
 
-/**
- * Append a list `<li>` to `parent`, where the contents are an alternating
- * sequence of plain strings and `[tag, text]` tuples (rendered as that
- * inline element). Keeps the static help-text builders compact without
- * resorting to innerHTML.
- */
+/** Keeps the static help-text builders compact without resorting to innerHTML. */
 type InlineNode = string | [tag: string, text: string, attrs?: Record<string, string>];
 
 function appendInlineLi(parent: HTMLElement, parts: InlineNode[]): HTMLLIElement {
@@ -493,7 +473,7 @@ function buildDebugSection(args: {
         }),
     );
 
-    // Solve button — kept inside Debug so all debug tools stay together.
+    // Kept inside Debug so all debug tools stay together.
     if (args.onSolve) {
         const solveBtn = document.createElement('button');
         solveBtn.className = 'info-modal-solve-btn';
@@ -573,7 +553,6 @@ function buildOpacitySetting(): HTMLElement {
     value.dataset.testid = 'piece-opacity-value';
     value.textContent = '1';
 
-    // Initialize from the current CSS custom property, if previously set.
     const current = getComputedStyle(document.documentElement)
         .getPropertyValue('--piece-opacity')
         .trim();
@@ -593,10 +572,6 @@ function buildOpacitySetting(): HTMLElement {
     return setting;
 }
 
-/**
- * Build a debug-section toggle that mirrors a class on `<html>`: the
- * checkbox reflects whether the class is set, and changes apply or remove it.
- */
 function buildDebugToggleSetting(args: {
     testid: string;
     label: string;
@@ -634,13 +609,10 @@ function buildDebugToggleSetting(args: {
     return setting;
 }
 
-/**
- * Create and show the info modal. Returns a cleanup function that removes the modal from the DOM.
- */
+/** Returns a cleanup function that removes the modal from the DOM. */
 export function createInfoModal(options: InfoModalOptions): () => void {
     const { container, onDismiss, onToleranceChanged, getState } = options;
 
-    // Build overlay (dismissal listeners owned by createDismissableOverlay).
     const { overlay, dismiss: dismissOverlay } = createDismissableOverlay({
         container,
         className: 'info-modal-overlay',
@@ -657,7 +629,6 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-label', 'Info and Help');
 
-    // Header with close button
     const header = document.createElement('div');
     header.className = 'info-modal-header';
 

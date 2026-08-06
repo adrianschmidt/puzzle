@@ -32,7 +32,6 @@ describe('rotate-handle gesture', () => {
 
     afterEach(() => {
         document.body.replaceChildren();
-        // Clean up prototype stubs.
         // @ts-expect-error — deleting stub added in beforeEach
         delete HTMLButtonElement.prototype.setPointerCapture;
         // @ts-expect-error
@@ -107,13 +106,11 @@ describe('rotate-handle gesture', () => {
         const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
         dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
 
-        // Second finger lands somewhere else.
         const secondFinger = new PointerEvent('pointerdown', {
             pointerId: 2, bubbles: true, clientX: 500, clientY: 500,
         });
         window.dispatchEvent(secondFinger);
 
-        // Subsequent pointermove on the original pointer should NOT emit onRotate.
         onRotate.mockClear();
         dispatchPointerEvent(button, 'pointermove', { clientX: 150, clientY: 250 });
         expect(onRotate).not.toHaveBeenCalled();
@@ -133,7 +130,6 @@ describe('rotate-handle gesture', () => {
 
         expect(onCommit).not.toHaveBeenCalled();
 
-        // After cancel, a pointermove from the same pointerId should not emit onRotate.
         onRotate.mockClear();
         dispatchPointerEvent(button, 'pointermove', { clientX: 150, clientY: 250 });
         expect(onRotate).not.toHaveBeenCalled();
@@ -158,11 +154,9 @@ describe('rotate-handle gesture', () => {
 
         // First move: pointer at angle 45° → target 45°, delta 45°.
         dispatchPointerEvent(button, 'pointermove', { clientX: 220.7, clientY: 220.7 });
-        // currentRotation is now ≈ 45°.
 
         // Second move: pointer at angle 90° → target 90°, delta = 90 − 45 = 45°.
         dispatchPointerEvent(button, 'pointermove', { clientX: 150, clientY: 250 });
-        // currentRotation should now be ≈ 90°.
 
         // Floating-point: allow 1° tolerance.
         expect(currentRotation).toBeCloseTo(90, 0);
@@ -178,15 +172,10 @@ describe('rotate-handle gesture', () => {
         const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
         dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
 
-        // Switch focus to a different group while drag is in progress.
         rotationFocus.setFocus(1);
 
-        // The old handle should have detached its window listener. Simulate a
-        // second-finger pointerdown — if the old listener is still around, it
-        // would have called cancelDrag() (no-op since drag is already cleared)
-        // but no other observable side effect to assert. Instead, verify that
-        // a subsequent pointermove on the (now-detached) old button does not
-        // emit onRotate.
+        // No direct way to observe the detached window listener; instead
+        // verify a pointermove on the old button no longer emits onRotate.
         onRotate.mockClear();
         dispatchPointerEvent(button, 'pointermove', { clientX: 150, clientY: 250 });
         expect(onRotate).not.toHaveBeenCalled();

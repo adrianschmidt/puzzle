@@ -3,11 +3,6 @@ import { clampTabToCurve } from './curve-clamp.js';
 import { classicTabTemplate } from './tab-shapes.js';
 import type { Point } from '../../model/types.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Generate a straight-line set of curve points. */
 function straightLine(x0: number, y0: number, x1: number, y1: number, n = 20): Point[] {
     const pts: Point[] = [];
     for (let i = 0; i <= n; i++) {
@@ -17,7 +12,6 @@ function straightLine(x0: number, y0: number, x1: number, y1: number, n = 20): P
     return pts;
 }
 
-/** Generate a sine-wave curve. */
 function sineWave(length: number, amplitude: number, frequency: number, n = 40): Point[] {
     const pts: Point[] = [];
     for (let i = 0; i <= n; i++) {
@@ -37,10 +31,6 @@ function seededRandom(seed: number): () => number {
         return s / 0x7fffffff;
     };
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('clampTabToCurve', () => {
     it('produces a non-empty SVG path', () => {
@@ -71,7 +61,6 @@ describe('clampTabToCurve', () => {
         const tab = classicTabTemplate.generate(seededRandom(42));
         const result1 = clampTabToCurve(curve, tab, 0.3);
         const result2 = clampTabToCurve(curve, tab, 0.7);
-        // Different placement → different paths
         expect(result1.svgPath).not.toBe(result2.svgPath);
     });
 
@@ -80,7 +69,6 @@ describe('clampTabToCurve', () => {
         const tab = classicTabTemplate.generate(seededRandom(42));
         const small = clampTabToCurve(curve, tab, 0.5, 0.2);
         const large = clampTabToCurve(curve, tab, 0.5, 0.6);
-        // Different chord fraction → different paths
         expect(small.svgPath).not.toBe(large.svgPath);
     });
 
@@ -88,8 +76,7 @@ describe('clampTabToCurve', () => {
         const curve = straightLine(0, 0, 100, 0, 40);
         const tab = classicTabTemplate.generate(seededRandom(42));
         const result = clampTabToCurve(curve, tab, 0.5, 0.3);
-        // Path should start with L commands (the curve before the tab)
-        // and contain both L and C commands
+        // The curve before the tab is emitted as L commands
         expect(result.svgPath).toMatch(/^L/);
         expect(result.svgPath).toContain('C');
     });

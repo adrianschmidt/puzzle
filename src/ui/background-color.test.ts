@@ -130,7 +130,6 @@ describe('loadColorPreference', () => {
         localStorage.setItem(COLOR_PREFERENCE_KEY, 'blue-default');
         localStorage.setItem('puzzle-background-colour', 'green-dark');
         expect(loadColorPreference()).toBe('blue-default');
-        // The old key is left untouched when the new key already has a value.
         expect(localStorage.getItem('puzzle-background-colour')).toBe('green-dark');
     });
 });
@@ -207,17 +206,13 @@ describe('applyBackgroundColor', () => {
     });
 
     it('derives the chrome from the color written to document.body', () => {
-        // Regression guard for the read-back target. applyBackgroundColor
-        // writes the color to document.body.style.backgroundColor *so it can
-        // read it back* via getComputedStyle(document.body) to pick the
-        // ui-scheme. That assignment looks redundant next to the
-        // --puzzle-bg-color custom property (which drives the visible
-        // background), but dropping it leaves body transparent → the chrome
-        // would be silently stuck on 'dark' for every color.
-        //
-        // Unlike the tests above, this mock resolves the var() off body's
-        // *actual* inline style — the way a real browser would — so it fails
-        // if the body assignment is ever removed (body would be '' → dark).
+        // Regression guard: applyBackgroundColor writes document.body's
+        // backgroundColor *so it can read it back* via getComputedStyle to
+        // pick the ui-scheme. It looks redundant next to the --puzzle-bg-color
+        // custom property, but dropping it leaves body transparent → chrome
+        // silently stuck on 'dark'. Unlike the tests above, this mock resolves
+        // the var() off body's actual inline style, so it fails if that
+        // assignment is ever removed.
         vi.spyOn(window, 'getComputedStyle').mockImplementation(
             (el: Element) =>
                 ({

@@ -1,10 +1,4 @@
 /**
- * Load a puzzle from a decoded share-link payload — or, via the
- * `__reproPuzzle` console hook, from a reconstructed one. Preload the
- * traced-tab chunk if the payload needs it, resolve the image (the
- * payload's URL, or none for a blank puzzle), generate the puzzle, apply
- * the link's attribution and progress, and install it.
- *
  * Most of the work is delegated to extracted modules; what is left here is
  * orchestration order:
  *
@@ -47,14 +41,6 @@ import { diagnostics } from '../diagnostics.js';
 import type { BackgroundColorControl } from './install-background-color.js';
 import type { GameSession } from './game-session.js';
 
-/**
- * Collaborators {@link loadSharedPuzzle} cannot own itself: the DOM
- * container it sizes the puzzle against, the session that installs the
- * generated state, the background-color control the sharer's color is
- * offered through, and two callbacks for the composition-root-owned parts
- * of loading a shared puzzle (view-fitting/persistence, and analytics
- * bookkeeping).
- */
 export interface LoadSharedPuzzleDeps {
     container: HTMLElement;
     /**
@@ -63,7 +49,6 @@ export interface LoadSharedPuzzleDeps {
      * there before.
      */
     session: Pick<GameSession, 'install'>;
-    /** Gather and zoom-to-fit the freshly installed puzzle. */
     fitView: (state: GameState) => void;
     persistNewPuzzle: (state: GameState) => void;
     /**
@@ -73,7 +58,6 @@ export interface LoadSharedPuzzleDeps {
      * picker's selection cannot diverge.
      */
     backgroundColor: BackgroundColorControl;
-    /** Record the payload as the current game's analytics. */
     onGameAnalytics: (data: NewGameData) => void;
     /**
      * Whether a puzzle is currently installed. Gates the overlay's Cancel
@@ -85,13 +69,9 @@ export interface LoadSharedPuzzleDeps {
 }
 
 /**
- * Load a puzzle from a decoded share-link payload.
- *
- * @param payload - The decoded share-link payload.
  * @param recipientHadSavedState - Whether the recipient had a readable save
  * before this load; carried into the `recipientHadSavedState` analytics
  * field untouched.
- * @param deps - Collaborators; see {@link LoadSharedPuzzleDeps}.
  * @param source - `'shared'` for a real `#p=` link, `'repro'` for a
  * `__reproPuzzle` replay. Only affects the `source` field of the
  * `piece-count-mismatch` and `generation-canceled` events — it separates

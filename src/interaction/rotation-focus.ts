@@ -1,8 +1,6 @@
 /**
- * Rotation focus — tracks the single piece-group most recently tapped
- * by the user, used to anchor the floating rotate buttons. Independent
- * of SelectionManager: focus is short-lived and cleared by virtually
- * any non-rotate interaction.
+ * Anchors the floating rotate buttons. Independent of SelectionManager:
+ * focus is short-lived and cleared by virtually any non-rotate interaction.
  */
 
 export type RotationFocusChangeCallback = (focusedGroupId: number | null) => void;

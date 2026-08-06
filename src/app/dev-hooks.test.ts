@@ -36,12 +36,10 @@ function hooks(): WindowHooks {
     return window as unknown as WindowHooks;
 }
 
-/** The read-only session slice `solvePuzzle` takes. */
 function makeSession(state: GameState | undefined): Pick<GameSession, 'current'> {
     return { current: () => state };
 }
 
-/** A minimal `ReproParams` the share codec accepts. */
 function validReproParams(): ReproParams {
     return {
         seed: 42,

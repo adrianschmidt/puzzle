@@ -13,7 +13,6 @@ import { getBorderEdges, tryGetGroup } from '../model/helpers.js';
 import type { GroupBorderEdge } from '../model/helpers.js';
 import { getGroupLocalBounds } from './group-bounds.js';
 
-/** Clamp a value to the unit interval [0, 1]. */
 export function clamp01(value: number): number {
     return Math.min(1, Math.max(0, value));
 }
@@ -37,7 +36,6 @@ export interface SnapTolerances {
  * Build at gesture start, discard on end/cancel.
  */
 export interface ProximityContext {
-    /** The dragged group. */
     groupId: number;
     /** Border edges of the dragged group and their mates (fixed during a gesture). */
     candidates: GroupBorderEdge[];

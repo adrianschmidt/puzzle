@@ -1,16 +1,8 @@
-/**
- * Tests for DragController.
- *
- * Uses mock callbacks and fake PointerEvents to verify
- * drag logic without needing a real DOM.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DragController } from './drag-controller.js';
 import type { DragCallbacks, DragGroupLookups } from './drag-controller.js';
 import type { PieceGroup } from '../model/types.js';
 
-/** Wrap a mutable groups array as the lookups interface DragController expects. */
 function lookupsFor(groups: () => PieceGroup[]): DragGroupLookups {
     return {
         getGroupForPiece(pieceId) {
@@ -24,7 +16,6 @@ function lookupsFor(groups: () => PieceGroup[]): DragGroupLookups {
     };
 }
 
-/** Create a minimal fake PointerEvent with the fields DragController uses. */
 function fakePointerEvent(
     overrides: Partial<{
         clientX: number;
@@ -185,7 +176,6 @@ describe('DragController', () => {
                 }),
             );
 
-            // First move: delta (10, 5), second: delta (20, 15)
             expect(callbacks.moveGroup).toHaveBeenCalledTimes(2);
             expect(callbacks.moveGroup).toHaveBeenNthCalledWith(1, 1, {
                 x: 10,
@@ -302,7 +292,6 @@ describe('DragController', () => {
                 fakePointerEvent({ pointerId: 1 }),
             );
 
-            // No error thrown; drag remains null.
             expect(controller.getActiveDrag()).toBeNull();
         });
 
@@ -320,7 +309,6 @@ describe('DragController', () => {
                 fakePointerEvent({ pointerId: 2 }),
             );
 
-            // Drag should still be active
             expect(controller.getActiveDrag()).not.toBeNull();
         });
 
@@ -440,7 +428,6 @@ describe('DragController', () => {
         });
 
         it('should clamp pointer during move at left edge', () => {
-            // Start in the middle
             clampedController.handlePointerDown(
                 10,
                 fakePointerEvent({
@@ -452,7 +439,6 @@ describe('DragController', () => {
 
             vi.mocked(callbacks.moveGroup).mockClear();
 
-            // Move pointer past the left edge
             clampedController.handlePointerMove(
                 fakePointerEvent({
                     clientX: -50,
@@ -559,7 +545,6 @@ describe('DragController', () => {
 
             vi.mocked(callbacks.moveGroup).mockClear();
 
-            // Move to bottom-right corner, well past the edge
             clampedController.handlePointerMove(
                 fakePointerEvent({
                     clientX: VP_W + 200,
@@ -615,7 +600,6 @@ describe('DragController', () => {
 
             vi.mocked(callbacks.moveGroup).mockClear();
 
-            // First move: clamped to left edge
             clampedController.handlePointerMove(
                 fakePointerEvent({
                     clientX: -50,
@@ -663,7 +647,6 @@ describe('DragController', () => {
             // Shrink viewport (e.g. virtual keyboard appears)
             vpSize = { width: 200, height: 200 };
 
-            // Move slightly right — now clamped to the smaller viewport
             resizableController.handlePointerMove(
                 fakePointerEvent({
                     clientX: VP_W - MARGIN,
@@ -720,7 +703,6 @@ describe('DragController', () => {
         });
 
         it('should use identity transform by default', () => {
-            // Default controller (no transform) — delta passes through unchanged
             controller.handlePointerDown(
                 10,
                 fakePointerEvent({
@@ -749,7 +731,6 @@ describe('DragController', () => {
 
     describe('full drag cycle', () => {
         it('should complete a full drag: down → move → up', () => {
-            // Start drag
             controller.handlePointerDown(
                 30,
                 fakePointerEvent({
@@ -762,7 +743,6 @@ describe('DragController', () => {
             expect(callbacks.bringToFront).toHaveBeenCalledWith(3);
             expect(controller.getActiveDrag()!.groupId).toBe(3);
 
-            // Move
             controller.handlePointerMove(
                 fakePointerEvent({
                     clientX: 80,
@@ -776,7 +756,6 @@ describe('DragController', () => {
                 y: 10,
             });
 
-            // Drop
             controller.handlePointerUp(
                 fakePointerEvent({ pointerId: 3 }),
             );
@@ -785,7 +764,6 @@ describe('DragController', () => {
         });
 
         it('should allow a new drag after completing one', () => {
-            // First drag
             controller.handlePointerDown(
                 10,
                 fakePointerEvent({
@@ -798,7 +776,6 @@ describe('DragController', () => {
                 fakePointerEvent({ pointerId: 1 }),
             );
 
-            // Second drag on a different group
             controller.handlePointerDown(
                 20,
                 fakePointerEvent({
@@ -825,7 +802,6 @@ describe('DragController', () => {
                 }),
             );
 
-            // Simulate some movement
             controller.handlePointerMove(
                 fakePointerEvent({
                     clientX: 150,
@@ -841,9 +817,7 @@ describe('DragController', () => {
 
             controller.cancel();
 
-            // Drag should be cleared
             expect(controller.getActiveDrag()).toBeNull();
-            // Group should be restored to origin
             expect(callbacks.moveGroup).toHaveBeenCalledWith(1, { x: -50, y: -20 });
             // Render must fire so the snap-back is visible immediately
             expect(callbacks.requestRender).toHaveBeenCalled();

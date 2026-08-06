@@ -1,16 +1,9 @@
-/**
- * Build the analytics payload attached to `puzzle-completed`, merging cached
- * new-game data with fields derived from the current game state.
- */
-
 import type { GameState } from '../model/types.js';
 import type { NewGameData, PuzzleCompletedData } from '../analytics/index.js';
 import { classifyImageSource } from './classify-image-source.js';
 import { traceSetVersionOf } from './trace-set-version.js';
 
 /**
- * Build the analytics payload for a puzzle completion.
- *
  * Always derives geometry/style fields from gameState (so resumed
  * games still get a useful event), then merges in any cached
  * NewGameData fields the user wouldn't be able to recover otherwise

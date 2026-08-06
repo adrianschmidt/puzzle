@@ -1,7 +1,3 @@
-/**
- * CellGrid — tracks visited tiles and occupied cells during piece growth.
- */
-
 import type { Tile } from './types.js';
 import { makeTile } from './tile.js';
 

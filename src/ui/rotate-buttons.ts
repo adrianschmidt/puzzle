@@ -1,14 +1,3 @@
-/**
- * Rotate buttons — a transient pair of CCW/CW buttons that flanks the
- * group most recently tapped by the user. The pair fades in fast, sits
- * for repeated rotations, and fades out softly after a 5-second idle
- * window or instantly on any non-rotate action.
- *
- * The host is responsible for projecting the focused group's bounding
- * box from world space into screen space (via getFocusedGroupScreenBounds);
- * we just place the buttons next to it, clamped to viewport.
- */
-
 import type { RotationFocus } from '../interaction/rotation-focus.js';
 
 export type RotationDirection = 'cw' | 'ccw';
@@ -27,16 +16,13 @@ export interface RotateButtonsOptions {
     rotationFocus: RotationFocus;
     /** Rotate the given group by 90° in the given direction. */
     onRotate: (groupId: number, direction: RotationDirection) => void;
-    /**
-     * Project the focused group's visual bounds into screen-space.
-     * Return `null` when the group cannot be located (e.g. just removed).
-     */
+    /** Return `null` when the group cannot be located (e.g. just removed). */
     getFocusedGroupScreenBounds: (
         groupId: number,
     ) => { left: number; right: number; top: number; bottom: number } | null;
     /**
-     * Current viewport size in CSS pixels. Defaults to
-     * `visualViewport` (or `window.innerWidth/Height` as fallback).
+     * In CSS pixels. Defaults to `visualViewport`, falling back to
+     * `window.innerWidth/Height`.
      */
     getViewportSize?: () => { width: number; height: number };
 }
@@ -52,11 +38,9 @@ interface ActivePair {
     ccw: HTMLButtonElement;
     cw: HTMLButtonElement;
     idleTimerId: ReturnType<typeof setTimeout> | null;
-    /** Timeout that removes the pair after a fade-out completes. */
     removalTimerId: ReturnType<typeof setTimeout> | null;
-    /** Fadeout-end listener — bound on the CCW button (either button works). */
+    /** Bound on the CCW button only (either button works). */
     transitionEndListener: ((e: Event) => void) | null;
-    /** Mode the pair is currently in. */
     state: 'visible' | 'fade-out-quick' | 'fade-out-slow';
 }
 
@@ -175,12 +159,6 @@ export function createRotateButtons(
         startIdleTimer();
     }
 
-    /**
-     * Restore an actively-fading pair to full opacity and clear its
-     * removal/idle timers. Used by both the click-rescue path (rotate
-     * button clicked during slow fade) and the re-focus path (user taps
-     * the same piece again during a quick fade-out).
-     */
     function rescueActive(): void {
         if (!active) return;
         cancelPairRemoval(active);
@@ -198,8 +176,8 @@ export function createRotateButtons(
     function handleRotateClick(direction: RotationDirection): void {
         if (!active) return;
         const groupId = active.groupId;
-        // Rescue from slow fade-out (the pointer-events:none on quick-fade
-        // means clicks can only land on visible or slowly-fading pairs).
+        // pointer-events:none on quick-fade means clicks can only land on
+        // visible or slowly-fading pairs.
         if (active.state !== 'visible') rescueActive();
         startIdleTimer();
         onRotate(groupId, direction);
@@ -232,8 +210,7 @@ export function createRotateButtons(
     }
 
     function startQuickFadeOut(pair: ActivePair): void {
-        // Cancel any in-flight removal — could be a slow fade that's
-        // being upgraded to a quick fade because focus moved away.
+        // The pair may be mid slow-fade, upgraded to quick because focus moved away.
         cancelPairRemoval(pair);
         if (pair.idleTimerId !== null) {
             clearTimeout(pair.idleTimerId);
@@ -299,16 +276,13 @@ export function createRotateButtons(
     function handleFocusChange(focusedGroupId: number | null): void {
         if (!shown) return;
         if (focusedGroupId === null) {
-            // User dismissed: quick fade-out the current pair.
             if (active) startQuickFadeOut(active);
             return;
         }
         if (active && active.groupId === focusedGroupId) {
-            // Same group. RotationFocus only fires on actual change, so this
-            // branch is reached when focus was cleared and re-set on the
-            // same piece (e.g. user taps background then taps same piece
-            // again within the quick-fade window). If the pair is mid-fade,
-            // rescue it; if visible, this is a true no-op.
+            // RotationFocus only fires on actual change, so this branch means
+            // focus was cleared and re-set on the same piece within the
+            // quick-fade window.
             if (active.state !== 'visible') {
                 rescueActive();
                 startIdleTimer();
@@ -316,7 +290,6 @@ export function createRotateButtons(
             return;
         }
         if (active) {
-            // Switching pieces: quick-fade old, spawn new.
             const old = active;
             active = null;
             startQuickFadeOut(old);
@@ -329,7 +302,6 @@ export function createRotateButtons(
             if (shown) return;
             shown = true;
             unsubscribeFocus = rotationFocus.onChange(handleFocusChange);
-            // If focus is already set when shown, treat it like a focus event.
             if (rotationFocus.focusedGroupId !== null) {
                 spawnPair(rotationFocus.focusedGroupId);
             }

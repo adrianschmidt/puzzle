@@ -59,32 +59,24 @@ vi.mock('../ui/index.js', async (importOriginal) => {
 
 import { createRotationUi } from './rotation-ui.js';
 
-/** The button-pair handle most recently produced by the mocked factory. */
 function lastButtonsHandle(): RotateButtonsHandle {
     const last = vi.mocked(createRotateButtons).mock.results.at(-1);
     if (!last) throw new Error('createRotateButtons was never called');
     return last.value;
 }
 
-/** The drag-handle handle most recently produced by the mocked factory. */
 function lastHandleHandle(): RotateHandleHandle {
     const last = vi.mocked(createRotateHandle).mock.results.at(-1);
     if (!last) throw new Error('createRotateHandle was never called');
     return last.value;
 }
 
-/**
- * The options the rotate buttons were built with — the callbacks the real
- * control invokes on a quarter-turn tap, and the bounds projector it asks
- * for its own placement.
- */
 function buttonsOptions(): RotateButtonsOptions {
     const last = vi.mocked(createRotateButtons).mock.calls.at(-1);
     if (!last) throw new Error('createRotateButtons was never called');
     return last[0];
 }
 
-/** The options the rotate handle was built with; see {@link buttonsOptions}. */
 function handleOptions(): RotateHandleOptions {
     const last = vi.mocked(createRotateHandle).mock.calls.at(-1);
     if (!last) throw new Error('createRotateHandle was never called');

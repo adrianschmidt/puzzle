@@ -14,7 +14,6 @@ import type { Piece, PieceGroup, Edge } from './types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
 import { computePieceBounds } from './derive.js';
 
-/** Create a minimal edge for testing. */
 function edge(
     id: number,
     mateEdgeId = -1,
@@ -30,7 +29,6 @@ function edge(
     };
 }
 
-/** Create a minimal piece for testing. */
 function piece(id: number, edges: Edge[]): Piece {
     return {
         id,
@@ -41,7 +39,6 @@ function piece(id: number, edges: Edge[]): Piece {
     };
 }
 
-/** Create a group with given piece IDs. */
 function group(id: number, pieceIds: number[]): PieceGroup {
     const pieces = new Map(pieceIds.map((pid) => [pid, { x: 0, y: 0 }]));
     return { id, pieces, position: { x: 0, y: 0 }, rotation: 0 };
@@ -141,7 +138,6 @@ describe('moveGroup', () => {
 
 describe('getBorderEdges', () => {
     it('returns edges whose mates are in a different group', () => {
-        // Two pieces with mated edges, in different groups
         const e1 = edge(0, 1, 1);
         const e2 = edge(1, 0, 0);
         const p0 = piece(0, [e1]);
@@ -163,12 +159,11 @@ describe('getBorderEdges', () => {
     });
 
     it('excludes edges whose mates are in the same group', () => {
-        // Two pieces with mated edges, in the SAME group
         const e1 = edge(0, 1, 1);
         const e2 = edge(1, 0, 0);
         const p0 = piece(0, [e1]);
         const p1 = piece(1, [e2]);
-        const g1 = group(0, [0, 1]); // both pieces in same group
+        const g1 = group(0, [0, 1]);
 
         const borders = getBorderEdges(
             g1,
@@ -381,7 +376,6 @@ describe('signedAngularDelta', () => {
     });
 
     it('returns +180 (not -180) for an exactly opposite pair', () => {
-        // Convention: (-180, 180]. Boundary value is +180, not -180.
         expect(signedAngularDelta(180, 0)).toBe(180);
     });
 

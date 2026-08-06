@@ -1,11 +1,5 @@
 /**
- * Start a fresh game: decide the cut style, resolve the image (bundled,
- * blank, player-picked, or a fresh Unsplash fetch), generate the puzzle, and
- * install it. Used by the New Game dialog, the boot flow's preferred start
- * and its last-resort fallback, and two dev-console hooks.
- *
- * Most of the work is delegated to extracted modules; what is left here is
- * orchestration, and the orchestration *order* is the contract:
+ * The orchestration *order* here is the contract:
  *
  *  1. {@link planTracedTabs} decides the cut style and whether the lazy
  *     traced-tab chunk is needed before anything else runs. The boot
@@ -62,9 +56,8 @@ import {
 import type { CandidateImage } from './unsplash-display-image.js';
 import type { GameSession } from './game-session.js';
 
-/** Per-game choices for {@link startNewGame}. */
 export interface StartNewGameOptions {
-    /** Cut style for piece generation. Defaults to Classic. */
+    /** Defaults to Classic. */
     cutStyle?: CutStyle;
     composableConfig?: ComposableConfig;
     imageSource?: string;
@@ -83,12 +76,6 @@ export interface StartNewGameOptions {
     bootFallback?: boolean;
 }
 
-/**
- * Collaborators {@link startNewGame} cannot own itself: the DOM container it
- * sizes the puzzle against, the session that installs the generated state,
- * and four callbacks for the composition-root-owned parts of starting a
- * game (viewport reset, view-fitting, persistence, analytics bookkeeping).
- */
 export interface StartNewGameDeps {
     container: HTMLElement;
     /**
@@ -104,10 +91,8 @@ export interface StartNewGameDeps {
      * that point leaves the current puzzle's pan/zoom untouched.
      */
     resetViewport: () => void;
-    /** Gather and zoom-to-fit the freshly installed puzzle. */
     fitView: (state: GameState) => void;
     persistNewPuzzle: (state: GameState) => void;
-    /** Record the payload as the current game's analytics. */
     onGameAnalytics: (data: NewGameData) => void;
     /**
      * Whether a puzzle is currently installed. Gates the overlay's Cancel
@@ -119,13 +104,6 @@ export interface StartNewGameDeps {
 }
 
 /**
- * Start a new game. Uses the player-picked photo when one is given;
- * otherwise fetches a random Unsplash image if available. Falls back to
- * the default image if the API key is missing or fetch fails.
- *
- * @param gridSize - Grid dimensions (cols × rows) for the puzzle
- * @param options - Per-game choices; see {@link StartNewGameOptions}
- * @param deps - Collaborators; see {@link StartNewGameDeps}
  * @param source - `'fresh'` for a real player start (the new-game dialog or
  * the boot path), `'dev'` for a start kicked off from the dev console (e.g.
  * `__newComposableGame`). Only affects the `source` field of the
@@ -227,8 +205,8 @@ export async function startNewGame(
         let imageSize = bundled.size;
         let attribution: GameState['attribution'] = bundled.attribution;
 
-        // Blank puzzle: no photo. Match the puzzle orientation so a portrait
-        // screen gets a portrait blank.
+        // Match the puzzle orientation so a portrait screen gets a portrait
+        // blank.
         if (imageSource === 'blank') {
             imageUrl = null;
             imageSize = blankSizeForOrientation(orientation);

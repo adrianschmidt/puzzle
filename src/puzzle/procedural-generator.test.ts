@@ -165,7 +165,6 @@ describe('reproducibility', () => {
         const pieces1 = generateProceduralPuzzle(8, 6, imageSize, 1);
         const pieces2 = generateProceduralPuzzle(8, 6, imageSize, 2);
 
-        // Shapes should differ — check a few interior pieces
         const interiorPiece1 = pieces1.find((p) => p.id === 9)!; // row 1, col 1
         const interiorPiece2 = pieces2.find((p) => p.id === 9)!;
 
@@ -201,7 +200,6 @@ describe('different grid sizes', () => {
         const pieces = generateProceduralPuzzle(12, 16, { width: 1200, height: 1600 }, 42);
         expect(pieces).toHaveLength(192);
 
-        // Verify mate symmetry on larger grid too
         for (const piece of pieces) {
             for (const edge of piece.edges) {
                 if (edge.mateEdgeId === -1) continue;
@@ -218,7 +216,6 @@ describe('edge path variation', () => {
     it('internal edges of different pieces have different paths', () => {
         const pieces = generateProceduralPuzzle(4, 4, { width: 400, height: 400 }, 42);
 
-        // Collect all internal edge paths
         const internalPaths = pieces.flatMap((p) =>
             p.edges.filter((e) => e.mateEdgeId !== -1).map((e) => e.path),
         );

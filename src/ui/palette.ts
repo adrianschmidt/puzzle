@@ -1,10 +1,8 @@
 /**
- * Extended color palette metadata. The color *values* live in
- * `src/palette.css` as CSS custom properties (with a dark-mode override),
- * so anything that renders a swatch references `var(--color-<id>)` and the
- * OS light/dark flip is handled entirely by CSS. This module only
- * enumerates the swatches and exposes an OS-scheme change hook used to
- * refresh the luminance-derived UI chrome.
+ * The color *values* live in `src/palette.css` as CSS custom properties
+ * (with a dark-mode override), so anything that renders a swatch
+ * references `var(--color-<id>)` and the OS light/dark flip is handled
+ * entirely by CSS.
  */
 
 export const PALETTE_HUES = [
@@ -30,12 +28,10 @@ export interface PaletteSwatch {
 }
 
 /**
- * All swatches in tone-major order: the "lighter" tone of every hue
- * first, then "light", etc. With a 20-column grid this lays out as rows
- * = tones, columns = hues (mirrors the limel-color-picker layout).
- *
- * The `{ id, label, color }` shape matches the swatch picker's
- * `SwatchEntry`, so these can feed `createSwatchPicker` directly.
+ * Tone-major order: with a 20-column grid this lays out as rows = tones,
+ * columns = hues (mirrors the limel-color-picker layout). The shape
+ * matches the swatch picker's `SwatchEntry`, so these can feed
+ * `createSwatchPicker` directly.
  */
 export const PALETTE_SWATCHES: readonly PaletteSwatch[] = PALETTE_TONES.flatMap(
     (tone) =>
@@ -47,11 +43,10 @@ export const PALETTE_SWATCHES: readonly PaletteSwatch[] = PALETTE_TONES.flatMap(
 );
 
 /**
- * Subscribe to OS color-scheme changes. The callback fires on each
- * subsequent change only — it is NOT invoked on subscription, so apply
- * the current scheme once yourself before subscribing. Returns an
- * unsubscribe function. No-op (and a no-op unsubscribe) when `matchMedia`
- * is unavailable (e.g. jsdom).
+ * The callback fires on each subsequent change only — it is NOT invoked
+ * on subscription, so apply the current scheme once yourself before
+ * subscribing. No-op (and a no-op unsubscribe) when `matchMedia` is
+ * unavailable (e.g. jsdom).
  */
 export function onColorSchemeChange(callback: () => void): () => void {
     if (typeof matchMedia !== 'function') {

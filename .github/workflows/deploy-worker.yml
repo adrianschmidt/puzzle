@@ -1,7 +1,5 @@
 name: Deploy worker
 
-# Deploys the Unsplash image-proxy Worker (src/worker/image-proxy.ts).
-#
 # Separate from deploy.yml because the two have nothing to do with each other:
 # the app is a static bundle pushed to gh-pages, the Worker is a Cloudflare
 # script. Coupling them would redeploy one every time the other changed.

@@ -1,6 +1,4 @@
 /**
- * Bézier path primitives shared across the cut-style pipelines.
- *
  * A `BezierPath` is a flat point array storing one start point followed by
  * groups of three (cp1, cp2, end) per cubic segment:
  * `[p0, cp1_1, cp2_1, p1, cp1_2, cp2_2, p2, ...]`. Both the procedural
@@ -17,19 +15,8 @@
 import type { Point } from '../../model/types.js';
 import { fmt } from '../../model/build-shape.js';
 
-/**
- * A series of cubic Bézier segments represented as points.
- * Format: [p0, cp1_1, cp2_1, p1, cp1_2, cp2_2, p2, ...]
- * where each segment after the first shares the previous end as start.
- */
 export type BezierPath = Point[];
 
-/**
- * Convert a Bézier path to SVG path commands.
- *
- * Skips `path[0]` because the caller is assumed to be there already,
- * then emits one `C` command per (cp1, cp2, end) triple.
- */
 export function bezierPathToSvg(path: BezierPath): string {
     if (path.length < 4) {
         if (path.length === 0) return '';
@@ -52,22 +39,17 @@ export function bezierPathToSvg(path: BezierPath): string {
 
 /**
  * Reverse a BezierPath to create the mating edge.
- * Reverses the point order and swaps control point pairs within each segment.
  */
 export function reverseBezierPath(path: BezierPath): BezierPath {
     const reversed: Point[] = [];
     const n = path.length;
 
-    // The path has (n-1)/3 segments.
-    // Walk backwards through segments.
-    reversed.push(path[n - 1]); // New start = old end
+    reversed.push(path[n - 1]);
 
     for (let i = n - 2; i >= 0; i -= 3) {
-        // Old segment ended at path[i+1] with control points path[i-1], path[i]
-        // Reversed: swap cp1 and cp2
-        reversed.push(path[i]);     // was cp2, becomes cp1
-        reversed.push(path[i - 1]); // was cp1, becomes cp2
-        reversed.push(path[i - 2]); // was segment start, becomes segment end
+        reversed.push(path[i]);
+        reversed.push(path[i - 1]);
+        reversed.push(path[i - 2]);
     }
 
     return reversed;
@@ -82,9 +64,8 @@ export function mirrorBezierPathY(path: BezierPath): BezierPath {
 }
 
 /**
- * Scale a BezierPath's coordinates about the origin. Used to shrink a
- * tab (smaller footprint and depth) without regenerating its shape.
- * Tab placement positions everything relative to the path's own
+ * Used to shrink a tab (smaller footprint and depth) without regenerating
+ * its shape. Tab placement positions everything relative to the path's own
  * midpoint, so scaling about the origin uniformly shrinks the tab.
  */
 export function scaleBezierPath(path: BezierPath, sx: number, sy: number): BezierPath {

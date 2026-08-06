@@ -3,14 +3,8 @@
  */
 
 /**
- * Tests for setupInteraction — the orchestration layer that wires
- * PointerRouter + DragController + ViewportController + AutoPanController.
- *
  * The bulk of gesture-classification logic is covered in pointer-router.test.ts;
  * this file only verifies that the wiring between collaborators is correct.
- *
- * Uses a FakeContainer that captures addEventListener handlers and exposes
- * a fire() helper — same pattern as setup-drag.test.ts.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -32,10 +26,6 @@ beforeEach(() => {
     globalThis.requestAnimationFrame = vi.fn(() => 1);
     globalThis.cancelAnimationFrame = vi.fn();
 });
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 interface FakeContainer {
     addEventListener: ReturnType<typeof vi.fn>;
@@ -121,10 +111,6 @@ function makeState(groups: PieceGroup[]): GameState {
     return makeGameState({ groups });
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('setupInteraction', () => {
     it('cleanup() removes container listeners', () => {
         const container = createFakeContainer();
@@ -153,7 +139,6 @@ describe('setupInteraction', () => {
         const selectionManager = new SelectionManager();
         selectionManager.toolActive = true;
 
-        // Group 7 contains piece 3
         const state = makeState([makeGroup(7, [3])]);
 
         setupInteraction({
@@ -167,10 +152,8 @@ describe('setupInteraction', () => {
             selectionManager,
         });
 
-        // The renderer's pieceIdFromTarget will return 3 for this target object
         const pieceTarget = { _pieceId: 3 } as unknown as EventTarget;
 
-        // Fire pointerdown then pointerup with minimal movement (tap)
         container.fire('pointerdown', fakePointerEvent({ target: pieceTarget, clientX: 100, clientY: 100 }));
         container.fire('pointerup', fakePointerEvent({ target: pieceTarget, clientX: 101, clientY: 100 }));
 
@@ -233,7 +216,6 @@ describe('setupInteraction', () => {
         container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
         container.fire('pointermove', fakePointerEvent({ pointerId: 1, clientX: 120, clientY: 100 })); // promote
 
-        // It became a piece drag (not a background pan).
         expect(renderer.pieceIdAtPoint).toHaveBeenCalled();
         expect(renderer.setGroupDragging).toHaveBeenCalledWith(7, true);
 
@@ -264,8 +246,6 @@ describe('setupInteraction', () => {
         container.fire('pointermove', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 130, clientY: 100 })); // promote pan
         container.fire('pointermove', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 150, clientY: 100 })); // pan move
 
-        // The probe ran and found nothing, so this stayed a background pan:
-        // no piece grabbed, and the viewport changed.
         expect(renderer.pieceIdAtPoint).toHaveBeenCalled();
         expect(renderer.setGroupDragging).not.toHaveBeenCalled();
         expect(onViewportChanged).toHaveBeenCalled();
@@ -393,7 +373,6 @@ describe('setupInteraction', () => {
                 rotationFocus,
             });
 
-            // Background-target pointerdown → small pointerup = background tap.
             // Cast the FakeContainer to EventTarget so the production
             // classifyTarget's `target === container` reference check matches.
             const bgTarget = container as unknown as EventTarget;

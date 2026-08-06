@@ -1,5 +1,50 @@
 # Repo conventions for Claude
 
+## Comment policy: intent and not-in-the-code information only
+
+Code Complete's six kinds of comments, applied to this repo. **Forbidden** —
+never write these, and delete them on sight when editing a file:
+
+1. **Repeat of the code** — restates what the line says.
+2. **Explanation of the code** — walks through *how* the code works. If code
+   needs explaining, make the code clearer instead. Exception: where a
+   reproducibility or geometry contract forbids that refactor (the modules
+   pinned by the bezier-js geometry-digest tripwire — `apply-tabs.ts`,
+   `dcel.ts`, `curve-clamp.ts`), the explanation *is* category 6 — keep it.
+3. **Marker** — `TODO`/`FIXME`/section banners/notes-to-self.
+4. **Summary** — condenses a block so a reader can skim it. In this repo no
+   human skims the source, so summaries (including JSDoc that merely restates
+   a signature) are pure drift risk with no reader.
+
+**Allowed** — the only comments this repo should contain:
+
+5. **Intent** — *why* this approach, at the level of the problem: rationale,
+   rejected alternatives, constraints that shaped the code.
+6. **Information the code cannot express** — contracts and invariants not
+   capturable in types (units, ranges, call-order requirements,
+   reproducibility contracts), workarounds for third-party bugs with a
+   pointer to the cause, security rationale, spec/issue references.
+
+Every comment must fall squarely in 5 or 6; shorten those to the load-bearing
+core. When reviewing, never propose adding a category 1–4 comment — a
+hard-to-follow block wants a code change, not commentary.
+
+Scope and carve-outs:
+
+- The policy governs the whole repo — workflow YAML and config files
+  included. In workflows, a step's `name:` already serves the summary role,
+  so a comment restating a step is category 1. Form does not decide
+  category: a comment that carries rationale is 5/6 even when banner-shaped
+  — `.oxlintrc.jsonc`'s rule-group banners are the canonical example, being
+  the only record of the noise-vs-actively-wrong split described below.
+- Lint, compiler, and test-runner pragmas are not comments, whatever their
+  spelling: `eslint-disable*`, `@ts-expect-error`, `@vitest-environment`, and
+  kin. Beware that `@vitest-environment` sits alone in a top-of-file `/** */`
+  block — exactly the shape of a category-4 summary — and deleting it
+  silently changes the file's test environment.
+- `src/analytics/umami.ts`'s doc comments are the operator-facing query spec
+  (category 6): keep them **accurate**, don't trim them.
+
 ## The oxlint config's disabled rules are load-bearing
 
 `npm run lint` runs oxlint with type-aware rules. Ten rules are switched off in

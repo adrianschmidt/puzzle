@@ -1,7 +1,3 @@
-/**
- * Tests for the candidate-image fetch wrapper.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../images/index.js', () => ({ fetchRandomImages: vi.fn() }));

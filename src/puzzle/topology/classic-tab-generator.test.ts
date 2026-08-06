@@ -24,10 +24,9 @@ describe('classicTabGenerator', () => {
         const edge = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const result = classicTabGenerator.generate(edge, random, {})!;
 
-        // Sample the result and find the maximum perpendicular displacement
         const samples = result.sample(20);
         const maxAbsY = Math.max(...samples.map(p => Math.abs(p.y)));
-        expect(maxAbsY).toBeGreaterThan(5); // tab protrudes meaningfully
+        expect(maxAbsY).toBeGreaterThan(5);
     });
 
     it('returns null when the edge is too short for the tab', () => {

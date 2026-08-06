@@ -41,7 +41,6 @@ describe('sineCutGenerator', () => {
             },
         );
         // Border + horizontal + vertical = 4 + 1 + 1 = 6
-        // Both internal cuts should be straight lines
         expect(curves[4].segments).toHaveLength(1);
         expect(curves[5].segments).toHaveLength(1);
     });
@@ -55,7 +54,6 @@ describe('sineCutGenerator capability', () => {
 
 describe('sineCutGenerator borderless oversize', () => {
     const frame = { width: 800, height: 600 };
-    // Deterministic PRNG that also counts its calls.
     function countingRandom() {
         let calls = 0;
         const fn = () => { calls++; return 0.5; };

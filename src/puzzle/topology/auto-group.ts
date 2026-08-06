@@ -1,10 +1,5 @@
 /**
- * Deterministic auto-grouping for small pieces.
- *
- * Pieces below `minArea` are merged with a neighbour via union-find,
- * producing a list of "starting groups" that the caller turns into
- * actual `PieceGroup`s with positions and offsets. This module is a
- * pure topological utility: it knows nothing about geometry, the PRNG,
+ * A pure topological utility: it knows nothing about geometry, the PRNG,
  * or `Piece`/`Edge` types — just piece ids, areas, and adjacency.
  *
  * **Determinism is load-bearing.** Share-link reproducibility depends
@@ -22,12 +17,8 @@
  * the DCEL to fold small faces into their neighbours.
  */
 
-/**
- * Inputs to the auto-grouping pass. The caller is responsible for
- * computing piece areas and the adjacency graph from the DCEL.
- */
 export interface AutoGroupContext {
-    /** All piece ids, in any order (the algorithm sorts internally). */
+    /** Any order; the algorithm sorts internally. */
     pieceIds: number[];
     /** pieceId → polygon area (px²). */
     areas: Map<number, number>;
@@ -36,8 +27,6 @@ export interface AutoGroupContext {
 }
 
 /**
- * A starting group of pieces emitted by `autoGroupSmallPieces`.
- *
  * The group `id` is the smallest piece id in the group (the
  * union-find root, by construction). `pieceIds` is sorted ascending
  * so test output and downstream layout are stable.

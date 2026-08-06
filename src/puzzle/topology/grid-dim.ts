@@ -29,7 +29,6 @@
  */
 export const MAX_GRID_DIM = 64;
 
-/** Clamp a grid dimension to a positive integer within `[1, MAX_GRID_DIM]`. */
 export function clampGridDim(n: number): number {
     if (!Number.isFinite(n)) return 1;
     return Math.max(1, Math.min(MAX_GRID_DIM, Math.floor(n)));

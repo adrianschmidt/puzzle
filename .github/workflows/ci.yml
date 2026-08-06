@@ -3,10 +3,10 @@ name: CI
 on:
   pull_request:
 
-# Matches the four sibling workflows, which all declare their scope. This job
-# only checks out and runs npm, so read is all it needs — and it executes a
-# good deal of third-party code (npm ci, oxlint's and vite's native bindings,
-# vitest), which `actions/checkout` hands a token to via `persist-credentials`.
+# This job only checks out and runs npm, so read is all it needs — and it
+# executes a good deal of third-party code (npm ci, oxlint's and vite's
+# native bindings, vitest), which `actions/checkout` hands a token to via
+# `persist-credentials`.
 permissions:
   contents: read
 

@@ -15,10 +15,8 @@ function seededRandom(seed: number): () => number {
 }
 
 /**
- * Build a TopologyGeneratorConfig with sine-grid amplitudes/frequencies
- * and a flag for whether tabs should be applied. Mirrors the legacy
- * config shape so the tests remain readable after the new opaque
- * configuration replaced the per-parameter fields.
+ * Mirrors the legacy config shape so the tests remain readable after
+ * the new opaque configuration replaced the per-parameter fields.
  */
 function sineConfig(opts: {
     ha?: number;
@@ -166,7 +164,7 @@ describe('generateTopologyPuzzle', () => {
         expect(pieces.length).toBeGreaterThanOrEqual(4);
     });
 
-    // -- Wavy Bézier cut tests (regression for segment-level splitting) ----
+    // Regression coverage for segment-level splitting of wavy Bézier cuts.
 
     it('wavy 3×2 with freq 1 produces correct piece count', () => {
         const { pieces } = generateTopologyPuzzle(

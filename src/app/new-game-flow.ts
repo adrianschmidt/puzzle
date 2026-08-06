@@ -1,16 +1,9 @@
 /**
- * The New Game dialog flow: open it seeded from the player's saved
- * preferences, persist every choice the moment they pick an image, and
- * kick off the start — wrapped so a failure surfaces as a toast instead
- * of a click that silently does nothing.
- *
- * The dialog's `onSelect` fires once, synchronously, with everything the
- * player configured. Nine separate preferences are written from that one
- * payload; a dropped write is not an error, it is a setting that quietly
- * reverts the next time the player opens the dialog. Keeping the writes
- * as one flat sequence — rather than folding some into a shared helper —
- * is deliberate: each one stays independently greppable against its
- * `load*` counterpart.
+ * A dropped preference write is not an error, it is a setting that
+ * quietly reverts the next time the player opens the dialog. Keeping the
+ * writes as one flat sequence — rather than folding some into a shared
+ * helper — is deliberate: each one stays independently greppable against
+ * its `load*` counterpart.
  */
 
 import type { GridSize } from '../model/types.js';
@@ -55,25 +48,11 @@ import { orientationForViewport } from './orientation.js';
 import { runWithErrorReport } from './run-with-error-report.js';
 import type { StartNewGameOptions } from './start-new-game.js';
 
-/**
- * Collaborators {@link openNewGameDialog} cannot own itself: the DOM
- * container the dialog attaches to and image candidates are sized
- * against, and the start callback the composition root binds to
- * `startNewGame` plus its own `StartNewGameDeps`.
- */
 export interface OpenNewGameDialogDeps {
     container: HTMLElement;
     start: (gridSize: GridSize, options: StartNewGameOptions) => Promise<void>;
 }
 
-/**
- * Open the New Game dialog, seeded from every saved preference so it
- * reopens exactly where the player left it. On select, persist the nine
- * preferences the dialog collects and start the chosen game — `deps.start`
- * (`startNewGame`) replaces the current save with the new puzzle's own once
- * generation actually succeeds; see the comment above that call for why
- * this flow does not clear it up front.
- */
 export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
     const preferredSizeId = loadSizePreference();
     const preferredCutStyleId = loadCutStylePreference();
@@ -140,29 +119,16 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
 
             const option = getSizeOption(sizeId);
             const cutStyle = cutStyleId as CutStyle;
-            // The current save is deliberately left alone here — it is not
-            // wiped until `deps.start` actually replaces it. `startNewGame`
-            // only calls its own `persistNewPuzzle` once generation has
-            // fully succeeded and the new puzzle is installed, so:
-            //  - success: that call overwrites the previous geometry/
-            //    progress, same end state as clearing up front.
-            //  - cancel (the loading overlay's Cancel affordance, #489,
-            //    gated on a puzzle already being installed — true for
-            //    essentially every dialog-started game) or a throw: neither
-            //    reaches `persistNewPuzzle`, so the previous save survives,
-            //    matching the in-memory puzzle the player is left with.
-            // An eager clear here used to destroy that save on every one of
-            // those paths, cancel included — the same defect as the
-            // share-link loader's (`share-link-loader.ts`), on what is this
-            // PR's most common cancel path.
-            // A fourth outcome those three don't cover: a new puzzle whose
-            // geometry exceeds the storage quota. `saveNewPuzzle` writes
-            // nothing at all in that case (#399), so the PREVIOUS puzzle
-            // stays on disk under a different puzzle on screen, and a reload
-            // resumes it. Arguably better than the eager clear's "reload
-            // hands you a stranger", and the failure already toasts — but it
-            // does mean "overwrite-on-success" is the rule, not the whole
-            // story.
+            // The current save is deliberately left alone here — `deps.start`
+            // (`startNewGame`) persists the new puzzle only once generation
+            // fully succeeds, so a cancel (the loading overlay's Cancel
+            // affordance, #489) or a throw leaves the previous save intact,
+            // matching the in-memory puzzle the player is left with. An eager
+            // clear here used to destroy that save on every one of those
+            // paths — the same defect as `share-link-loader.ts`'s. Also: a
+            // new puzzle whose geometry exceeds the storage quota writes
+            // nothing at all (#399), so the PREVIOUS puzzle stays on disk
+            // under a different puzzle on screen and a reload resumes it.
             const newGame = deps.start(toGridSize(option), {
                 cutStyle,
                 composableConfig: composableConfig

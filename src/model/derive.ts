@@ -1,6 +1,4 @@
 /**
- * Pure derivations from puzzle pieces.
- *
  * Geometry and layout metadata that can be computed from a `GameState`
  * (or a single `Piece`) without any DOM, SVG, or rendering involvement.
  */
@@ -8,8 +6,6 @@
 import type { GameState, GeneratedEdge, Piece, PieceBounds } from './types.js';
 
 /**
- * Derive image dimensions from the puzzle pieces.
- *
  * The bottom-right piece has the most negative image offset.
  * Image size = abs(most negative offset) + one piece cell size.
  */
@@ -69,9 +65,7 @@ export function computePieceBounds(piece: { edges: GeneratedEdge[] }): PieceBoun
 }
 
 /**
- * Get the piece-local bounding box stored on the piece.
- *
- * Reads the bounds stored on the piece; every `Piece` carries them, set by
+ * Reads the piece-local bounds stored on the piece; every `Piece` carries them, set by
  * `model/seal-geometry.ts` — at generation time, or on load (restored as
  * stored for a v12+ save, recomputed from curve samples when migrating an
  * older one).
@@ -88,10 +82,7 @@ export function getPieceBounds(piece: Piece): {
     return { ...b, width: b.maxX - b.minX, height: b.maxY - b.minY };
 }
 
-/**
- * Get the base dimension of a piece (width or height) from its edge endpoints.
- * This is the rectangular cell size, not including tab protrusions.
- */
+/** The rectangular cell size, not including tab protrusions. */
 export function getPieceBaseDimension(
     piece: Piece,
     axis: 'x' | 'y',
@@ -100,7 +91,6 @@ export function getPieceBaseDimension(
     return axis === 'x' ? bounds.width : bounds.height;
 }
 
-/** Derive grid columns from image offsets. */
 export function getGridCols(state: GameState): number {
     if (state.pieces.length === 0) return 1;
 
@@ -111,7 +101,6 @@ export function getGridCols(state: GameState): number {
     return uniqueXOffsets.size;
 }
 
-/** Derive grid rows from image offsets. */
 export function getGridRows(state: GameState): number {
     if (state.pieces.length === 0) return 1;
 

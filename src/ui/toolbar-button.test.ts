@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the generic toolbar button helper.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createToolbarButton } from './toolbar-button.js';
 

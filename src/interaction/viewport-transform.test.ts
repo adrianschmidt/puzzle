@@ -1,10 +1,3 @@
-/**
- * Tests for ViewportTransform.
- *
- * Verifies coordinate conversion, zoom-around-point, pan,
- * and scale clamping behavior.
- */
-
 import { describe, it, expect } from 'vitest';
 import {
     ViewportTransform,
@@ -138,8 +131,6 @@ describe('ViewportTransform', () => {
             const vt = new ViewportTransform();
             const focus = { x: 0, y: 0 };
             vt.zoom(2, focus);
-            // After zooming around origin with no initial offset,
-            // the world point at origin should still map to screen origin.
             const screen = vt.worldToScreen({ x: 0, y: 0 });
             expect(screen.x).toBeCloseTo(0);
             expect(screen.y).toBeCloseTo(0);
@@ -149,12 +140,10 @@ describe('ViewportTransform', () => {
             const vt = new ViewportTransform();
             const focus = { x: 400, y: 300 };
 
-            // Before zoom: screen (400, 300) maps to world (400, 300)
             const worldBefore = vt.screenToWorld(focus);
 
             vt.zoom(2, focus);
 
-            // After zoom: same world point should still map to same screen point
             const screenAfter = vt.worldToScreen(worldBefore);
             expect(screenAfter.x).toBeCloseTo(focus.x);
             expect(screenAfter.y).toBeCloseTo(focus.y);
@@ -198,7 +187,6 @@ describe('ViewportTransform', () => {
             vt.zoom(1.5, focus);
             vt.zoom(1.5, focus);
 
-            // Focus point should still be fixed
             const screenAfter = vt.worldToScreen(worldBefore);
             expect(screenAfter.x).toBeCloseTo(focus.x);
             expect(screenAfter.y).toBeCloseTo(focus.y);

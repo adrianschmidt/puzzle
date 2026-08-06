@@ -1,40 +1,27 @@
 /**
- * Corrupt-save dialog — modal shown at startup when a saved puzzle was found
- * but could not be restored (corruption, unsupported version, torn pair).
- *
- * Rather than silently regenerating over the unreadable data, the app stops
- * and offers the player a chance to download a verbatim copy of the raw save
- * blobs (for recovery or a bug report) before starting a new game. Any
- * dismissal path — the "Start new game" button or Escape — resolves through
- * `onDismiss`, which the host uses to proceed with the fresh-start boot.
+ * Rather than silently regenerating over an unreadable save, the app stops
+ * and offers a verbatim download of the raw save blobs (for recovery or a
+ * bug report) before starting a new game.
  */
 
 import type { CorruptSaveData } from '../persistence/index.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
 
 export interface CorruptSaveDialogOptions {
-    /** Container to append the dialog to. */
     container: HTMLElement;
-    /** Raw blobs captured from the unreadable save, offered for download. */
     raw: CorruptSaveData;
     /**
-     * Fires once when the player closes the dialog (via "Start new game" or
-     * Escape). The host proceeds with a fresh puzzle from here. `downloaded`
-     * reports whether the player took a copy of the raw data first, for
-     * recovery-usage telemetry.
+     * Fires once regardless of dismissal path ("Start new game" or Escape);
+     * the host proceeds with the fresh-start boot from here. `downloaded`
+     * reports whether the player took a copy first, for recovery-usage
+     * telemetry.
      */
     onDismiss: (info: { downloaded: boolean }) => void;
-    /**
-     * Injectable download trigger. Defaults to an anchor-click download of a
-     * JSON file. Overridden in tests to capture the filename/contents without
-     * touching the real download machinery.
-     */
+    /** Injectable so tests can capture filename/contents without a real download. */
     triggerDownload?: (filename: string, contents: string) => void;
-    /** Injectable clock for the download filename/timestamp. Defaults to Date.now. */
     now?: () => number;
 }
 
-/** Default download mechanism: a JSON blob saved via a transient anchor. */
 function anchorDownload(filename: string, contents: string): void {
     const blob = new Blob([contents], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -47,7 +34,6 @@ function anchorDownload(filename: string, contents: string): void {
     URL.revokeObjectURL(url);
 }
 
-/** Build the JSON payload and filename for a corrupt-save download. */
 export function buildCorruptSaveDownload(
     raw: CorruptSaveData,
     timestamp: number,

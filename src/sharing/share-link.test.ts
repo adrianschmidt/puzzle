@@ -1109,7 +1109,6 @@ describe('free-mode rotation encoding', () => {
                 // One merged group (needed to trigger extractProgress)
                 { id: 0, pieces: new Map([[0, { x: 0, y: 0 }], [1, { x: 100, y: 0 }]]),
                   position: { x: 0, y: 0 }, rotation: 0 },
-                // Solo pieces
                 { id: 2, pieces: new Map([[2, { x: 0, y: 0 }]]),
                   position: { x: 0, y: 0 }, rotation: 123.4 },
                 { id: 3, pieces: new Map([[3, { x: 0, y: 0 }]]),
@@ -1124,7 +1123,6 @@ describe('free-mode rotation encoding', () => {
     });
 
     it('round-trips free-mode merged-group rotations within 0.5°', () => {
-        // Encode a payload directly with free-mode mr values.
         const originalDegrees = [47, 180, 312];
         const payload: SharePayload = {
             v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'classic', s: 1, r: 'free',
@@ -1306,8 +1304,7 @@ describe('share-link tg = "traced"', () => {
     });
 
     it('decodes legacy "dt: true" (no tg) as tg: "none"', () => {
-        // Hand-craft a legacy payload. translateLegacyComposable in
-        // share-link.ts should map dt → tg.
+        // translateLegacyComposable in share-link.ts should map dt → tg.
         const legacyJson = JSON.stringify({
             v: 1, i: 'blank', is: [800, 600], g: [4, 3], c: 'composable',
             s: 1, r: 'none',

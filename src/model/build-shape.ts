@@ -1,6 +1,4 @@
 /**
- * Shared SVG-path construction for piece shapes.
- *
  * Lives in the model layer (not the puzzle layer) because persistence also
  * needs it: the serializer omits `piece.shape` from the geometry blob when
  * this function reproduces it byte-identically from the edge paths, and the
@@ -29,8 +27,6 @@
 import type { Edge, Point } from './types.js';
 
 /**
- * Format a coordinate, dropping trailing zeros for integer values.
- *
  * The 2-decimal cap is app-wide: every rendered path — `piece.shape`,
  * `edge.path` — comes through here, from the legacy procedural generator, the
  * composable pipeline and the fractal converter alike. It is therefore also
@@ -47,11 +43,6 @@ export function fmt(n: number): string {
 /** Tolerance for matching consecutive edges' end→start in piece-local px. */
 const CHAIN_EPSILON = 0.5;
 
-/**
- * Build the SVG `d` string from a flat list of edges. Loop boundaries
- * are detected implicitly: each edge that does not pick up where the
- * previous one ended starts a new `M..Z` subpath.
- */
 export function buildShape(edges: Edge[]): string {
     if (edges.length === 0) return '';
     const parts: string[] = [];

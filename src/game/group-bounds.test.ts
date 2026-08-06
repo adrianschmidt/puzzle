@@ -1,7 +1,3 @@
-/**
- * Tests for group bounds primitives.
- */
-
 import { describe, it, expect } from 'vitest';
 import type { Edge, Piece, PieceGroup, Point } from '../model/types.js';
 import {

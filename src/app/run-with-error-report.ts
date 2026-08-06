@@ -1,15 +1,3 @@
-/**
- * Run an async application operation and, if it rejects, report the failure
- * uniformly: a console diagnostic (DEV-gated by default, see
- * `logInProduction`), a typed Umami event, and — for the callers that ask
- * for one, see `toastMessage` — a user-facing toast; then resolve to a
- * caller-supplied fallback instead of propagating.
- *
- * Used by the entry-point flows whose failures were previously caught and
- * swallowed without analytics (shared-link load, new-game start). Extracted
- * from `main.ts` so the reporting behavior is unit-testable.
- */
-
 import { diagnostics } from '../diagnostics.js';
 import {
     track,
@@ -20,12 +8,10 @@ import {
 import { showToast } from '../ui/index.js';
 
 /**
- * Which typed failure event the operation reports on, plus the per-event
- * fields that can't be derived from the error itself. `shared-load-failed`
- * has two producers (a real `#p=` share link and the `__reproPuzzle` console
- * helper), so it carries a `source` discriminator; `new-game-failed` carries
- * the cut style the failed attempt asked for, and — on the boot path only —
- * which of the two attempts it was.
+ * `shared-load-failed` has two producers (a real `#p=` share link and the
+ * `__reproPuzzle` console helper), so it carries a `source` discriminator;
+ * `new-game-failed` carries the cut style the failed attempt asked for,
+ * and — on the boot path only — which of the two attempts it was.
  */
 export type ErrorReportEvent =
     | { event: 'shared-load-failed'; source: SharedLoadFailedData['source'] }
@@ -78,11 +64,11 @@ export async function runWithErrorReport<T>(opts: ErrorReportEvent & {
     run: () => Promise<T>;
     warnMessage: string;
     /**
-     * Message for the user-facing toast. Omit to stay silent — only for a
-     * caller that shows its own message once a recovery attempt has
-     * settled. `showToast` renders one toast at a time, so an eager
-     * failure toast would be replaced by the recovery's message anyway,
-     * and the intermediate flash reads as a contradiction.
+     * Omit to stay silent — only for a caller that shows its own message
+     * once a recovery attempt has settled. `showToast` renders one toast
+     * at a time, so an eager failure toast would be replaced by the
+     * recovery's message anyway, and the intermediate flash reads as a
+     * contradiction.
      */
     toastMessage?: string;
     fallback: T;

@@ -1,7 +1,5 @@
 /**
- * Build the two `new-game-started` analytics payloads: one for a freshly
- * generated puzzle (dialog, boot, console hooks), one for a puzzle loaded
- * from a share link. Kept in one file because both readers derive
+ * Both payload builders live in one file because they derive
  * `traceSetVersion` off the generated state the same way — see the comment
  * on that call in `buildFreshGameData`.
  */
@@ -13,9 +11,6 @@ import type { CandidateImage } from './unsplash-display-image.js';
 import { classifyImageSource, resolveNewGameImageSource } from './classify-image-source.js';
 import { traceSetVersionOf } from './trace-set-version.js';
 
-/**
- * Build the `new-game-started` payload for a freshly generated puzzle.
- */
 export function buildFreshGameData(opts: {
     state: GameState;
     cutStyle: string;
@@ -91,9 +86,6 @@ export function buildFreshGameData(opts: {
     return data;
 }
 
-/**
- * Build the `new-game-started` payload for a puzzle loaded from a share link.
- */
 export function buildSharedGameData(opts: {
     state: GameState;
     includesProgress: boolean;

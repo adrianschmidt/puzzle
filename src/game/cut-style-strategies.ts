@@ -1,25 +1,6 @@
 /**
- * Per-cut-style generation strategy.
- *
- * Each `CutStyle` owns the four things that used to live as branching
- * inside `init.ts`:
- *
- *   1. `scaleGrid`          — turn the user-facing grid (piece count) into
- *                             the grid handed to the generator. Fractal
- *                             scales the tile grid; other styles pass it
- *                             through.
- *   2. `inscribePuzzleSize` — fit the puzzle rectangle inside the image so
- *                             the generation grid scales uniformly. Fractal
- *                             needs this so arcs stay circular; other
- *                             styles use the image as-is.
- *   3. `generatePieces`     — call the right generator with the right config.
- *   4. `configKey`          — which `GameState` field the generator's config
- *                             round-trips to. Every current style has one;
- *                             it stays optional for a future style that
- *                             takes no config at all.
- *
- * Adding a new cut style means adding a new strategy entry here, not editing
- * `init.ts`.
+ * Adding a new cut style means adding a new strategy entry here, not
+ * editing `init.ts`.
  */
 
 import type { GeneratedPiece, GridSize, Size } from '../model/types.js';
@@ -313,7 +294,6 @@ const STRATEGIES: Record<CutStyle, CutStyleStrategy> = {
     triangles: trianglesStrategy,
 };
 
-/** Look up the strategy for a cut style. */
 export function getCutStyleStrategy(cutStyle: CutStyle): CutStyleStrategy {
     return STRATEGIES[cutStyle];
 }
@@ -326,10 +306,8 @@ export function getCutStyleStrategy(cutStyle: CutStyle): CutStyleStrategy {
 function inscribeToGridAspect(imageSize: Size, gridAspect: number): Size {
     const imageAspect = imageSize.width / imageSize.height;
     if (gridAspect >= imageAspect) {
-        // Grid wider than image — match image width, shrink height.
         return { width: imageSize.width, height: imageSize.width / gridAspect };
     }
 
-    // Grid taller than image — match image height, shrink width.
     return { width: imageSize.height * gridAspect, height: imageSize.height };
 }

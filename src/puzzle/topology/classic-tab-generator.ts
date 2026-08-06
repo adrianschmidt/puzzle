@@ -1,8 +1,7 @@
 /**
- * Classic tab generator: produces the mushroom-shaped tabs from
- * tab-shapes.ts. Uses the standard (no-smoothing) splicer to keep
- * the existing Classic / Wavy splice geometry — and the existing
- * PRNG-snapshot test — stable.
+ * Uses the standard (no-smoothing) splicer to keep the existing
+ * Classic / Wavy splice geometry — and the existing PRNG-snapshot
+ * test — stable.
  */
 
 import type { Curve } from './curve.js';

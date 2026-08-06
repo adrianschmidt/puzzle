@@ -5,16 +5,11 @@
  */
 
 export interface UpdateAvailableIndicatorOptions {
-    /** Invoked when the user taps the indicator. */
     onRefresh: () => void;
 }
 
 const INDICATOR_CLASS = 'update-available-indicator';
 
-/**
- * Show the indicator. Returns a cleanup function that removes it. Only one
- * indicator exists at a time.
- */
 export function createUpdateAvailableIndicator(
     options: UpdateAvailableIndicatorOptions,
 ): () => void {

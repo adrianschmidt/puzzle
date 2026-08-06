@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the Select-tool toggle button DOM integration.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createSelectToolButton } from './select-tool-button.js';
 import { SelectionManager } from '../interaction/selection-manager.js';
@@ -108,8 +104,6 @@ describe('createSelectToolButton', () => {
         const button = container.querySelector('button')!;
         cleanup();
 
-        // After cleanup, further state changes must not re-style the
-        // (now detached) button.
         selectionManager.toolActive = true;
 
         expect(button.getAttribute('aria-pressed')).toBe('false');

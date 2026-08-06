@@ -1,6 +1,4 @@
 /**
- * Piece growth via flood-fill on diagonal connections.
- *
  * Pipeline order:
  *   1. createPiece — grow one piece from a random empty tile.
  *   2. fillHoles  — extend existing pieces into any remaining slack.
@@ -46,10 +44,8 @@ function findPossibleConnections(
 /**
  * Detect pinwheel/swastika shapes: a tile with connections spiralling
  * out in all 4 quadrants creates an unfortunate resemblance.
- * Returns true if the piece contains such a pattern.
  */
 function hasPinwheelShape(connections: DiagonalConnection[]): boolean {
-    // Build a map of which quadrants each tile connects FROM (as p1)
     const quadsByTile = new Map<string, Set<number>>();
     for (const c of connections) {
         const key = `${c.p1.x},${c.p1.y}`;
@@ -61,7 +57,6 @@ function hasPinwheelShape(connections: DiagonalConnection[]): boolean {
         quads.add(c.quad);
     }
 
-    // A tile connecting in all 4 quadrants creates the pinwheel
     for (const quads of quadsByTile.values()) {
         if (quads.size >= 4) {
             return true;
@@ -91,10 +86,8 @@ export function createPiece(
 
         const chosen = pcs[Math.floor(random() * pcs.length)];
 
-        // Reject connections that would create a pinwheel shape
         const tentative = [...myconnections, chosen];
         if (hasPinwheelShape(tentative)) {
-            // Try another connection from the remaining candidates
             const alternatives = pcs.filter(p => p !== chosen);
             let found = false;
             for (const alt of alternatives) {
@@ -109,7 +102,6 @@ export function createPiece(
                 }
             }
             if (!found) {
-                // All options create a pinwheel — stop growing this piece
                 break;
             }
 
@@ -126,7 +118,6 @@ export function createPiece(
         return myconnections;
     }
 
-    // Too small — release cells
     for (const c of myconnections) {
         grid.liberateCell(c.cell);
     }
@@ -173,7 +164,6 @@ export function adoptOrphanTiles(
     cols: number,
     rows: number,
 ): void {
-    // Build a set of all tiles that ARE in pieces
     const tilesInPieces = new Set<string>();
     for (const p of pieces) {
         tilesInPieces.add(`${p[0].p1.x},${p[0].p1.y}`);
@@ -182,7 +172,6 @@ export function adoptOrphanTiles(
         }
     }
 
-    // Find orphans: tiles in the grid that aren't in any piece
     const neighbors = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
     let changed = true;
     while (changed) {
@@ -192,24 +181,20 @@ export function adoptOrphanTiles(
                 const key = `${x},${y}`;
                 if (tilesInPieces.has(key)) continue;
 
-                // This tile is an orphan — try to connect it to an adjacent piece
                 const orphan = makeTile(x, y);
                 for (const n of neighbors) {
                     const adj = makeTile(x + n[0], y + n[1]);
                     const adjKey = `${adj.x},${adj.y}`;
                     if (!grid.isTileValid(adj) || !tilesInPieces.has(adjKey)) continue;
 
-                    // Check if the cell between them is free
                     const dc = makeConnection(adj, orphan, true);
                     if (!grid.isCellEmpty(dc.cell)) continue;
 
-                    // Find which piece the adjacent tile belongs to
                     for (const p of pieces) {
                         const allTiles: Tile[] = [p[0].p1];
                         for (const c of p) allTiles.push(c.p2);
 
                         if (allTiles.find(t => tileEq(t, adj))) {
-                            // Add the orphan to this piece
                             p.push(dc);
                             grid.occupyCell(dc.cell);
                             grid.visitTile(orphan);
@@ -226,12 +211,9 @@ export function adoptOrphanTiles(
 }
 
 /**
- * Fill empty cells by adding diagonal connections through them.
  * A cell at (cx, cy) has 4 corner tiles: (cx,cy), (cx+1,cy),
  * (cx,cy+1), (cx+1,cy+1). An empty cell means no diagonal
  * connection passes through it, leaving a visible star-shaped hole.
- * We fix this by adding a connection between two corner tiles
- * that belong to the same piece (or to any piece if needed).
  */
 export function fillEmptyCells(
     grid: CellGrid,
@@ -239,7 +221,6 @@ export function fillEmptyCells(
     cols: number,
     rows: number,
 ): void {
-    // Build a map of tile → piece index for quick lookup
     const tileToPiece = new Map<string, number>();
     for (let pi = 0; pi < pieces.length; pi++) {
         const p = pieces[pi];
@@ -253,7 +234,6 @@ export function fillEmptyCells(
         for (let cx = 0; cx < cols - 1; cx++) {
             if (!grid.isCellEmpty({ x: cx, y: cy })) continue;
 
-            // Try both diagonals through this cell
             const diagonals: [Tile, Tile][] = [
                 [makeTile(cx, cy), makeTile(cx + 1, cy + 1)],
                 [makeTile(cx + 1, cy), makeTile(cx, cy + 1)],
@@ -268,8 +248,6 @@ export function fillEmptyCells(
 
                 if (pi1 === undefined && pi2 === undefined) continue;
 
-                // Prefer connecting within the same piece
-                // Otherwise add to whichever piece owns a corner tile
                 const targetPi = pi1 !== undefined ? pi1 : pi2!;
                 const from = pi1 !== undefined ? t1 : t2;
                 const to = pi1 !== undefined ? t2 : t1;
@@ -286,7 +264,6 @@ export function fillEmptyCells(
             }
 
             if (!filled) {
-                // Neither diagonal has a tile in a piece — log for debugging
                 diagnostics.warn(`[fractal] Could not fill cell (${cx},${cy}). Corner tiles:`,
                     diagonals.map(([t1, t2]) =>
                         `(${t1.x},${t1.y}):pi=${tileToPiece.get(`${t1.x},${t1.y}`) ?? 'none'} ↔ (${t2.x},${t2.y}):pi=${tileToPiece.get(`${t2.x},${t2.y}`) ?? 'none'}`

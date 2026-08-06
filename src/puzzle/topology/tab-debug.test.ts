@@ -12,7 +12,6 @@ describe('TabDebugSession', () => {
     });
 
     afterEach(() => {
-        // Make sure no session leaks between tests.
         setTracedTabChoiceRecorder(null);
     });
 
@@ -26,11 +25,10 @@ describe('TabDebugSession', () => {
         });
         const report = result.tabDebugReport!;
         expect(report).toBeDefined();
-        // 3x3 grid has 9 pieces; every inner piece should have at least one entry.
+        // 3x3 grid has 9 pieces.
         const pieceIds = Object.keys(report).map(Number);
         expect(pieceIds.length).toBeGreaterThan(0);
         expect(pieceIds.length).toBeLessThanOrEqual(9);
-        // Every entry has the expected shape, with traced metadata filled in.
         for (const entries of Object.values(report)) {
             for (const e of entries) {
                 expect(typeof e.halfEdgeId).toBe('number');
@@ -71,8 +69,6 @@ describe('TabDebugSession', () => {
             tabDebug: debug,
         });
         const report = result.tabDebugReport!;
-        // For each entry that records a mate, the mate's report should
-        // contain a matching halfEdgeId (the shared edge).
         for (const [pieceIdStr, entries] of Object.entries(report)) {
             const pieceId = Number(pieceIdStr);
             for (const e of entries) {
@@ -110,7 +106,6 @@ describe('TabDebugSession', () => {
             tabGenerator: 'traced',
             tabDebug: new TabDebugSession(),
         }).tabDebugReport!;
-        // Same set of piece ids, same templateIds per piece in same order.
         expect(Object.keys(a).sort()).toEqual(Object.keys(b).sort());
         for (const pid of Object.keys(a)) {
             const at = a[Number(pid)].map(e => e.traced?.templateId);

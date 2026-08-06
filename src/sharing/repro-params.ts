@@ -32,10 +32,7 @@ export interface ReproParams extends StyleConfigSource {
     rotationMode?: string;
 }
 
-/**
- * Fields required to reproduce a puzzle from its seed.
- * Kept minimal so a screenshot of the block is easy to read.
- */
+/** Kept minimal so a screenshot of the block is easy to read. */
 export function buildReproParams(state: GameState): ReproParams {
     const params: ReproParams = {};
     if (state.seed !== undefined) params.seed = state.seed;
@@ -56,8 +53,6 @@ export function buildReproParams(state: GameState): ReproParams {
 }
 
 /**
- * Map a repro-params object onto the share-link wire format.
- *
  * Throws (naming the field) when a required field is missing or, for
  * `cutStyle`/`rotationMode`, unrecognized — e.g. a params object copied
  * from a screenshot that predates `imageSize` being included, or

@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the Marquee-tool toggle button DOM integration.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMarqueeToolButton } from './marquee-tool-button.js';
 import { SelectionManager } from '../interaction/selection-manager.js';
@@ -115,7 +111,6 @@ describe('createMarqueeToolButton', () => {
         cleanup();
         expect(container.querySelector('button')).toBeNull();
 
-        // Neither marquee-active changes nor Shift restyle the detached button.
         selectionManager.toggleMarquee();
         pressShift();
         expect(button.classList.contains('marquee-tool-button--active')).toBe(false);

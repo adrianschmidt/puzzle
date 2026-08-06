@@ -36,7 +36,6 @@ function shapeOf(part: Bezier): string {
     return JSON.stringify([part._t1, part._t2, part.points]);
 }
 
-/** Assert the parts are ordered and span [0, 1] with no hole. */
 function expectCoversWholeCurve(parts: Bezier[]): void {
     expect(parts.length).toBeGreaterThan(0);
     expect(parts[0]._t1).toBeCloseTo(0, 9);

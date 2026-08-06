@@ -25,7 +25,6 @@ export function decimals(v: number): number {
     return Math.max(0, fraction.length - Number(exponent));
 }
 
-/** A number located by {@link worstPrecision}. */
 export interface PrecisionSample {
     /** Property path from the walked root, e.g. `[3].edges[1].start.x`. */
     path: string;
@@ -34,9 +33,6 @@ export interface PrecisionSample {
 }
 
 /**
- * Walk every number reachable from `root` and return the one that serializes
- * with the most decimals.
- *
  * Deliberately generic rather than a hand-written coordinate list. The
  * invariant is "nothing on this object is finer than N decimals", so a
  * coordinate field added to `Edge` or `Piece` later has to be caught without

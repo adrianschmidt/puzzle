@@ -28,7 +28,6 @@ describe('createSeededRandom', () => {
         const seq1 = Array.from({ length: 10 }, () => random1());
         const seq2 = Array.from({ length: 10 }, () => random2());
 
-        // Sequences should not be identical
         const allSame = seq1.every((v, i) => v === seq2[i]);
         expect(allSame).toBe(false);
     });
@@ -61,8 +60,7 @@ describe('createSeededRandom', () => {
             buckets[bucket]++;
         }
 
-        // Each bucket should get roughly 20% of values
-        // Allow ±8% tolerance (600-1400 out of 5000)
+        // Allow ±8% tolerance around the expected 20% (600-1400 out of 5000)
         for (const count of buckets) {
             expect(count).toBeGreaterThan(600);
             expect(count).toBeLessThan(1400);

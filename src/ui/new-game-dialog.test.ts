@@ -2,16 +2,11 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the new-game dialog.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createNewGameDialog, type ComposableSliderConfig } from './new-game-dialog.js';
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 
-/** Start the game the way the new dialog does it: click "Surprise me". */
 function pickSurprise(container: HTMLElement): void {
     container
         .querySelector<HTMLButtonElement>('[data-testid="image-picker-surprise"]')!
@@ -246,7 +241,6 @@ describe('createNewGameDialog', () => {
             onSelect,
         });
 
-        // Pick the '24' size.
         const select = container.querySelector<HTMLSelectElement>('[data-testid="size-select"]')!;
         select.value = '24';
         select.dispatchEvent(new Event('change'));
@@ -273,13 +267,11 @@ describe('createNewGameDialog', () => {
             onSelect,
         });
 
-        // Switch to Fractal
         const fractalBtn = container.querySelector<HTMLButtonElement>(
             '[data-cut-style-id="fractal"]',
         )!;
         fractalBtn.click();
 
-        // Then pick the '24' size and start the game.
         const select = container.querySelector<HTMLSelectElement>('[data-testid="size-select"]')!;
         select.value = '24';
         select.dispatchEvent(new Event('change'));
@@ -508,7 +500,6 @@ describe('createNewGameDialog — composable visibility', () => {
             selectedCutStyleId: 'composable',  // saved value not visible on prod
             onSelect: vi.fn(),
         });
-        // The "Classic" button should be the selected one.
         const classicBtn = container.querySelector(
             '[data-cut-style-id="classic"]',
         ) as HTMLElement | null;
@@ -545,7 +536,6 @@ describe('createNewGameDialog — composable borderless toggle', () => {
         checkbox!.checked = true;
         checkbox!.dispatchEvent(new Event('change'));
 
-        // Trigger onSelect the same way the dialog does: pick "Surprise me".
         pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith(
@@ -595,7 +585,6 @@ describe('createNewGameDialog — fractal borderless toggle', () => {
         toggle!.checked = true;
         toggle!.dispatchEvent(new Event('change'));
 
-        // Trigger selection the same way the existing dialog tests do (pick "Surprise me").
         pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith(
@@ -630,7 +619,6 @@ describe('createNewGameDialog — wavy borderless toggle', () => {
         toggle!.checked = true;
         toggle!.dispatchEvent(new Event('change'));
 
-        // Trigger selection the same way the existing dialog tests do (pick "Surprise me").
         pickSurprise(container);
 
         expect(onSelect).toHaveBeenCalledWith(
@@ -765,7 +753,6 @@ describe('composable base-cut picker', () => {
         const jitter = container.querySelector<HTMLInputElement>('[data-testid="composable-jitter-slider"]')!;
         jitter.value = '0.3';
         jitter.dispatchEvent(new Event('input'));
-        // Pick "Surprise me" to fire onSelect.
         pickSurprise(container);
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -782,7 +769,6 @@ describe('composable base-cut picker', () => {
         expect(smooth).not.toBeNull();
         smooth.checked = true;
         smooth.dispatchEvent(new Event('change'));
-        // Pick "Surprise me" to fire onSelect.
         pickSurprise(container);
         expect(onSelect).toHaveBeenCalledWith(
             expect.objectContaining({

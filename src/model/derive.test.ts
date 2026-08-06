@@ -10,7 +10,6 @@ import {
 import type { Edge, GameState, Piece } from './types.js';
 import { makeGameState, makePiece } from '../test-helpers/fixtures.js';
 
-/** Create a minimal edge with start/end points. */
 function edge(
     start: { x: number; y: number },
     end: { x: number; y: number },
@@ -25,7 +24,6 @@ function edge(
     };
 }
 
-/** Create a rectangular piece with given cell dimensions. */
 function rectPiece(
     id: number,
     width: number,
@@ -34,10 +32,10 @@ function rectPiece(
     offsetY = 0,
 ): Piece {
     const edges = [
-        edge({ x: 0, y: 0 }, { x: width, y: 0 }),       // top
-        edge({ x: width, y: 0 }, { x: width, y: height }), // right
-        edge({ x: width, y: height }, { x: 0, y: height }), // bottom
-        edge({ x: 0, y: height }, { x: 0, y: 0 }),         // left
+        edge({ x: 0, y: 0 }, { x: width, y: 0 }),
+        edge({ x: width, y: 0 }, { x: width, y: height }),
+        edge({ x: width, y: height }, { x: 0, y: height }),
+        edge({ x: 0, y: height }, { x: 0, y: 0 }),
     ];
     return {
         id,
@@ -48,7 +46,6 @@ function rectPiece(
     };
 }
 
-/** Create a minimal GameState with the given pieces. */
 function gameState(pieces: Piece[]): GameState {
     return makeGameState({ pieces });
 }
@@ -76,7 +73,6 @@ describe('computePieceBounds', () => {
     });
 
     it('considers both endpoints of every edge', () => {
-        // Single diagonal edge whose start/end define the bbox extremes.
         const edges = [edge({ x: 5, y: 1 }, { x: 9, y: 8 })];
         expect(computePieceBounds({ edges })).toEqual({
             minX: 5, minY: 1, maxX: 9, maxY: 8,
@@ -150,10 +146,10 @@ describe('getImageDimensions', () => {
 
     it('returns correct size for a 2×2 grid', () => {
         const pieces = [
-            rectPiece(0, 100, 75, 0, 0),       // top-left
-            rectPiece(1, 100, 75, -100, 0),     // top-right
-            rectPiece(2, 100, 75, 0, -75),      // bottom-left
-            rectPiece(3, 100, 75, -100, -75),   // bottom-right
+            rectPiece(0, 100, 75, 0, 0),
+            rectPiece(1, 100, 75, -100, 0),
+            rectPiece(2, 100, 75, 0, -75),
+            rectPiece(3, 100, 75, -100, -75),
         ];
         const state = gameState(pieces);
         expect(getImageDimensions(state)).toEqual({ width: 200, height: 150 });

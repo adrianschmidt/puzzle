@@ -125,7 +125,6 @@ describe('merge-tolerance', () => {
 
     describe('getActiveTolerance', () => {
         it('computes tolerance for the default preset', () => {
-            // Normal: fraction 0.333, 1080/8 = 135 → ~45
             const tolerance = getActiveTolerance(1080, 8);
             expect(tolerance).toBeCloseTo(0.333 * 135, 1);
         });

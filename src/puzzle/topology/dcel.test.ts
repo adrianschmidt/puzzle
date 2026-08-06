@@ -4,19 +4,10 @@ import type { Face } from './dcel.js';
 import type { BoundingBox } from './curve.js';
 import { Curve } from './curve.js';
 
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Get inner (non-outer) faces from a DCEL result. */
 function innerFaces(result: ReturnType<typeof buildDCEL>): Face[] {
     return result.faces.filter(f => !f.isOuter);
 }
 
-
-
-/** Compute the approximate area of a face using the shoelace formula. */
 function faceArea(face: Face): number {
     const pts = getFaceVertices(face);
     let area = 0;
@@ -27,10 +18,6 @@ function faceArea(face: Face): number {
     }
     return Math.abs(area / 2);
 }
-
-// ---------------------------------------------------------------------------
-// Test: curve broad-phase (#439)
-// ---------------------------------------------------------------------------
 
 describe('curveBroadPhasePairs', () => {
     // The one property that must never break: completeness. The broad-phase
@@ -120,10 +107,6 @@ describe('curveBroadPhasePairs', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Test: vertex-pool merge equivalence (#439)
-// ---------------------------------------------------------------------------
-
 describe('VertexPool merge equivalence', () => {
     // Locks the share-link-critical merge rule independently of the geometry
     // snapshot: when a query point lies within VERTEX_MERGE_TOLERANCE of
@@ -153,7 +136,6 @@ describe('VertexPool merge equivalence', () => {
         const merged = pool.getOrCreate({ x: 0, y: 0 });
         expect(merged).toBe(v0);
 
-        // The query merged, it didn't insert a third vertex.
         expect(pool.all()).toHaveLength(2);
     });
 
@@ -166,28 +148,18 @@ describe('VertexPool merge equivalence', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Test: 2 crossing lines → 4 faces
-// ---------------------------------------------------------------------------
-
 describe('DCEL: 2 crossing lines', () => {
-    // Two lines crossing at (50, 50):
-    //   horizontal: (0,50) → (100,50)
-    //   vertical:   (50,0) → (50,100)
-    //
-    // This creates 4 quadrant faces + 1 outer face.
-    // But wait — 2 crossing lines in the plane create 4 unbounded regions,
-    // not 4 enclosed faces. We need a bounding box to get enclosed faces.
-    //
-    // For puzzle cuts, we always have border curves forming a bounding rectangle.
-    // Let's test with a border rectangle + 1 horizontal + 1 vertical cut.
+    // 2 crossing lines in the plane create 4 unbounded regions, not 4
+    // enclosed faces — a bounding box is needed to get enclosed faces.
+    // For puzzle cuts, we always have border curves forming a bounding
+    // rectangle.
 
     it('rectangle + cross creates 4 inner faces', () => {
         const border = [
-            Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 }),   // top
-            Curve.line({ x: 100, y: 0 }, { x: 100, y: 100 }), // right
-            Curve.line({ x: 100, y: 100 }, { x: 0, y: 100 }), // bottom
-            Curve.line({ x: 0, y: 100 }, { x: 0, y: 0 }),     // left
+            Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 }),
+            Curve.line({ x: 100, y: 0 }, { x: 100, y: 100 }),
+            Curve.line({ x: 100, y: 100 }, { x: 0, y: 100 }),
+            Curve.line({ x: 0, y: 100 }, { x: 0, y: 0 }),
         ];
         const hCut = Curve.line({ x: 0, y: 50 }, { x: 100, y: 50 });
         const vCut = Curve.line({ x: 50, y: 0 }, { x: 50, y: 100 });
@@ -208,19 +180,13 @@ describe('DCEL: 2 crossing lines', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Test: simple 2×2 grid → 4 faces
-// ---------------------------------------------------------------------------
-
 describe('DCEL: 2×2 grid', () => {
     it('creates 4 inner faces from a 2×2 grid', () => {
-        // Border rectangle
         const top = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
         const right = Curve.line({ x: 100, y: 0 }, { x: 100, y: 100 });
         const bottom = Curve.line({ x: 100, y: 100 }, { x: 0, y: 100 });
         const left = Curve.line({ x: 0, y: 100 }, { x: 0, y: 0 });
 
-        // Internal cuts
         const hCut = Curve.line({ x: 0, y: 50 }, { x: 100, y: 50 });
         const vCut = Curve.line({ x: 50, y: 0 }, { x: 50, y: 100 });
 
@@ -251,22 +217,15 @@ describe('DCEL: 2×2 grid', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Test: 3×3 grid → 9 faces
-// ---------------------------------------------------------------------------
-
 describe('DCEL: 3×3 grid', () => {
     it('creates 9 inner faces', () => {
         const curves: Curve[] = [
-            // Border
             Curve.line({ x: 0, y: 0 }, { x: 90, y: 0 }),
             Curve.line({ x: 90, y: 0 }, { x: 90, y: 90 }),
             Curve.line({ x: 90, y: 90 }, { x: 0, y: 90 }),
             Curve.line({ x: 0, y: 90 }, { x: 0, y: 0 }),
-            // 2 horizontal cuts
             Curve.line({ x: 0, y: 30 }, { x: 90, y: 30 }),
             Curve.line({ x: 0, y: 60 }, { x: 90, y: 60 }),
-            // 2 vertical cuts
             Curve.line({ x: 30, y: 0 }, { x: 30, y: 90 }),
             Curve.line({ x: 60, y: 0 }, { x: 60, y: 90 }),
         ];
@@ -276,10 +235,6 @@ describe('DCEL: 3×3 grid', () => {
         expect(inner).toHaveLength(9);
     });
 });
-
-// ---------------------------------------------------------------------------
-// Test: single rectangle (no internal cuts) → 1 face
-// ---------------------------------------------------------------------------
 
 describe('DCEL: single rectangle', () => {
     it('creates 1 inner face', () => {
@@ -309,10 +264,6 @@ describe('DCEL: single rectangle', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Test: nonIntersectingGroups hint
-// ---------------------------------------------------------------------------
-
 describe('DCEL: nonIntersectingGroups', () => {
     it('produces same result with hints as without', () => {
         const top = Curve.line({ x: 0, y: 0 }, { x: 100, y: 0 });
@@ -338,10 +289,6 @@ describe('DCEL: nonIntersectingGroups', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Test: half-edge twins share faces correctly
-// ---------------------------------------------------------------------------
-
 describe('DCEL: twin relationships', () => {
     it('every half-edge has a twin with opposite origin/target', () => {
         const curves = [
@@ -357,8 +304,6 @@ describe('DCEL: twin relationships', () => {
         for (const he of result.halfEdges) {
             expect(he.twin).toBeDefined();
             expect(he.twin.twin).toBe(he);
-            // Twin's origin should be "close to" this edge's target
-            // (the next vertex in the same direction)
         }
     });
 
@@ -375,20 +320,13 @@ describe('DCEL: twin relationships', () => {
         const inner = innerFaces(result);
         expect(inner).toHaveLength(2);
 
-        // The horizontal cut's half-edges should belong to different faces
-        // (one inner, one inner — or one inner, one outer for border edges)
         for (const he of result.halfEdges) {
             if (he.face && !he.face.isOuter && he.twin.face && !he.twin.face.isOuter) {
-                // This is an internal edge — twins should have different faces
                 expect(he.face).not.toBe(he.twin.face);
             }
         }
     });
 });
-
-// ---------------------------------------------------------------------------
-// Test: outer face identification
-// ---------------------------------------------------------------------------
 
 describe('DCEL: outer face', () => {
     it('identifies exactly one outer face', () => {
@@ -417,10 +355,6 @@ describe('DCEL: outer face', () => {
         expect(innerFaces(result).every(f => !f.isOuter)).toBe(true);
     });
 });
-
-// ---------------------------------------------------------------------------
-// Test: 1 horizontal cut only → 2 rectangles
-// ---------------------------------------------------------------------------
 
 describe('DCEL: single horizontal cut', () => {
     it('creates 2 inner faces', () => {

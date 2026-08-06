@@ -1,8 +1,6 @@
 /**
- * PWA manifest configuration.
- *
- * Extracted into a module so it can be tested independently
- * and imported by vite.config.ts.
+ * Extracted into a module so it can be tested independently and imported by
+ * vite.config.ts.
  */
 
 export interface ManifestIcon {
@@ -25,17 +23,9 @@ export interface ManifestConfig {
     icons: ManifestIcon[];
 }
 
-/**
- * The required icon sizes for a valid PWA manifest.
- * 192×192 and 512×512 are the minimum required sizes.
- */
+/** 192×192 and 512×512 are the minimum a valid PWA manifest requires. */
 export const REQUIRED_ICON_SIZES = ['192x192', '512x512'];
 
-/**
- * Create the PWA manifest configuration.
- *
- * @param basePath - The base path for the app (e.g. '/puzzle/')
- */
 export function createManifestConfig(basePath: string): ManifestConfig {
     return {
         name: 'Puzzle',
@@ -68,10 +58,6 @@ export function createManifestConfig(basePath: string): ManifestConfig {
     };
 }
 
-/**
- * Validate that a manifest config has all required fields and icons.
- * Returns an array of error messages (empty if valid).
- */
 export function validateManifestConfig(config: ManifestConfig): string[] {
     const errors: string[] = [];
 

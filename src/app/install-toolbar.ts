@@ -1,9 +1,4 @@
 /**
- * The toolbar: New Game, Gather Pieces, multi-select, marquee, deselect,
- * the 🎨 background-color control, and Info/Help — the floating controls
- * that sit outside any single feature flow, wired to the session and the
- * collaborators the composition root already owns.
- *
  * DOM order matters here: every one of these controls is absolutely
  * positioned (`src/style.css` places them by explicit `top`/`right`), so
  * keyboard tab order comes from append order alone, not visual position —
@@ -33,9 +28,7 @@ import type { SelectionManager } from '../interaction/selection-manager.js';
 import type { BackgroundColorControl } from './install-background-color.js';
 import type { GameSession } from './game-session.js';
 
-/** Collaborators {@link installToolbar} cannot own itself. */
 export interface InstallToolbarDeps {
-    /** Container the floating controls and the info modal attach to. */
     container: HTMLElement;
     /**
      * Read-only slice of the {@link GameSession}: the toolbar reports on the
@@ -45,15 +38,9 @@ export interface InstallToolbarDeps {
      */
     session: Pick<GameSession, 'current'>;
     selectionManager: SelectionManager;
-    /**
-     * Gather all groups into a compact layout, zoom to fit, and render —
-     * the same closure passed to `startNewGame`/`loadSharedPuzzle` as
-     * `fitView`, reused here for the Gather Pieces button.
-     */
     fitView: (state: GameState) => void;
     /** Debounced progress save. */
     save: (state: GameState) => void;
-    /** Open the New Game dialog. */
     onNewGame: () => void;
     /**
      * Install the 🎨 background-color control (`installBackgroundColor`,
@@ -79,15 +66,6 @@ export interface InstallToolbarDeps {
     solve: () => void;
 }
 
-/**
- * Install the toolbar: New Game, Gather Pieces, multi-select, marquee,
- * deselect, the background-color control, and Info/Help — in that DOM
- * order (see the module doc and `installBackgroundColorControl`).
- *
- * Returns the background-color handle its `installBackgroundColorControl`
- * dependency produced, so the caller gets it as a value rather than having
- * to declare an assigned-by-callback binding.
- */
 export function installToolbar(deps: InstallToolbarDeps): BackgroundColorControl {
     const {
         container,

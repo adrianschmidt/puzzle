@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the new-game dialog's image picker section.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createImagePicker } from './image-picker.js';
 import type { CandidateImage } from '../app/unsplash-display-image.js';
@@ -270,7 +266,6 @@ describe('createImagePicker', () => {
             await flush();
 
             const credit = credits(container)[0];
-            // The unsafe scheme never reaches the DOM; the name still renders.
             expect(credit.getAttribute('href')).toBeNull();
             expect(credit.hidden).toBe(false);
             expect(credit.textContent).toBe('Photographer 1');

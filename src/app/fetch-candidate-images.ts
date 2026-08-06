@@ -1,9 +1,8 @@
 /**
- * Fetch the candidate photos shown in the new-game dialog's image picker
- * and map them into the picker's shape. Returns `null` when the fetch
- * fails or yields nothing — the picker shows its inline error state and
- * the player can retry via the refresh button, so failures here are
- * logged but not tracked as analytics events.
+ * Returns `null` when the fetch fails or yields nothing — the picker
+ * shows its inline error state and the player can retry via the refresh
+ * button, so failures here are logged but not tracked as analytics
+ * events.
  */
 
 import { diagnostics } from '../diagnostics.js';

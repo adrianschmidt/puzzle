@@ -1,7 +1,4 @@
 /**
- * Derive the per-style generator configs for a new game, stamping trace-set
- * versions where appropriate.
- *
  * The decision is asymmetric by style: Wavy and Triangles always get their
  * versions because those styles have no fallback; Classic only when traced
  * tabs loaded (otherwise it falls back to legacy); Composable never (it is
@@ -20,8 +17,6 @@ export interface GeneratorConfigs {
 }
 
 /**
- * Derive the per-style generator configs for a new game.
- *
  * Withholding `classicConfig` is not an omission; it is a decision. A Classic
  * game without `classicConfig` falls back to the legacy straight-grid
  * generator. So `cutStyle === 'classic' && !tracedTabsOk` producing `{}` is

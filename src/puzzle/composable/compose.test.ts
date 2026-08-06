@@ -4,7 +4,6 @@ import type { PieceDefinition } from './types.js';
 import { classicTabTemplate } from './tab-shapes.js';
 import { createSeededRandom } from '../seeded-random.js';
 
-/** Create a simple 2x2 grid of piece definitions for testing. */
 function make2x2PieceDefs(): PieceDefinition[] {
     // 4 pieces in a 200×200 grid (100×100 each)
     // Shared edges: h_0_0, h_0_1 (horizontal), v_0_0, v_1_0 (vertical)
@@ -14,7 +13,6 @@ function make2x2PieceDefs(): PieceDefinition[] {
     const h01_1 = nextId++; const h01_2 = nextId++;
     const v00_1 = nextId++; const v00_2 = nextId++;
     const v10_1 = nextId++; const v10_2 = nextId++;
-    // Border edges
     const borders = Array.from({ length: 8 }, () => nextId++);
 
     return [
@@ -97,7 +95,7 @@ describe('composePuzzle', () => {
     it('border edges are straight lines', () => {
         const pieces = composePuzzle(pieceDefs, template, createSeededRandom(42));
         const p0 = pieces.find(p => p.id === 0)!;
-        // Top edge (border) should be a straight L command
+        // edges[0] is the top (border) edge
         const topEdge = p0.edges[0];
         expect(topEdge.mateEdgeId).toBe(-1);
         expect(topEdge.path).toMatch(/^L /);
@@ -106,7 +104,7 @@ describe('composePuzzle', () => {
     it('shared edges have Bézier curves (C commands)', () => {
         const pieces = composePuzzle(pieceDefs, template, createSeededRandom(42));
         const p0 = pieces.find(p => p.id === 0)!;
-        // Right edge (shared) should have C commands
+        // edges[1] is the right (shared) edge
         const rightEdge = p0.edges[1];
         expect(rightEdge.mateEdgeId).not.toBe(-1);
         expect(rightEdge.path).toContain('C ');
@@ -152,7 +150,6 @@ describe('composePuzzle', () => {
     it('produces different results with different seeds', () => {
         const pieces1 = composePuzzle(pieceDefs, template, createSeededRandom(1));
         const pieces2 = composePuzzle(pieceDefs, template, createSeededRandom(2));
-        // At least one piece should differ
         const differ = pieces1.some((p, i) => p.shape !== pieces2[i].shape);
         expect(differ).toBe(true);
     });
@@ -201,7 +198,6 @@ describe('composePuzzle', () => {
 
             const pieces = composePuzzle(twoLoopPieceDefs, template, createSeededRandom(1), { disableTabs: true });
             expect(pieces).toHaveLength(1);
-            // The shape path should contain two `M ... Z` sub-paths.
             expect(pieces[0].shape).toMatch(/M.*Z.*M.*Z/);
         });
     });

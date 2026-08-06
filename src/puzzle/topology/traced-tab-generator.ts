@@ -1,5 +1,4 @@
 /**
- * Traced tab generator: produces tab shapes from the photographed library.
  * Uses the tangent-smoothed splicer so the flowy photographed curves join the
  * parent edge with C1 continuity.
  *
@@ -54,7 +53,6 @@ function readDeepResolve(config: unknown): boolean {
     return (config as { deepResolve?: unknown } | null | undefined)?.deepResolve === true;
 }
 
-/** Today's shallow ladder: base, flip, shrink, shrink+center. */
 function defaultRungs(
     basePath: BezierPath,
     tCenter: number,
@@ -121,8 +119,8 @@ function readTraceSetVersion(config: unknown): number {
 }
 
 /**
- * The retry ladder, shared by `generate` and `generateVariants`. All PRNG
- * draws (placement + the one template path) happen before the first yield.
+ * All PRNG draws (placement + the one template path) happen before the
+ * first yield.
  */
 function* tracedTabVariants(
     edge: Curve,
