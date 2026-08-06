@@ -82,12 +82,10 @@ describe('createCorruptSaveDialog', () => {
         expect(filename).toBe('puzzle-corrupt-save-1700000000000.json');
         expect(JSON.parse(contents).geometry).toBe(RAW.geometry);
 
-        // Dialog stays open after download; the button reflects the action.
         expect(container.querySelector('.corrupt-save-dialog')).not.toBeNull();
         expect(downloadBtn.disabled).toBe(true);
         expect(onDismiss).not.toHaveBeenCalled();
 
-        // Focus moves off the now-disabled button to the remaining action.
         const newGameBtn = Array.from(
             container.querySelectorAll<HTMLButtonElement>('.corrupt-save-btn'),
         ).find((b) => b.textContent === 'Start new game')!;

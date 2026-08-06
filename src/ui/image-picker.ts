@@ -1,8 +1,4 @@
 /**
- * Image picker — the start group of the new-game dialog. Shows four
- * candidate photos (tap one to start a game with it), a refresh control
- * that swaps the candidates, and Surprise me / Blank puzzle actions.
- *
  * Unlike the other dialog sections, this one is the game-start trigger:
  * every tile and action button fires `onPick`, and the dialog dismisses
  * itself in response. There is no selected state.
@@ -11,7 +7,6 @@
 import { isSafeHttpUrl } from '../sharing/safe-url.js';
 import { CANDIDATE_COUNT, type CandidateImage } from '../app/unsplash-display-image.js';
 
-/** What the player clicked to start the game. */
 export type NewGameImageChoice =
     | { kind: 'photo'; photo: CandidateImage }
     | { kind: 'surprise' }
@@ -19,18 +14,15 @@ export type NewGameImageChoice =
 
 export interface ImagePickerOptions {
     /**
-     * Fetch a fresh candidate set. Absent when no image proxy is configured
-     * — the grid and refresh button are then hidden and only Surprise me /
-     * Blank puzzle remain.
+     * Absent when no image proxy is configured — the grid and refresh
+     * button are then hidden and only Surprise me / Blank puzzle remain.
      */
     fetchCandidates?: () => Promise<CandidateImage[] | null>;
-    /** Called when the player picks a photo, surprise, or blank. */
     onPick: (choice: NewGameImageChoice) => void;
 }
 
 export interface ImagePicker {
     element: HTMLElement;
-    /** Re-fetch the candidate set (used when category/vibrant change). */
     refresh(): void;
 }
 

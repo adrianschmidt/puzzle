@@ -1,6 +1,4 @@
 /**
- * Library of traced puzzle-tab Bezier paths.
- *
  * Each JSON file is produced by tools/trace-tab/ from a real photograph.
  * One file per trace gives readable diffs when traces are added or
  * replaced.
@@ -55,8 +53,7 @@ export interface TracedTemplate {
 }
 
 /**
- * Narrow an unknown JSON value to a {@link TracedTemplate}. Used to
- * validate each checked-in trace at module import — any structural
+ * Validates each checked-in trace at module import — any structural
  * problem (missing fields, NaN landmarks, wrong-length `path`) throws
  * immediately at startup instead of propagating NaNs through the
  * pinch / scale math later. The same helper backs the schema tests in
@@ -139,16 +136,14 @@ export const TRACED_TEMPLATES: readonly TracedTemplate[] = [
  */
 const TRACE_SET_V1: readonly TracedTemplate[] = TRACED_TEMPLATES;
 
-/** version → frozen ordered template list. */
 const TRACE_SETS: Readonly<Record<number, readonly TracedTemplate[]>> = {
     1: TRACE_SET_V1,
 };
 
 /**
- * Resolve a trace-set version to its frozen ordered template list. Unknown
- * versions fall back to v1 — a defensive net only; the share-link decoder
- * clamps `wf.tv` to [1, CURRENT_TRACE_SET_VERSION] before generation, so a
- * known client never asks for a version it lacks.
+ * Unknown versions fall back to v1 — a defensive net only; the share-link
+ * decoder clamps `wf.tv` to [1, CURRENT_TRACE_SET_VERSION] before
+ * generation, so a known client never asks for a version it lacks.
  */
 export function getTracedTemplates(version: number): readonly TracedTemplate[] {
     const set = TRACE_SETS[version];

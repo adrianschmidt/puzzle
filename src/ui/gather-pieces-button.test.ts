@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the Gather Pieces button DOM integration.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createGatherPiecesButton } from './gather-pieces-button.js';
 
@@ -76,7 +72,6 @@ describe('createGatherPiecesButton', () => {
         const button = container.querySelector('button')!;
         cleanup();
 
-        // Button was removed, but simulate a click on the detached element
         button.click();
 
         expect(onGatherPieces).not.toHaveBeenCalled();

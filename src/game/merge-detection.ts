@@ -1,10 +1,6 @@
 /**
- * Merge detection — determines whether edges of a dropped group
- * align closely enough with their mates to trigger a merge.
- *
- * The core mechanic: pieces merge when their matching edges are
- * placed within tolerance of perfect alignment, regardless of
- * where they are on the table.
+ * Pieces merge when their matching edges are placed within tolerance of
+ * perfect alignment, regardless of where they are on the table.
  */
 
 import type { Edge, GameState, Piece, PieceGroup, Point } from '../model/types.js';
@@ -19,11 +15,7 @@ import {
 } from '../model/helpers.js';
 import { getGroupLocalBounds } from './group-bounds.js';
 
-/**
- * Tolerance in pixels for edge alignment.
- * If the actual distance between matching edge endpoints is within
- * this threshold, the pieces are considered aligned and will merge.
- */
+/** Tolerance in pixels for edge alignment. */
 export const MERGE_TOLERANCE_PX = 18;
 
 /**
@@ -41,21 +33,12 @@ export const MERGE_ROTATION_TOLERANCE_DEG = 10;
  */
 export const SNAP_EPSILON_DEG = 1e-9;
 
-/**
- * A detected merge candidate: two groups whose edges are close enough.
- */
 export interface MergeCandidate {
-    /** The group that was just dropped. */
     movedGroup: PieceGroup;
-    /** The other group whose piece is close enough to merge. */
     targetGroup: PieceGroup;
-    /** The piece in the moved group whose edge matched. */
     movedPiece: Piece;
-    /** The edge on the moved piece that matched. */
     movedEdge: Edge;
-    /** The mate piece in the target group. */
     targetPiece: Piece;
-    /** The mate edge on the target piece. */
     targetEdge: Edge;
     /**
      * The positional correction needed to snap the moved group
@@ -135,9 +118,6 @@ function getWorldPositionAfterRotationSnap(
     };
 }
 
-/**
- * Compute the distance between two points.
- */
 function distance(a: Point, b: Point): number {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
@@ -209,16 +189,6 @@ export function measureEdgeAlignment(
     };
 }
 
-/**
- * Check alignment between two matching edges.
- *
- * For a pair of mate edges, "correct alignment" means:
- * - Edge A's start aligns with Edge B's end (edges run in opposite directions)
- * - Edge A's end aligns with Edge B's start
- *
- * We check both endpoint pairs and use the average distance.
- * If within tolerance, returns the snap delta to achieve perfect alignment.
- */
 export function checkEdgeAlignment(
     movedPiece: Piece,
     movedEdge: Edge,
@@ -251,14 +221,8 @@ export function checkEdgeAlignment(
 }
 
 /**
- * Detect all merge candidates for a dropped group.
- *
- * Checks every border edge of the moved group against its mate.
- * Returns all edge pairs that are within merge tolerance.
- *
- * Note: returns ALL candidates, not just the closest. The caller
- * (group merging, task 4.2) decides how to handle multiple merges
- * (cascading).
+ * Returns ALL candidates, not just the closest — the caller decides how
+ * to handle multiple merges (cascading).
  */
 export function detectMerges(
     movedGroupId: number,

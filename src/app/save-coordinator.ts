@@ -1,9 +1,4 @@
 /**
- * Coordinates persisting the game to `localStorage`: debounced progress
- * saves, the one-shot geometry+progress write for a freshly created or
- * loaded puzzle, and flushing any pending save before the page can be
- * torn down.
- *
  * Surfacing a save failure has two independent halves: telemetry (always,
  * so a regression is observable) and a user-facing toast (rate-limited, so
  * a fast debounced save loop can't spam the player). See
@@ -22,24 +17,19 @@ import type { ViewportTransform } from '../interaction/index.js';
 /** Shown when a save could not be persisted (quota exceeded even after compression). */
 export const SAVE_FAILED_TOAST =
     "This puzzle is too large to save — your progress won't be kept across reloads.";
-/** Minimum gap between two save-failure toasts. */
 export const SAVE_FAILED_TOAST_DEDUP_MS = 10_000;
 
 export interface SaveCoordinator {
-    /** Debounced progress save of `state`, including selection and viewport. */
     autoSave(state: GameState): void;
-    /** Geometry + initial progress for a freshly created or loaded puzzle. */
     persistNewPuzzle(state: GameState): void;
-    /** Flush any pending debounced save immediately. */
     flush(): void;
 }
 
 /**
- * Create a coordinator that owns the debounced-save lifecycle: it installs
- * the `pagehide` and `visibilitychange` flush listeners as a side effect of
- * construction (matching the app's previous module-scope registration), so
- * a change made within the debounce window is not lost on a fast reload,
- * navigation, tab close, or mobile app-switch / background-kill.
+ * Installs the `pagehide` and `visibilitychange` flush listeners as a side
+ * effect of construction, so a change made within the debounce window is
+ * not lost on a fast reload, navigation, tab close, or mobile app-switch /
+ * background-kill.
  */
 export function createSaveCoordinator(deps: {
     selectionManager: SelectionManager;
@@ -116,15 +106,10 @@ export function createSaveCoordinator(deps: {
         },
 
         /**
-         * Persist a freshly created or loaded puzzle: geometry (once) + initial
-         * progress. Surfaces a failed write as a toast, and records when the
-         * save crossed into the compression regime (near-quota — one growth
-         * step from total failure).
-         *
-         * That signal covers the whole save, not the geometry write alone:
-         * `saveNewPuzzle` reports the worse of the two writes, so a compressed
-         * initial *progress* write emits the same event. See
-         * `SaveCompressedData` in `analytics/umami.ts`.
+         * The `save-compressed` signal covers the whole save, not the
+         * geometry write alone: `saveNewPuzzle` reports the worse of the two
+         * writes, so a compressed initial *progress* write emits the same
+         * event. See `SaveCompressedData` in `analytics/umami.ts`.
          */
         persistNewPuzzle(state: GameState): void {
             const result = saveNewPuzzle(

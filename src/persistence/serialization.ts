@@ -1,6 +1,4 @@
 /**
- * Serialization helpers for GameState.
- *
  * GameState contains Maps (PieceGroup.pieces), which don't survive
  * JSON round-tripping. These helpers convert to/from a plain JSON-safe
  * representation.
@@ -26,12 +24,10 @@ import { legacyDisableTabsToTabGenerator } from '../game/composable-config.js';
 import { isDataUrl } from '../sharing/safe-url.js';
 import type { ViewportState } from '../interaction/viewport-transform.js';
 
-/** Current schema version. Bump when the serialized shape changes. */
+/** Bump when the serialized shape changes. */
 export const STATE_VERSION = 13;
 
 /**
- * Supported schema versions.
- *
  * - v1: original format (no imageSize or attribution)
  * - v2: adds imageSize and optional attribution
  * - v3: adds gridSize (cols × rows)
@@ -72,9 +68,9 @@ export interface SerializedEdge extends Edge {
 }
 
 /**
- * A piece as stored in a blob. `shape` is omitted (v12+) when
- * `buildShape(edges)` reproduces it byte-identically; `bounds` is required
- * on v12+ pieces and absent on v≤11 pieces (computed during migration).
+ * `shape` is omitted (v12+) when `buildShape(edges)` reproduces it
+ * byte-identically; `bounds` is required on v12+ pieces and absent on v≤11
+ * pieces (computed during migration).
  */
 export interface SerializedPiece {
     id: number;
@@ -84,20 +80,18 @@ export interface SerializedPiece {
     bounds?: PieceBounds;
 }
 
-/** A PieceGroup with its Map serialized as an entries array. */
 export interface SerializedPieceGroup {
     id: number;
     pieces: Array<[number, Point]>;
     position: Point;
     /**
-     * Rotation. v9+ saves store float degrees in `[0, 360)`; v6–v8 stored
+     * v9+ saves store float degrees in `[0, 360)`; v6–v8 stored
      * a quarter-turn count `{0, 1, 2, 3}` and are migrated on load. Missing
      * on v5 and earlier saves.
      */
     rotation?: number;
 }
 
-/** JSON-safe representation of a full game state, with a version tag. */
 export interface SerializedGameState {
     version: number;
     pieces: SerializedPiece[];
@@ -110,30 +104,19 @@ export interface SerializedGameState {
     seed?: number;
     cutStyle?: string;
     /**
-     * Rotation mode for this puzzle. Missing on early v6 saves written before
-     * the rotation-mode field was added — those are migrated on load based on
-     * cut style.
+     * Missing on early v6 saves written before the rotation-mode field was
+     * added — those are migrated on load based on cut style.
      */
     rotationMode?: 'none' | 'quarter-turn' | 'free';
-    /**
-     * Composable-cut config (v8+; only set when cutStyle === 'composable').
-     */
+    /** v8+; only set when cutStyle === 'composable'. */
     composableConfig?: GameState['composableConfig'];
-    /**
-     * Fractal-cut config (v8+; only set when cutStyle === 'fractal').
-     */
+    /** v8+; only set when cutStyle === 'fractal'. */
     fractalConfig?: GameState['fractalConfig'];
-    /**
-     * Wavy-cut config (only set when cutStyle === 'wavy').
-     */
+    /** Only set when cutStyle === 'wavy'. */
     wavyConfig?: GameState['wavyConfig'];
-    /**
-     * Triangles-cut config (only set when cutStyle === 'triangles').
-     */
+    /** Only set when cutStyle === 'triangles'. */
     trianglesConfig?: GameState['trianglesConfig'];
-    /**
-     * Classic-cut config (only set when cutStyle === 'classic' with the sine generator).
-     */
+    /** Only set when cutStyle === 'classic' with the sine generator. */
     classicConfig?: GameState['classicConfig'];
     /**
      * v7 legacy field: opaque generator config. Migrated to the typed
@@ -195,7 +178,6 @@ export interface SerializedProgress {
     viewport?: SerializedViewport;
 }
 
-/** JSON-safe viewport (zoom + pan) snapshot. */
 export interface SerializedViewport {
     scale: number;
     offset: Point;
@@ -228,8 +210,6 @@ declare function __assertViewportContract(
  * is retained as the symmetric counterpart to {@link deserializeState} (which
  * still loads legacy single-key saves) and for tests that exercise the full
  * blob shape.
- *
- * Maps are converted to `[key, value][]` entries arrays.
  *
  * The multi-select `selection` lives outside `GameState` (in the
  * SelectionManager), so it is passed in separately. Any ids are written
@@ -299,7 +279,6 @@ export function serializeState(
     return serialized;
 }
 
-/** Serialize only the static geometry + metadata (no groups/selection/completed). */
 export function serializeStatic(state: GameState): SerializedStaticState {
     const s: SerializedStaticState = {
         version: STATE_VERSION,
@@ -322,7 +301,6 @@ export function serializeStatic(state: GameState): SerializedStaticState {
     return s;
 }
 
-/** Serialize only the mutable progress (groups, selection, completed, viewport). */
 export function serializeProgress(
     state: GameState,
     selection?: Iterable<number>,
@@ -365,8 +343,6 @@ function serializePiece(piece: Piece): SerializedPiece {
 }
 
 /**
- * Is this a bounding box the renderer can work with?
- *
  * Finite on all four sides and not inverted: `getPieceBounds` derives
  * width/height by subtraction, and a `maxX < minX` box would propagate a
  * negative dimension into `deriveImageSize`. Nothing this repo writes can
@@ -381,8 +357,6 @@ function isUsableBounds(bounds: PieceBounds | undefined): bounds is PieceBounds 
 }
 
 /**
- * Restore blob pieces to full model `Piece`s.
- *
  * - v12+: `bounds` must be present and usable (throw otherwise — a piece
  *   without bounds is an invalid blob, not a guessable one); a missing
  *   `shape` is rebuilt from the edge paths.
@@ -446,13 +420,7 @@ function restorePieces(pieces: SerializedPiece[], version: number): Piece[] {
     }));
 }
 
-/**
- * Restore a GameState from its serialized form.
- *
- * Validates the version tag and reconstructs Maps from entries arrays.
- * Supports migration from v1 (derives imageSize from pieces).
- * Throws if the data is invalid or the version is unsupported.
- */
+/** Throws if the data is invalid or the version is unsupported. */
 export function deserializeState(data: SerializedGameState): GameState {
     if (!SUPPORTED_VERSIONS.includes(data.version)) {
         throw new Error(
@@ -534,8 +502,6 @@ export function deserializeState(data: SerializedGameState): GameState {
 }
 
 /**
- * Rebuild a full GameState from a static blob + a progress blob.
- *
  * The static blob may be a v11 static-only blob or a legacy v≤10 full blob
  * (its inline groups are ignored — groups come from `progress`).
  *
@@ -595,8 +561,6 @@ export function recombine(
 }
 
 /**
- * Resolve the composable config from a serialized state.
- *
  * The on-disk shape changed at v10 from the legacy long-named fields
  * (`horizontalAmplitude`, `horizontalFrequency`, …) to the opaque
  * `{baseCutGenerator, baseCutConfig, tabGenerator, tabConfig}` shape that
@@ -626,7 +590,6 @@ function resolveComposableConfig(
         ) {
             return data.composableConfig;
         }
-        // Legacy v8/v9 shape — migrate to the new opaque shape.
         return migrateLegacyComposableConfig(cfg);
     }
 
@@ -637,12 +600,7 @@ function resolveComposableConfig(
     return migrateLegacyComposableConfig(data.generatorConfig);
 }
 
-/**
- * Build the opaque {@link GameState.composableConfig} shape from a record
- * carrying the legacy `horizontalAmplitude`/`horizontalFrequency`/
- * `verticalAmplitude`/`verticalFrequency`/`disableTabs` fields. Used for
- * v7/v8/v9 → v10 migration.
- */
+/** v7/v8/v9 → v10 migration. */
 function migrateLegacyComposableConfig(
     legacy: Record<string, unknown>,
 ): NonNullable<GameState['composableConfig']> {
@@ -670,8 +628,6 @@ function migrateLegacyComposableConfig(
 }
 
 /**
- * Resolve the fractal config from a serialized state.
- *
  * v8+ stores it directly. v7 saves stored an opaque `generatorConfig`;
  * for fractal puzzles, migrate the `borderless` flag into the typed shape.
  */
@@ -694,8 +650,6 @@ function resolveFractalConfig(
 }
 
 /**
- * Determine the rotationMode for a loaded save.
- *
  * - If the save explicitly records one, honour it.
  * - Otherwise, infer from the data: any non-zero group rotation implies the
  *   player was using quarter-turn mode, so preserve that. Fractal saves
@@ -727,11 +681,7 @@ function resolveRotationMode(
 }
 
 /**
- * Derive image dimensions from piece data (for v1 migration and static-blob
- * fallback).
- *
- * Uses `getImageDimensions` on a temporary partial state synthesised
- * from the pieces array. The other fields are inert padding — `getImageDimensions`
+ * The other fields are inert padding — `getImageDimensions`
  * only reads `pieces`.
  *
  * Takes restored `Piece[]` only — callers must run blob pieces through
@@ -774,8 +724,6 @@ function validateImageUrl(imageUrl: unknown, version: number): void {
 }
 
 /**
- * Extract a sanitized multi-select selection from a serialized state.
- *
  * Tolerates missing/garbage data (older saves, hand-edited storage): a
  * non-array or absent `selection` yields `[]`, and non-finite-number
  * entries are dropped. Returned ids are not checked against the live
@@ -791,8 +739,6 @@ export function readSelection(data: SerializedGameState | SerializedProgress): n
 }
 
 /**
- * Extract a sanitized viewport from a serialized progress blob.
- *
  * Tolerates missing/garbage data (older saves, hand-edited storage): a missing
  * field, a non-object viewport, a non-finite `scale`, or an `offset` without
  * finite `x`/`y` all yield `undefined`. Never throws.
@@ -848,7 +794,6 @@ function normalizeStoredRotation(value: unknown): number {
     return 0;
 }
 
-/** Validate the serialized groups array (shape + per-group invariants). */
 function validateGroups(groups: SerializedPieceGroup[] | undefined): void {
     if (!Array.isArray(groups) || groups.length === 0) {
         throw new Error('Invalid state: groups must be a non-empty array');
@@ -866,10 +811,6 @@ function validateGroups(groups: SerializedPieceGroup[] | undefined): void {
     }
 }
 
-/**
- * Basic structural validation of the serialized state.
- * Throws descriptive errors on invalid data.
- */
 function validateSerializedState(data: SerializedGameState): void {
     if (!Array.isArray(data.pieces) || data.pieces.length === 0) {
         throw new Error('Invalid state: pieces must be a non-empty array');

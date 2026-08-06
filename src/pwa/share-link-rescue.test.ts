@@ -8,7 +8,6 @@ import {
     type RescueRegistration,
 } from './share-link-rescue.js';
 
-/** Minimal in-memory Storage stand-in. */
 function fakeStorage(): Storage {
     const map = new Map<string, string>();
     return {
@@ -49,7 +48,6 @@ describe('share-link rescue guard', () => {
         const storage = fakeStorage();
         expect(recordRescueAttempt('abc', storage)).toBe(true);
         expect(wasRescueAttempted('abc', storage)).toBe(true);
-        // A different link gets its own fresh attempt.
         expect(wasRescueAttempted('other', storage)).toBe(false);
     });
 
@@ -80,7 +78,6 @@ describe('share-link rescue guard', () => {
     });
 });
 
-/** Deps harness: manual control over registration, readiness, and the deadline. */
 function makeDeps(overrides: Partial<ShareLinkRescueDeps> = {}) {
     const applyUpdate = vi.fn();
     let readyHandler: (() => void) | null = null;

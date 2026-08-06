@@ -1,10 +1,6 @@
 /**
- * Sine-grid base-cut generator.
- *
- * Produces a rectangular grid of cuts with sine-wave perturbations
- * (the classic Composable look). Border curves come first (top,
- * right, bottom, left), followed by horizontal internal cuts,
- * followed by vertical internal cuts.
+ * Border curves come first (top, right, bottom, left), followed by
+ * horizontal internal cuts, followed by vertical internal cuts.
  */
 
 import type { Size } from '../../model/types.js';
@@ -67,7 +63,6 @@ export const sineCutGenerator: BaseCutGenerator = {
         // Fall back to sensible defaults when sub-fields are missing so that
         // `baseCutConfig: {}` (or no config) still produces the canonical
         // sine grid rather than collapsing to flat cuts via NaN comparisons.
-        // These defaults mirror the previous behavior from generator.ts.
         const cfg = (config ?? {}) as Partial<SineCutConfig>;
         // Borderless: oversize the grid by one piece on each side (+2 cols,
         // +2 rows) across the SAME frame. The framework then strips the outer

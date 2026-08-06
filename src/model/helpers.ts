@@ -1,6 +1,4 @@
 /**
- * Helper functions for the puzzle data model.
- *
  * These operate on the generic graph-based model
  * and know nothing about grids or specific puzzle shapes.
  */
@@ -8,10 +6,8 @@
 import type { Edge, GameState, Piece, PieceGroup, Point } from './types.js';
 
 /**
- * Build the `piecesById` index for a freshly constructed pieces array.
- *
  * Pieces are immutable after generation, so this Map is built once and
- * never mutated. Used by `createNewGame`, `deserializeState`, and tests.
+ * never mutated.
  */
 export function buildPiecesById(pieces: Piece[]): Map<number, Piece> {
     const map = new Map<number, Piece>();
@@ -22,8 +18,6 @@ export function buildPiecesById(pieces: Piece[]): Map<number, Piece> {
 }
 
 /**
- * Build the `groupsById` and `pieceToGroup` indexes for a list of groups.
- *
  * Used at construction time and after wholesale group rebuilds. Incremental
  * mutations should use `addGroup` / `removeGroup` / `mergeGroups` instead.
  */
@@ -42,9 +36,7 @@ export function buildGroupIndexes(groups: PieceGroup[]): {
     return { groupsById, pieceToGroup };
 }
 
-/**
- * Look up a piece by id. Throws if not found.
- */
+/** Throws if not found. */
 export function getPiece(state: GameState, pieceId: number): Piece {
     const piece = state.piecesById.get(pieceId);
     if (!piece) {
@@ -53,9 +45,7 @@ export function getPiece(state: GameState, pieceId: number): Piece {
     return piece;
 }
 
-/**
- * Look up a group by id. Throws if not found.
- */
+/** Throws if not found. */
 export function getGroup(state: GameState, groupId: number): PieceGroup {
     const group = state.groupsById.get(groupId);
     if (!group) {
@@ -65,8 +55,6 @@ export function getGroup(state: GameState, groupId: number): PieceGroup {
 }
 
 /**
- * Look up a group by id, returning `undefined` if not found.
- *
  * Use when the absence of a group is a valid outcome (e.g. defensive
  * checks during pointer events, where the dragged group may have been
  * absorbed by a merge).
@@ -78,10 +66,7 @@ export function tryGetGroup(
     return state.groupsById.get(groupId);
 }
 
-/**
- * Find the group that contains a given piece. Throws if the piece is
- * not in any group.
- */
+/** Throws if the piece is not in any group. */
 export function getGroupForPiece(
     state: GameState,
     pieceId: number,
@@ -129,12 +114,7 @@ export function removeGroup(state: GameState, groupId: number): void {
     }
 }
 
-/**
- * Find the mate edge for a given piece's edge.
- *
- * Returns the mate piece and its corresponding edge,
- * or `undefined` if the edge is a border edge (no mate).
- */
+/** Returns `undefined` if the edge is a border edge (no mate). */
 export function getMateEdge(
     _piece: Piece,
     edge: Edge,
@@ -156,9 +136,6 @@ export function getMateEdge(
     return { piece: matePiece, edge: mateEdge };
 }
 
-/**
- * Move a group by a delta, mutating its position in place.
- */
 export function moveGroup(
     group: PieceGroup,
     delta: Point,
@@ -187,12 +164,7 @@ export function rotatePoint(point: Point, degrees: number): Point {
     };
 }
 
-/**
- * Normalize an unbounded degrees value into the range [0, 360).
- *
- * Accepts negative or large positive inputs and returns a non-negative
- * value strictly less than 360. Preserves fractional precision.
- */
+/** Normalize an unbounded degrees value into the range [0, 360). */
 export function normalizeDegrees(deg: number): number {
     return ((deg % 360) + 360) % 360;
 }
@@ -201,8 +173,7 @@ export function normalizeDegrees(deg: number): number {
  * Smallest signed angular delta from `b` to `a` in degrees, in the
  * half-open range `(-180, 180]`.
  *
- * Wrap-aware: the delta between 359° and 1° is `-2`, not `-358`. Useful
- * for tolerance comparisons (e.g. `Math.abs(signedAngularDelta(...)) < 10`).
+ * Wrap-aware: the delta between 359° and 1° is `-2`, not `-358`.
  *
  * `a − b` is the convention: positive when `a` is "ahead" of `b` going
  * clockwise.
@@ -230,8 +201,6 @@ export function localToWorld(local: Point, group: PieceGroup): Point {
 }
 
 /**
- * Compute the world position of a point on a piece.
- *
  * Piece offsets and edge endpoints live in the group's un-rotated local
  * space. The point is shifted by the piece's offset within the group, then
  * projected to world space via `localToWorld`.
@@ -269,8 +238,6 @@ export interface GroupBorderEdge {
  * are in a different group.
  *
  * These are the candidates for merge detection after a drop.
- * Each result includes the piece and edge within the group,
- * plus the mate piece and edge in the other group.
  */
 export function getBorderEdges(
     group: PieceGroup,
@@ -288,7 +255,6 @@ export function getBorderEdges(
                 continue; // border edge of the puzzle itself
             }
 
-            // Is the mate in a different group?
             const mateGroup = getGroupForPiece(state, mate.piece.id);
 
             if (mateGroup.id !== group.id) {

@@ -1,6 +1,4 @@
 /**
- * Marquee (drag-box) selection.
- *
  * Owns one rubber-band gesture: a transient screen-space overlay rectangle,
  * and, on release, an additive selection of every group whose projected
  * screen bounds match the box. Whether a group "matches" depends on the

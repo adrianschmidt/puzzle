@@ -1,12 +1,8 @@
 /**
- * Wires service-worker update handling for the PWA. Kept as thin glue: all
- * decision logic lives in `update-controller.ts` (unit-tested) and the
- * indicator UI in `ui/update-available-indicator.ts`. `virtual:pwa-register`
- * is provided by vite-plugin-pwa and only exists at build time, so this file
- * is intentionally not imported from the `pwa/index.ts` barrel (that would
- * pull the virtual module into unit tests). It also supplies the real
- * service-worker deps for the stale-client share-link rescue
- * (share-link-rescue.ts), exposed via the returned `PwaUpdates` handle.
+ * Kept as thin glue: decision logic lives in `update-controller.ts`
+ * (unit-tested). `virtual:pwa-register` only exists at build time, so this
+ * file is intentionally not imported from the `pwa/index.ts` barrel (that
+ * would pull the virtual module into unit tests).
  */
 
 import { registerSW } from 'virtual:pwa-register';
@@ -23,21 +19,11 @@ import { createUpdateAvailableIndicator } from '../ui/index.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { diagnostics } from '../diagnostics.js';
 
-/**
- * Handle returned to the composition root (app/bootstrap.ts) for flows that
- * need the update machinery.
- */
 export interface PwaUpdates {
-    /**
-     * Run the stale-client share-link rescue: one forced update check;
-     * applies + reloads on success. See share-link-rescue.ts.
-     */
     attemptShareLinkRescue: () => Promise<RescueOutcome>;
 }
 
 /**
- * Initialize PWA update handling.
- *
  * @param flush  Flush pending autosave before any reload, so a change made
  *               within the autosave debounce window survives the version
  *               switch.

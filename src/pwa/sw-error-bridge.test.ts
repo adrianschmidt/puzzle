@@ -3,7 +3,6 @@ import { initSwErrorReporting } from './sw-error-bridge.js';
 import { SW_ERROR_MESSAGE_TYPE, type SwErrorReport } from './sw-error-reporter.js';
 import { diagnostics } from '../diagnostics.js';
 
-/** A minimal stand-in for `navigator.serviceWorker`'s message channel. */
 function makeTarget() {
     const handlers = new Set<(event: MessageEvent) => void>();
     return {
@@ -74,20 +73,17 @@ describe('initSwErrorReporting', () => {
 
         initSwErrorReporting({ serviceWorker: target, track: track as never });
 
-        // Unrelated messages: no warn (they aren't claiming to be ours).
         target.emit({ type: 'something-else' });
         target.emit('a bare string');
         target.emit(null);
         expect(warn).not.toHaveBeenCalled();
 
-        // Claims our discriminator but fails the rest of validation: warn.
         const malformed = { type: SW_ERROR_MESSAGE_TYPE, source: 'bogus', name: 'X', reason: 'Y' };
         target.emit(malformed);
         expect(warn).toHaveBeenCalledTimes(1);
         expect(warn).toHaveBeenCalledWith(expect.any(String), malformed);
         expect(track).not.toHaveBeenCalled();
 
-        // A well-formed report does not warn.
         warn.mockClear();
         target.emit(report);
         expect(warn).not.toHaveBeenCalled();

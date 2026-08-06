@@ -1,18 +1,7 @@
 /**
- * Composable puzzle generator (entry point).
- *
  * Thin wrapper that creates a seeded PRNG and forwards an opaque
  * `ComposableConfig` to the topology pipeline. The topology layer
- * (see `topology/generator.ts`) does the real work:
- *
- *   1. Look up the BaseCutGenerator by id and call it to produce
- *      input cuts.
- *   2. Build the topology graph in a single intersection pass.
- *   3. Apply the TabGenerator per shared internal edge with
- *      framework-owned collision rejection.
- *   4. Convert faces → PieceDefinitions → GeneratedPiece[] via
- *      composePuzzle (with disableTabs:true since tabs are already
- *      in the edge geometry).
+ * (see `topology/generator.ts`) does the real work.
  *
  * See issue #127 for the composable design,
  * and #166 for the topology-driven approach.
@@ -25,13 +14,6 @@ import type { TopologyPuzzle } from './topology/generator.js';
 import type { TabDebugSession } from './topology/tab-debug.js';
 
 /**
- * Configuration for the composable generator.
- *
- * Identifies the BaseCutGenerator and TabGenerator plug-ins by id and
- * forwards their per-generator config opaquely. All fields are optional:
- *   - omitting `baseCutGenerator` defaults to `'sine'`
- *   - omitting `tabGenerator` defaults to `'classic'` (use `'none'` to skip tabs)
- *
  * The two `*Config` records are passed straight through to the registered
  * generator, which is solely responsible for validating its own keys.
  */
@@ -72,13 +54,8 @@ export interface ComposableConfig {
 export const DEFAULT_MIN_PIECE_AREA = 4;
 
 /**
- * Generate a puzzle using the topology-driven composable architecture.
- *
- * Thin pass-through to {@link generateTopologyPuzzle} — the only work
- * done here is creating the seeded PRNG and renaming the four config
- * fields onto the topology generator's `*Id` field names. Returns
- * `{ pieces, autoGroups }` so the gameplay layer can present tiny
- * residual faces as starting groups.
+ * Returns `{ pieces, autoGroups }` so the gameplay layer can present
+ * tiny residual faces as starting groups.
  */
 export function generateComposablePuzzle(
     cols: number,

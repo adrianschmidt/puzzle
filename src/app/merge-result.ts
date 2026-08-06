@@ -17,9 +17,6 @@ import type { SelectionManager } from '../interaction/selection-manager.js';
 import type { RotationFocus } from '../interaction/index.js';
 
 /**
- * Prune the selection and rotate-handle focus of any group `result` just
- * absorbed, re-render, refresh z-order, and check for a win.
- *
  * `droppedGroupIds` is the caller-supplied list of groups whose z-order
  * should be refreshed; absorbed IDs are remapped to the surviving merged
  * group. Drag flows pass the multi-select expansion; rotate-handle
@@ -38,16 +35,14 @@ export function applyMergeResult(
         renderer: Renderer;
         selectionManager: SelectionManager;
         rotationFocus: RotationFocus;
-        /** Cached new-game analytics, for the completion payload. */
         currentGameAnalytics: () => NewGameData | null;
-        /** Frame and celebrate a completed puzzle. */
         onCompleted: (state: GameState) => void;
     },
 ): void {
     const { renderer, selectionManager, rotationFocus, currentGameAnalytics, onCompleted } = deps;
 
-    // Prune absorbed groups from selection. The surviving merged group
-    // inherits selection if any absorbed group was selected.
+    // The surviving merged group inherits selection if any absorbed group
+    // was selected.
     const validIds = new Set(state.groups.map(g => g.id));
     const hadSelectedAbsorbed = [...selectionManager.selectedGroupIds]
         .some(id => !validIds.has(id));

@@ -1,9 +1,4 @@
 /**
- * Viewport-fit operations: packing all groups into a compact layout and
- * zooming the viewport to fit them, and the celebratory zoom that frames a
- * single completed group (spinning it upright first if it finished at a
- * non-zero rotation).
- *
  * `zoomToFitCompletedPuzzle` reaches into the DOM directly — querying
  * `[data-group-id]` and `[data-puzzle-table]`, and calling
  * `applyGroupTransform` — instead of going through the `Renderer` port.
@@ -45,18 +40,10 @@ import {
  */
 export const SETTLE_GRACE_MS = 200;
 
-/**
- * Dependencies for {@link gatherAndZoomToFit} and
- * {@link zoomToFitCompletedPuzzle}: the DOM container the renderer draws
- * into, the renderer port itself, the shared viewport-transform state, and
- * two distinct ways of pushing a render — see `renderCurrent` below for why
- * there are two.
- */
 export interface ViewportFitDeps {
     container: HTMLElement;
     renderer: Renderer;
     viewportTransform: ViewportTransform;
-    /** Push the transform to the renderer after a setState. */
     applyTransform: () => void;
     /**
      * Re-render whatever game is current, read late. The completion cleanup
@@ -67,10 +54,6 @@ export interface ViewportFitDeps {
     renderCurrent: () => void;
 }
 
-/**
- * Gather all groups into a compact layout and zoom the viewport to fit.
- * Reusable by the gather button, the solver, and new game initialization.
- */
 export function gatherAndZoomToFit(state: GameState, deps: ViewportFitDeps): void {
     const { container, viewportTransform, applyTransform } = deps;
     const screenWidth = container.clientWidth || window.innerWidth;
@@ -104,16 +87,11 @@ export function gatherAndZoomToFit(state: GameState, deps: ViewportFitDeps): voi
 }
 
 /**
- * Animate the viewport to center and zoom-to-fit a single completed group.
- * Unlike gatherAndZoomToFit(), it does not re-lay-out the board; it mostly
- * just animates the viewport to frame the completed puzzle nicely. Its one
+ * Unlike gatherAndZoomToFit(), this does not re-lay-out the board. Its one
  * model write is the completed group's upright resting state — `position`
  * and `rotation = 0` — and only when the puzzle finished at a non-zero
  * rotation.
  *
- * @param state - Current game state (its `piecesById` bounds the group)
- * @param completedGroup - The single group containing all pieces
- * @param deps - Viewport-fit dependencies
  * @param onComplete - Run exactly once per call, when the zoom settles:
  *   at `transitionend`, or at a deadline if that never arrives — including
  *   when no animation ran at all. Like `deps.renderCurrent` it fires up to
@@ -196,10 +174,8 @@ export function zoomToFitCompletedPuzzle(
         completedGroup.rotation = 0;
     }
 
-    // Compute the visual bounds of the completed group in its current position
     const groupBounds = getGroupVisualBounds(completedGroup, state.piecesById);
 
-    // Convert to world-space bounds (group-local space + group position)
     const worldBounds = {
         x: completedGroup.position.x + groupBounds.minX,
         y: completedGroup.position.y + groupBounds.minY,
@@ -207,12 +183,10 @@ export function zoomToFitCompletedPuzzle(
         height: groupBounds.height,
     };
 
-    // Calculate target scale to fit the completed puzzle with padding
     const scaleX = screenWidth / worldBounds.width;
     const scaleY = screenHeight / worldBounds.height;
     const targetScale = Math.min(scaleX, scaleY) * 0.9; // 10% padding like gatherAndZoomToFit
 
-    // Calculate target offset to center the completed puzzle
     const worldCenterX = worldBounds.x + worldBounds.width / 2;
     const worldCenterY = worldBounds.y + worldBounds.height / 2;
     const targetOffset = {
@@ -220,7 +194,6 @@ export function zoomToFitCompletedPuzzle(
         y: screenHeight / 2 - worldCenterY * targetScale,
     };
 
-    // Enable transition before applying the new transform
     renderer.enableViewportTransition();
 
     // Apply the target transform on next frame to ensure transition is set
@@ -259,7 +232,6 @@ export function zoomToFitCompletedPuzzle(
         }
 
         function handleTransitionEnd(event: TransitionEvent): void {
-            // Make sure it's the transform property and not some other transition
             if (event.propertyName === 'transform' && event.target === tableEl) settle();
         }
 

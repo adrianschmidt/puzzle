@@ -1,20 +1,7 @@
-/**
- * Cut style options and preference persistence.
- *
- * Each option carries a stable string id used in localStorage.
- * Legacy integer indices migrate via the id-keyed factory.
- */
-
 import { createIdPreferenceStore } from '../ui/preference-store.js';
 
-/**
- * Identifier for a cut style generator.
- */
 export type CutStyle = 'classic' | 'fractal' | 'wavy' | 'triangles' | 'composable';
 
-/**
- * A selectable cut style option.
- */
 export interface CutStyleOption {
     id: CutStyle;
     label: string;
@@ -38,8 +25,6 @@ export interface CutStyleOption {
 }
 
 /**
- * Available cut style options.
- *
  * Storage is id-keyed; declaration order is no longer load-bearing for
  * persistence. The legacy-integer migration (`LEGACY_ORDER` below)
  * relies on the original pre-migration order, captured separately.
@@ -82,10 +67,8 @@ export const CUT_STYLE_OPTIONS: readonly CutStyleOption[] = [
     },
 ] as const;
 
-/** Default cut style id. */
 export const DEFAULT_CUT_STYLE_ID: CutStyle = 'classic';
 
-/** localStorage key for the saved cut style preference. */
 export const CUT_STYLE_PREFERENCE_KEY = 'puzzle-cut-style';
 
 /**
@@ -119,18 +102,12 @@ export function isComposableVisible(): boolean {
     return base.includes('/dev/');
 }
 
-/**
- * Return the cut style options the new-game dialog should render —
- * the full list on dev, the list without Composable on production.
- */
 export function getVisibleCutStyleOptions(): readonly CutStyleOption[] {
     if (isComposableVisible()) return CUT_STYLE_OPTIONS;
     return CUT_STYLE_OPTIONS.filter((o) => o.id !== 'composable');
 }
 
 /**
- * Rotation mode for a newly created game, as a pure function of cut style.
- *
  * Reads each style's `rotation` capability from `CUT_STYLE_OPTIONS`, so a
  * new cut style must declare its rotation behavior to compile.
  *

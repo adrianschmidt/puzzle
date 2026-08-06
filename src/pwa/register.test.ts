@@ -11,8 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { RegisterSWOptions } from 'vite-plugin-pwa/types';
 
 // `register.ts` is otherwise untestable: it imports the build-time-only
-// `virtual:pwa-register`. Mock it to capture the options object passed to
-// `registerSW` (so we can drive the callbacks) and return a stub `updateSW`.
+// `virtual:pwa-register`.
 const { registerSW, capturedOptions } = vi.hoisted(() => {
     const captured: { current: RegisterSWOptions | undefined } = {
         current: undefined,

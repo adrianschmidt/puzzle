@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the New Game button logic and DOM integration.
- */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     shouldConfirmNewGame,
@@ -18,7 +14,6 @@ describe('shouldConfirmNewGame', () => {
     });
 
     it('should not confirm when all pieces are still separate (no progress)', () => {
-        // 48 groups, 48 pieces — nothing merged yet
         expect(shouldConfirmNewGame(false, 48, 48)).toBe(false);
     });
 
@@ -30,7 +25,6 @@ describe('shouldConfirmNewGame', () => {
     });
 
     it('should confirm when some pieces have been merged', () => {
-        // 47 groups, 48 pieces — at least one merge happened
         expect(shouldConfirmNewGame(false, 47, 48)).toBe(true);
     });
 
@@ -43,7 +37,6 @@ describe('shouldConfirmNewGame', () => {
     });
 
     it('should not confirm completed game even with 1 group', () => {
-        // Completed with all pieces in one group
         expect(shouldConfirmNewGame(true, 1, 48)).toBe(false);
     });
 });
@@ -178,7 +171,6 @@ describe('createNewGameButton', () => {
         const button = container.querySelector('button')!;
         cleanup();
 
-        // Button was removed, but let's simulate a click on a detached element
         button.click();
 
         expect(onNewGame).not.toHaveBeenCalled();

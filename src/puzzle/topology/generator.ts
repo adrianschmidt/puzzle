@@ -1,13 +1,4 @@
 /**
- * Topology-driven puzzle generator.
- *
- * Single-pass pipeline:
- *   1. BaseCutGenerator → input cuts (Curves)
- *   2. buildDCEL → topology graph (single intersection pass)
- *   3. applyTabs → per-edge tab application with collision rejection
- *   4. facesToPieceDefinitions → PieceDefinition[]
- *   5. composePuzzle → final GeneratedPiece[]
- *
  * The base-cut and tab generators are looked up from the registry by
  * id, so the same code path serves the sine grid, Venn diagrams, and
  * any future plug-ins. See issue #166 for the architecture.
@@ -28,13 +19,7 @@ import { stripBorderRing } from './strip-border-ring.js';
 import { clampGridDim } from './grid-dim.js';
 import { diagnostics } from '../../diagnostics.js';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 /**
- * Configuration for the topology generator.
- *
  * The base-cut and tab generators are referenced by id (looked up
  * via the registry); their parameters are passed as opaque records
  * that each generator validates internally. Use `tabGeneratorId:
@@ -82,10 +67,6 @@ export interface TopologyGeneratorConfig {
     tabDebug?: TabDebugSession;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 /**
  * A generated puzzle whose face count did not match what its base-cut
  * generator declared via {@link BaseCutGenerator.expectedPieceCount}.
@@ -108,8 +89,6 @@ export interface PieceCountMismatch {
 }
 
 /**
- * Result of {@link generateTopologyPuzzle}.
- *
  * `autoGroups` is populated when the caller supplied
  * {@link TopologyGeneratorConfig.minPieceArea}; the gameplay layer
  * uses it to glue together tiny noise faces (sub-pixel slivers from
@@ -136,16 +115,6 @@ export interface TopologyPuzzle {
     pieceCountMismatch?: PieceCountMismatch;
 }
 
-/**
- * Generate a puzzle using the topology-driven pipeline.
- *
- * @param cols - Number of piece columns
- * @param rows - Number of piece rows
- * @param imageSize - Pixel dimensions of the puzzle image
- * @param random - Seeded PRNG function
- * @param config - Optional generator configuration
- * @returns Pieces plus any auto-grouping the small-piece pass produced.
- */
 export function generateTopologyPuzzle(
     cols: number,
     rows: number,
@@ -156,8 +125,8 @@ export function generateTopologyPuzzle(
     const baseCutId = config?.baseCutGeneratorId ?? 'sine';
     const tabId = config?.tabGeneratorId ?? 'classic';
 
-    // 1. Generate the cuts. The sine grid needs cols/rows; other
-    //    generators that ignore them aren't harmed by their presence.
+    // The sine grid needs cols/rows; other generators that ignore
+    // them aren't harmed by their presence.
     const baseCutGenerator = getBaseCutGenerator(baseCutId);
     // Borderless applies only when the resolved generator advertises support
     // (it must know how to oversize its grid). Otherwise the flag is ignored.
@@ -185,13 +154,10 @@ export function generateTopologyPuzzle(
         })),
     });
 
-    // 2. Build the topology graph in a single intersection pass.
     const graph = buildDCEL({ curves });
 
-    // 3. Apply tabs per edge with collision rejection. The graph's
-    //    topology is unchanged — only edge curves are swapped. The
-    //    `none` generator is registered like any other and returns
-    //    null on every edge, so we don't special-case it here.
+    // The `none` generator is registered like any other and returns
+    // null on every edge, so we don't special-case it here.
     const tabGenerator = getTabGenerator(tabId);
     // Triangular pieces have little interior room, so the traced resolver's
     // shallow ladder leaves many edges flat. Opt those cuts into the deep
@@ -207,9 +173,9 @@ export function generateTopologyPuzzle(
         onCandidate: config?.tabDebug?.onCandidate,
     });
 
-    // 4. Faces → piece definitions. Tiny faces are not merged here —
-    //    the auto-group pass below handles them by gluing them into
-    //    starting PieceGroups instead of mutating the DCEL.
+    // Tiny faces are not merged here — the auto-group pass below
+    // handles them by gluing them into starting PieceGroups instead
+    // of mutating the DCEL.
     const computeArea = (face: { outerEdge: HalfEdge }) => {
         let area = 0;
         let current = face.outerEdge;
@@ -261,13 +227,12 @@ export function generateTopologyPuzzle(
         );
     }
 
-    // 5. Auto-group sub-threshold pieces. We compute area/adjacency from
-    //    the piece definitions (rather than the DCEL faces directly) so
-    //    the auto-group pass operates on the same identifiers callers
-    //    will see. Adjacency follows mate relationships across all loops
-    //    of each piece — inner-boundary edges count as neighbours, which
-    //    is what we want (a tiny piece living inside a hole should be
-    //    glued to the surrounding frame, not orphaned).
+    // Area/adjacency come from the piece definitions (rather than the
+    // DCEL faces directly) so the auto-group pass operates on the same
+    // identifiers callers will see. Adjacency follows mate relationships
+    // across all loops of each piece — inner-boundary edges count as
+    // neighbours, which is what we want (a tiny piece living inside a
+    // hole should be glued to the surrounding frame, not orphaned).
     const minPieceArea = config?.minPieceArea;
     let autoGroups: AutoGroup[] = [];
     if (minPieceArea !== undefined) {
@@ -291,9 +256,9 @@ export function generateTopologyPuzzle(
         );
     }
 
-    // 6. Compose final pieces. Tabs (when enabled) are already baked
-    //    into the edge geometry by `applyTabs`, so disable the
-    //    composition layer's own tab logic and pass no template.
+    // Tabs (when enabled) are already baked into the edge geometry by
+    // `applyTabs`, so disable the composition layer's own tab logic and
+    // pass no template.
     const composed = composePuzzle(pieceDefs, null, random, { disableTabs: true });
 
     // Borderless: strip the outer ring AFTER composition. composePuzzle draws
@@ -316,13 +281,8 @@ export function generateTopologyPuzzle(
     return { pieces, autoGroups: finalAutoGroups, tabDebugReport, pieceCountMismatch };
 }
 
-// ---------------------------------------------------------------------------
-// Outer-loop polygon area (shoelace on edge endpoints)
-// ---------------------------------------------------------------------------
-
 /**
- * Compute the polygon area of a piece's outer loop using the shoelace
- * formula. The outer loop is the prefix of `edges` before the first
+ * The outer loop is the prefix of `edges` before the first
  * chain break (where the previous edge's `end` no longer matches the
  * current edge's `start`).
  *
@@ -338,7 +298,6 @@ export function generateTopologyPuzzle(
  */
 function computeOuterLoopArea(edges: EdgeDefinition[]): number {
     if (edges.length === 0) return 0;
-    // Build a polyline approximating the outer loop, then shoelace it.
     const polyline: Point[] = [];
     for (let i = 0; i < edges.length; i++) {
         const cur = edges[i];
@@ -373,10 +332,6 @@ function computeOuterLoopArea(edges: EdgeDefinition[]): number {
     }
     return Math.abs(area) / 2;
 }
-
-// ---------------------------------------------------------------------------
-// DCEL face logging (used by tests via the diagnostics singleton)
-// ---------------------------------------------------------------------------
 
 function logFaceDetails(
     stage: string,

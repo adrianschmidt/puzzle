@@ -1,6 +1,4 @@
 /**
- * Dev-time tab-debug session.
- *
  * Wires together the two extension points that let us identify which
  * traced template ended up on which piece's tab:
  *
@@ -32,8 +30,6 @@ import {
 } from '../composable/traced-tab-recorder.js';
 
 /**
- * One tab's debug record, from a piece's point of view.
- *
  * `edgeIndex` is the position of this edge in the piece's
  * `PieceDefinition.edges[]` array — i.e. the same ordering the
  * renderer and the debug piece view use, so you can correlate this
@@ -44,7 +40,6 @@ export interface TabDebugEntry {
     halfEdgeId: number;
     /** Position of this edge in PieceDefinition.edges (outer loop first). */
     edgeIndex: number;
-    /** Piece id this entry was attached to. */
     pieceId: number;
     /** Piece id on the *other* side of the shared edge, or null for borders. */
     matePieceId: number | null;
@@ -54,7 +49,6 @@ export interface TabDebugEntry {
     traced: TracedTabChoice | null;
 }
 
-/** Final per-piece map produced by {@link TabDebugSession.finish}. */
 export type TabDebugReport = Record<number, TabDebugEntry[]>;
 
 interface RawEntry {
@@ -64,9 +58,9 @@ interface RawEntry {
 }
 
 /**
- * Open a debug session. Call {@link onCandidate} as the `onCandidate`
- * option of `applyTabs`, then call {@link finish} once you have the
- * piece definitions (or face → piece mapping) ready.
+ * Call {@link onCandidate} as the `onCandidate` option of `applyTabs`,
+ * then call {@link finish} once you have the piece definitions (or
+ * face → piece mapping) ready.
  *
  * The session installs a traced-tab recorder for its lifetime; calling
  * `finish` (or `dispose`) un-installs it. Only one session can be
@@ -161,11 +155,6 @@ function matePieceFor(
 }
 
 /**
- * Walk the loop containing `he` (outer or inner) and return how many
- * steps we took to reach `he` from the loop's "start". For outer
- * loops the start is `face.outerEdge`; for inner-boundary loops, the
- * matching entry in `face.innerBoundaries`.
- *
  * The walk mirrors `facesToPieceDefinitions`'s ordering: outer-loop
  * edges come first (index 0..N-1), then each inner loop (continuing
  * the index). This way the returned `edgeIndex` lines up with the
@@ -176,11 +165,9 @@ function indexInFaceWalk(target: HalfEdge): number {
     if (!face) return -1;
 
     let offset = 0;
-    // Outer loop first.
     let i = walkUntil(face.outerEdge, target);
     if (i >= 0) return offset + i;
     offset += walkLength(face.outerEdge);
-    // Then each inner-boundary loop.
     for (const innerStart of face.innerBoundaries) {
         i = walkUntil(innerStart, target);
         if (i >= 0) return offset + i;

@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for image category options and preference persistence.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
     IMAGE_CATEGORY_OPTIONS,

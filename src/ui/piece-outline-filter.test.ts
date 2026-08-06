@@ -68,9 +68,7 @@ describe('installPieceOutlineFilter — configurable flood colour', () => {
         const flood = document.querySelector(
             'filter#piece-outline feFlood',
         ) as SVGElement;
-        // No hardcoded colour attribute any more.
         expect(flood.getAttribute('flood-color')).toBeNull();
-        // Reads the CSS variable, with a near-black fallback.
         expect(flood.style.getPropertyValue('flood-color')).toBe(
             'var(--piece-outline-color, #080808)',
         );

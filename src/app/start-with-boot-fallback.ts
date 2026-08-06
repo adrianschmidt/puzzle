@@ -1,6 +1,4 @@
 /**
- * Boot-path safety net for starting a new game.
- *
  * The boot flow has no user standing in front of it: if its
  * `startNewGame` rejects there is no previous puzzle to fall back to and
  * no dialog to retry from, so the session installs nothing — `hasGame()`
@@ -18,22 +16,17 @@
  * identically against `startFallback` and ends at `BOOT_FAILED_TOAST`.
  * Still strictly better than the pre-#488 dead app, but this is a
  * different-generator fallback, not a retry-with-different-inputs one.
- *
- * Extracted from `main.ts` so the outcomes are unit-testable.
  */
 
 import { runWithErrorReport } from './run-with-error-report.js';
 import { BOOT_FALLBACK_CUT_STYLE } from './traced-tab-plan.js';
 import { showToast } from '../ui/index.js';
 
-/** Shown once the last-resort puzzle is actually on screen. */
 export const FALLBACK_STARTED_TOAST = "Couldn't start your usual puzzle — started a Classic one";
 
-/** Shown when even the last-resort puzzle failed and the app is stuck. */
 export const BOOT_FAILED_TOAST = "Couldn't start a puzzle — try reloading";
 
 export async function startWithBootFallback(opts: {
-    /** Start the puzzle the player's preferences ask for. */
     start: () => Promise<void>;
     /**
      * Cut style `start` is attempting, for failure attribution. The

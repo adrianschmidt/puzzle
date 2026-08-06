@@ -1,6 +1,4 @@
 /**
- * Pluggable curve interface for the topology system.
- *
  * All curves are represented as chains of cubic Bézier segments,
  * backed by bezier-js for precise intersection, projection, and
  * arc-length computation.
@@ -12,13 +10,6 @@ import type { Point } from '../../model/types.js';
 import { Bezier } from 'bezier-js';
 import { completeReduction } from './complete-reduction.js';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/**
- * An intersection between two curves.
- */
 export interface CurveIntersection {
     /** The intersection point. */
     point: Point;
@@ -36,9 +27,6 @@ export interface CurveIntersection {
     tLocalOther: number;
 }
 
-/**
- * A cubic Bézier segment: start, control1, control2, end.
- */
 export interface BezierSegment {
     p0: Point;
     cp1: Point;
@@ -54,27 +42,13 @@ export interface BoundingBox {
     maxY: number;
 }
 
-// ---------------------------------------------------------------------------
-// Curve class
-// ---------------------------------------------------------------------------
-
-/**
- * A curve composed of one or more cubic Bézier segments.
- *
- * Provides evaluation, splitting, intersection, tangent computation,
- * and arc-length measurement — all using exact Bézier math via bezier-js.
- */
 export class Curve {
-    /** The raw segments composing this curve. */
     readonly segments: readonly BezierSegment[];
 
-    /** Cached bezier-js instances (one per segment). */
     private _beziers?: Bezier[];
 
-    /** Cached per-segment bounding boxes (one per segment). */
     private _segmentBoxes?: BBox[];
 
-    /** Cached per-segment gap-free reductions (lazily filled per segment). */
     private _reducedSegments?: Array<Bezier[] | undefined>;
 
     constructor(segments: BezierSegment[]) {
@@ -84,9 +58,6 @@ export class Curve {
         this.segments = segments;
     }
 
-    // -- bezier-js interop -------------------------------------------------
-
-    /** Get bezier-js instances for each segment (lazily created). */
     private get beziers(): Bezier[] {
         if (!this._beziers) {
             this._beziers = this.segments.map(s => new Bezier(
@@ -100,8 +71,6 @@ export class Curve {
     }
 
     /**
-     * Per-segment bounding boxes (lazily created, cached).
-     *
      * `intersect` is called O(n) times per curve by the DCEL builder's
      * pair loop; recomputing the segment boxes on every call rebuilds
      * each curve's boxes ~n times (millions of tiny allocations on
@@ -142,11 +111,6 @@ export class Curve {
         return (this._reducedSegments[index] ??= completeReduction(this.beziers[index]));
     }
 
-    // -- Factory methods ---------------------------------------------------
-
-    /**
-     * Create a straight-line curve between two points.
-     */
     static line(start: Point, end: Point): Curve {
         return new Curve([{
             p0: start,
@@ -157,7 +121,6 @@ export class Curve {
     }
 
     /**
-     * Create a curve from a flat array of Bézier points.
      * Format: [p0, cp1, cp2, p1, cp1, cp2, p2, ...]
      * (Same format as BezierPath from tab-shapes.ts)
      */
@@ -203,23 +166,16 @@ export class Curve {
         ]);
     }
 
-    // -- Accessors ---------------------------------------------------------
-
-    /** The start point of the curve. */
     get start(): Point {
         return this.segments[0].p0;
     }
 
-    /** The end point of the curve. */
     get end(): Point {
         return this.segments[this.segments.length - 1].p3;
     }
 
-    // -- Evaluation --------------------------------------------------------
-
     /**
-     * Evaluate the curve at parameter t ∈ [0, 1].
-     * t is distributed uniformly across segments (not arc-length).
+     * t ∈ [0, 1], distributed uniformly across segments (not arc-length).
      */
     pointAt(t: number): Point {
         const { segment, localT } = this.resolveT(t);
@@ -238,8 +194,6 @@ export class Curve {
         }
         return { x: d.x / len, y: d.y / len };
     }
-
-    // -- Splitting ---------------------------------------------------------
 
     /**
      * Split the curve at parameter t → [before, after].
@@ -270,12 +224,10 @@ export class Curve {
     }
 
     /**
-     * Split the curve at a specific segment index + local t.
      * No global t conversion — uses the exact segment and parameter.
      */
     splitAtSegmentLocal(segmentIndex: number, localT: number): [Curve, Curve] {
         if (localT <= 1e-10) {
-            // Split at the start of this segment
             if (segmentIndex === 0) {
                 return [Curve.line(this.start, this.start), this];
             }
@@ -285,7 +237,6 @@ export class Curve {
             ];
         }
         if (localT >= 1 - 1e-10) {
-            // Split at the end of this segment
             if (segmentIndex === this.segments.length - 1) {
                 return [this, Curve.line(this.end, this.end)];
             }
@@ -302,8 +253,6 @@ export class Curve {
         ];
     }
 
-    // -- Arc length --------------------------------------------------------
-
     /**
      * Arc length computed via bezier-js (Legendre-Gauss quadrature).
      */
@@ -313,9 +262,6 @@ export class Curve {
 
     /**
      * Convert an arc-length fraction s ∈ [0, 1] to uniform parameter t.
-     *
-     * Finds the segment containing the target arc length, then uses
-     * bisection within that segment to find the precise local t.
      * Returns global uniform t = (segIndex + localT) / N.
      */
     arcLengthToT(s: number): number {
@@ -332,7 +278,6 @@ export class Curve {
         for (let i = 0; i < n; i++) {
             const segLen = this.beziers[i].length();
             if (accumulated + segLen >= targetLen - 1e-6) {
-                // Target is within this segment
                 const remaining = targetLen - accumulated;
 
                 // Bisect for precise localT (bezier-js arc length
@@ -356,12 +301,6 @@ export class Curve {
         return 1;
     }
 
-    // -- Nearest point -----------------------------------------------------
-
-    /**
-     * Find the parameter t ∈ [0, 1] where this curve is closest to a point.
-     * Uses bezier-js project() for each segment, picks the closest.
-     */
     nearestT(point: Point): number {
         const n = this.segments.length;
         let bestT = 0;
@@ -372,7 +311,6 @@ export class Curve {
             const d = dist(proj, point);
             if (d < bestDist) {
                 bestDist = d;
-                // Convert segment-local t to global t
                 bestT = (i + proj.t!) / n;
             }
         }
@@ -380,14 +318,6 @@ export class Curve {
         return bestT;
     }
 
-    // -- Intersection ------------------------------------------------------
-
-    /**
-     * Find all intersections with another curve.
-     *
-     * Uses bezier-js curve-curve intersection for each segment pair.
-     * Returns precise intersection points with accurate t-parameters.
-     */
     intersect(other: Curve, tolerance = 0.5): CurveIntersection[] {
         const results: CurveIntersection[] = [];
         const selfN = this.segments.length;
@@ -401,7 +331,6 @@ export class Curve {
 
         for (let i = 0; i < selfN; i++) {
             for (let j = 0; j < otherN; j++) {
-                // Skip pairs whose bounding boxes don't overlap
                 if (!bboxOverlap(selfBoxes[i], otherBoxes[j], tolerance)) {
                     continue;
                 }
@@ -414,21 +343,17 @@ export class Curve {
                 let pairs: Array<{ tA: number; tB: number; point: Point }>;
 
                 if (aIsLinear && bIsLinear) {
-                    // Line-line: use direct formula
                     pairs = lineLineIntersect(segA, segB);
                 } else if (aIsLinear) {
-                    // Line-curve: use bezier-js lineIntersects
                     const bz = other.beziers[j];
                     const line = { p1: segA.p0, p2: segA.p3 };
                     const ts = bz.lineIntersects(line);
                     pairs = ts.map(tB => {
                         const pt = evalCubic(segB, tB);
-                        // Find tA on the line
                         const tA = projectOntoLine(segA.p0, segA.p3, pt);
                         return { tA, tB, point: pt };
                     }).filter(p => p.tA >= -0.001 && p.tA <= 1.001);
                 } else if (bIsLinear) {
-                    // Curve-line: use bezier-js lineIntersects
                     const bz = this.beziers[i];
                     const line = { p1: segB.p0, p2: segB.p3 };
                     const ts = bz.lineIntersects(line);
@@ -480,12 +405,6 @@ export class Curve {
         return results;
     }
 
-    // -- Sampling ----------------------------------------------------------
-
-    /**
-     * Sample the curve at regular intervals (e.g. for rendering or hit-testing).
-     * @param pointsPerSegment - Number of sample points per segment (default 8).
-     */
     sample(pointsPerSegment = 8): Point[] {
         const points: Point[] = [this.start];
         for (const seg of this.segments) {
@@ -527,8 +446,6 @@ export class Curve {
         return { minX, minY, maxX, maxY };
     }
 
-    // -- Reverse -----------------------------------------------------------
-
     /**
      * Return a new curve with reversed direction.
      */
@@ -546,8 +463,6 @@ export class Curve {
         return new Curve(reversed);
     }
 
-    // -- Internal ----------------------------------------------------------
-
     private resolveT(t: number): { segment: BezierSegment; localT: number } {
         const { segmentIndex, localT } = this.resolveTWithIndex(t);
         return { segment: this.segments[segmentIndex], localT };
@@ -563,11 +478,6 @@ export class Curve {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Bézier math helpers
-// ---------------------------------------------------------------------------
-
-/** Evaluate a cubic Bézier at parameter t. */
 function evalCubic(seg: BezierSegment, t: number): Point {
     const mt = 1 - t;
     const mt2 = mt * mt;
@@ -578,7 +488,6 @@ function evalCubic(seg: BezierSegment, t: number): Point {
     };
 }
 
-/** Evaluate the first derivative of a cubic Bézier at parameter t. */
 function evalCubicDerivative(seg: BezierSegment, t: number): Point {
     const mt = 1 - t;
     return {
@@ -591,9 +500,6 @@ function evalCubicDerivative(seg: BezierSegment, t: number): Point {
     };
 }
 
-/**
- * Split a cubic Bézier segment at t using de Casteljau's algorithm.
- */
 function splitCubicAt(seg: BezierSegment, t: number): [BezierSegment, BezierSegment] {
     const { p0, cp1, cp2, p3 } = seg;
     const p01 = lerpPoint(p0, cp1, t);
@@ -609,14 +515,6 @@ function splitCubicAt(seg: BezierSegment, t: number): [BezierSegment, BezierSegm
     ];
 }
 
-// ---------------------------------------------------------------------------
-// Geometry helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Check if a cubic Bézier segment is effectively a straight line.
- * (Control points are close to the line from p0 to p3.)
- */
 function isLinearSegment(seg: BezierSegment, tolerance = 0.1): boolean {
     const dx = seg.p3.x - seg.p0.x;
     const dy = seg.p3.y - seg.p0.y;
@@ -633,9 +531,6 @@ function isLinearSegment(seg: BezierSegment, tolerance = 0.1): boolean {
     return true;
 }
 
-/**
- * Line-line intersection for two linear Bézier segments.
- */
 function lineLineIntersect(
     segA: BezierSegment,
     segB: BezierSegment,
@@ -663,9 +558,6 @@ function lineLineIntersect(
     }];
 }
 
-/**
- * Project a point onto a line segment, returning the t parameter (0–1).
- */
 function projectOntoLine(a: Point, b: Point, p: Point): number {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
@@ -687,10 +579,6 @@ function dist(a: { x: number; y: number }, b: { x: number; y: number }): number 
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-// ---------------------------------------------------------------------------
-// Bounding-box helpers for intersection pre-filtering
-// ---------------------------------------------------------------------------
-
 interface BBox {
     minX: number;
     minY: number;
@@ -698,7 +586,6 @@ interface BBox {
     maxY: number;
 }
 
-/** Compute the axis-aligned bounding box of a cubic Bézier segment. */
 function segmentBBox(seg: BezierSegment): BBox {
     return {
         minX: Math.min(seg.p0.x, seg.cp1.x, seg.cp2.x, seg.p3.x),
@@ -708,7 +595,6 @@ function segmentBBox(seg: BezierSegment): BBox {
     };
 }
 
-/** Check if two bounding boxes overlap, with a tolerance margin. */
 function bboxOverlap(a: BBox, b: BBox, margin: number): boolean {
     return (
         a.minX - margin <= b.maxX &&

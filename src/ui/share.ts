@@ -39,7 +39,6 @@ export async function sharePuzzle(opts: SharePuzzleOptions): Promise<void> {
             // Older WebKit throws DOMException for AbortError, which didn't
             // inherit from Error. Match by duck-typed name to cover both.
             if ((e as { name?: string } | null)?.name === 'AbortError') return;
-            // fall through to clipboard
         }
     }
 

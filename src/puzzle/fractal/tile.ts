@@ -1,7 +1,3 @@
-/**
- * Helpers for the Tile and DiagonalConnection value types.
- */
-
 import type { DiagonalConnection, Tile } from './types.js';
 
 export function tileEq(a: Tile, b: Tile): boolean {

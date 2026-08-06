@@ -6,8 +6,6 @@ import {
 } from './z-order.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
-// --- Test helpers ---
-
 function makeEdge(
     id: number,
     start: Point,
@@ -40,8 +38,6 @@ function makeSquarePiece(id: number): Piece {
         makeEdge(edgeBase + 3, { x: 0, y: 100 },   { x: 0, y: 0 }),
     ] });
 }
-
-// --- Tests ---
 
 describe('rectFullyContains', () => {
     it('returns true when rect A fully contains rect B', () => {
@@ -105,7 +101,6 @@ describe('rectFullyContains', () => {
 
 describe('reorderGroupsAfterDrop', () => {
     it('raises smaller groups that are fully covered by dropped group', () => {
-        // Create custom pieces with specific bounds to ensure proper coverage
         const largePiece = makePiece({ id: 0, edges: [
             makeEdge(0, { x: 0, y: 0 }, { x: 200, y: 0 }),     // top
             makeEdge(1, { x: 200, y: 0 }, { x: 200, y: 200 }), // right
@@ -182,7 +177,6 @@ describe('reorderGroupsAfterDrop', () => {
 
         reorderGroupsAfterDrop([0], state, mockBringToFront);
 
-        // No groups should be raised (same size)
         expect(raisedGroups).toHaveLength(0);
     });
 
@@ -211,12 +205,10 @@ describe('reorderGroupsAfterDrop', () => {
 
         reorderGroupsAfterDrop([0], state, mockBringToFront);
 
-        // Small group extends beyond bounds, so it should not be raised
         expect(raisedGroups).toHaveLength(0);
     });
 
     it('sorts raised groups by size descending (largest raised first)', () => {
-        // Create a large piece that will cover multiple smaller pieces
         const largePiece = makePiece({ id: 0, edges: [
             makeEdge(0, { x: 0, y: 0 }, { x: 300, y: 0 }),
             makeEdge(1, { x: 300, y: 0 }, { x: 300, y: 300 }),
@@ -224,7 +216,6 @@ describe('reorderGroupsAfterDrop', () => {
             makeEdge(3, { x: 0, y: 300 }, { x: 0, y: 0 }),
         ] });
 
-        // Create smaller pieces
         const mediumPiece1 = makePiece({ id: 1, edges: [
             makeEdge(4, { x: 0, y: 0 }, { x: 50, y: 0 }),
             makeEdge(5, { x: 50, y: 0 }, { x: 50, y: 50 }),
@@ -296,12 +287,10 @@ describe('reorderGroupsAfterDrop', () => {
 
         reorderGroupsAfterDrop([0], state, mockBringToFront);
 
-        // Should raise both covered groups, with medium group (size 2) raised before small group (size 1)
         expect(raisedGroups).toEqual([1, 3]); // Medium (2 pieces) raised first, then small (1 piece)
     });
 
     it('handles multiple dropped groups from multi-select', () => {
-        // Create large pieces for the dropped groups
         const largePiece0 = makePiece({ id: 0, edges: [
             makeEdge(0, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(1, { x: 150, y: 0 }, { x: 150, y: 150 }),
@@ -380,14 +369,12 @@ describe('reorderGroupsAfterDrop', () => {
 
         reorderGroupsAfterDrop([0, 1], state, mockBringToFront);
 
-        // Both small groups should be raised
         expect(raisedGroups).toHaveLength(2);
         expect(raisedGroups).toContain(2);
         expect(raisedGroups).toContain(3);
     });
 
     it('avoids duplicate raises when multiple dropped groups cover the same small group', () => {
-        // Create large pieces for the dropped groups
         const largePiece0 = makePiece({ id: 0, edges: [
             makeEdge(0, { x: 0, y: 0 }, { x: 150, y: 0 }),
             makeEdge(1, { x: 150, y: 0 }, { x: 150, y: 150 }),
@@ -458,7 +445,6 @@ describe('reorderGroupsAfterDrop', () => {
 
         reorderGroupsAfterDrop([0, 1], state, mockBringToFront);
 
-        // Small group should be raised only once, despite being covered by both dropped groups
         expect(raisedGroups).toEqual([2]);
     });
 
@@ -487,7 +473,7 @@ describe('reorderGroupsAfterDrop', () => {
             raisedGroups.push(groupId);
         };
 
-        reorderGroupsAfterDrop([999], state, mockBringToFront); // Non-existent group ID
+        reorderGroupsAfterDrop([999], state, mockBringToFront);
 
         expect(raisedGroups).toHaveLength(0);
     });

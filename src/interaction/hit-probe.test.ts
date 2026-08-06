@@ -40,7 +40,6 @@ describe('probeNearbyPieceId', () => {
     });
 
     it('returns the piece found by a sampled point', () => {
-        // Report piece 5 only for points to the right of the press.
         const pieceIdAt = (p: { x: number; y: number }) =>
             p.x > 100 ? 5 : null;
         const result = probeNearbyPieceId({ x: 100, y: 100 }, pieceIdAt);
@@ -66,7 +65,6 @@ describe('probeNearbyPieceId', () => {
             seen.push(p);
             return null;
         });
-        // Every probed point is the press plus an offset within the radius.
         for (const p of seen) {
             expect(Math.hypot(p.x - 50, p.y - 70)).toBeLessThanOrEqual(HIT_PROBE_RADIUS_PX + 1e-9);
         }

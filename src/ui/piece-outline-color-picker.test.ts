@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the piece-outline color picker adapter.
- */
-
 import { describe, it, expect, vi } from 'vitest';
 import { createPieceOutlineColorPicker } from './piece-outline-color-picker.js';
 import { PIECE_OUTLINE_COLOR_PRESETS } from './piece-outline-color.js';

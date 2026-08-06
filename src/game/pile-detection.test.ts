@@ -8,8 +8,6 @@ import {
 } from './pile-detection.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
-// --- Test helpers ---
-
 function makeEdge(
     id: number,
     start: Point,
@@ -76,8 +74,6 @@ function makeSquarePiece(
         ), // left
     ] });
 }
-
-// --- Tests ---
 
 describe('rectsOverlap', () => {
     it('detects overlap when rects share a region', () => {

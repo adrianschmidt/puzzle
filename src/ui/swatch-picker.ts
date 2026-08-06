@@ -1,8 +1,4 @@
 /**
- * Reusable swatch-grid picker: a button that opens a dismissable popover
- * containing a grid of color swatches. Selecting a swatch fires
- * `onSelect(id)` and closes the popover.
- *
  * The component is color-source agnostic — callers pass swatches as
  * data — so it can back both the background-color picker and the
  * piece-outline color picker (#392).
@@ -11,25 +7,20 @@
 import { attachDismissablePopover } from './dismissable-overlay.js';
 
 /**
- * A swatch to render. All fields must be caller-trusted: `color` is
- * written to `style.backgroundColor` and `label` to `aria-label`/`title`,
- * so callers must not pass untrusted/user-supplied strings.
+ * All fields must be caller-trusted: `color` is written to
+ * `style.backgroundColor` and `label` to `aria-label`/`title`, so callers
+ * must not pass untrusted/user-supplied strings.
  */
 export interface SwatchEntry {
-    /** Stable id reported to `onSelect`. */
     id: string;
-    /** Accessible label / tooltip. */
     label: string;
-    /** CSS color value shown in the swatch. */
     color: string;
 }
 
 export interface SwatchPickerOptions {
-    /** The container to append the button to. */
     container: HTMLElement;
-    /** Trigger-button presentation. `className` positions the button. */
+    /** `className` positions the button. */
     button: { icon: string; title: string; className: string };
-    /** Accessible label for the grid (listbox). */
     ariaLabel: string;
     /**
      * Extra class on the grid panel, added alongside `swatch-grid`. The
@@ -39,19 +30,15 @@ export interface SwatchPickerOptions {
      * independently instead of stacking at the same coordinates.
      */
     panelClassName?: string;
-    /** Swatches to render. */
     swatches: readonly SwatchEntry[];
-    /** Currently selected swatch id. */
     selectedId: string;
-    /** Called with the chosen swatch id. */
     onSelect: (id: string) => void;
-    /** Grid column count (default 20). */
+    /** Default 20. */
     columnCount?: number;
 }
 
 const DEFAULT_COLUMNS = 20;
 
-/** Create a single swatch button. */
 export function createSwatch(
     entry: SwatchEntry,
     isSelected: boolean,
@@ -73,7 +60,6 @@ export function createSwatch(
     return swatch;
 }
 
-/** Create the grid panel (listbox of swatches). */
 export function createSwatchGrid(
     swatches: readonly SwatchEntry[],
     selectedId: string,
@@ -105,7 +91,6 @@ export function createSwatchGrid(
     return grid;
 }
 
-/** Handle returned by {@link createSwatchPicker}. */
 export interface SwatchPickerHandle {
     /**
      * Update the highlighted swatch when the selection changed outside
@@ -114,14 +99,9 @@ export interface SwatchPickerHandle {
      * from the current id on the next open.
      */
     setSelected: (id: string) => void;
-    /** Remove the picker (button + any open panel) from the DOM. */
     dispose: () => void;
 }
 
-/**
- * Create and attach the swatch picker (button + popover). Returns a
- * handle with `setSelected` and `dispose`.
- */
 export function createSwatchPicker(options: SwatchPickerOptions): SwatchPickerHandle {
     const { container, swatches, onSelect, ariaLabel, columnCount, panelClassName } =
         options;

@@ -24,7 +24,6 @@ import type { GameState, GridSize } from '../model/types.js';
 import { runBootSequence, type BootSequenceDeps } from './boot-sequence.js';
 import type { StartNewGameOptions } from './start-new-game.js';
 
-/** Click the corrupt-save dialog's "Start new game" button. */
 function dismissCorruptSaveDialog(container: HTMLElement): void {
     const btn = Array.from(
         container.querySelectorAll<HTMLButtonElement>('.corrupt-save-btn'),
@@ -304,7 +303,6 @@ describe('runBootSequence', () => {
             const promise = runBootSequence(d);
             await flushUntil(() => d.container.querySelector('.corrupt-save-dialog') !== null);
 
-            // The dialog is up and the fresh start must not have run yet.
             expect(start).not.toHaveBeenCalled();
 
             dismissCorruptSaveDialog(d.container);

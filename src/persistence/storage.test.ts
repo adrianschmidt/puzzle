@@ -2,12 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the persistence storage layer.
- *
- * Uses jsdom's localStorage implementation via Vitest's jsdom environment.
- */
-
 // vi.mock is hoisted to the top by Vitest. Wrapping decompressFromStorage in a
 // vi.fn pass-through makes it spy-able even when called from within storage.ts,
 // which holds a direct binding to the function. The mock calls the real
@@ -56,19 +50,16 @@ beforeAll(() => {
     installGeometryTokenInvalidation();
 });
 
-/** The persisted selection, or `[]` when nothing/none is saved. */
 function loadedSelection(): number[] {
     const outcome = loadSavedGame();
     return outcome.status === 'ok' ? outcome.selection : [];
 }
 
-/** The persisted viewport, or undefined when none is saved. */
 function loadedViewport(): SerializedViewport | undefined {
     const outcome = loadSavedGame();
     return outcome.status === 'ok' ? outcome.viewport : undefined;
 }
 
-/** Assert the save loaded successfully and return its `ok` payload. */
 function expectLoaded(): { state: GameState; selection: number[] } {
     const outcome = loadSavedGame();
     expect(outcome.status).toBe('ok');
@@ -216,7 +207,6 @@ describe('saveNewPuzzle quota handling', () => {
         spy.mockRestore();
 
         expect(result).toBe('ok-compressed');
-        // At least the geometry key should be compressed.
         const stored = localStorage.getItem(STORAGE_KEY)!;
         expect(stored.startsWith(COMPRESSED_MARKER)).toBe(true);
 
@@ -302,13 +292,13 @@ describe('saveNewPuzzle quota handling', () => {
                 realSetItem.call(this, key, value);
             });
 
-        const result = saveNewPuzzle(makeGameState({ seed: 1 }), [0]); // empty storage
+        const result = saveNewPuzzle(makeGameState({ seed: 1 }), [0]);
         spy.mockRestore();
         warnSpy.mockRestore();
 
         expect(result).toBe('failed');
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-        expect(localStorage.getItem(PROGRESS_KEY)).toBeNull(); // no orphan progress
+        expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
         expect(loadSavedGame().status).toBe('empty');
     });
 });
@@ -385,7 +375,7 @@ describe('split storage', () => {
         const geometryBefore = localStorage.getItem(STORAGE_KEY);
 
         saveProgress(state, [2]);
-        expect(localStorage.getItem(STORAGE_KEY)).toBe(geometryBefore); // unchanged
+        expect(localStorage.getItem(STORAGE_KEY)).toBe(geometryBefore);
         expect(expectLoaded().selection).toEqual([2]);
     });
 
@@ -452,7 +442,6 @@ describe('split storage', () => {
             completed: false, seed: 9,
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy));
-        // A newer progress write lands in the progress key.
         saveProgress(state, [0]);
         const loaded = expectLoaded();
         expect(loaded.selection).toEqual([0]); // from progress, not the legacy blob
@@ -461,7 +450,7 @@ describe('split storage', () => {
     });
 
     it('reports "empty" for an orphaned progress key when geometry is missing', () => {
-        saveProgress(makeGameState({ seed: 5 }), [1]); // only the progress key, no geometry
+        saveProgress(makeGameState({ seed: 5 }), [1]);
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
         // No geometry anchor: the stray progress key is a harmless torn-write
         // artifact, not a recognizable save, so this is "empty" not "unreadable".
@@ -477,14 +466,14 @@ describe('saveProgress cross-tab guard (#404)', () => {
 
     it('refuses to overwrite progress when the stored geometry is a different puzzle', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        saveNewPuzzle(makeGameState({ seed: 1 }), [0]); // geometry=1, progress=1
+        saveNewPuzzle(makeGameState({ seed: 1 }), [0]);
         const progressBefore = localStorage.getItem(PROGRESS_KEY);
 
         const result = saveProgress(makeGameState({ seed: 2 }), [1]); // stale tab
         warnSpy.mockRestore();
 
         expect(result).toBe('skipped');
-        expect(localStorage.getItem(PROGRESS_KEY)).toBe(progressBefore); // untouched
+        expect(localStorage.getItem(PROGRESS_KEY)).toBe(progressBefore);
     });
 
     it('logs why it skipped a mismatched progress write', () => {
@@ -504,7 +493,7 @@ describe('saveProgress cross-tab guard (#404)', () => {
         warnSpy.mockRestore();
 
         const loaded = expectLoaded();
-        expect(loaded.state.seed).toBe(1); // still puzzle 1, pair intact
+        expect(loaded.state.seed).toBe(1);
     });
 
     it('writes normally when the stored geometry is the same puzzle', () => {
@@ -532,7 +521,7 @@ describe('saveProgress cross-tab guard (#404)', () => {
     });
 
     it('writes when either side has no seed (only a confirmed mismatch skips)', () => {
-        saveNewPuzzle(makeGameState({ seed: 5 }), []); // geometry has seed 5
+        saveNewPuzzle(makeGameState({ seed: 5 }), []);
         const result = saveProgress(makeGameState(), [1]); // progress has no seed
         expect(result).not.toBe('skipped');
     });
@@ -1063,14 +1052,11 @@ describe('createDebouncedSave', () => {
         save(state1);
         vi.advanceTimersByTime(300);
 
-        // Second save within the debounce window resets the timer
         save(state2);
         vi.advanceTimersByTime(300);
 
-        // 300ms after second call — not yet saved
         expect(localStorage.getItem(PROGRESS_KEY)).toBeNull();
 
-        // Remaining 200ms — now it fires
         vi.advanceTimersByTime(200);
         const restored = loadState();
         expect(restored!.imageUrl).toBe('second.jpg');

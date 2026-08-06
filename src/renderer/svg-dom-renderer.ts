@@ -1,11 +1,4 @@
 /**
- * SVG/DOM renderer implementation.
- *
- * Each piece is an `<svg>` holding either an `<image>` clipped to the piece
- * shape, or — for a blank puzzle, which has no image — a flat-filled `<path>`
- * of that same shape. Only the image form builds the clip path.
- * Groups are absolutely positioned `<div>` containers with CSS transforms.
- *
  * Coordinate system:
  * - Pieces define their shapes in piece-local coordinates
  *   (origin at piece's top-left corner, before tabs/blanks extend beyond)
@@ -18,15 +11,10 @@ import { getPieceBounds } from '../model/derive.js';
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
 import { VIEWPORT_TRANSITION_MS, type Renderer } from './types.js';
 
-/**
- * Extra padding around each piece's SVG element to accommodate
- * tabs that extend beyond the base piece rectangle.
- */
+/** Accommodates tabs that extend beyond the base piece rectangle. */
 const PIECE_PADDING = 30;
 
 /**
- * The CSS `transition` value {@link VIEWPORT_TRANSITION_MS} spells out.
- *
  * Exported for the one caller outside this module that writes a `transition`
  * itself: `app/viewport-fit.ts` spins the completed group in lockstep with
  * the viewport zoom, through the same direct-DOM route it already uses for
@@ -36,8 +24,6 @@ const PIECE_PADDING = 30;
 export const VIEWPORT_TRANSITION = `transform ${VIEWPORT_TRANSITION_MS / 1000}s ease-in-out`;
 
 /**
- * Write a group container's CSS transform.
- *
  * Single source of truth for the `translate(...) rotate(...)` string so
  * callers outside the renderer (e.g. the completion spin animation) stay in
  * sync with how groups are normally rendered.
@@ -87,11 +73,9 @@ export class SvgDomRenderer implements Renderer {
     renderState(gameState: GameState): void {
         if (!this.tableEl) return;
 
-        // When the puzzle changes (new game), invalidate all cached SVG
-        // elements. Piece IDs restart at 0 each game, so stale elements
-        // would be reused with wrong shapes if not cleared.
-        // We detect a new game by checking image URL, piece count, AND
-        // the first piece's shape as a fingerprint.
+        // On a new game, invalidate all cached SVG elements: piece IDs
+        // restart at 0 each game, so stale elements would be reused with
+        // wrong shapes if not cleared.
         const pieceCount = gameState.pieces.length;
         const shapeFingerprint = gameState.pieces[0]?.shape ?? '';
         if (gameState.imageUrl !== this.currentImageUrl ||
@@ -119,7 +103,6 @@ export class SvgDomRenderer implements Renderer {
             this.renderGroup(group, pieceLookup, gameState.imageUrl);
         }
 
-        // Remove groups that no longer exist (after merging)
         for (const [groupId, el] of this.groupElements) {
             if (!activeGroupIds.has(groupId)) {
                 el.remove();
@@ -127,7 +110,6 @@ export class SvgDomRenderer implements Renderer {
             }
         }
 
-        // Remove orphaned piece elements
         const activePieceIds = new Set<number>();
         for (const group of gameState.groups) {
             for (const pieceId of group.pieces.keys()) {
@@ -193,13 +175,12 @@ export class SvgDomRenderer implements Renderer {
         const el = this.groupElements.get(groupId);
         if (!el) return;
 
-        // Restart the animation by removing and re-adding the class
         el.classList.remove('merge-pulse');
-        // Force a reflow to restart the animation
+        // Force a reflow so removing and re-adding the class restarts the
+        // animation.
         void el.offsetWidth;
         el.classList.add('merge-pulse');
 
-        // Clean up the class when the animation ends
         el.addEventListener(
             'animationend',
             () => el.classList.remove('merge-pulse'),
@@ -233,15 +214,6 @@ export class SvgDomRenderer implements Renderer {
         this.pieceElements.clear();
     }
 
-    // --- Private rendering helpers ---
-
-    /**
-     * Remove all cached group and piece DOM elements.
-     *
-     * Called when the puzzle image (or grid size) changes so that every
-     * SVG piece element is recreated with the correct clip-path and
-     * dimensions.
-     */
     private clearAllElements(): void {
         for (const el of this.groupElements.values()) {
             el.remove();
@@ -250,7 +222,7 @@ export class SvgDomRenderer implements Renderer {
         this.groupElements.clear();
 
         // Piece elements live inside group containers, so they are already
-        // removed from the DOM above.  We just need to clear the map.
+        // removed from the DOM above.
         this.pieceElements.clear();
     }
 
@@ -274,10 +246,8 @@ export class SvgDomRenderer implements Renderer {
 
         applyGroupTransform(groupEl, group.position, group.rotation);
 
-        // Track which pieces should be in this group
         const expectedPieceIds = new Set(group.pieces.keys());
 
-        // Remove pieces that moved to a different group
         for (const child of Array.from(groupEl.children)) {
             const pieceId = Number((child as HTMLElement).dataset.pieceId);
 
@@ -286,7 +256,6 @@ export class SvgDomRenderer implements Renderer {
             }
         }
 
-        // Add/update pieces in this group
         for (const [pieceId, offset] of group.pieces) {
             const piece = pieceLookup.get(pieceId);
             if (!piece) continue;
@@ -395,14 +364,10 @@ export class SvgDomRenderer implements Renderer {
             svg.appendChild(edgePath);
         }
 
-        // Debug overlay: white-fill / black-outline piece shape, a stable
-        // piece-ID label, and an arrow marking piece-local "up" (so a
-        // player can see how a rotated group was originally oriented).
-        // All hidden by default; toggled together via .show-debug-pieces.
+        // Hidden by default; toggled via .show-debug-pieces.
         this.appendDebugPieceOverlay(svg, piece);
 
-        // Disable pointer events on the SVG container itself —
-        // only the hit-area paths should respond.
+        // Only the hit-area paths should respond to pointer events.
         svg.style.pointerEvents = 'none';
 
         return svg;
@@ -414,10 +379,8 @@ export class SvgDomRenderer implements Renderer {
     }
 
     /**
-     * Append the debug piece-view elements (fill, ID label, up arrow).
-     *
-     * They're always in the DOM so the toggle can flip them instantly
-     * without re-rendering. Defaults to hidden via CSS.
+     * Always in the DOM so the toggle can flip them instantly without
+     * re-rendering. Defaults to hidden via CSS.
      */
     private appendDebugPieceOverlay(svg: SVGSVGElement, piece: Piece): void {
         const svgNS = 'http://www.w3.org/2000/svg';
@@ -449,7 +412,6 @@ export class SvgDomRenderer implements Renderer {
         label.dataset.pieceLabel = 'true';
         svg.appendChild(label);
 
-        // Upward-pointing triangle near the top of the piece's bbox.
         // Drawn in piece-local space, so group rotation carries it along —
         // it always points toward what was originally "up".
         const arrowHalf = 5;

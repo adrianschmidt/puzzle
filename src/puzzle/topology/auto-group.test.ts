@@ -23,7 +23,7 @@ describe('autoGroupSmallPieces', () => {
         const groups = autoGroupSmallPieces(ctx, 50);
         expect(groups).toHaveLength(2);
         const grouped = groups.find(g => g.pieceIds.includes(1))!;
-        expect(grouped.pieceIds).toContain(2);   // joined with the larger neighbour
+        expect(grouped.pieceIds).toContain(2);
         expect(grouped.pieceIds).not.toContain(0);
     });
 
@@ -34,7 +34,7 @@ describe('autoGroupSmallPieces', () => {
         );
         const groups = autoGroupSmallPieces(ctx, 50);
         const grouped = groups.find(g => g.pieceIds.includes(1))!;
-        expect(grouped.pieceIds).toContain(0);   // lowest id wins
+        expect(grouped.pieceIds).toContain(0);
         expect(grouped.pieceIds).not.toContain(2);
     });
 

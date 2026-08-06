@@ -1,10 +1,8 @@
 import { BUNDLED_IMAGE_URL, BUNDLED_PORTRAIT_IMAGE_URL } from './bundled-image.js';
 
 /**
- * Heuristically classify a puzzle image URL into one of the sources we
- * care about for analytics. Used when the puzzle origin (a share
- * payload, or a resumed save) only carries the URL — not the choice
- * that produced it.
+ * Used when the puzzle origin (a share payload, or a resumed save) only
+ * carries the URL — not the choice that produced it.
  *
  * `'bundled'` is the shipped image (first-run puzzles and
  * Unsplash-failure fallbacks — the fresh-game path distinguishes the
@@ -33,8 +31,6 @@ export function classifyImageSource(
 }
 
 /**
- * Resolve the analytics image-source label for a freshly-started game.
- *
  * A first-run start reuses the bundled image URL, so
  * {@link classifyImageSource} alone can't tell it from an
  * Unsplash-fetch-failure fallback (both land on the bundled URL). The

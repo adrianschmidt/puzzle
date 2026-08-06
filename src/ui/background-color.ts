@@ -1,13 +1,9 @@
 /**
- * Background color presets and persistence.
- *
- * Presets are the full extended palette (see `palette.ts` / `palette.css`).
  * Each preset's `color` is a `var(--color-<id>)` reference, so the chosen
  * background and every swatch flip between light/dark shades with the OS
- * theme automatically. The chosen preset is saved by its stable string id.
- * Preferences saved before the palette switch (an old preset id or an
- * even-older bare integer index) migrate to their nearest new swatch via
- * `LEGACY_COLOR_MAP`; anything unrecognized falls back to the default.
+ * theme automatically. Preferences saved before the palette switch (an old
+ * preset id or an even-older bare integer index) migrate to their nearest
+ * new swatch via `LEGACY_COLOR_MAP`.
  */
 
 import { diagnostics } from '../diagnostics.js';
@@ -16,16 +12,13 @@ import { PALETTE_SWATCHES, type PaletteSwatch } from './palette.js';
 import type { SwatchEntry } from './swatch-picker.js';
 
 /**
- * A background preset is just a palette swatch (`{ id, label, color }`,
- * where `color` is a `var(--color-<id>)` reference). Aliased so the
- * public name stays meaningful while there's a single shape.
+ * Aliased so the public name stays meaningful while there's a single shape.
  */
 export type BackgroundColorPreset = PaletteSwatch;
 
-/** Default preset id — a fixed dark hue (closest to the old "midnight"). */
+/** Closest to the old "midnight" default. */
 export const DEFAULT_COLOR_ID = 'indigo-darker';
 
-/** localStorage key for the saved background color. */
 export const COLOR_PREFERENCE_KEY = 'puzzle-background-color';
 
 /**
@@ -35,7 +28,6 @@ export const COLOR_PREFERENCE_KEY = 'puzzle-background-color';
  */
 const LEGACY_COLOR_PREFERENCE_KEY = 'puzzle-background-colour';
 
-/** CSS custom property name applied to the document root. */
 export const CSS_CUSTOM_PROPERTY = '--puzzle-bg-color';
 
 const swatchById = new Map<string, PaletteSwatch>(
@@ -51,9 +43,8 @@ if (defaultSwatchOrUndef === undefined) {
 const defaultSwatch: PaletteSwatch = defaultSwatchOrUndef;
 
 /**
- * Available background color presets (the full palette). `satisfies`
- * documents that a preset is a valid `SwatchEntry`, so it feeds the
- * swatch picker directly.
+ * `satisfies` documents that a preset is a valid `SwatchEntry`, so it
+ * feeds the swatch picker directly.
  */
 export const BACKGROUND_COLOR_PRESETS: readonly BackgroundColorPreset[] =
     PALETTE_SWATCHES satisfies readonly SwatchEntry[];
@@ -69,11 +60,10 @@ const store = createStringPreference({
 export const saveColorPreference = store.save;
 
 /**
- * Migration for preferences saved before the palette switch. Each of the
- * old 12 preset ids maps to its nearest equivalent in the new palette, so
- * a returning user keeps a similar background instead of being reset to
- * the default. Curated for hue character rather than blind nearest:
- * neutral grays map to grays, tinted pastels stay in their hue family.
+ * Each old preset id maps to its nearest equivalent in the new palette, so
+ * a returning user keeps a similar background. Curated for hue character
+ * rather than blind nearest: neutral grays map to grays, tinted pastels
+ * stay in their hue family.
  */
 const LEGACY_NEAREST: Record<string, string> = {
     midnight: 'indigo-darker',
@@ -99,7 +89,6 @@ const LEGACY_ORDER = [
     'hot-pink', 'blush', 'peach', 'sage', 'sky', 'lavender',
 ] as const;
 
-/** Both old string ids and old integer indices → nearest new swatch id. */
 const LEGACY_COLOR_MAP: Record<string, string> = {
     ...LEGACY_NEAREST,
     ...Object.fromEntries(
@@ -118,7 +107,6 @@ for (const target of Object.values(LEGACY_COLOR_MAP)) {
     }
 }
 
-/** Resolve a raw stored value to a valid swatch id, legacy-aware. */
 function resolveStoredId(raw: string): string {
     if (Object.hasOwn(LEGACY_COLOR_MAP, raw)) {
         return LEGACY_COLOR_MAP[raw];
@@ -126,14 +114,6 @@ function resolveStoredId(raw: string): string {
     return ALLOWED_IDS.includes(raw) ? raw : DEFAULT_COLOR_ID;
 }
 
-/**
- * Load the saved background id. A current id loads as-is; a recognized
- * legacy value (old preset id or integer index) migrates to its nearest
- * new swatch; anything else falls back to the default.
- *
- * A preference still under the old British-spelling key is read once and
- * rewritten under {@link COLOR_PREFERENCE_KEY}, then the old key is dropped.
- */
 export function loadColorPreference(): string {
     let raw: string | null;
     let fromLegacyKey = false;
@@ -151,7 +131,6 @@ export function loadColorPreference(): string {
     }
     const resolved = resolveStoredId(raw);
     if (fromLegacyKey) {
-        // One-time key migration: rewrite under the new key, drop the old.
         try {
             saveColorPreference(resolved);
             localStorage.removeItem(LEGACY_COLOR_PREFERENCE_KEY);
@@ -162,15 +141,11 @@ export function loadColorPreference(): string {
     return resolved;
 }
 
-/** Outcome of offering a share link's background color to this client. */
 export type SharedColorOutcome = 'adopted' | 'kept-own' | 'invalid';
 
 /**
- * Adopt a background color carried by a share link — but only for a
- * recipient who has never chosen one (neither the current key nor the
- * legacy British-spelling key exists). Adoption persists the color as
- * the normal preference, so it survives reloads; a recipient with a
- * preference keeps it untouched. Raw key existence is the test:
+ * Adopt a share link's background color only for a recipient who has
+ * never chosen one. Raw key existence is the test:
  * `loadColorPreference()` returns the default either way.
  */
 export function adoptSharedBackgroundColor(id: string): SharedColorOutcome {
@@ -191,15 +166,10 @@ export function adoptSharedBackgroundColor(id: string): SharedColorOutcome {
     return 'adopted';
 }
 
-/** Get the preset for an id, or the default preset for an unknown id. */
 export function getColorPreset(id: string): BackgroundColorPreset {
     return swatchById.get(id) ?? defaultSwatch;
 }
 
-/**
- * Parse a CSS color string (`rgb()`/`rgba()` from getComputedStyle, or a
- * 6-digit hex) into [r, g, b], or null if unrecognized.
- */
 function parseRgb(color: string): [number, number, number] | null {
     // Accept both legacy comma syntax `rgb(r, g, b)` and CSS Color Level 4
     // space syntax `rgb(r g b / a)`, with optional fractional channels.
@@ -226,22 +196,11 @@ function luminanceIsLight([r, g, b]: [number, number, number]): boolean {
     return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.4;
 }
 
-/**
- * Determine whether a color is perceptually light (relative luminance >
- * 0.4). Accepts an `rgb()/rgba()` string or a hex string; an unparseable
- * value is treated as dark.
- */
 export function isLightColor(color: string): boolean {
     const parsed = parseRgb(color);
     return parsed !== null && luminanceIsLight(parsed);
 }
 
-/**
- * Apply a background color to the document root. The color itself is a
- * CSS variable reference (so it flips with the OS theme via CSS); the
- * luminance-derived `data-ui-scheme` chrome is computed here from the
- * resolved color.
- */
 export function applyBackgroundColor(id: string): void {
     const preset = getColorPreset(id);
     // Drives the visible background — style.css applies it on :root.

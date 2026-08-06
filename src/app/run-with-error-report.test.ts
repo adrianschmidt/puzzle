@@ -109,7 +109,6 @@ describe('runWithErrorReport', () => {
 
         expect(console.error).toHaveBeenCalledWith('Failed to load repro puzzle:', error);
         expect(console.warn).not.toHaveBeenCalled();
-        // The toast and the Umami event still fire.
         expect(showToast).toHaveBeenCalledWith("Couldn't load repro puzzle");
         expect(umamiTrack).toHaveBeenCalledWith('shared-load-failed', {
             reason: 'topology unsupported',

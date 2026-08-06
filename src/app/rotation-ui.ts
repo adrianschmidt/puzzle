@@ -1,14 +1,9 @@
 /**
- * The floating rotation controls: the quarter-turn button pair, the
- * free-rotation drag handle, and the plumbing shared between them — a snap
- * proximity controller for the drag gesture and a screen-space bounds
- * projector both read.
- *
- * Bundled together because they share almost everything: both controls
- * float next to whichever group has rotate focus, both rotate the same way
- * (`rotateGroup` + re-render + re-apply selection visuals), and both commit
- * through the same merge-detection path. Only which pair is visible depends
- * on the game's `rotationMode`.
+ * The two rotation controls are bundled because they share almost
+ * everything: both float next to whichever group has rotate focus, both
+ * rotate the same way (`rotateGroup` + re-render + re-apply selection
+ * visuals), and both commit through the same merge-detection path. Only
+ * which pair is visible depends on the game's `rotationMode`.
  */
 
 import type { GameState } from '../model/types.js';
@@ -24,20 +19,16 @@ import { localToWorld } from '../model/helpers.js';
 import { activeSnapTolerances } from './snap-tolerances.js';
 
 /**
- * The rotation UI's public surface: syncing which control is visible.
- *
- * That is the whole of it. Everything else the module builds — the screen-
- * space bounds projection, the rotate/commit handlers — is handed to the two
- * controls themselves, so the composition root needs none of it.
+ * Syncing visibility is deliberately the whole public surface. Everything
+ * else the module builds — the screen-space bounds projection, the
+ * rotate/commit handlers — is handed to the two controls themselves, so the
+ * composition root needs none of it.
  */
 export interface RotationUi {
-    /** Show the controls matching `state.rotationMode`, hiding the others. */
     syncVisibility: (state: GameState | undefined) => void;
 }
 
 /**
- * Create the rotation UI.
- *
  * Returns an object literal of closures rather than a class instance so
  * `syncVisibility` can be handed to a caller as a bare value — no `.bind`,
  * no wrapper arrow — and still work. The composition root passes it into
@@ -71,11 +62,6 @@ export function createRotationUi(deps: {
         applyMerge,
     } = deps;
 
-    /**
-     * Project the visual bounds of the given group from world space into
-     * screen space, using the current viewport transform. Returns `null` if
-     * the group is no longer in the game state, or there is no game at all.
-     */
     function getFocusedGroupScreenBounds(
         groupId: number,
     ): { left: number; right: number; top: number; bottom: number } | null {
@@ -93,8 +79,6 @@ export function createRotationUi(deps: {
         return { left: tl.x, top: tl.y, right: br.x, bottom: br.y };
     }
 
-    // Set up the rotate buttons (bottom-left, fractal-only).
-    // Visibility is updated whenever a game is installed.
     const rotateButtons = createRotateButtons({
         container,
         rotationFocus,
@@ -108,7 +92,8 @@ export function createRotationUi(deps: {
             rotateGroup(group, state.piecesById, deltaDeg);
 
             renderer.renderState(state);
-            // Re-apply selection visuals after re-render (rotation re-renders the group).
+            // Re-apply selection visuals after re-render (renderState may
+            // recreate elements).
             for (const selectedId of selectionManager.selectedGroupIds) {
                 renderer.setGroupSelected(selectedId, true);
             }
@@ -137,7 +122,8 @@ export function createRotationUi(deps: {
             rotateGroup(group, state.piecesById, deltaDegrees);
             snapPosition.onGroupRotated();
             renderer.renderState(state);
-            // Re-apply selection visuals after re-render.
+            // Re-apply selection visuals after re-render (renderState may
+            // recreate elements).
             for (const selectedId of selectionManager.selectedGroupIds) {
                 renderer.setGroupSelected(selectedId, true);
             }
@@ -180,7 +166,6 @@ export function createRotationUi(deps: {
         screenToWorld: (clientX, clientY) => viewportTransform.screenToWorld({ x: clientX, y: clientY }),
     });
 
-    /** Show the controls matching `state.rotationMode`, hiding the others. */
     function syncVisibility(state: GameState | undefined): void {
         if (state?.rotationMode === 'quarter-turn') {
             rotateButtons.show();

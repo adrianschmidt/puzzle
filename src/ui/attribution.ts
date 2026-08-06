@@ -1,8 +1,5 @@
 /**
- * Attribution display for puzzle images.
- *
- * Shows photographer credit as required by the Unsplash API guidelines.
- * Renders as a small, unobtrusive link in the corner of the puzzle area.
+ * Photographer credit is required by the Unsplash API guidelines.
  */
 
 import type { ImageAttribution } from '../model/types.js';
@@ -10,12 +7,6 @@ import { isSafeHttpUrl } from '../sharing/safe-url.js';
 
 const ATTRIBUTION_CLASS = 'image-attribution';
 
-/**
- * Create an attribution element for the current puzzle image.
- *
- * Displays "Photo by {name} on Unsplash" with appropriate links,
- * following Unsplash API guidelines for attribution.
- */
 export function createAttributionElement(
     attribution: ImageAttribution,
 ): HTMLElement {
@@ -50,9 +41,6 @@ export function createAttributionElement(
     return container;
 }
 
-/**
- * Remove any existing attribution element from the container.
- */
 export function removeAttribution(container: HTMLElement): void {
     const existing = container.querySelector(`.${ATTRIBUTION_CLASS}`);
 
@@ -62,10 +50,8 @@ export function removeAttribution(container: HTMLElement): void {
 }
 
 /**
- * Build the inner HTML string for an attribution element.
- *
- * Pure function for easy testing. The actual DOM creation uses
- * `createAttributionElement` which sets proper link attributes.
+ * Kept pure for easy testing; DOM creation with proper link attributes
+ * happens in `createAttributionElement`.
  */
 export function formatAttributionText(attribution: ImageAttribution): string {
     return `Photo by ${attribution.photographerName} on Unsplash`;

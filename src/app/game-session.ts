@@ -56,21 +56,10 @@ export interface GameSession {
      * stricter than `current() !== undefined`: see `install`.
      */
     hasGame(): boolean;
-    /** Render `state`, make it current, and wire interaction to it. */
     install(state: GameState): void;
-    /** Re-apply a multi-select selection persisted from a previous session. */
     restoreSelection(saved: readonly number[]): void;
 }
 
-/**
- * Create the session that owns game installation.
- *
- * The collaborators it cannot own itself are injected: the DOM container and
- * renderer it draws through, the shared viewport/selection/rotation state,
- * and five callbacks for the parts of installation and drop handling that
- * belong to the composition root (attribution, rotation UI, the completion
- * overlay, analytics-carrying merges, and persistence).
- */
 export function createGameSession(deps: {
     container: HTMLElement;
     renderer: Renderer;
@@ -81,7 +70,6 @@ export function createGameSession(deps: {
     onInstalled: (state: GameState) => void;
     /** Debounced progress save. */
     save: (state: GameState) => void;
-    /** Apply a merge produced by a drop. */
     applyMerge: (
         state: GameState,
         result: MergeResult,
@@ -178,7 +166,6 @@ export function createGameSession(deps: {
                     const current = liveState();
                     const { tolerancePx, rotationToleranceDeg } = activeSnapTolerances(current);
 
-                    // Primary dragged group + any selected groups (multi-select mode).
                     const droppedGroupIds = [...selectionManager.expandToSelectionIfActive(groupId)];
 
                     const result = processDrop(groupId, current, tolerancePx, rotationToleranceDeg);
@@ -186,7 +173,6 @@ export function createGameSession(deps: {
                         applyMerge(current, result, droppedGroupIds);
                         save(current);
                     } else {
-                        // No merge: z-reorder the original dropped groups as-is.
                         reorderGroupsAfterDrop(
                             droppedGroupIds,
                             current,
@@ -207,8 +193,6 @@ export function createGameSession(deps: {
         },
 
         /**
-         * Re-apply a multi-select selection persisted from a previous session.
-         *
          * Called only on the saved-game restore path, right after `install`
          * has put the restored state in place (and cleared any in-memory
          * selection). Group ids are stable across a reload, so the saved ids

@@ -1,12 +1,4 @@
 /**
- * The traced-tab decision for a *new* game, in the two halves it
- * naturally has: what to do before the lazy chunk fetch starts, and what
- * the fetch's outcome means once it settles.
- *
- * Extracted from `main.ts` because that file is not importable under
- * test, so every rule here — including the Classic degradation — was
- * previously unverifiable.
- *
  * Reproducing an existing save or share link is a different question and
  * does not go through here: those carry their own per-style config, and
  * a pre-upgrade Classic link or a legacy-tab Wavy link needs no chunk
@@ -16,9 +8,8 @@
 import { cutStyleNeedsTracedTabs, type CutStyle } from '../game/cut-styles.js';
 
 export interface TracedTabPlan {
-    /** Cut style the game is actually generated with. */
+    /** Cut style the game is actually generated with — may differ from the requested one. */
     cutStyle: CutStyle;
-    /** Whether to start the lazy traced-tab chunk fetch. */
     preloadChunk: boolean;
     /**
      * Generate the legacy straight-grid Classic cut whatever the chunk
@@ -44,9 +35,6 @@ export interface TracedTabPlan {
 export const BOOT_FALLBACK_CUT_STYLE: CutStyle = 'classic';
 
 /**
- * Decide, before any fetch, which cut style to generate and whether the
- * traced-tab chunk is needed for it.
- *
  * `bootFallback` is the last-resort boot puzzle (#488): the boot path's
  * preferred start already failed, so this one forces the legacy Classic
  * cut and never touches the chunk. Forcing the style here rather than
@@ -85,7 +73,6 @@ export type TracedTabOutcome =
     | { kind: 'fail'; error: unknown };
 
 export function resolveTracedTabOutcome(opts: {
-    /** The plan the fetch was (or was not) started from. */
     plan: TracedTabPlan;
     /**
      * Why the chunk fetch rejected, or `null` for "it succeeded, or it was

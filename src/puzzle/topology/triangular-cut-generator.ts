@@ -1,6 +1,4 @@
 /**
- * Equilateral / isometric triangle base-cut generator.
- *
  * Tiles the frame with near-equilateral triangles (three line families:
  * horizontal plus ±60°), emitted as a deduplicated set of per-edge line
  * segments between shared lattice vertices — NOT maximal full-frame lines.
@@ -208,7 +206,7 @@ function clipSegmentToFrame(a: Point, b: Point, w: number, h: number): [Point, P
     const q = [a.x, w - a.x, a.y, h - a.y];
     for (let i = 0; i < 4; i++) {
         if (p[i] === 0) {
-            if (q[i] < 0) return null; // parallel to this edge and outside it
+            if (q[i] < 0) return null;
         } else {
             const t = q[i] / p[i];
             if (p[i] < 0) {
@@ -375,9 +373,8 @@ export const triangularCutGenerator: BaseCutGenerator = {
             beyondA?: Point,
             beyondB?: Point,
         ): void => {
-            // Smooth path: both endpoints inside the frame → bow the edge.
-            // (Fringe edges with an endpoint outside the frame fall through to
-            // the straight clip below, as before.)
+            // Fringe edges with an endpoint outside the frame fall through
+            // to the straight clip below.
             if (smooth && inFrame(a) && inFrame(b)) {
                 curves.push(catmullRomBezierEdge(a, b, beyondA, beyondB));
                 return;

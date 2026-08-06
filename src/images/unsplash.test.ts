@@ -1,7 +1,3 @@
-/**
- * Tests for the Unsplash API client.
- */
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
     buildRandomPhotoUrl,
@@ -15,10 +11,8 @@ import {
 } from './unsplash.js';
 import { resolveUpstream, RANDOM_PARAMS } from '../worker/image-proxy.js';
 
-/** Stand-in for the deployed Worker's base URL. */
 const PROXY = 'https://proxy.example';
 
-/** A valid Unsplash API response for testing. */
 function makeUnsplashResponse() {
     return {
         urls: {

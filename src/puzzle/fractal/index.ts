@@ -1,26 +1,6 @@
 /**
- * Fractal circle-packing puzzle generator.
- *
  * Ported from the Fractal Jigsaw Generator by proceduraljigsaw:
  * https://github.com/proceduraljigsaw/Fractalpuzzlejs
- *
- * The algorithm places tiles on a square grid and connects them
- * diagonally to form pieces. Each piece is bounded by quarter-circle
- * arcs around the tile centers, producing organic, dragon-curve-like
- * shapes that interlock without traditional tabs/blanks.
- *
- * Public API:
- *   - generateFractalPuzzle — produce GeneratedPiece[] from grid + image size + seed.
- *   - scaleFractalGrid     — pick a tile-grid shape that yields ~N pieces
- *                            while matching the image aspect ratio.
- *
- * Pipeline modules (internal):
- *   - types.ts        — Tile, DiagonalConnection, ArcData
- *   - tile.ts         — small constructors / equality helpers
- *   - cell-grid.ts    — visited-tile / occupied-cell bookkeeping
- *   - arcs.ts         — quarter-circle arc construction
- *   - piece-growth.ts — flood-fill, hole filling, orphan adoption
- *   - convert.ts      — abstract pieces → standard GeneratedPiece[] with mates
  */
 
 import type { GeneratedPiece, Size } from '../../model/types.js';
@@ -46,9 +26,6 @@ import { convertToStandardPieces } from './convert.js';
 const TILES_PER_PIECE = 4.9;
 
 /**
- * Compute tile-grid dimensions that produce approximately `targetPieces`
- * fractal pieces while matching the aspect ratio of the puzzle image.
- *
  * The grid aspect must match the image aspect closely, otherwise the
  * generator's per-axis scaling turns the circular tile arcs into ellipses
  * (visibly "squashed" discs). The effective aspect is:
@@ -59,10 +36,7 @@ const TILES_PER_PIECE = 4.9;
  * error; aspect is weighted 10× since even small ovalness is perceptible
  * while piece-count drift of ±20% is not.
  *
- * @param targetPieces - Desired number of pieces (e.g. 24, 48, 96, 192)
  * @param imageAspect  - Image width / height (e.g. 4/3 ≈ 1.333)
- * @param borderless   - Whether the puzzle uses borderless (curved-edge) fitting
- * @returns `{ cols, rows }` for the tile grid
  */
 export function scaleFractalGrid(
     targetPieces: number,
@@ -71,8 +45,6 @@ export function scaleFractalGrid(
 ): { cols: number; rows: number } {
     const totalTiles = targetPieces * TILES_PER_PIECE;
 
-    // Iterate rows over a generous range; for each, pick the cols values
-    // around the ideal (for perfect aspect match) and score each candidate.
     const idealRows = Math.sqrt(totalTiles / imageAspect);
     const rowsSpan = Math.max(20, Math.ceil(idealRows * 2));
 
@@ -83,7 +55,6 @@ export function scaleFractalGrid(
             ? rows * imageAspect
             : (rows - 1) * imageAspect + 1;
 
-        // Try floor and ceil to cover both sides of the ideal.
         const candidates = new Set([
             Math.floor(idealCols),
             Math.ceil(idealCols),
@@ -110,9 +81,6 @@ export function scaleFractalGrid(
     return { cols: best.cols, rows: best.rows };
 }
 
-/**
- * Configuration for the fractal generator.
- */
 export interface FractalConfig {
     /** Minimum number of tiles per piece (default: 2). */
     minPieceSize?: number;
@@ -127,14 +95,9 @@ export interface FractalConfig {
 }
 
 /**
- * Generate a fractal puzzle using the circle-packing diagonal connection algorithm.
- *
  * @param cols - Grid columns (tile grid, NOT piece columns)
  * @param rows - Grid rows (tile grid, NOT piece rows)
  * @param imageSize - Pixel dimensions of the puzzle image
- * @param seed - PRNG seed for reproducible layouts
- * @param config - Optional configuration for piece sizes
- * @returns Array of pieces with organic arc-based shapes
  */
 export function generateFractalPuzzle(
     cols: number,
@@ -160,7 +123,6 @@ export function generateFractalPuzzle(
     const rad = 6.0;
     const frameOffset = 0;
 
-    // Create grid and generate pieces
     const grid = new CellGrid(cols, rows);
     const pieces: DiagonalConnection[][] = [];
 
@@ -181,16 +143,11 @@ export function generateFractalPuzzle(
         }
     }
 
-    // Fill remaining holes
     while (fillHoles(grid, pieces, false)) { /* keep going */ }
     fillHoles(grid, pieces, true);
 
-    // Adopt orphan tiles: tiles that were visited but never ended up in
-    // a piece (e.g. because the piece was too small and got discarded).
-    // For each orphan, find an adjacent piece and add a connection to it.
     adoptOrphanTiles(grid, pieces, cols, rows);
 
-    // Fill any remaining empty cells (star-shaped holes)
     fillEmptyCells(grid, pieces, cols, rows);
 
     // Any tile still not attached to a piece — because all of its
@@ -226,14 +183,12 @@ export function generateFractalPuzzle(
         }
     }
 
-    // Convert to standard GeneratedPiece[] format
     return convertToStandardPieces(
         pieces, orphanDiscs, rad, frameOffset, imageSize, cols, rows, borderless,
     );
 }
 
 /**
- * Find the piece that owns any diagonal in a cell adjacent to (x,y).
  * Returns -1 if no adjacent cell contains a diagonal (shouldn't happen
  * for a true orphan — every orphan tile is boxed in by occupied cells).
  */

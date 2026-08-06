@@ -86,7 +86,7 @@ describe('MarqueeController', () => {
         });
 
         c.start(evt(0, 0));
-        c.end(evt(20, 20)); // box (0,0)-(20,20)
+        c.end(evt(20, 20));
 
         expect([...selection.selectedGroupIds]).toEqual([1]);
         expect(committed).toHaveBeenCalledTimes(1);
@@ -105,7 +105,7 @@ describe('MarqueeController', () => {
         });
 
         c.start(evt(0, 0));
-        c.end(evt(20, 20)); // box (0,0)-(20,20)
+        c.end(evt(20, 20));
 
         expect([...selection.selectedGroupIds]).toEqual([1]);
     });

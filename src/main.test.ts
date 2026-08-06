@@ -30,7 +30,6 @@
 import { describe, it, expect } from 'vitest';
 import mainSrc from './main.ts?raw';
 
-/** Where a maintainer who trips this guard should put the code instead. */
 const WHERE_INSTEAD =
     'main.ts must stay an entry point: two CSS imports and the bootstrap() call. '
     + 'Put new wiring in src/app/bootstrap.ts — it exports a function, so '
@@ -52,8 +51,6 @@ function closingQuoteIndex(src: string, start: number): number {
 }
 
 /**
- * `src` with every comment removed and string literals left intact.
- *
  * One left-to-right scan rather than a pass per comment style. The two are
  * not equivalent: comments and string literals nest, so whether `//`, `/*`
  * or a quote starts anything at all depends on what is already open, and a
@@ -129,8 +126,6 @@ function stripComments(src: string): string {
 }
 
 /**
- * `src` split into whitespace-normalized statements, with comments dropped.
- *
  * Splits on `;` rather than on newlines, so a statement appended to an import
  * line is a statement of its own and a hand-wrapped multi-line import is one
  * statement rather than three fragments. That assumes no `;` inside a string
@@ -146,8 +141,6 @@ function statements(src: string): string[] {
 }
 
 /**
- * A whole, well-formed import statement — nothing more on the line.
- *
  * The specifier has to be the last thing before the `;`, which is what stops
  * an import whose own `;` was dropped from absorbing the following statement:
  * JavaScript's automatic semicolon insertion makes
@@ -164,7 +157,6 @@ function statements(src: string): string[] {
  */
 const IMPORT_STATEMENT = /^import (?:[\w$*{},\s]+ from )?('[^']*'|"[^"]*");$/;
 
-/** Statements that are neither an import nor the `bootstrap()` call. */
 function offendingStatements(src: string): string[] {
     return statements(src).filter(
         (statement) => !IMPORT_STATEMENT.test(statement) && statement !== 'bootstrap();',

@@ -36,7 +36,6 @@ export function sanitizeErrorReason(value: unknown, maxLength = DEFAULT_MAX_LENG
         // `data:`/`blob:` URIs (no `//`, handled explicitly).
         .replace(/\bdata:\S+/gi, '<url>')
         .replace(/\bblob:\S+/gi, '<url>')
-        // Any other `scheme://…` (http, https, ws, wss, file, ftp, …).
         .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, '<url>')
         .trim();
     const reason = redacted || 'unknown';

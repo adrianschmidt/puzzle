@@ -1,13 +1,3 @@
-/**
- * Game initialization logic.
- *
- * Creates a new game state: generates pieces using the configured cut
- * style's generator, partitions them into starting groups (one piece
- * per group by default; the generator may opt in to multi-piece groups
- * via {@link AutoGroup}s for auto-glued tiny pieces), and randomizes
- * positions within the viewport so all groups are visible.
- */
-
 import type { GameState, PieceGroup, Piece, Point, Size, GridSize } from '../model/types.js';
 import type { FractalConfig } from '../puzzle/fractal/index.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
@@ -34,33 +24,22 @@ function tabDebugEnabled(): boolean {
     return v !== null && v !== '0' && v !== 'false';
 }
 
-/** Default grid dimensions for the MVP puzzle. */
 export const DEFAULT_COLS = 8;
 export const DEFAULT_ROWS = 6;
 
-/** Margin from the viewport edge to keep pieces visible. */
 export const VIEWPORT_MARGIN = 20;
 
-/**
- * Options for random position generation.
- * Extracted for testability (allows injecting a seeded RNG).
- */
 export interface InitOptions {
     /** Random number generator: returns a value in [0, 1). Default: Math.random */
     random?: () => number;
     /** PRNG seed for procedural cut generation. If omitted, a random seed is generated. */
     seed?: number;
-    /** Cut style to use. Defaults to 'classic'. */
+    /** Defaults to 'classic'. */
     cutStyle?: CutStyle;
-    /** Configuration for the composable generator (only used when cutStyle is 'composable'). */
     composableConfig?: ComposableConfig;
-    /** Configuration for the fractal generator (only used when cutStyle is 'fractal'). */
     fractalConfig?: FractalConfig;
-    /** Configuration for the wavy generator (only used when cutStyle is 'wavy'). */
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
-    /** Configuration for the triangles preset (only used when cutStyle is 'triangles'). */
     trianglesConfig?: { traceSetVersion?: number };
-    /** Configuration for the sine-based Classic generator (only used when cutStyle is 'classic'). */
     classicConfig?: { traceSetVersion?: number };
     /**
      * Rotation mode for this puzzle. Defaults to `'none'`.
@@ -83,15 +62,7 @@ export interface InitOptions {
     onPieceCountMismatch?: (mismatch: PieceCountMismatch) => void;
 }
 
-/**
- * Create a new game state with randomized piece positions.
- *
- * @param imageUrl - URL of the puzzle image, or null for a blank puzzle
- * @param imageSize - Pixel dimensions of the puzzle image
- * @param viewport - Available viewport size for positioning pieces
- * @param gridSize - Grid dimensions (cols × rows). Defaults to 8×6.
- * @param options - Optional configuration (e.g. custom RNG)
- */
+/** `imageUrl` may be null for a blank puzzle. */
 export function createNewGame(
     imageUrl: string | null,
     imageSize: Size,
@@ -194,10 +165,6 @@ function assembleGameState(
 ): GameState {
     const cutStyle = options.cutStyle ?? 'classic';
     const rotationMode = options.rotationMode ?? 'none';
-    // Quantize/seal rationale (why generated geometry is rounded and
-    // stripped of dense curve samples before it becomes game state) now
-    // lives in `generation-core.ts`, alongside `runGeneration` where that
-    // work actually happens.
     const { pieces, puzzleSize, autoGroups, tabDebugReport, pieceCountMismatch } = result;
 
     if (pieceCountMismatch) {
@@ -239,8 +206,6 @@ function assembleGameState(
 }
 
 /**
- * Create the starting `PieceGroup[]` for a new game.
- *
  * If `autoGroups` is omitted (or empty), each piece becomes its own
  * single-piece group — the legacy behavior, used by Fractal and by
  * pre-upgrade (legacy-generator) Classic puzzles.
@@ -254,17 +219,6 @@ function assembleGameState(
  * seamlessly across the group, computed from `imageOffset` deltas.
  * One world position and one rotation are picked per group, not per
  * piece.
- *
- * Positions are distributed within the usable area of the viewport,
- * accounting for piece dimensions so pieces stay fully visible.
- *
- * @param pieces - All puzzle pieces
- * @param imageSize - Puzzle image dimensions (to compute piece cell size)
- * @param viewport - Available viewport dimensions
- * @param gridSize - Grid dimensions (cols × rows)
- * @param options - Optional configuration
- * @param autoGroups - Starting groups from the generator (composable
- *     pipeline only). When omitted, every piece is its own group.
  */
 export function createInitialGroups(
     pieces: Piece[],
@@ -288,16 +242,10 @@ export function createInitialGroups(
             ? () => random() * 360
             : () => 0;
 
-    // Resolve the partition. The generator either tells us how to glue
-    // tiny pieces together, or we default to one-piece-per-group so
-    // existing styles (classic, fractal) keep their behavior.
     const partition: AutoGroup[] = autoGroups && autoGroups.length > 0
         ? autoGroups
         : pieces.map(p => ({ id: p.id, pieceIds: [p.id] }));
 
-    // One random position per group (not per piece). For multi-piece
-    // groups, each contained piece needs an offset so the underlying
-    // image stays aligned — see the offset math below.
     const positions = randomizePositions(
         partition.length,
         pieceWidth,
@@ -318,8 +266,6 @@ export function createInitialGroups(
 }
 
 /**
- * Build the `pieces` map for a starting group.
- *
  * Single-piece groups trivially map to `{[id]: (0,0)}`. For multi-
  * piece groups (auto-grouped tiny pieces from the topology generator),
  * we pick the lowest piece id as the anchor — by construction this
@@ -370,16 +316,6 @@ function buildGroupPieceMap(
     return out;
 }
 
-/**
- * Generate random positions for n pieces within the viewport.
- *
- * Each position ensures the piece stays fully visible:
- * - x: from VIEWPORT_MARGIN to (viewport.width - pieceWidth - VIEWPORT_MARGIN)
- * - y: from VIEWPORT_MARGIN to (viewport.height - pieceHeight - VIEWPORT_MARGIN)
- *
- * If the viewport is too small to fit pieces with margin,
- * positions are clamped to at least 0.
- */
 export function randomizePositions(
     count: number,
     pieceWidth: number,

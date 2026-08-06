@@ -41,20 +41,15 @@ describe('tracedTabTemplate', () => {
     });
 
     it('produces a path with length matching the picked template (3n+1 cubic Bezier shape)', () => {
-        // For any seed we pick a template from TRACED_TEMPLATES and the
-        // output preserves the (3n+1) length invariant.
         const path = tracedTabTemplate.generate(createSeededRandom(99));
         expect(path.length).toBeGreaterThanOrEqual(4);
         expect((path.length - 1) % 3).toBe(0);
-        // Length must match one of the library entries.
         const libraryLengths = TRACED_TEMPLATES.map(t => t.path.length);
         expect(libraryLengths).toContain(path.length);
     });
 
     it('preserves chord endpoints x≈mid±half-width after transforms', () => {
-        // After the lateral shift + scale, the chord endpoints should
-        // still sit on y=0 (already tested above) and span a positive
-        // x range — i.e. start.x < end.x with non-zero width.
+        // y=0 after transforms is already covered above.
         const path = tracedTabTemplate.generate(createSeededRandom(7));
         expect(path[path.length - 1].x).toBeGreaterThan(path[0].x);
     });

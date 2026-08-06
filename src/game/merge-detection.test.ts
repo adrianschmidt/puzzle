@@ -10,9 +10,6 @@ import {
 import { getGroupLocalBounds } from './group-bounds.js';
 import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
 
-// --- Test helpers ---
-
-/** Create a minimal edge. */
 function makeEdge(
     id: number,
     start: Point,
@@ -23,7 +20,6 @@ function makeEdge(
     return { id, mateEdgeId, matePieceId, path: '', start, end };
 }
 
-/** Create a single-piece group at a position. */
 function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
     return {
         id,
@@ -34,17 +30,8 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
 }
 
 /**
- * Create two adjacent pieces that share a vertical edge.
- *
- * Piece 0 (left, 100×100):
- *   right edge: start=(100,0), end=(100,100)
- *
- * Piece 1 (right, 100×100):
- *   left edge: start=(100,100), end=(100,0)
- *   (Note: left edge runs bottom-to-top in piece-local coords
- *    but we use 0-based coords here so left edge is at x=0)
- *
- * Actually let's keep it simple with piece-local coords:
+ * Two adjacent 100×100 pieces sharing a vertical edge, in piece-local
+ * coords:
  * Piece 0: right edge from (100,0) to (100,100), mates with piece 1
  * Piece 1: left edge from (0,100) to (0,0), mates with piece 0
  */
@@ -379,7 +366,7 @@ describe('checkEdgeAlignment with angular tolerance', () => {
 
     it('accepts pairs whose rotations match exactly (quarter-turn parity)', () => {
         // Both at rotation=90°. rotDelta=0, so getWorldPositionAfterRotationSnap
-        // collapses to getWorldPosition — identical to pre-T4 behavior.
+        // collapses to getWorldPosition.
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
         const piecesById = new Map([[0, piece0], [1, piece1]]);
 
@@ -612,7 +599,6 @@ describe('detectMerges', () => {
 
         const candidates = detectMerges(0, state);
 
-        // Should find both neighbors
         expect(candidates).toHaveLength(2);
 
         const targetGroupIds = candidates.map((c) => c.targetGroup.id).sort((a, b) => a - b);

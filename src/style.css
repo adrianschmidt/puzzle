@@ -91,13 +91,11 @@ html, body {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  /* Prevent text selection and touch callout on puzzle pieces */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 
-/* New Game button */
 .new-game-button {
   position: absolute;
   top: 12px;
@@ -129,7 +127,6 @@ html, body {
   background: var(--ui-control-scrim-active);
 }
 
-/* Gather Pieces button */
 .gather-pieces-button {
   position: absolute;
   top: 52px;
@@ -161,7 +158,6 @@ html, body {
   background: var(--ui-control-scrim-active);
 }
 
-/* Multi-select tool button (top-left) */
 .select-tool-button,
 .marquee-tool-button {
   position: absolute;
@@ -251,7 +247,6 @@ html, body {
   background: var(--ui-control-scrim-active);
 }
 
-/* Fade-in: snappy, near-instant. */
 .rotate-button--fade-in {
   opacity: 1;
   transition: opacity 100ms ease-out;
@@ -328,7 +323,6 @@ html, body {
   transition: opacity 750ms ease-out;
 }
 
-/* Deselect-all floating button (bottom-center) */
 .deselect-button {
   position: absolute;
   bottom: 24px;
@@ -431,7 +425,6 @@ html, body {
           drop-shadow(0 0 12px rgba(0, 0, 0, 0.45));
 }
 
-/* Brief pulse on a group after a successful merge */
 [data-group-id].merge-pulse {
   animation: merge-pulse 0.25s ease-out;
 }
@@ -441,7 +434,6 @@ html, body {
   100% { filter: var(--piece-edge-filter, opacity(1)) brightness(1); }
 }
 
-/* Marquee (drag-box) selection overlay — screen-space, non-interactive */
 .marquee-box {
   position: fixed;
   pointer-events: none;
@@ -450,7 +442,6 @@ html, body {
   background: color-mix(in srgb, var(--ui-accent) 20%, transparent);
 }
 
-/* Win detection overlay */
 .completion-overlay {
   position: absolute;
   inset: 0;
@@ -511,14 +502,12 @@ html, body {
   100% { background-position: 200% center; }
 }
 
-/* Completion celebration — puzzle glows briefly */
 .completion-glow [data-group-id] {
   filter: drop-shadow(0 0 20px color-mix(in srgb, var(--color-amber-default) 60%, transparent))
           drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
   transition: filter 1s ease-out;
 }
 
-/* Image attribution (e.g. Unsplash) */
 .image-attribution {
   position: absolute;
   bottom: 8px;
@@ -540,7 +529,6 @@ html, body {
   text-decoration: underline;
 }
 
-/* Version display */
 .app-version {
   position: absolute;
   bottom: 8px;
@@ -571,7 +559,6 @@ html, body {
   --ui-muted-link-hover: rgba(255, 255, 255, 0.9);
 }
 
-/* Size picker dialog */
 .size-picker-overlay {
   position: absolute;
   inset: 0;
@@ -621,7 +608,6 @@ html, body {
   padding: 0 24px 24px;
 }
 
-/* Image picker (start group of the new-game dialog) */
 .image-picker-header {
   display: flex;
   align-items: center;
@@ -781,7 +767,6 @@ html, body {
   text-decoration: underline;
 }
 
-/* Cut style picker (inside new-game dialog) */
 .cut-style-section {
   margin-bottom: 16px;
 }
@@ -856,7 +841,6 @@ html, body {
   margin-top: 3px;
 }
 
-/* Composable parameter sliders */
 .composable-sliders {
   margin-top: 16px;
   padding: 12px;
@@ -919,7 +903,6 @@ html, body {
   text-align: right;
 }
 
-/* Three-way segmented control used for tab-style picker in composable section */
 .segmented-control {
   display: inline-flex;
   border: 1px solid var(--ui-border);
@@ -971,7 +954,6 @@ html, body {
   }
 }
 
-/* Info modal solve button (debug) */
 .info-modal-solve-btn {
   display: block;
   margin: 24px auto 0;
@@ -989,7 +971,6 @@ html, body {
   background: var(--ui-overlay-hover);
 }
 
-/* Background color picker button */
 .bg-color-button {
   position: absolute;
   top: 92px;
@@ -1123,7 +1104,6 @@ html, body {
   z-index: 10000;
 }
 
-/* Info button */
 .info-button {
   position: absolute;
   top: 135px;
@@ -1157,7 +1137,6 @@ html, body {
   background: var(--ui-control-scrim-active);
 }
 
-/* Info modal */
 .info-modal-overlay {
   position: absolute;
   inset: 0;
@@ -1308,7 +1287,6 @@ details.info-section[open] > .info-section-summary {
   text-decoration: underline;
 }
 
-/* Merge tolerance settings */
 .info-setting {
   margin-top: 4px;
 }

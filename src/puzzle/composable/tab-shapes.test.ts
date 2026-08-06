@@ -29,7 +29,6 @@ describe('classicTabTemplate', () => {
         const random = createSeededRandom(42);
         const path = classicTabTemplate.generate(random);
 
-        // At least some points should have y > 0
         const maxY = Math.max(...path.map(p => p.y));
         expect(maxY).toBeGreaterThan(0);
     });
@@ -45,7 +44,6 @@ describe('classicTabTemplate', () => {
         const path1 = classicTabTemplate.generate(createSeededRandom(1));
         const path2 = classicTabTemplate.generate(createSeededRandom(2));
 
-        // Paths should differ (extremely unlikely to be identical)
         const maxY1 = Math.max(...path1.map(p => p.y));
         const maxY2 = Math.max(...path2.map(p => p.y));
         expect(maxY1).not.toBeCloseTo(maxY2, 5);

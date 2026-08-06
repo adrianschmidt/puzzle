@@ -1,12 +1,3 @@
-/**
- * Group merging — combines two piece groups into one when a merge is detected.
- *
- * After a group is dropped and merge candidates are found, this module:
- * 1. Snaps the moved group into perfect alignment
- * 2. Combines the two groups into one (recalculating piece offsets)
- * 3. Handles cascading merges (the new larger group may align with additional neighbors)
- */
-
 import type { GameState, PieceGroup, Point } from '../model/types.js';
 import {
     getGroup,
@@ -23,32 +14,16 @@ import { rotateGroup } from './rotate-group.js';
 /** Maximum cascade depth to prevent infinite loops in degenerate cases. */
 const MAX_CASCADE_DEPTH = 50;
 
-/**
- * Result of a merge operation.
- */
 export interface MergeResult {
-    /** The new/surviving group after all merges. */
     group: PieceGroup;
     /** Number of individual merges that happened (including cascades). */
     mergeCount: number;
 }
 
 /**
- * Merge two groups into one.
- *
- * The target group is the "anchor" — its position stays fixed.
- * The moved group's pieces are absorbed into the target group,
- * with their offsets recalculated relative to the target group's position.
- *
- * Updates `state.pieceToGroup` to point absorbed pieces at the target.
- * The moved group itself is left intact — `processDrop` removes it via
- * `removeGroup` afterwards.
- *
- * @param state - The game state (pieceToGroup index is mutated)
- * @param movedGroup - The group that was just dropped (will be absorbed)
- * @param targetGroup - The group to merge into (stays in place)
- * @param snapDelta - Position correction to apply to the moved group before merging
- * @returns The merged group (which is the mutated targetGroup)
+ * The target group is the "anchor" — its position stays fixed while the
+ * moved group's pieces are absorbed into it. The moved group itself is
+ * left intact — `processDrop` removes it via `removeGroup` afterwards.
  */
 export function mergeGroups(
     state: GameState,
@@ -93,11 +68,8 @@ export function mergeGroups(
 }
 
 /**
- * Select the best merge candidate from a list.
- *
- * When multiple edges of a dropped group align with different target groups,
- * we pick the candidate with the smallest snap delta (closest alignment).
- * This gives the most natural "snap" feel.
+ * The candidate with the smallest snap delta (closest alignment) wins —
+ * it gives the most natural "snap" feel.
  */
 export function selectBestCandidate(candidates: MergeCandidate[]): MergeCandidate {
     if (candidates.length === 0) {
@@ -122,22 +94,7 @@ export function selectBestCandidate(candidates: MergeCandidate[]): MergeCandidat
 }
 
 /**
- * Process a drop event: detect merges and execute them, including cascades.
- *
- * This is the main entry point called after a group is dropped.
- * It handles the full merge lifecycle:
- * 1. Detect merge candidates for the dropped group
- * 2. If any found, pick the best one and merge
- * 3. Remove the absorbed group from the state
- * 4. Repeat (cascade) — the newly enlarged group might now align with more neighbors
- * 5. Stop when no more merges are found or max cascade depth is reached
- *
- * Mutates the game state in place.
- *
- * @param movedGroupId - The group that was just dropped
- * @param state - The current game state (mutated)
- * @param tolerance - Optional custom merge tolerance in pixels
- * @returns MergeResult if any merges happened, or null if no merges
+ * Mutates the game state in place. `tolerance` is in pixels.
  */
 export function processDrop(
     movedGroupId: number,
@@ -145,8 +102,6 @@ export function processDrop(
     tolerance?: number,
     rotationTolerance?: number,
 ): MergeResult | null {
-    // Check if the group is being dropped into a pile of unrelated pieces.
-    // If so, suppress merging to avoid accidental snaps while sorting.
     if (shouldSuppressMerge(movedGroupId, state)) {
         return null;
     }
@@ -161,15 +116,13 @@ export function processDrop(
             break;
         }
 
-        // Group candidates by target group, pick the best per target,
-        // then merge one at a time (since merging changes the group structure)
+        // Merge one at a time — merging changes the group structure.
         const best = selectBestCandidate(candidates);
 
         mergeGroups(state, best.movedGroup, best.targetGroup, best.snapDelta);
         removeGroup(state, best.movedGroup.id);
         totalMerges++;
 
-        // The merged group is now the target group — continue cascading from it
         currentGroupId = best.targetGroup.id;
     }
 

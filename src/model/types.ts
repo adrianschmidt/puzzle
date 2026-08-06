@@ -1,32 +1,26 @@
 /**
- * Core data model for the puzzle engine.
- *
  * Graph-based and shape-agnostic — no grid assumptions.
  * The engine handles merging and interaction generically;
  * puzzle generators produce pieces conforming to these types.
  */
 
-/** A 2D point. */
 export interface Point {
     x: number;
     y: number;
 }
 
-/** Width × height dimensions. */
 export interface Size {
     width: number;
     height: number;
 }
 
 /**
- * One edge of a piece.
- *
  * Connectivity is expressed through mate relationships:
  * an edge knows which piece and edge it connects to.
  * Border edges use -1 for both mate fields.
  */
 export interface Edge {
-    /** Unique edge identifier (globally unique across all pieces). */
+    /** Globally unique across all pieces. */
     id: number;
     /** The matching edge on the adjacent piece (-1 for border edges). */
     mateEdgeId: number;
@@ -80,13 +74,10 @@ export interface GeneratedPiece {
 }
 
 /**
- * A single puzzle piece.
- *
  * Knows its shape and connectivity, but nothing about
  * where it is on the table — that's the group's job.
  */
 export interface Piece {
-    /** Unique piece identifier. */
     id: number;
     /**
      * All edges of this piece, defining its shape boundary and
@@ -112,13 +103,10 @@ export interface Piece {
 }
 
 /**
- * A group of connected pieces.
- *
  * Every piece is always in exactly one group.
  * A solo (unmerged) piece is a single-piece group.
  */
 export interface PieceGroup {
-    /** Unique group identifier. */
     id: number;
     /** pieceId → offset of that piece within the group's local space. */
     pieces: Map<number, Point>;
@@ -139,36 +127,26 @@ export interface PieceGroup {
     rotation: number;
 }
 
-/**
- * Attribution info for the puzzle image (e.g. Unsplash photographer).
- */
 export interface ImageAttribution {
-    /** Photographer / artist name. */
     photographerName: string;
-    /** Link to the photographer's profile. */
     photographerUrl: string;
     /** Link to the original photo page. */
     photoUrl: string;
 }
 
-/**
- * Grid dimensions for the puzzle (cols × rows).
- */
 export interface GridSize {
     cols: number;
     rows: number;
 }
 
 /**
- * Which way a puzzle is laid out. Lives here (not in `app/orientation.ts`)
- * so the `images` layer can reference it without importing from `app`,
- * which would create a type-only images→app cycle.
+ * Lives here (not in `app/orientation.ts`) so the `images` layer can
+ * reference it without importing from `app`, which would create a
+ * type-only images→app cycle.
  */
 export type Orientation = 'landscape' | 'portrait';
 
 /**
- * Complete game state — everything needed to render and persist a game.
- *
  * The `*ById` and `pieceToGroup` Maps are derived indexes that mirror
  * `pieces` and `groups` for O(1) lookup on hot paths (drag, merge
  * detection, pile detection). They are NOT serialized — `deserializeState`
@@ -194,15 +172,13 @@ export interface GameState {
     imageUrl: string | null;
     /** Pixel dimensions of the puzzle image. */
     imageSize: Size;
-    /** Grid dimensions used to generate this puzzle. */
     gridSize: GridSize;
     /** True when all pieces have been merged into a single group. */
     completed: boolean;
-    /** Optional attribution for the puzzle image (e.g. from Unsplash). */
     attribution?: ImageAttribution;
     /** PRNG seed used for procedural cut generation. Reproduces the same cuts. */
     seed?: number;
-    /** Cut style used for this puzzle. Defaults to 'classic' when absent. */
+    /** Defaults to 'classic' when absent. */
     cutStyle?: string;
     /**
      * How (or whether) groups in this puzzle can be rotated by the player.

@@ -1,13 +1,7 @@
 /**
- * New-game dialog — modal that lets the player configure and start a new
- * puzzle. Despite the legacy `.size-picker-*` CSS classes, the dialog now
- * owns the cut-style picker, fractal/composable options, image-options
- * controls, the size select, and the image picker itself.
- *
- * The dialog is dismissed by picking an image (photo tile, Surprise me, or
- * Blank puzzle), clicking the backdrop, or pressing Escape. The latter two
- * paths fire `onCancel`; image picks fire `onSelect` with a
- * {@link NewGameSelection}.
+ * Despite the legacy `.size-picker-*` CSS classes, the dialog owns the
+ * cut-style picker, fractal/composable options, image-options controls,
+ * the size select, and the image picker itself.
  */
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
@@ -18,7 +12,6 @@ import { createDismissableOverlay } from './dismissable-overlay.js';
 import { createImagePicker, type ImagePicker, type NewGameImageChoice } from './image-picker.js';
 import type { CandidateImage } from '../app/unsplash-display-image.js';
 
-/** Composable generator config passed through from sliders. */
 export interface ComposableSliderConfig {
     baseCut: 'sine' | 'triangular';
     horizontalAmplitude: number;
@@ -31,17 +24,14 @@ export interface ComposableSliderConfig {
     smooth: boolean;
 }
 
-/** Fractal generator config passed through from the dialog. */
 export interface FractalDialogConfig {
     borderless: boolean;
 }
 
-/** Wavy generator config passed through from the dialog. */
 export interface WavyDialogConfig {
     borderless: boolean;
 }
 
-/** Everything the player chose in the new-game dialog. */
 export interface NewGameSelection {
     sizeId: string;
     cutStyleId: string;
@@ -51,7 +41,6 @@ export interface NewGameSelection {
     fractalConfig?: FractalDialogConfig;
     /** Present only when the chosen cut style is wavy. */
     wavyConfig?: WavyDialogConfig;
-    /** Whether the player ticked the top-level "Enable rotation" checkbox. */
     rotationEnabled: boolean;
     imageChoice: NewGameImageChoice;
     imageCategory: string;
@@ -59,31 +48,17 @@ export interface NewGameSelection {
 }
 
 export interface NewGameDialogOptions {
-    /** Container to append the dialog to. */
     container: HTMLElement;
-    /** Currently selected size id (highlighted in the dialog). */
     selectedSizeId: string;
-    /** Currently selected cut style id. */
     selectedCutStyleId?: string;
-    /** Previously saved composable slider config (used to pre-populate sliders). */
     savedComposableConfig?: ComposableSliderConfig;
-    /** Previously saved fractal config (used to pre-populate controls). */
     savedFractalConfig?: FractalDialogConfig;
-    /** Previously saved wavy config (used to pre-populate the borderless toggle). */
     savedWavyConfig?: WavyDialogConfig;
-    /** Previously saved rotation-enabled preference (defaults to false). */
     savedRotationEnabled?: boolean;
-    /** Whether the composable base cut generator supports borderless mode. */
     composableSupportsBorderless?: boolean;
-    /** Previously saved image category preference. */
     savedImageCategory?: string;
-    /** Previously saved "vibrant images" preference. */
     savedVibrant?: boolean;
-    /**
-     * Fetch candidate photos for the image picker, given the currently
-     * selected category and vibrant values. Absent when no image proxy is
-     * configured — the picker hides its grid.
-     */
+    /** Absent when no image proxy is configured — the picker hides its grid. */
     fetchImageCandidates?: (
         imageCategory: string,
         vibrant: boolean,
@@ -94,12 +69,9 @@ export interface NewGameDialogOptions {
     onCancel?: () => void;
     /**
      * Fires as soon as the dialog's effective tab generator becomes
-     * `'traced'` (on open with that saved value, on cut-style change
-     * into Composable while traced is active, or when the user picks
-     * the "Traced" radio). The host uses it to kick off the
-     * traced-tab lazy chunk in the background so the click-to-puzzle
-     * path stays snappy. Safe to invoke repeatedly — the preload
-     * helper is idempotent.
+     * `'traced'`. The host uses it to kick off the traced-tab lazy chunk
+     * in the background so the click-to-puzzle path stays snappy. Safe to
+     * invoke repeatedly — the preload helper is idempotent.
      */
     onPreloadTracedTabs?: () => void;
 }
@@ -107,16 +79,12 @@ export interface NewGameDialogOptions {
 interface SizeSelectRow {
     element: HTMLElement;
     getValue(): string;
-    /** Re-render option labels (approximate counts for fractal/triangles). */
     updateLabels(): void;
 }
 
 /**
- * A cut-style options sub-section holding a single "Borderless" checkbox.
  * Both Fractal and Wavy render identically — only their test id differs —
- * so they share one builder. `getValues()` returns the structural
- * `{ borderless }` shape of both {@link FractalDialogConfig} and
- * {@link WavyDialogConfig}.
+ * so they share one builder.
  */
 interface BorderlessOptionsSection {
     element: HTMLElement;
@@ -265,20 +233,16 @@ function buildComposableSlidersSection(args: {
     const section = document.createElement('div');
     section.className = 'composable-sliders';
 
-    // Sine controls wrapper — holds the four amplitude/frequency sliders.
     const sineControls = document.createElement('div');
     sineControls.dataset.testid = 'composable-sine-controls';
 
-    // Triangular controls wrapper — holds the Irregularity (jitter) slider.
     const triangularControls = document.createElement('div');
     triangularControls.dataset.testid = 'composable-triangular-controls';
 
-    // Borderless toggle wrapper — created up front so the visibility helper
-    // can toggle it; appended to the section later in DOM order.
+    // Created up front so the visibility helper can toggle it; appended to
+    // the section later in DOM order.
     const borderlessWrap = document.createElement('div');
 
-    // Toggle control visibility for the chosen base cut: triangular hides the
-    // sine sliders + Borderless and shows the Irregularity slider.
     const applyBaseCutVisibility = (baseCut: 'sine' | 'triangular'): void => {
         const tri = baseCut === 'triangular';
         sineControls.style.display = tri ? 'none' : 'block';
@@ -286,7 +250,6 @@ function buildComposableSlidersSection(args: {
         borderlessWrap.style.display = tri ? 'none' : 'block';
     };
 
-    // Base-cut picker: Sine | Triangular.
     const baseCutRow = appendSegmentedRow<'sine' | 'triangular'>(
         section,
         'Base cut',
@@ -350,7 +313,6 @@ function buildComposableSlidersSection(args: {
 
     section.appendChild(sineControls);
 
-    // Irregularity (jitter) slider — lives in the triangular controls wrapper.
     const jitterRow = document.createElement('div');
     jitterRow.className = 'dialog-row';
     const jitterLabel = document.createElement('label');
@@ -399,7 +361,7 @@ function buildComposableSlidersSection(args: {
         args.onTabGeneratorChange,
     );
 
-    // Borderless toggle — hidden for triangular cut since it doesn't apply.
+    // Hidden for triangular cut since borderless doesn't apply there.
     section.appendChild(borderlessWrap);
     const borderlessCheckbox = args.showBorderless
         ? appendCheckboxRow(borderlessWrap, 'Borderless', args.saved?.borderless ?? false)
@@ -437,14 +399,11 @@ interface SegmentedRow<T extends string> {
 }
 
 /**
- * Module-scoped counter for unique DOM ids in `appendSegmentedRow`.
  * Increments on each row so two rows with the same label still get
- * distinct ids — important when the dialog is reopened (each open
- * builds a fresh DOM tree, but multiple rows may share a label).
+ * distinct ids (multiple rows may share a label).
  */
 let nextSegmentedRowSuffix = 0;
 
-/** Append a label + radio-group "segmented" row and return the value getter. */
 function appendSegmentedRow<T extends string>(
     parent: HTMLElement,
     labelText: string,
@@ -507,7 +466,6 @@ function appendSegmentedRow<T extends string>(
     };
 }
 
-/** Append a label + checkbox row and return the checkbox. */
 function appendCheckboxRow(
     parent: HTMLElement,
     labelText: string,
@@ -532,11 +490,7 @@ function appendCheckboxRow(
     return checkbox;
 }
 
-/**
- * Create and show the new-game dialog.
- *
- * Returns a cleanup function that removes the dialog from the DOM.
- */
+/** Returns a cleanup function that removes the dialog from the DOM. */
 export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     const { container, selectedSizeId, onSelect, onCancel } = options;
 
@@ -590,11 +544,8 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     });
 
     /**
-     * Whether starting a game with `id` selected needs the lazy traced-tab
-     * chunk — the per-style answer from `cut-styles.ts`, bound to the tab
-     * generator currently picked in the Composable section. Kicking the
-     * preload off here is what keeps the fetch off the critical path in
-     * `startNewGame`.
+     * Kicking the preload off here is what keeps the fetch off the
+     * critical path in `startNewGame`.
      */
     const needsTracedTabs = (id: string): boolean =>
         cutStyleNeedsTracedTabs(id, composableSection.getSelectedTabGenerator());
@@ -604,7 +555,6 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         getCutStyleId: () => currentCutStyleId,
     });
 
-    // Top-level "Enable rotation" row — applies to any cut style.
     const rotationRow = document.createElement('div');
     rotationRow.className = 'rotation-row';
     const rotationCheckbox = appendCheckboxRow(
@@ -665,8 +615,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
 
     // Scrollable body: the title stays pinned above; everything else lives in
     // two groups so the short-and-wide layout can place them side by side.
-    // Settings (cut style, its options, and the size select) come first; the
-    // start group holds only the image picker, since picking an image
+    // The start group holds only the image picker, since picking an image
     // launches the game.
     const content = document.createElement('div');
     content.className = 'dialog-content';

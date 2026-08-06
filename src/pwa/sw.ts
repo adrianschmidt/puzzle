@@ -1,18 +1,12 @@
 /**
- * Custom service worker (Workbox `injectManifest` strategy).
- *
- * The repo previously built the worker via Workbox `generateSW`, which has
- * no source file: the plugin generated precache + navigation routing for us.
- * Instrumenting the worker's own scope (#430) needs real `self.addEventListener`
- * handlers, which only a hand-written worker can carry — hence the switch to
- * `injectManifest`, where this file IS the worker and the build only injects
- * the precache manifest at `self.__WB_MANIFEST`.
- *
- * This file therefore has to reproduce the behaviors `generateSW` gave us for
- * free — precache + cleanup, the SPA navigation fallback with the
- * cross-deployment denylist, and the `prompt`-mode skip-waiting handshake —
- * plus the new error backstop. Keep it thin: the testable error logic lives
- * in `sw-error-reporter.ts`.
+ * Custom service worker (Workbox `injectManifest` strategy). The worker was
+ * previously built via `generateSW` (no source file); instrumenting the
+ * worker's own scope (#430) needs real `self.addEventListener` handlers, so
+ * this file IS the worker and the build only injects the precache manifest at
+ * `self.__WB_MANIFEST`. It must reproduce what `generateSW` gave for free:
+ * precache + cleanup, the SPA navigation fallback with the cross-deployment
+ * denylist, and the `prompt`-mode skip-waiting handshake. Keep it thin: the
+ * testable error logic lives in `sw-error-reporter.ts`.
  */
 
 import {
@@ -31,9 +25,7 @@ declare const self: ServiceWorkerGlobalScope & {
     __WB_MANIFEST: Array<PrecacheEntry | string>;
 };
 
-// Precache everything the build injects at this point, and drop caches left
-// by older Workbox revisions (the plugin set `cleanupOutdatedCaches` for the
-// generateSW build; preserve that).
+// The generateSW build set `cleanupOutdatedCaches`; preserve that.
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
@@ -52,17 +44,16 @@ registerRoute(
 // `registerType: 'prompt'`: never activate a waiting worker on our own.
 // `virtual:pwa-register`'s `updateSW(true)` posts `{type: 'SKIP_WAITING'}`
 // once the page commits to reloading (see pwa/update-controller.ts); only
-// then do we take over. generateSW wired this handshake automatically.
+// then do we take over.
 self.addEventListener('message', (event) => {
     if ((event.data as { type?: unknown } | null)?.type === 'SKIP_WAITING') {
         void self.skipWaiting();
     }
 });
 
-// #430: report failures thrown inside the worker's own scope — message
-// handlers, lifecycle/timer callbacks — which the page's `window` listeners
-// can't see. The reporter sanitizes + rate-limits; we forward each finished
-// report to every open window, where the page bridge relays it to analytics.
+// #430: report failures thrown inside the worker's own scope, which the
+// page's `window` listeners can't see; the page bridge relays each report
+// to analytics.
 //
 // Coverage is deliberately limited to what the worker's global `error` and
 // `unhandledrejection` events surface: synchronous throws and unhandled

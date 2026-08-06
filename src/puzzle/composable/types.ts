@@ -1,6 +1,4 @@
 /**
- * Shared types for the composable puzzle generator.
- *
  * These types define the interface between the grid layer and
  * the composition layer, using abstract edges with no grid-specific
  * concepts (no rows, columns, or directions).
@@ -8,12 +6,7 @@
 
 import type { Point } from '../../model/types.js';
 
-/**
- * A piece definition produced by the grid layer.
- * Contains abstract edges with mate relationships already resolved.
- */
 export interface PieceDefinition {
-    /** Unique piece identifier. */
     id: number;
     /**
      * All edges of the piece, flat. The outer boundary comes first
@@ -30,8 +23,6 @@ export interface PieceDefinition {
 }
 
 /**
- * An edge definition with mate relationship and clamping info.
- *
  * The grid layer resolves all topology — the composition layer
  * just sees edges with start/end points and mate references.
  */

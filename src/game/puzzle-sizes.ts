@@ -1,29 +1,16 @@
-/**
- * Puzzle size options and persistence.
- *
- * Each option carries a stable string `id` (the piece count as a
- * string). Legacy integer indices migrate via the id-keyed factory.
- */
-
 import type { GridSize } from '../model/types.js';
 import { createIdPreferenceStore } from '../ui/preference-store.js';
 
 export interface PuzzleSizeOption {
     /** Stable string id (the piece count as a string). */
     id: string;
-    /** Display label, e.g. "48 pieces" */
     label: string;
-    /** Total number of pieces */
     pieceCount: number;
-    /** Grid columns */
     cols: number;
-    /** Grid rows */
     rows: number;
 }
 
 /**
- * Available puzzle size options.
- *
  * Storage is id-keyed; declaration order is no longer load-bearing for
  * persistence. The legacy-integer migration (`LEGACY_ORDER` below)
  * relies on the original pre-migration order, captured separately.
@@ -35,10 +22,8 @@ export const PUZZLE_SIZE_OPTIONS: readonly PuzzleSizeOption[] = [
     { id: '192', label: '192 pieces', pieceCount: 192, cols: 16, rows: 12 },
 ] as const;
 
-/** Default size id (48 pieces — the original default). */
 export const DEFAULT_SIZE_ID = '48';
 
-/** localStorage key for the saved size preference. */
 export const SIZE_PREFERENCE_KEY = 'puzzle-size-preference';
 
 /**
@@ -54,18 +39,12 @@ const store = createIdPreferenceStore({
     legacyOrder: LEGACY_ORDER,
 });
 
-/** Get the option for an id, or the default option. */
 export const getSizeOption = store.getPreset;
 
-/** Convert a PuzzleSizeOption to a GridSize. */
 export function toGridSize(option: PuzzleSizeOption): GridSize {
     return { cols: option.cols, rows: option.rows };
 }
 
-/**
- * Find the id of the option matching the given grid size.
- * Returns undefined if no match is found.
- */
 export function findSizeId(gridSize: GridSize): string | undefined {
     return PUZZLE_SIZE_OPTIONS.find(
         (opt) => opt.cols === gridSize.cols && opt.rows === gridSize.rows,

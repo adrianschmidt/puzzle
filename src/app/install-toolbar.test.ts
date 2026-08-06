@@ -9,14 +9,12 @@ import type { BackgroundColorControl } from './install-background-color.js';
 import type { GameSession } from './game-session.js';
 import { installToolbar, type InstallToolbarDeps } from './install-toolbar.js';
 
-/** A stand-in for the handle `installBackgroundColorControl` produces. */
 function makeBackgroundColor(): BackgroundColorControl {
     return { adopt: vi.fn(() => 'adopted' as const) };
 }
 
 /**
- * The read-only session slice the toolbar takes, returning `state` (default:
- * no game). Only `current` — the narrowed dependency is what stops a fake
+ * Only `current` — the narrowed dependency is what stops a fake
  * from having to guess at `hasGame`'s stricter meaning.
  */
 function makeSession(state?: GameState): Pick<GameSession, 'current'> {

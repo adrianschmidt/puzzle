@@ -35,7 +35,6 @@ import { runWithErrorReport } from './run-with-error-report.js';
 import type { StartNewGameOptions } from './start-new-game.js';
 import type { GameSession } from './game-session.js';
 
-/** Collaborators {@link solvePuzzle} cannot own itself. */
 export interface SolvePuzzleDeps {
     /**
      * Read-only slice of the {@link GameSession}: this solves whatever is
@@ -44,13 +43,10 @@ export interface SolvePuzzleDeps {
      */
     session: Pick<GameSession, 'current'>;
     renderer: Renderer;
-    /** Frame and celebrate a solved puzzle — the completion zoom. */
     onSolved: (state: GameState, group: PieceGroup) => void;
 }
 
 /**
- * Solve the puzzle by placing all pieces in their correct positions.
- *
  * A no-op when there is no installed game — mirrors the #488/#499 guards
  * elsewhere: this runs from a user-triggered click (the info modal's Solve
  * button) or a manually-typed console call, either of which can land in the
@@ -81,19 +77,13 @@ export function solvePuzzle(deps: SolvePuzzleDeps): void {
     state.completed = true;
     deps.renderer.renderState(state);
 
-    // Use the same animated zoom as normal completion.
     deps.onSolved(state, solvedGroup);
 }
 
-/** Collaborators {@link installDevHooks} cannot own itself. */
 export interface DevHooksDeps {
-    /** `startNewGame` bound to the composition root's deps. */
     start: (gridSize: GridSize, options: StartNewGameOptions) => Promise<void>;
-    /** `loadSharedPuzzle` bound to the composition root's deps. */
     loadShared: (payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>;
     /**
-     * Solve the puzzle — `solvePuzzle` bound to the composition root's deps.
-     *
      * Injected rather than built here so `window.__solvePuzzle` and the info
      * modal's Solve button (`installToolbar`'s `solve`) are the same
      * reference. While each installer built its own `solvePuzzle` call, an
@@ -103,9 +93,6 @@ export interface DevHooksDeps {
     solve: () => void;
 }
 
-/**
- * Install the four dev-console hooks on `window`.
- */
 export function installDevHooks(deps: DevHooksDeps): void {
     // Debug helper: solve the puzzle by placing all pieces in their correct
     // positions. The same reference the info modal's Solve button calls.

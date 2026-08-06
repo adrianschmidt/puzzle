@@ -1,6 +1,4 @@
 /**
- * Lazy registration for the traced tab generator.
- *
  * The 20 trace JSONs (~80 KB raw / ~10–15 KB gzipped) and
  * `tab-shapes-traced.ts` live behind a dynamic `import()`, so they
  * don't ship in the main chunk. The only UI route that can ever
@@ -160,8 +158,6 @@ export const tracedTabGeneratorStub: TabGenerator = {
 };
 
 /**
- * Trigger the dynamic import of the traced tab implementation.
- *
  * Idempotent and safe to call repeatedly — concurrent callers and
  * later retry attempts all share the same in-flight promise.
  * Awaiting the returned promise guarantees that the next synchronous

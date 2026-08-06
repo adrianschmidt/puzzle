@@ -1,6 +1,4 @@
 /**
- * Guard: the app shell's `img-src` Content-Security-Policy.
- *
  * `index.html` is not reachable from any other test — `main.test.ts` guards
  * the entry point it loads, and this guards the shell itself. The CSP is the
  * only place the *origin* policy for images is expressed: the share codec's
@@ -20,12 +18,10 @@ import indexHtml from '../index.html?raw';
 
 const CSP_META = /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]*)"/gi;
 
-/** Every CSP meta tag's `content`, whitespace-normalized. */
 function cspContents(): string[] {
     return [...indexHtml.matchAll(CSP_META)].map((m) => m[1].replace(/\s+/g, ' ').trim());
 }
 
-/** The `content` of the single CSP meta tag. */
 function cspContent(): string {
     const all = cspContents();
     if (all.length !== 1) {
@@ -34,7 +30,6 @@ function cspContent(): string {
     return all[0];
 }
 
-/** The sources listed for `directive`, or `null` when it is absent. */
 function directiveSources(directive: string): string[] | null {
     const found = cspContent()
         .split(';')

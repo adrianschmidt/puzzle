@@ -61,8 +61,6 @@ import { installGeometryTokenInvalidation } from '../persistence/index.js';
 import { initPwaUpdates } from '../pwa/register.js';
 
 /**
- * Build the app and start it inside `root`.
- *
  * `root` defaults to `#app`, evaluated at call time: `main.ts` stays free of
  * any DOM lookup while a test can pass its own container — and importing this
  * module boots nothing.
@@ -81,8 +79,6 @@ export function bootstrap(
     installGeometryTokenInvalidation();
 
     /**
-     * Analytics metadata for the currently-playing puzzle.
-     *
      * Populated when a puzzle starts (fresh or shared). Stays null when
      * the user resumes a previous session from localStorage — in that
      * case `puzzle-completed` falls back to deriving fields from the
@@ -102,39 +98,30 @@ export function bootstrap(
     const renderer = new SvgDomRenderer();
     renderer.init(root);
 
-    // Multi-select tool
     const selectionManager = new SelectionManager();
 
-    // Floating rotate-buttons focus tracker
     const rotationFocus = new RotationFocus();
 
     const completionPresenter = createCompletionPresenter({ container: root, rotationFocus });
 
-    // When selection changes, update group visuals and persist it (debounced)
-    // so the selection survives a reload. The selection is stored alongside the
-    // game state, so it is cleared automatically when the user deselects all or
-    // starts a new game, and never leaks into share links.
+    // The selection is stored alongside the game state, so it is cleared
+    // automatically when the user deselects all or starts a new game, and
+    // never leaks into share links.
     selectionManager.onChange((selectedIds) => {
         const state = session.current();
-        // Remove highlight from all groups, then re-apply to selected
         for (const group of state?.groups ?? []) {
             renderer.setGroupSelected(group.id, selectedIds.has(group.id));
         }
         if (state) saveCoordinator.autoSave(state);
     });
 
-    // Viewport transform for zoom & pan
     const viewportTransform = new ViewportTransform();
 
-    /**
-     * Apply the current viewport transform to the renderer.
-     */
     function applyViewportTransform(): void {
         const state = viewportTransform.getState();
         renderer.setViewportTransform(state.scale, state.offset.x, state.offset.y);
     }
 
-    /** Dependencies for `gatherAndZoomToFit` / `zoomToFitCompletedPuzzle`, built once. */
     const viewportFitDeps: ViewportFitDeps = {
         container: root,
         renderer,
@@ -152,8 +139,7 @@ export function bootstrap(
     };
 
     /**
-     * React to a viewport (zoom/pan) change: re-apply the transform to the
-     * renderer and persist the new view via the debounced auto-save, so the
+     * Persists the new view via the debounced auto-save, so the
      * player's zoom level and pan offset survive a reload (#420).
      */
     function onViewportChanged(): void {
@@ -162,17 +148,13 @@ export function bootstrap(
         if (state) saveCoordinator.autoSave(state);
     }
 
-    // Owns debounced progress saves, the new-puzzle geometry+progress write, and
-    // flushing before the page can be torn down (installs its own pagehide /
-    // visibilitychange listeners as a side effect of construction).
+    // Installs its own pagehide / visibilitychange listeners as a side
+    // effect of construction.
     const saveCoordinator = createSaveCoordinator({ selectionManager, viewportTransform });
 
     /**
-     * Apply a merge produced by a drop or a rotate-handle commit: hand off to
-     * `applyMergeResult` with the collaborators it needs to update visuals,
-     * selection and rotation focus, carry analytics, and trigger the
-     * completion flow. Shared, unmodified, by the rotation UI and the game
-     * session — both drive a merge outcome through the exact same follow-up.
+     * Shared, unmodified, by the rotation UI and the game session — both
+     * drive a merge outcome through the exact same follow-up.
      */
     const applyMerge = (
         state: GameState,
@@ -188,10 +170,8 @@ export function bootstrap(
         });
     };
 
-    // Owns the rotate-buttons/-handle pair (bottom-left, fractal-only /
-    // free-rotation drag handle), their shared snap-position controller, and
-    // screen-space bounds projection. Constructed before `session` — see
-    // `createOnInstalled` for why the compiler now enforces that.
+    // Constructed before `session` — see `createOnInstalled` for why the
+    // compiler now enforces that.
     const rotationUi = createRotationUi({
         container: root,
         renderer,
@@ -204,9 +184,6 @@ export function bootstrap(
     });
 
     /**
-     * Build the session's `onInstalled` hook around the rotation UI's
-     * `syncVisibility`.
-     *
      * Taking `syncRotationUi` as a parameter rather than closing over
      * `rotationUi` is the whole point: the call site below reads
      * `rotationUi.syncVisibility` as a bare value — no wrapper arrow, no
@@ -256,16 +233,11 @@ export function bootstrap(
         applyTransform: applyViewportTransform,
     });
 
-    // Keep the installed PWA current: detect new versions while open and on
-    // reopen, and apply them at a safe moment (focus regain or a manual tap).
-    // The save coordinator flushes first so progress within the debounce window
-    // survives the reload.
+    // The save coordinator flushes first so progress within the debounce
+    // window survives the update reload.
     const pwaUpdates = initPwaUpdates(() => saveCoordinator.flush());
 
     /**
-     * Frame and celebrate a completed puzzle: zoom to fit `group`, then show
-     * the completion overlay once the zoom settles.
-     *
      * The overlay reads the session late, as the module global did: the zoom
      * lands up to ~1000ms later, by which time a new game may have replaced
      * this one — and the overlay carries a "Challenge a friend" link built
@@ -294,9 +266,6 @@ export function bootstrap(
     }
 
     /**
-     * Frame and celebrate a just-completed puzzle: zoom to fit the single
-     * surviving group, then show the completion overlay once the zoom settles.
-     *
      * Passed to `applyMergeResult` as `onCompleted`, which owns detecting the
      * win but not the viewport — that stays here.
      */
@@ -311,9 +280,6 @@ export function bootstrap(
         }
     }
 
-    /**
-     * Update the attribution display for the game being installed.
-     */
     function updateAttribution(state: GameState): void {
         removeAttribution(root);
 
@@ -324,8 +290,7 @@ export function bootstrap(
     }
 
     /**
-     * Dependencies for `startNewGame`, built once so every call site spells the
-     * argument the same way. `fitView` folds the gather-and-zoom-to-fit step and
+     * `fitView` folds the gather-and-zoom-to-fit step and
      * the follow-up render together: `session.install` already renders the state
      * at its pre-gather positions, so the view-fit's repositioning needs a
      * second render to reach the screen.
@@ -400,10 +365,6 @@ export function bootstrap(
     });
 
     /**
-     * Background-color control handle — the swatch picker, the OS-theme
-     * re-apply, and the piece-outline SVG filter plus its saved preferences,
-     * all installed by the one call.
-     *
      * `installToolbar` invokes `installBackgroundColorControl` between the
      * deselect and Info buttons (see `install-toolbar.ts`'s module doc) so
      * DOM order matches the visual top-to-bottom control stack, then hands
@@ -439,9 +400,7 @@ export function bootstrap(
     });
 
     /**
-     * Dependencies for `loadSharedPuzzle`, built once so both call sites — the
-     * share-link boot path and the `__reproPuzzle` console hook — spell the
-     * argument the same way. Reuses `startNewGameDeps`'s `fitView`,
+     * Reuses `startNewGameDeps`'s `fitView`,
      * `persistNewPuzzle` and `onGameAnalytics`: installing a freshly generated
      * puzzle works the same whether it came from a fresh start or a share link.
      *
@@ -458,20 +417,12 @@ export function bootstrap(
         hasCurrentGame: startNewGameDeps.hasCurrentGame,
     };
 
-    /**
-     * Handles a `#p=` link on boot and on an in-tab hash change, including the
-     * stale-client rescue for a link that fails to decode. See
-     * `share-link-loader.ts` for the mechanism.
-     */
     const shareLinks = createShareLinkLoader({
         loadShared: (payload, recipientHadSavedState) =>
             loadSharedPuzzle(payload, recipientHadSavedState, sharedDeps),
         attemptRescue: () => pwaUpdates.attemptShareLinkRescue(),
     });
 
-    // On load: shared-link (hash) > saved game > fresh start. See
-    // `boot-sequence.ts` for the flow, the corrupt-save recovery gate, and
-    // first-run detection.
     void runBootSequence({
         container: root,
         session,

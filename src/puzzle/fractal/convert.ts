@@ -1,21 +1,3 @@
-/**
- * Convert fractal pieces (DiagonalConnection lists) to standard
- * GeneratedPiece[] with full Edge mate relationships for merge detection.
- *
- * The top-level `convertToStandardPieces` orchestrates a fixed pipeline of
- * helpers, each owning one concern:
- *   1. buildMainContourArcs    — recursive walk to seed each piece's arcs.
- *   2. computeGapFills          — find cells the walk missed and pick owners.
- *   3. appendDiamondFillerArcs  — close gap cells as 4-arc sub-paths.
- *   4. appendOrphanDiscArcs     — attach orphan-disc tiles as concave loops.
- *   5. buildArcIndex            — index arcs by (cx,cy,quad) for mate lookup.
- *   6. markMatelessArcs         — flag border-side arcs (no mate across).
- *   7. scaleArcsToImage         — scale + translate into image coordinates.
- *   8. buildSubPaths            — emit drawable ops, collapsing mateless runs.
- *   9. allocateEdgeIds          — assign edge IDs and record arc → id map.
- *  10. buildPiece               — assemble each GeneratedPiece (bbox, edges, shape).
- */
-
 import type { Edge, GeneratedPiece, Size } from '../../model/types.js';
 import { fmt } from '../../model/build-shape.js';
 import type { ArcData, DiagonalConnection, Tile } from './types.js';
@@ -32,9 +14,6 @@ type Op = ArcOp | LineOp;
 interface RectBorder { xMin: number; yMin: number; xMax: number; yMax: number }
 
 /**
- * Build arcs for all pieces, then convert each piece's arc sequence
- * into Edge[] with proper mate relationships.
- *
  * Two arcs are "mates" when they share the same center + quadrant
  * but belong to different pieces (one has sign=0, the other sign=1).
  */
@@ -109,7 +88,6 @@ export function convertToStandardPieces(
 }
 
 /**
- * Walk each piece's connection tree from p[0] and accumulate arcs.
  * `addArcs` probes for sibling connections by key, so pre-build a Set
  * per piece for O(1) membership instead of O(n) Array.find.
  */
@@ -188,7 +166,7 @@ function computeGapFills(
                 `${cx + 1},${cy + 1},1`, // tile(cx+1,cy+1) q=1
             ];
 
-            let owner = pi; // fallback to connection owner
+            let owner = pi;
             for (const arcKey of borderArcs) {
                 const arcOwner = concaveArcOwner.get(arcKey);
                 if (arcOwner !== undefined) {
@@ -390,7 +368,6 @@ function buildSubPaths(
                     i++;
                     continue;
                 }
-                // Walk to end of run.
                 let j = i;
                 while (j < n && isMateless[pi][spStart + ((j + rot) % n)]) j++;
                 const firstAi = spStart + ((i + rot) % n);
@@ -437,11 +414,7 @@ function allocateEdgeIds(pieceSubPaths: Op[][][]): {
 }
 
 /**
- * Assemble a single GeneratedPiece from its sub-paths: compute the bounding
- * box over every op, emit one Edge per op (with its mate ids resolved via
- * the arc index), and concatenate the SVG path string.
- *
- * That `shape` string is built inline here rather than by the shared
+ * The `shape` string is built inline here rather than by the shared
  * `model/build-shape.ts` (one `M …/Z` per sub-path, emitted alongside the
  * edges). The two agree on every piece this converter emits today, and the
  * save path depends on it — `serializePiece` omits `shape` from the v12 blob

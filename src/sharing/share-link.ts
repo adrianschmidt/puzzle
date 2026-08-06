@@ -1,12 +1,3 @@
-/**
- * Share-link codec — encodes a puzzle (+ optional progress) into a
- * URL-safe base64 JSON payload and back.
- *
- * Used by the "Share this puzzle" section of the info modal and by
- * app/share-link-loader.ts, on boot and on an in-tab hash change, to
- * detect and load `#p=...` hash links.
- */
-
 import type { GameState } from '../model/types.js';
 import { normalizeDegrees } from '../model/helpers.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
@@ -26,7 +17,7 @@ export interface SharePayload {
     i: string;
     /** Image size [width, height]. */
     is: [number, number];
-    /** Optional attribution. */
+    /** Attribution. */
     a?: { n: string; u: string; p: string };
     /** Grid size [cols, rows]. */
     g: [number, number];
@@ -77,7 +68,7 @@ export interface SharePayload {
      * composable pipeline at the current trace set.
      */
     clf?: { tv: number };
-    /** Optional progress snapshot. */
+    /** Progress snapshot. */
     pr?: {
         m: number[][];
         mr?: number[];
@@ -209,7 +200,6 @@ const MAX_SINE_FREQUENCY = 100;
  */
 const MAX_SINE_AMPLITUDE = 0.5;
 
-/** Clamp a decoded dimension to a positive integer within `[1, max]`. */
 function clampDim(n: number, max: number): number {
     if (!Number.isFinite(n)) return 1;
     return Math.max(1, Math.min(max, Math.floor(n)));
@@ -564,8 +554,7 @@ function isValidProgress(x: unknown): boolean {
 }
 
 /**
- * Project a decoded share-link `cf` block onto the framework's
- * {@link ComposableConfig} shape. `decodePayload` already translates legacy
+ * `decodePayload` already translates legacy
  * share-link payloads (v1 `ha`/`hf`/`va`/`vf`/`dt` fields) to the current
  * `bg`/`bgc`/`tg`/`tgc` shape on the way in, so this is a 1:1 rename plus
  * the optional `mpa` propagation that keeps auto-grouping behavior
@@ -631,7 +620,6 @@ export interface StyleConfigSource {
  */
 export function applyStyleConfigs(payload: SharePayload, source: StyleConfigSource): void {
     if (payload.c === 'composable' && source.composableConfig) {
-        // Write the opaque generator/config shape directly to the wire.
         // Defaults: sine base-cut generator and classic tab generator
         // (matching src/puzzle/topology/generator.ts) so recipients reproduce
         // the same cuts when the sender omitted sub-fields.

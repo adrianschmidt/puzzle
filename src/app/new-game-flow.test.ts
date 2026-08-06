@@ -69,15 +69,12 @@ describe('openNewGameDialog', () => {
         vi.restoreAllMocks();
     });
 
-    /** Open the dialog and return the options `createNewGameDialog` was called with. */
     function open() {
         openNewGameDialog({ container, start });
         return vi.mocked(createNewGameDialog).mock.calls[0][0];
     }
 
     /**
-     * Open the dialog and fire `onSelect` with a selection payload matching
-     * the real `NewGameSelection` shape (see `src/ui/new-game-dialog.ts`).
      * `wavyConfig`/`fractalConfig`/`composableConfig` are omitted by
      * default, mirroring the real dialog: it only fills the one matching
      * the currently-selected cut style.
@@ -110,8 +107,6 @@ describe('openNewGameDialog', () => {
         // The real sine base-cut generator advertises borderless support.
         expect(opts.composableSupportsBorderless).toBe(true);
     });
-
-    // --- The nine preference writes -----------------------------------
 
     it('persists the chosen size', () => {
         selectWith({ sizeId: '96' });
@@ -177,8 +172,6 @@ describe('openNewGameDialog', () => {
         expect(loadVibrantPreference()).toBe(true);
     });
 
-    // --- previous save handling --------------------------------------------
-
     it('leaves the previous save intact when the start is canceled (or throws)', () => {
         // `start` (the real `startNewGame`) only replaces the save once
         // generation has fully succeeded — a cancel (the loading overlay's
@@ -209,8 +202,6 @@ describe('openNewGameDialog', () => {
 
         expect(loadState()?.imageUrl).toBe('new-puzzle.jpg');
     });
-
-    // --- start() wiring ----------------------------------------------------
 
     it('starts the game with the chosen size and options', () => {
         selectWith({ sizeId: '96', cutStyleId: 'wavy', wavyConfig: { borderless: true } });
@@ -263,8 +254,6 @@ describe('openNewGameDialog', () => {
         );
     });
 
-    // --- traced-tab preload ------------------------------------------------
-
     it('kicks off the traced-tab preload without leaking an unhandled rejection', async () => {
         vi.mocked(preloadTracedTabGenerator).mockReset().mockRejectedValue(new Error('chunk boom'));
         const opts = open();
@@ -280,8 +269,6 @@ describe('openNewGameDialog', () => {
         await Promise.resolve();
         await Promise.resolve();
     });
-
-    // --- error reporting -----------------------------------------------
 
     it('starts silently and reports nothing when the start succeeds', async () => {
         selectWith();

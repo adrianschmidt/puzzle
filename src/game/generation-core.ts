@@ -24,7 +24,7 @@ import { sealPieceGeometry } from '../model/seal-geometry.js';
 import type { CutStyle } from './cut-styles.js';
 import { getCutStyleStrategy } from './cut-style-strategies.js';
 
-/** Everything the generate phase needs. Plain data — worker-safe. */
+/** Plain data — worker-safe. */
 export interface GenerationRequest {
     cutStyle: CutStyle;
     gridSize: GridSize;
@@ -54,7 +54,7 @@ export interface GenerationRequest {
     tabDebug: boolean;
 }
 
-/** What the generate phase yields. Plain data — worker-safe. */
+/** Plain data — worker-safe. */
 export interface GenerationResult {
     pieces: Piece[];
     puzzleSize: Size;

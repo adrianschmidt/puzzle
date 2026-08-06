@@ -1,11 +1,6 @@
 /**
- * Marquee tool toggle button — placed below the multi-select button.
- *
- * Toggles the marquee (drag-box) gesture. Enabling it also enables
- * multi-select, since a marquee builds a multi-select selection (see
- * SelectionManager.toggleMarquee). While the desktop Shift key is held the
- * button lights up to show that the Shift+drag shortcut will marquee, even
- * when the toggle itself is off; the hint clears when Shift is released.
+ * Enabling the marquee also enables multi-select, since a marquee builds a
+ * multi-select selection (see SelectionManager.toggleMarquee).
  */
 
 import type { SelectionManager } from '../interaction/selection-manager.js';
@@ -15,10 +10,6 @@ export interface MarqueeToolButtonOptions {
     selectionManager: SelectionManager;
 }
 
-/**
- * Create and attach the marquee-tool toggle button.
- * Returns a cleanup function.
- */
 export function createMarqueeToolButton(
     options: MarqueeToolButtonOptions,
 ): () => void {
@@ -30,20 +21,15 @@ export function createMarqueeToolButton(
     button.setAttribute('aria-label', 'Marquee selection tool');
     button.setAttribute('aria-pressed', 'false');
 
-    // Dashed selection-rectangle icon (SVG)
     button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3">
       <rect x="3" y="3" width="18" height="18" rx="1.5"/>
     </svg>`;
 
-    // True while Shift is held — a transient hint that the Shift+drag
-    // shortcut will marquee, shown even when the toggle is off.
-    //
-    // This is a purely cosmetic observation of the Shift key, deliberately
-    // independent of the authoritative gesture read (`evt.shiftKey` in
-    // setupInteraction's onBackgroundPan.start). The two can momentarily
-    // disagree — e.g. a `blur` clears this hint while a captured drag still
-    // sees `evt.shiftKey` — which is harmless: the gesture decides what
-    // actually happens, this only lights the button.
+    // Purely cosmetic observation of the Shift key, deliberately independent
+    // of the authoritative gesture read (`evt.shiftKey` in setupInteraction's
+    // onBackgroundPan.start). The two can momentarily disagree — e.g. a
+    // `blur` clears this hint while a captured drag still sees `evt.shiftKey`
+    // — which is harmless: the gesture decides, this only lights the button.
     let shiftHint = false;
 
     function updateVisuals(): void {

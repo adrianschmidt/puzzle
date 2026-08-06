@@ -1,16 +1,6 @@
 /**
- * Integration test for the two-circle Venn case.
- *
- * Two circles strictly inside a frame, intersecting each other,
- * should produce exactly four pieces:
- *   - the frame piece (rectangular outer boundary, with a hole
- *     where the circle component sits — emitted as a second
- *     loop on the flat `edges` list)
- *   - two crescents
- *   - one lens
- *
- * Loop count on a piece is detected by counting chain breaks in
- * its flat `edges` list.
+ * The frame piece's hole (where the circle component sits) is emitted
+ * as a second loop on the flat `edges` list.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -65,10 +55,9 @@ describe('composable: two-circle Venn', () => {
             1, 1, { width: 600, height: 400 }, 42, CONFIG,
         );
         const frame = pieces.find(p => countLoops(p.edges) > 1)!;
-        // The frame's outer boundary is 4 border edges (unmated). The
-        // inner-boundary edges should each have a mate pointing at one
-        // of the crescent pieces (the lens has no edges shared with
-        // the frame). Verify at least one inner-boundary edge is mated.
+        // "At least one" because the frame's outer boundary is unmated
+        // border edges, and the lens shares no edges with the frame —
+        // only the crescents mate with the inner boundary.
         const matedFrameEdges = frame.edges.filter(
             e => e.matePieceId !== -1 && e.mateEdgeId !== -1,
         );

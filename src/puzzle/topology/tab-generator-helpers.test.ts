@@ -304,7 +304,6 @@ describe('smoothedTabSplicer anchor-removal', () => {
         // At least one anchor was dropped → fewer segments overall.
         expect(smoothed.segments.length).toBeLessThan(standard.segments.length);
 
-        // Splice is still C1 at both ends.
         const N = smoothed.segments.length - 2;
         const beforeOut = unitTangentLeaving(smoothed.segments[0]);
         const tabIn = unitTangentEntering(smoothed.segments[1]);
@@ -380,7 +379,6 @@ describe('smoothedTabSplicer anchor-removal', () => {
         const smoothed = smoothedTabSplicer.splice(
             edge, placement, tmpl, createSeededRandom(1),
         )!;
-
 
         expect(smoothed.segments.length).toBeLessThan(standard.segments.length);
         expectC1AtBothSplices(smoothed);

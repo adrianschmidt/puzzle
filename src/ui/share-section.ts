@@ -1,5 +1,4 @@
 /**
- * Build and wire the "Share this puzzle" section for the info modal.
  * DOM-building is done via createElement so we don't hand-build HTML
  * strings here; the parent modal owns its HTML template.
  */
@@ -33,7 +32,6 @@ export function attachShareSection(
     explainer.textContent = 'Send this link to share the same puzzle with a friend.';
     section.appendChild(explainer);
 
-    // Checkbox row
     const label = document.createElement('label');
     label.className = 'info-setting-toggle';
 
@@ -55,7 +53,6 @@ export function attachShareSection(
     hint.dataset.testid = 'share-progress-hint';
     section.appendChild(hint);
 
-    // Primary button
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'share-primary-btn';
@@ -63,10 +60,9 @@ export function attachShareSection(
     button.textContent = webShareAvailable ? 'Share\u2026' : 'Copy link';
     section.appendChild(button);
 
-    // URL preview. An <input readonly> gives Chrome Android a proper
-    // long-press "Copy" toolbar (a plain <div> doesn't reliably do that),
-    // and it's naturally single-line. Auto-select on focus so one tap
-    // selects the entire URL for quick copy.
+    // An <input readonly> gives Chrome Android a proper long-press "Copy"
+    // toolbar (a plain <div> doesn't reliably do that). Auto-select on focus
+    // so one tap selects the entire URL.
     const preview = document.createElement('input');
     preview.type = 'text';
     preview.readOnly = true;
@@ -75,7 +71,6 @@ export function attachShareSection(
     preview.addEventListener('focus', () => preview.select());
     section.appendChild(preview);
 
-    // Wiring
     const progressAvailable = hasShareableProgress(state);
     const completed = state.completed;
     if (!progressAvailable && completed) {

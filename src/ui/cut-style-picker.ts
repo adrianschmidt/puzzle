@@ -1,26 +1,18 @@
 /**
- * Cut style picker — lets the player choose the puzzle cut style.
- *
- * Renders one button per provided option. The caller decides which
- * options to show — on production builds, `getVisibleCutStyleOptions()`
- * in `game/cut-styles.ts` filters Composable out.
+ * The caller decides which options to show — on production builds,
+ * `getVisibleCutStyleOptions()` in `game/cut-styles.ts` filters
+ * Composable out.
  */
 
 import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';
 import type { CutStyleOption } from '../game/cut-styles.js';
 
 export interface CutStylePickerOptions {
-    /** Currently selected cut style id. */
     selectedCutStyleId: string;
-    /** Options to render. Defaults to all known options. */
     options?: readonly CutStyleOption[];
-    /** Called when the player selects a style. Receives the option id. */
     onSelect: (id: string) => void;
 }
 
-/**
- * Create the cut style picker section (title + option buttons).
- */
 export function createCutStylePicker(opts: CutStylePickerOptions): HTMLElement {
     const { selectedCutStyleId, onSelect } = opts;
     const options = opts.options ?? CUT_STYLE_OPTIONS;

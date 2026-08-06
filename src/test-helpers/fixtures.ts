@@ -1,6 +1,4 @@
 /**
- * Shared test fixtures for Piece / GameState construction.
- *
  * Tests across the codebase used to roll their own makePiece / makeGameState
  * helpers, each subtly different. Drift across copies meant a test failure in
  * one file could be papered over by an inconsistent fixture rather than the
@@ -27,13 +25,6 @@ export interface MakePieceOpts {
     bounds?: PieceBounds;
 }
 
-/**
- * Build a Piece with empty edges, empty shape, and zero imageOffset by default.
- *
- * Pass `edges` to inject custom edges, e.g. when testing edge-graph traversal.
- * For a standard rectangular piece with derived shape and grid imageOffset,
- * use makeRectPiece instead.
- */
 export function makePiece(opts: MakePieceOpts = {}): Piece {
     const edges = opts.edges ?? [];
     return {
@@ -41,9 +32,9 @@ export function makePiece(opts: MakePieceOpts = {}): Piece {
         edges,
         shape: opts.shape ?? '',
         imageOffset: opts.imageOffset ?? { x: 0, y: 0 },
-        // Note: infinite for the default empty-edge piece, matching what the
-        // old on-demand walk produced for it. Tests that read bounds pass
-        // real edges or an explicit override.
+        // Infinite for the default empty-edge piece, matching what the old
+        // on-demand walk produced for it. Tests that read bounds pass real
+        // edges or an explicit override.
         bounds: opts.bounds ?? computePieceBounds({ edges }),
     };
 }
@@ -56,7 +47,6 @@ export interface MakeRectPieceOpts {
     col?: number;
     /** Row in the source-image grid; used to derive imageOffset. */
     row?: number;
-    /** Override the derived imageOffset. */
     imageOffset?: Point;
     bounds?: PieceBounds;
 }
@@ -127,11 +117,6 @@ export function makeRectPiece(opts: MakeRectPieceOpts = {}): Piece {
 }
 
 /**
- * Build a minimal valid GameState with sensible defaults.
- *
- * Default: empty pieces/groups, 800×600 image, 8×6 grid, not completed.
- * Pass any subset of GameState fields to override.
- *
  * The `piecesById`, `groupsById`, and `pieceToGroup` indexes are derived
  * from the final `pieces`/`groups` (overrides included) so callers don't
  * have to keep them in sync manually. Override them explicitly only if
@@ -172,7 +157,7 @@ export function makeMatedPiecePair(): { piece0: Piece; piece1: Piece } {
 
     const piece0 = makePiece({ id: 0, edges: [
         edge(10, { x: 0, y: 0 }, { x: 100, y: 0 }),
-        edge(0, { x: 100, y: 0 }, { x: 100, y: 100 }, 1, 1), // mates piece 1
+        edge(0, { x: 100, y: 0 }, { x: 100, y: 100 }, 1, 1),
         edge(11, { x: 100, y: 100 }, { x: 0, y: 100 }),
         edge(12, { x: 0, y: 100 }, { x: 0, y: 0 }),
     ] });
@@ -180,7 +165,7 @@ export function makeMatedPiecePair(): { piece0: Piece; piece1: Piece } {
         edge(13, { x: 0, y: 0 }, { x: 100, y: 0 }),
         edge(14, { x: 100, y: 0 }, { x: 100, y: 100 }),
         edge(15, { x: 100, y: 100 }, { x: 0, y: 100 }),
-        edge(1, { x: 0, y: 100 }, { x: 0, y: 0 }, 0, 0), // mates piece 0
+        edge(1, { x: 0, y: 100 }, { x: 0, y: 0 }, 0, 0),
     ] });
 
     return { piece0, piece1 };
@@ -217,9 +202,7 @@ export function makeCenteredGroup(
  *
  * `recombine` rejects an empty `pieces` array — which is exactly what
  * `makeGameState()`'s bare default has — so a fixture that gets saved and
- * read back needs at least one real piece, and a group holding it. Shared
- * by every test that seeds a save with `saveNewPuzzle` and then exercises
- * the code that loads it.
+ * read back needs at least one real piece, and a group holding it.
  */
 export function makeSavedGameState(): GameState {
     const pieces = [makeRectPiece({ id: 0 })];

@@ -1,10 +1,3 @@
-/**
- * Registry of base-cut and tab generator plug-ins, keyed by id.
- *
- * Pre-registers `sine` and `classic` as the framework defaults.
- * Other plug-ins (Venn etc.) register themselves at module import.
- */
-
 import type { BaseCutGenerator, TabGenerator } from './plugin-types.js';
 import { sineCutGenerator } from './sine-cut-generator.js';
 import { classicTabGenerator } from './classic-tab-generator.js';
@@ -44,11 +37,9 @@ export function listTabGeneratorIds(): string[] {
     return [...tabGenerators.keys()];
 }
 
-// Pre-register the framework defaults
 registerBaseCutGenerator(sineCutGenerator);
 registerTabGenerator(classicTabGenerator);
 
-// Register additional generators
 registerBaseCutGenerator(vennCutGenerator);
 registerBaseCutGenerator(triangularCutGenerator);
 registerTabGenerator(noneTabGenerator);

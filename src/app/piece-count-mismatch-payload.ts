@@ -1,6 +1,4 @@
 /**
- * Build the analytics payload attached to `piece-count-mismatch`.
- *
  * Derives from `buildReproParams` rather than reading `GameState` directly, so
  * the event and the info modal's "Reproduction parameters" block cannot drift
  * apart — a row in Umami is meant to paste straight into `__reproPuzzle`.
@@ -45,8 +43,6 @@ function toUmamiPrecision(value: number): number {
 const UMAMI_STRING_LIMIT = 500;
 
 /**
- * Which block each cut style's config lives in.
- *
  * A `Record<CutStyle, …>` rather than a `switch`, so a sixth cut style is a
  * COMPILE error here instead of falling into a default arm — the forcing
  * function `STRATEGIES` (`cut-style-strategies.ts`) and `CUT_STYLE_OPTIONS`
@@ -77,8 +73,6 @@ const STYLE_CONFIG_READERS: Record<CutStyle, (r: ReproParams) => object | undefi
 Object.setPrototypeOf(STYLE_CONFIG_READERS, null);
 
 /**
- * The per-style config block belonging to the puzzle's own cut style.
- *
  * Gated on `cutStyle` rather than picking whichever block happens to be
  * present, for the reason `traceSetVersionOf` and `applyStyleConfigs` both
  * give: `buildReproParams` copies every block the state carries, so a state
@@ -197,7 +191,6 @@ export function buildPieceCountMismatchData(
     return data;
 }
 
-/** `JSON.stringify`, or undefined when the value cannot be serialized. */
 function tryStringify(value: object): string | undefined {
     try {
         return JSON.stringify(value);

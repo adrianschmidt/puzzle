@@ -1,6 +1,4 @@
 /**
- * Tests for the Unsplash proxy Worker.
- *
  * The handler is exercised directly rather than through a Workers runtime:
  * it takes `(request, env, fetchFn)` and uses only standard web APIs, so a
  * plain vitest run covers every routing and validation decision in it.
@@ -63,7 +61,6 @@ function stubFetch(
         .mockImplementation(() => Promise.resolve(response.clone()));
 }
 
-/** The `Client-ID …` credential a stubbed fetch call was made with. */
 function authHeader(call: Parameters<typeof fetch>): string | null {
     return new Headers(call[1]?.headers).get('authorization');
 }

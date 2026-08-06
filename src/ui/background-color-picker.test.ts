@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the background color picker adapter.
- */
-
 import { describe, it, expect, vi } from 'vitest';
 import { createBackgroundColorPicker } from './background-color-picker.js';
 import { BACKGROUND_COLOR_PRESETS } from './background-color.js';

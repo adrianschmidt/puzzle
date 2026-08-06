@@ -2,10 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { Curve } from './curve.js';
 import type { Point } from '../../model/types.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function approxPoint(p: Point, x: number, y: number) {
     expect(p.x).toBeCloseTo(x, 0);
     expect(p.y).toBeCloseTo(y, 0);
@@ -15,7 +11,6 @@ function expectClose(a: number, b: number, tolerance = 0.01) {
     expect(Math.abs(a - b)).toBeLessThan(tolerance);
 }
 
-/** Create a multi-segment Bézier curve (two linear segments for testing). */
 function twoSegmentLine(x0: number, xMid: number, xEnd: number): Curve {
     return Curve.fromBezierPath([
         { x: x0, y: 0 },
@@ -27,10 +22,6 @@ function twoSegmentLine(x0: number, xMid: number, xEnd: number): Curve {
         { x: xEnd, y: 0 },
     ]);
 }
-
-// ---------------------------------------------------------------------------
-// Curve.line
-// ---------------------------------------------------------------------------
 
 describe('Curve.line', () => {
     it('creates a single-segment curve', () => {
@@ -56,10 +47,6 @@ describe('Curve.line', () => {
         approxPoint(c.pointAt(1), 100, 0);
     });
 });
-
-// ---------------------------------------------------------------------------
-// Curve.fromBezierPath
-// ---------------------------------------------------------------------------
 
 describe('Curve.fromBezierPath', () => {
     it('creates segments from flat point array', () => {
@@ -91,10 +78,6 @@ describe('Curve.fromBezierPath', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Multi-segment curves
-// ---------------------------------------------------------------------------
-
 describe('multi-segment curves', () => {
     it('creates segments from Bézier path', () => {
         const c = twoSegmentLine(0, 10, 20);
@@ -114,10 +97,6 @@ describe('multi-segment curves', () => {
         approxPoint(c.pointAt(0.75), 15, 0);
     });
 });
-
-// ---------------------------------------------------------------------------
-// pointAt
-// ---------------------------------------------------------------------------
 
 describe('pointAt', () => {
     it('clamps t below 0', () => {
@@ -142,10 +121,6 @@ describe('pointAt', () => {
         expect(mid.x).toBeCloseTo(5, 0);
     });
 });
-
-// ---------------------------------------------------------------------------
-// tangentAt
-// ---------------------------------------------------------------------------
 
 describe('tangentAt', () => {
     it('returns horizontal tangent for horizontal line', () => {
@@ -182,10 +157,6 @@ describe('tangentAt', () => {
         expect(tEnd.y).toBeLessThan(-0.5);
     });
 });
-
-// ---------------------------------------------------------------------------
-// splitAt
-// ---------------------------------------------------------------------------
 
 describe('splitAt', () => {
     it('splits a line at midpoint', () => {
@@ -231,10 +202,6 @@ describe('splitAt', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// sample
-// ---------------------------------------------------------------------------
-
 describe('sample', () => {
     it('returns correct number of points', () => {
         const c = Curve.line({ x: 0, y: 0 }, { x: 10, y: 0 });
@@ -258,10 +225,6 @@ describe('sample', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// arcLength
-// ---------------------------------------------------------------------------
-
 describe('arcLength', () => {
     it('computes correct length for a straight line', () => {
         const c = Curve.line({ x: 0, y: 0 }, { x: 10, y: 0 });
@@ -283,10 +246,6 @@ describe('arcLength', () => {
         expect(c.arcLength()).toBeGreaterThan(10);
     });
 });
-
-// ---------------------------------------------------------------------------
-// nearestT
-// ---------------------------------------------------------------------------
 
 describe('nearestT', () => {
     it('finds t=0 for start point', () => {
@@ -315,10 +274,6 @@ describe('nearestT', () => {
         expectClose(c.nearestT(p), 0.3, 0.01);
     });
 });
-
-// ---------------------------------------------------------------------------
-// reverse
-// ---------------------------------------------------------------------------
 
 describe('reverse', () => {
     it('swaps start and end for a line', () => {
@@ -356,10 +311,6 @@ describe('reverse', () => {
         expect(r.segments).toHaveLength(2);
     });
 });
-
-// ---------------------------------------------------------------------------
-// intersect
-// ---------------------------------------------------------------------------
 
 describe('intersect', () => {
     it('finds intersection of two crossing lines', () => {
@@ -486,10 +437,6 @@ describe('intersect', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Curve.circle
-// ---------------------------------------------------------------------------
-
 describe('Curve.circle', () => {
     it('produces a closed curve through the four cardinal points', () => {
         const c = Curve.circle({ x: 100, y: 100 }, 50);
@@ -497,14 +444,12 @@ describe('Curve.circle', () => {
         // start should be on the rightmost cardinal point
         expect(c.start.x).toBeCloseTo(150);
         expect(c.start.y).toBeCloseTo(100);
-        // end equals start (closed)
         expect(c.end.x).toBeCloseTo(c.start.x, 6);
         expect(c.end.y).toBeCloseTo(c.start.y, 6);
     });
 
     it('approximates radius accurately at midpoints of each arc', () => {
         const c = Curve.circle({ x: 0, y: 0 }, 100);
-        // Sample heavily and check distance from center
         const samples = c.sample(20);
         for (const p of samples) {
             const r = Math.hypot(p.x, p.y);
@@ -528,7 +473,6 @@ describe('Curve.boundingBox', () => {
         expect(box.minY).toBeCloseTo(-50);
         expect(box.maxY).toBeCloseTo(0);
 
-        // The box must contain every point actually on the curve.
         for (const p of c.sample(16)) {
             expect(p.x).toBeGreaterThanOrEqual(box.minX - 1e-9);
             expect(p.x).toBeLessThanOrEqual(box.maxX + 1e-9);

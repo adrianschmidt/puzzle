@@ -1,16 +1,7 @@
 /**
- * Full-screen "Building puzzle…" overlay for blocking work.
- *
  * Puzzle generation runs in a worker when available and can still take a
  * second or two on older devices; shared-link recipients in particular see
- * a dead page without feedback. `showLoadingOverlay` puts up a spinner and
- * explanatory text, `hideLoadingOverlay` tears it down once the game is
- * rendered. It also hosts an optional Cancel affordance (button + Escape)
- * for callers that can abort the underlying work.
- *
- * `yieldForPaint` is the helper that lets the browser actually paint the
- * overlay before a sync work burst; without it the overlay DOM is
- * created but never shown because the main thread never returns.
+ * a dead page without feedback.
  */
 
 const OVERLAY_CLASS = 'loading-overlay';
@@ -152,7 +143,6 @@ export function hideLoadingOverlay(): void {
 }
 
 /**
- * Wait for the browser to paint the current DOM state before returning.
  * Use this after `showLoadingOverlay` and before a synchronous heavy
  * work burst so the overlay actually appears on screen.
  */

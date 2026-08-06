@@ -33,12 +33,10 @@
  */
 
 /**
- * Bindings this Worker needs. Set with `wrangler secret put`.
- *
- * Optional because that is a separate step from the deploy: until it runs the
- * binding is absent, not empty. Typing it as a required `string` would make
- * the guard in `handleRequest` read as dead code — the shape `CLAUDE.md`
- * opens by warning about, where a "provably unnecessary" check gets removed.
+ * Set with `wrangler secret put`. Optional because that is a separate step
+ * from the deploy: until it runs the binding is absent, not empty. Typing it
+ * as a required `string` would make the guard in `handleRequest` read as
+ * dead code.
  */
 export interface Env {
     UNSPLASH_ACCESS_KEY?: string;
@@ -179,14 +177,11 @@ function errorResponse(
     });
 }
 
-/** Where a request should be forwarded, or why it should not be. */
 type Resolution =
     | { ok: true; url: string }
     | { ok: false; status: number; message: string };
 
 /**
- * Map an incoming request URL onto the Unsplash URL to fetch.
- *
  * The key is deliberately *not* added here — it travels as an `Authorization`
  * header instead, so no URL this function returns is secret. That is what lets
  * the caller log or report a failing upstream URL, and what keeps the key out
@@ -256,8 +251,6 @@ export function resolveUpstream(url: URL): Resolution {
 }
 
 /**
- * Handle one proxied request.
- *
  * Upstream status codes pass through unchanged — a 403 from Unsplash reaches
  * the client as a 403, which is what makes the rate-limit telemetry in #533
  * implementable without touching this Worker again.

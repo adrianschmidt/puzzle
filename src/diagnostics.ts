@@ -1,9 +1,6 @@
 /**
- * Project-wide diagnostic logging.
- *
  * - `diagnostics.log(stage, message, data?)` collects structured entries
- *   when enabled. Used by topology-pipeline tests to inspect generation
- *   without visual inspection.
+ *   when enabled.
  * - `diagnostics.warn(...args)` writes to console.warn when enabled.
  *   Used for runtime issues that developers should see in dev/test
  *   builds but stay silent in production.
@@ -19,10 +16,6 @@
  * a production diagnostic on top of it.
  */
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface DiagnosticEntry {
     stage: string;
     message: string;
@@ -36,10 +29,6 @@ export interface DiagnosticLog {
     warn(...args: unknown[]): void;
     clear(): void;
 }
-
-// ---------------------------------------------------------------------------
-// Singleton diagnostic log
-// ---------------------------------------------------------------------------
 
 let _enabled = import.meta.env.DEV;
 const _entries: DiagnosticEntry[] = [];

@@ -1,9 +1,7 @@
 /**
- * Fetch a random Unsplash image for a new puzzle and map it into the shape
- * the game needs. Returns `null` when no image is available — either Unsplash
- * returned no usable photo (a handled, untracked outcome) or the fetch threw
- * (reported as `image-fetch-failed`). Either way the caller falls back to its
- * default image. Extracted from `main.ts` so the failure reporting is testable.
+ * A no-usable-photo result is a handled, untracked outcome; only a thrown
+ * fetch is reported as `image-fetch-failed`. Either way the caller falls
+ * back to its default image.
  */
 
 import { diagnostics } from '../diagnostics.js';

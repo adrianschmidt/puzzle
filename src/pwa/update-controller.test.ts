@@ -62,10 +62,8 @@ describe('createUpdateController', () => {
         const flush = vi.fn();
         const updateSW = vi.fn().mockResolvedValue(undefined);
         const controller = createUpdateController({ flush, showIndicator: vi.fn() });
-        // Tap arrives before registerSW has resolved the handle.
         controller.reloadNow();
         expect(flush).not.toHaveBeenCalled();
-        // Handle becomes available — the buffered reload fires.
         controller.setUpdateSW(updateSW);
         expect(flush).toHaveBeenCalledOnce();
         expect(updateSW).toHaveBeenCalledWith(true);
@@ -129,7 +127,6 @@ describe('createUpdateController', () => {
         controller.reloadNow();
         expect(scheduleFallback).toHaveBeenCalledOnce();
         expect(scheduleFallback).toHaveBeenCalledWith(expect.any(Function), 3000);
-        // Invoke the captured handler to confirm it calls reload.
         const handler = scheduleFallback.mock.calls[0][0] as () => void;
         handler();
         expect(reload).toHaveBeenCalledOnce();
@@ -206,9 +203,7 @@ describe('createUpdateController analytics', () => {
         });
         controller.setUpdateSW(vi.fn().mockResolvedValue(undefined));
         controller.reloadNow();
-        // Fallback hasn't fired yet.
         expect(track).not.toHaveBeenCalledWith('pwa-update-fallback-reload', {});
-        // Fire the scheduled handler.
         (scheduleFallback.mock.calls[0][0] as () => void)();
         expect(track).toHaveBeenCalledWith('pwa-update-fallback-reload', {});
         expect(reload).toHaveBeenCalledOnce();
@@ -261,8 +256,6 @@ describe('setupUpdateChecks', () => {
             addVisibilityListener: () => {},
             isVisible: () => true,
         });
-        // Setup only wires the visibility listener; nothing runs until a
-        // visibility regain.
         expect(registration.update).not.toHaveBeenCalled();
     });
 

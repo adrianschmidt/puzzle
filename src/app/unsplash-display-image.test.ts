@@ -1,7 +1,3 @@
-/**
- * Tests for the shared Unsplash-result → display-model mapper.
- */
-
 import { describe, it, expect } from 'vitest';
 import type { UnsplashImageResult } from '../images/index.js';
 import { toDisplayImage } from './unsplash-display-image.js';

@@ -19,7 +19,6 @@ export function isSafeHttpUrl(url: string): boolean {
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
 }
 
-/** MIME-type prefix a `data:` URL must carry to be accepted as an image. */
 const IMAGE_MIME_PREFIX = 'image/';
 
 /**
@@ -78,8 +77,6 @@ export function isSafeImageUrl(url: string): boolean {
 }
 
 /**
- * Whether `url` carries the `data:` scheme.
- *
  * Parses rather than comparing a prefix, so it accepts every spelling
  * `new URL` does — uppercase, and leading whitespace or inner tab/CR/LF,
  * all of which the URL parser strips before reading `.protocol`. Both
@@ -96,8 +93,6 @@ export function isDataUrl(url: string): boolean {
 }
 
 /**
- * Whether `url` is a relative reference that resolves inside its own base.
- *
  * Resolving against a sentinel base and requiring the origin back, rather than
  * treating "`new URL()` threw" as proof of relativeness: the throw only means
  * there was no scheme, and `//evil.example/x.png` clears that bar while

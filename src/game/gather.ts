@@ -1,37 +1,17 @@
-/**
- * Gather pieces — computes new positions for all groups to bring them
- * together near the center of the visible play area.
- *
- * Groups are arranged in a compact layout using row-based packing,
- * where each row's height adapts to its tallest group. Groups are
- * shuffled so their layout position has no correlation with their
- * solved position.
- */
-
 import type { Point, Piece, PieceGroup } from '../model/types.js';
 import { getGroupVisualBounds } from './group-bounds.js';
 
-/** Padding between groups when distributing in the gather layout. */
 export const GATHER_PADDING = 50;
 
-/**
- * A rectangular area in world coordinates.
- */
 export interface WorldRect {
     /** Left edge (world x). */
     x: number;
     /** Top edge (world y). */
     y: number;
-    /** Width in world units. */
     width: number;
-    /** Height in world units. */
     height: number;
 }
 
-/**
- * Result of computing gathered positions, including the layout bounds
- * so the caller can zoom-to-fit.
- */
 export interface GatherResult {
     /** Map of groupId → new world position. */
     positions: Map<number, Point>;
@@ -40,20 +20,11 @@ export interface GatherResult {
 }
 
 /**
- * Compute new positions for all groups, arranging them in a compact
- * row-based layout that matches the screen's aspect ratio.
- *
  * Uses actual visual bounding boxes for each group, so it works
- * correctly with both classic and fractal piece shapes. Rows are
- * packed left-to-right, wrapping to maintain the target aspect ratio.
- *
- * After calling this, the caller should zoom-to-fit the returned
- * layoutBounds so all pieces are visible regardless of current zoom.
- *
- * @param groups - Current groups with their positions (not mutated)
- * @param screenAspectRatio - Width/height ratio of the screen viewport
- * @param piecesById - All pieces in the puzzle, indexed by id (for visual bounds)
- * @returns Positions and layout bounds for zoom-to-fit
+ * correctly with both classic and fractal piece shapes. Does not mutate
+ * the groups. After calling this, the caller should zoom-to-fit the
+ * returned layoutBounds so all pieces are visible regardless of
+ * current zoom.
  */
 export function computeGatheredPositions(
     groups: ReadonlyArray<Readonly<PieceGroup>>,
@@ -71,7 +42,6 @@ export function computeGatheredPositions(
 
     const margin = GATHER_PADDING;
 
-    // Compute visual bounds for each group
     interface GroupLayout {
         group: PieceGroup;
         bounds: ReturnType<typeof getGroupVisualBounds>;
@@ -91,10 +61,6 @@ export function computeGatheredPositions(
     // Sort by height descending for better row packing
     layouts.sort((a, b) => b.bounds.height - a.bounds.height);
 
-    // Find the target row width that produces a layout matching the
-    // viewport aspect ratio. We binary-search on width: pack rows at
-    // a candidate width, measure the resulting height, and adjust until
-    // width/height ≈ screenAspectRatio.
     const aspectRatio = Math.max(0.1, screenAspectRatio);
 
     let maxGroupWidth = 0;
@@ -104,7 +70,6 @@ export function computeGatheredPositions(
         totalGroupWidth += layout.bounds.width + margin;
     }
 
-    // Search bounds: minimum is widest group, maximum is all in one row
     const minWidth = maxGroupWidth + margin;
     const maxWidth = totalGroupWidth + margin;
 
@@ -138,14 +103,13 @@ export function computeGatheredPositions(
         if (h === 0) break;
         const ratio = mid / h;
         if (ratio < aspectRatio) {
-            lo = mid; // too tall → widen
+            lo = mid;
         } else {
-            hi = mid; // too wide → narrow
+            hi = mid;
         }
     }
     const targetWidth = (lo + hi) / 2;
 
-    // Pack into rows
     const rows: Array<{ items: GroupLayout[]; rowHeight: number }> = [];
     let currentRow: GroupLayout[] = [];
     let currentRowWidth = 0;
@@ -170,7 +134,6 @@ export function computeGatheredPositions(
         rows.push({ items: currentRow, rowHeight: currentRowHeight });
     }
 
-    // Compute total layout dimensions
     let totalHeight = 0;
     let maxRowWidth = 0;
     for (const row of rows) {
@@ -192,14 +155,13 @@ export function computeGatheredPositions(
     let y = startY;
 
     for (const row of rows) {
-        // Compute row width for centering
         let rowWidth = 0;
         for (const layout of row.items) {
             rowWidth += layout.bounds.width + margin;
         }
         rowWidth -= margin;
 
-        let x = -rowWidth / 2; // Center each row
+        let x = -rowWidth / 2;
 
         for (const layout of row.items) {
             const { group, bounds } = layout;
@@ -226,12 +188,7 @@ export function computeGatheredPositions(
     };
 }
 
-/**
- * Apply gathered positions to groups (mutates the groups in place).
- *
- * @param groups - The groups array to update
- * @param positions - Map of groupId → new position
- */
+/** Mutates the groups in place. */
 export function applyGatheredPositions(
     groups: PieceGroup[],
     positions: Map<number, Point>,

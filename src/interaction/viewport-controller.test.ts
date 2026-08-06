@@ -2,14 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for ViewportController.
- *
- * Tests the helper functions (pure math) and the public gesture handler methods.
- * Listener-attachment is owned by PointerRouter; ViewportController only contains
- * gesture math.
- */
-
 import { describe, it, expect, vi } from 'vitest';
 import {
     ViewportController,
@@ -80,10 +72,6 @@ describe('touchMidpoint', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
 function fakePointerEvent(o: {
     pointerId?: number;
     clientX?: number;
@@ -104,10 +92,6 @@ function setup() {
     const zoomSpy = vi.spyOn(transform, 'zoom');
     return { vc, transform, onChanged, panSpy, zoomSpy };
 }
-
-// ---------------------------------------------------------------------------
-// Pan handler math
-// ---------------------------------------------------------------------------
 
 describe('ViewportController — pan', () => {
     it('handlePanStart + handlePanMove translates the transform by the pointer delta', () => {
@@ -147,10 +131,6 @@ describe('ViewportController — pan', () => {
         expect(() => vc.handlePanEnd()).not.toThrow();
     });
 });
-
-// ---------------------------------------------------------------------------
-// Pinch handler math
-// ---------------------------------------------------------------------------
 
 describe('ViewportController — pinch', () => {
     it('handlePinchStart + handlePinchMove zooms by the distance ratio', () => {
@@ -224,10 +204,6 @@ describe('ViewportController — pinch', () => {
         expect(zoomSpy).not.toHaveBeenCalled();
     });
 });
-
-// ---------------------------------------------------------------------------
-// Wheel handler math
-// ---------------------------------------------------------------------------
 
 describe('ViewportController — wheel', () => {
     function fakeWheelEvent(o: {

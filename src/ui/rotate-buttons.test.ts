@@ -232,21 +232,16 @@ describe('createRotateButtons', () => {
             handle.show();
             rotationFocus.setFocus(7);
 
-            // User dismisses (e.g. tap background) → quick fade starts
             rotationFocus.clearFocus();
             const ccw = container.querySelector<HTMLButtonElement>('.rotate-button--ccw')!;
             expect(ccw.classList.contains('rotate-button--fade-out-quick')).toBe(true);
 
-            // Within the fade window, user re-taps the same piece
             rotationFocus.setFocus(7);
 
-            // The pair is rescued — same DOM element, fade-out class removed,
-            // fade-in re-applied
             expect(ccw.classList.contains('rotate-button--fade-out-quick')).toBe(false);
             expect(ccw.classList.contains('rotate-button--fade-in')).toBe(true);
             // No new pair was spawned alongside the rescued one
             expect(container.querySelectorAll('.rotate-button').length).toBe(2);
-            // Focus is set
             expect(rotationFocus.focusedGroupId).toBe(7);
             // Idle timer was restarted: still 5 s away from slow fade
             vi.advanceTimersByTime(4999);
@@ -264,9 +259,7 @@ describe('createRotateButtons', () => {
 
             rotationFocus.setFocus(8);
 
-            // Old pair has the quick-fade-out class
             expect(oldCcw.classList.contains('rotate-button--fade-out-quick')).toBe(true);
-            // A new pair exists, positioned for group 8
             const newPair = container.querySelectorAll<HTMLButtonElement>('.rotate-button--ccw');
             expect(newPair.length).toBe(2); // old + new
             const newCcw = newPair[1];
@@ -321,17 +314,15 @@ describe('createRotateButtons', () => {
             handle.show();
             rotationFocus.setFocus(7);
 
-            vi.advanceTimersByTime(5000); // pair-7 enters slow fade
+            vi.advanceTimersByTime(5000);
             const oldCcw = container.querySelector<HTMLButtonElement>('.rotate-button--ccw')!;
             expect(oldCcw.classList.contains('rotate-button--fade-out-slow')).toBe(true);
 
             rotationFocus.setFocus(8);
 
-            // Old pair upgraded to quick fade-out (slow class removed, quick class added)
             expect(oldCcw.classList.contains('rotate-button--fade-out-slow')).toBe(false);
             expect(oldCcw.classList.contains('rotate-button--fade-out-quick')).toBe(true);
 
-            // New pair exists for group 8 with fade-in class
             const allCcws = container.querySelectorAll<HTMLButtonElement>('.rotate-button--ccw');
             expect(allCcws.length).toBe(2);
             const newCcw = allCcws[1];
@@ -344,18 +335,15 @@ describe('createRotateButtons', () => {
             handle.show();
             rotationFocus.setFocus(7);
 
-            vi.advanceTimersByTime(5000); // start slow fade
+            vi.advanceTimersByTime(5000);
             const { ccw, cw } = getPair();
             expect(ccw!.classList.contains('rotate-button--fade-out-slow')).toBe(true);
 
             cw!.click();
 
-            // Rotation ran
             expect(onRotate).toHaveBeenCalledExactlyOnceWith(7, 'cw');
-            // Fade-out class removed; fade-in class re-applied
             expect(ccw!.classList.contains('rotate-button--fade-out-slow')).toBe(false);
             expect(ccw!.classList.contains('rotate-button--fade-in')).toBe(true);
-            // Focus is still set
             expect(rotationFocus.focusedGroupId).toBe(7);
 
             // Timer restarted: another 5s should be needed before slow fade

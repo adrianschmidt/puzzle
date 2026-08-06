@@ -1,17 +1,3 @@
-/**
- * Tests for the per-edge tab application harness.
- *
- * The harness must:
- * - skip border edges (one side is the outer face)
- * - call the tab generator once per eligible half-edge pair
- *   (each shared edge counted once, both sides updated)
- * - reject candidates that introduce new crossings against
- *   other edge curves
- * - leave edge geometry unchanged if no candidate is acceptable
- * - preserve graph topology (vertices, half-edges, faces are
- *   unchanged in count and connectivity)
- */
-
 import { describe, it, expect } from 'vitest';
 import { Curve } from './curve.js';
 import { buildDCEL } from './dcel.js';
@@ -58,7 +44,6 @@ describe('applyTabs', () => {
             generate: (edge) => makePerpBump(edge, 1000),
         };
 
-        // Snapshot one half-edge's curve before; expect it unchanged after
         const internalEdge = graph.halfEdges.find(he =>
             !he.face?.isOuter && !he.twin.face?.isOuter,
         )!;
@@ -83,7 +68,6 @@ describe('applyTabs', () => {
         });
         expect(calls).toBe(0);
 
-        // Inverse: policy admits every edge.
         let calls2 = 0;
         const generator2: TabGenerator = {
             id: 'count2',
@@ -161,8 +145,6 @@ describe('applyTabs', () => {
 
         applyTabs(graph, sideways, makeSeededRandom(1));
 
-        // Should have been applied: the S-curve crossing is entirely
-        // inside the removed middle section.
         expect(internalEdge.curve).not.toBe(curveBefore);
     });
 
@@ -210,8 +192,6 @@ describe('applyTabs', () => {
 
         applyTabs(graph, realFoldback, makeSeededRandom(1));
 
-        // Edge should remain flat — the bump loops back across the
-        // kept `before` portion.
         expect(internalEdge.curve).toBe(curveBefore);
     });
 
@@ -369,8 +349,6 @@ describe('applyTabs', () => {
         expect(internalEdge.curve).not.toBe(curveBefore);
     });
 });
-
-// Helpers
 
 function simpleGridCurves(cols: number, rows: number): Curve[] {
     const W = cols * 100, H = rows * 100;

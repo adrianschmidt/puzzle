@@ -1,6 +1,4 @@
 /**
- * Drag-lifecycle wrapper around snap proximity rotation.
- *
  * Owns the per-drag context (built once at drag start) and frame gating:
  * pointer-move events can outpace the display refresh, so evaluation runs
  * at most once per animation frame. The first move in a frame evaluates
@@ -26,7 +24,7 @@ export interface SnapProximityRotationOptions {
     getState: () => GameState;
     /** Active snap tolerances; read once per drag, at start(). */
     getTolerances: () => SnapTolerances;
-    /** Injectable frame scheduler for tests. Defaults to requestAnimationFrame. */
+    /** Injectable frame scheduler for tests. */
     scheduleFrame?: (cb: () => void) => void;
 }
 
@@ -45,8 +43,8 @@ export class SnapProximityRotationController {
     }
 
     /**
-     * Begin tracking a drag of `groupId`. Cheap no-op context (null) unless
-     * the game is in free-rotation mode and the group has cross-group mates.
+     * Cheap no-op context (null) unless the game is in free-rotation mode
+     * and the group has cross-group mates.
      */
     start(groupId: number): void {
         this.ctx = buildProximityContext(
@@ -55,7 +53,6 @@ export class SnapProximityRotationController {
         this.gated = false;
     }
 
-    /** Evaluate after the dragged group moved; at most once per frame. */
     onGroupMoved(): void {
         if (!this.ctx || this.gated) return;
         this.gated = true;
@@ -71,7 +68,6 @@ export class SnapProximityRotationController {
         if (group) rotateGroup(group, state.piecesById, delta, this.ctx.centerLocal);
     }
 
-    /** End tracking (drop or cancel). Rotation already applied stays. */
     stop(): void {
         this.ctx = null;
     }

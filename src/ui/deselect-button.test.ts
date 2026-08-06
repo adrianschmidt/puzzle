@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the Deselect-all button DOM integration.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createDeselectButton } from './deselect-button.js';
 import { SelectionManager } from '../interaction/selection-manager.js';
@@ -105,7 +101,6 @@ describe('createDeselectButton', () => {
         const button = container.querySelector('button')!;
         cleanup();
 
-        // Subsequent changes must not re-style the detached button.
         selectionManager.select(1);
 
         expect(button.style.display).toBe('none');

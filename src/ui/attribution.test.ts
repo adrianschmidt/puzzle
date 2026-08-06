@@ -2,10 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Tests for the image attribution UI component.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { ImageAttribution } from '../model/types.js';
 import {
@@ -89,7 +85,6 @@ describe('removeAttribution', () => {
     });
 
     it('does nothing when no attribution exists', () => {
-        // Should not throw
         expect(() => removeAttribution(container)).not.toThrow();
     });
 

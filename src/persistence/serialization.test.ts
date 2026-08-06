@@ -1,7 +1,3 @@
-/**
- * Tests for GameState serialization/deserialization.
- */
-
 import { describe, it, expect } from 'vitest';
 import type { GameState, Piece, PieceGroup } from '../model/types.js';
 import { buildShape } from '../model/build-shape.js';
@@ -23,7 +19,6 @@ import {
     makeGameState as makeBaseGameState,
 } from '../test-helpers/fixtures.js';
 
-/** A GameState wrapping hand-built pieces in a single group. */
 function makeStateWith(pieces: Piece[]): GameState {
     return makeBaseGameState({
         pieces,
@@ -130,7 +125,6 @@ describe('serializeState', () => {
         const state = makeGameState();
         const serialized = serializeState(state);
 
-        // Should round-trip through JSON without loss
         const json = JSON.stringify(serialized);
         const parsed = JSON.parse(json);
 
@@ -336,10 +330,8 @@ describe('deserializeState', () => {
         const parsed = JSON.parse(json) as SerializedGameState;
         const restored = deserializeState(parsed);
 
-        // Pieces should be identical
         expect(restored.pieces).toEqual(original.pieces);
 
-        // Groups: compare structurally (Maps vs entries)
         expect(restored.groups.length).toBe(original.groups.length);
 
         for (let i = 0; i < original.groups.length; i++) {
@@ -396,7 +388,6 @@ describe('deserializeState', () => {
 
         const restored = deserializeState(v1Serialized);
 
-        // Should derive imageSize from piece data
         expect(restored.imageSize).toBeDefined();
         expect(restored.imageSize.width).toBeGreaterThan(0);
         expect(restored.imageSize.height).toBeGreaterThan(0);
@@ -568,7 +559,6 @@ describe('deserializeState', () => {
     });
 
     it('defaults rotation to 0 when missing (v5 → v6 migration)', () => {
-        // Simulate a v5 saved state (has cutStyle but no rotation on groups)
         const v5Serialized: SerializedGameState = {
             version: 5,
             pieces: [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 })],
@@ -620,7 +610,6 @@ describe('deserializeState', () => {
         };
 
         const restored = deserializeState(noRotation);
-        // 0 quarter-turns × 90 = 0 degrees
         expect(restored.groups[0].rotation).toBe(0);
     });
 
@@ -1256,7 +1245,6 @@ describe('viewport persistence', () => {
             serializeProgress(makeGameState(), [], { scale: NaN, offset: { x: 0, y: 0 } }),
         );
         const parsed = JSON.parse(onDisk) as ReturnType<typeof serializeProgress>;
-        // Sanity: NaN serialized to null in the stored scale field.
         expect(readViewport(parsed)).toBeUndefined();
     });
 

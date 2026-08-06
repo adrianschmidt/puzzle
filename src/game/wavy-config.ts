@@ -1,17 +1,12 @@
 /**
- * Wavy cut style configuration — types and persistence.
- *
- * The wavy cut style exposes a "borderless" toggle (strip the outer ring
- * of pieces so every piece has a tab/blank on all sides). Player choices
- * are persisted as JSON in localStorage. Mirrors `fractal-config.ts`.
+ * "Borderless" strips the outer ring of pieces so every piece has a
+ * tab/blank on all sides.
  */
 
 import { createJsonPreference } from '../ui/preference-store.js';
 
-/** localStorage key for the saved wavy config. */
 export const WAVY_CONFIG_KEY = 'puzzle-wavy-config';
 
-/** Shape of the wavy config stored in preferences. */
 export interface WavyConfigPreference {
     borderless: boolean;
 }
@@ -33,11 +28,6 @@ const store = createJsonPreference<WavyConfigPreference>({
     parse: parseWavyConfig,
 });
 
-/** Save the wavy config to localStorage. */
 export const saveWavyConfigPreference = store.save;
 
-/**
- * Load the wavy config from localStorage.
- * Returns undefined if nothing is saved or the value is invalid.
- */
 export const loadWavyConfigPreference = store.load;

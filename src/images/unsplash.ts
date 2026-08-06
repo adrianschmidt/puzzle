@@ -1,6 +1,4 @@
 /**
- * Unsplash API client for fetching random photos.
- *
  * Calls go through our own proxy Worker (`src/worker/image-proxy.ts`) rather
  * than `api.unsplash.com` directly: this is a static site, so a build-time
  * API key would be inlined into the bundle and readable by every visitor
@@ -22,32 +20,22 @@ export const PROXY_RANDOM_PATH = '/random';
 /** Proxy route that forwards a photo's `download_location`. */
 export const PROXY_DOWNLOAD_PATH = '/download';
 
-/**
- * Relevant fields from the Unsplash random photo response.
- * Only the fields we actually use — the full API response is much larger.
- */
+/** Only the fields we actually use — the full API response is much larger. */
 export interface UnsplashPhoto {
-    /** Raw image URLs at various sizes. */
     urls: {
-        /** Processed image URL with configurable dimensions. */
         regular: string;
-        /** Full-size image URL. */
         full: string;
         /** Small (400px) URL — used for picker thumbnails. */
         small: string;
     };
-    /** Original image dimensions. */
     width: number;
-    /** Original image dimensions. */
     height: number;
-    /** Photographer attribution. */
     user: {
         name: string;
         links: {
             html: string;
         };
     };
-    /** Links for the photo page (attribution) and download reporting. */
     links: {
         html: string;
         download_location: string;
@@ -56,23 +44,13 @@ export interface UnsplashPhoto {
     alt_description?: string | null;
 }
 
-/**
- * Result of a successful random image fetch.
- */
 export interface UnsplashImageResult {
-    /** URL to use for the puzzle image. */
     imageUrl: string;
-    /** Original image width in pixels. */
     width: number;
-    /** Original image height in pixels. */
     height: number;
-    /** Photographer name for attribution. */
     photographerName: string;
-    /** Link to photographer's Unsplash profile. */
     photographerUrl: string;
-    /** Link to the photo on Unsplash. */
     photoUrl: string;
-    /** Small (400px) URL for thumbnail display. */
     thumbUrl: string;
     /** Unsplash download-reporting endpoint for this photo. */
     downloadLocation: string;
@@ -81,12 +59,10 @@ export interface UnsplashImageResult {
 }
 
 /**
- * Build the proxy URL for fetching a random photo.
- *
- * Filters for the requested orientation. Carries no credential of any kind:
- * the Worker authenticates with an `Authorization` header it adds itself, and
- * strips any `client_id` a caller supplies. A key in this URL would mean the
- * key is back in the bundle, which is the whole point of routing through it.
+ * Carries no credential of any kind: the Worker authenticates with an
+ * `Authorization` header it adds itself, and strips any `client_id` a caller
+ * supplies. A key in this URL would mean the key is back in the bundle, which
+ * is the whole point of routing through it.
  */
 export function buildRandomPhotoUrl(
     proxyBaseUrl: string,
@@ -107,14 +83,6 @@ export function buildRandomPhotoUrl(
     return `${proxyBaseUrl}${PROXY_RANDOM_PATH}?${params.toString()}`;
 }
 
-/**
- * Parse an Unsplash API response into our result type.
- *
- * Validates that the response has the expected shape and the image
- * is large enough for a good puzzle experience.
- *
- * @throws {Error} If the response shape is invalid.
- */
 export function parseUnsplashResponse(data: unknown): UnsplashImageResult {
     if (!isUnsplashPhoto(data)) {
         throw new Error('Invalid Unsplash API response');
@@ -138,7 +106,6 @@ export function parseUnsplashResponse(data: unknown): UnsplashImageResult {
     };
 }
 
-/** Walk a dotted-key path through an unknown value, returning the leaf or undefined. */
 function getAtPath(data: unknown, path: readonly string[]): unknown {
     let current: unknown = data;
 
@@ -161,9 +128,6 @@ function hasNumber(data: unknown, ...path: string[]): boolean {
     return typeof getAtPath(data, path) === 'number';
 }
 
-/**
- * Type guard to validate an Unsplash photo response.
- */
 function isUnsplashPhoto(data: unknown): data is UnsplashPhoto {
     return (
         hasString(data, 'urls', 'regular') &&
@@ -179,8 +143,6 @@ function isUnsplashPhoto(data: unknown): data is UnsplashPhoto {
 }
 
 /**
- * Get the image-proxy base URL from the build-time environment variable.
- *
  * Returns `undefined` if no proxy is configured, which callers treat as "no
  * photo source available" — the same gate the access key used to provide, so
  * an unconfigured build still degrades to no picker rather than a broken one.
@@ -197,13 +159,7 @@ export function getImageProxyBaseUrl(): string | undefined {
     return url.trim().replace(/\/+$/, '');
 }
 
-/**
- * Fetch a random photo from Unsplash.
- *
- * @param proxyBaseUrl - Base URL of the image-proxy Worker
- * @param fetchFn - Fetch implementation (injectable for testing)
- * @returns The image result, or `undefined` if the fetch fails
- */
+/** Resolves `undefined` on HTTP failure; throws on a malformed response body. */
 export async function fetchRandomImage(
     proxyBaseUrl: string,
     fetchFn: typeof fetch = fetch,
@@ -228,13 +184,10 @@ export async function fetchRandomImage(
 }
 
 /**
- * Fetch several random photos in a single API request.
+ * `/photos/random?count=N` returns an array and costs one request against the
+ * (per-application) rate limit regardless of count.
  *
- * Uses `/photos/random?count=N`, which returns an array and costs one
- * request against the (per-application) rate limit regardless of count.
- *
- * @returns The parsed results, or `undefined` if the fetch fails.
- * @throws {Error} If the response body is not an array of photos.
+ * Resolves `undefined` on HTTP failure; throws on a malformed response body.
  */
 export async function fetchRandomImages(
     proxyBaseUrl: string,

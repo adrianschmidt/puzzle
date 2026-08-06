@@ -1,7 +1,3 @@
-/**
- * Tests for the gather pieces layout algorithm.
- */
-
 import { describe, it, expect } from 'vitest';
 import type { Piece, PieceGroup } from '../model/types.js';
 import {
@@ -23,7 +19,7 @@ function makeMultiGroup(
     return { id, pieces: new Map(pieceOffsets), position, rotation: 0 };
 }
 
-const landscapeAspect = 800 / 600; // 1.33
+const landscapeAspect = 800 / 600;
 
 describe('computeGatheredPositions', () => {
     it('should return empty result for no groups', () => {

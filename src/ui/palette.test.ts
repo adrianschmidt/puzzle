@@ -43,7 +43,7 @@ describe('palette.css', () => {
 
     it('defines every swatch variable in :root (light)', () => {
         for (const s of PALETTE_SWATCHES) {
-            const name = s.color.slice('var('.length, -1); // --color-<id>
+            const name = s.color.slice('var('.length, -1);
             expect(lightBlock).toContain(`${name}:`);
         }
     });

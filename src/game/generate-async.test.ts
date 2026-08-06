@@ -14,7 +14,6 @@ const REQUEST: GenerationRequest = {
     tabDebug: false,
 };
 
-/** Minimal Worker stand-in driven by each test. */
 class StubWorker {
     static instances: StubWorker[] = [];
     messageHandler: ((e: { data: unknown }) => void) | null = null;

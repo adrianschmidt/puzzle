@@ -1,7 +1,5 @@
 /**
- * Global page-level wiring that isn't owned by any single feature: context
- * menu suppression on the puzzle table, the analytics/error-reporting
- * bootstrap, the resource-timing buffer size, and the version badge.
+ * Global page-level wiring that isn't owned by any single feature.
  *
  * Call once, as early as possible in boot: the internal ordering — analytics
  * before error tracking before the service-worker error bridge — puts every
@@ -11,10 +9,6 @@
 import { initAnalytics, initErrorTracking } from '../analytics/index.js';
 import { initSwErrorReporting } from '../pwa/sw-error-bridge.js';
 
-/**
- * Install the context-menu guard, analytics/error reporting, the timing
- * buffer size, and the version badge into `container`.
- */
 export function installGlobalHandlers(container: HTMLElement): void {
     // Suppress the browser context menu on the puzzle table only.
     // On touch devices (especially iPad), long-pressing a piece would
@@ -49,7 +43,6 @@ export function installGlobalHandlers(container: HTMLElement): void {
     // reliable at negligible memory cost.
     performance.setResourceTimingBufferSize?.(500);
 
-    // Display app version in bottom-right corner.
     // Injected at build time by the deploy workflow via VITE_APP_VERSION.
     const appVersion = import.meta.env.VITE_APP_VERSION as string | undefined;
     if (appVersion) {

@@ -4,10 +4,6 @@ import { buildDCEL } from './dcel.js';
 import { Curve } from './curve.js';
 import type { PieceDefinition } from '../composable/types.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function buildPipeline(curves: Curve[]): PieceDefinition[] {
     const dcel = buildDCEL({ curves });
     return facesToPieceDefinitions(dcel);
@@ -15,28 +11,21 @@ function buildPipeline(curves: Curve[]): PieceDefinition[] {
 
 function makeGrid(cols: number, rows: number, w: number, h: number): Curve[] {
     const curves: Curve[] = [
-        // Border
         Curve.line({ x: 0, y: 0 }, { x: w, y: 0 }),
         Curve.line({ x: w, y: 0 }, { x: w, y: h }),
         Curve.line({ x: w, y: h }, { x: 0, y: h }),
         Curve.line({ x: 0, y: h }, { x: 0, y: 0 }),
     ];
-    // Horizontal cuts
     for (let r = 1; r < rows; r++) {
         const y = (r / rows) * h;
         curves.push(Curve.line({ x: 0, y }, { x: w, y }));
     }
-    // Vertical cuts
     for (let c = 1; c < cols; c++) {
         const x = (c / cols) * w;
         curves.push(Curve.line({ x, y: 0 }, { x, y: h }));
     }
     return curves;
 }
-
-// ---------------------------------------------------------------------------
-// Single rectangle → 1 piece
-// ---------------------------------------------------------------------------
 
 describe('facesToPieceDefinitions: single rectangle', () => {
     it('produces 1 piece', () => {
@@ -77,10 +66,6 @@ describe('facesToPieceDefinitions: single rectangle', () => {
         expect(pieces[0].imageOffset.y).toBeCloseTo(0, 0);
     });
 });
-
-// ---------------------------------------------------------------------------
-// 2×2 grid → 4 pieces
-// ---------------------------------------------------------------------------
 
 describe('facesToPieceDefinitions: 2×2 grid', () => {
     const curves = makeGrid(2, 2, 100, 100);
@@ -175,10 +160,6 @@ describe('facesToPieceDefinitions: 2×2 grid', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// 3×3 grid → 9 pieces
-// ---------------------------------------------------------------------------
-
 describe('facesToPieceDefinitions: 3×3 grid', () => {
     const curves = makeGrid(3, 3, 90, 90);
 
@@ -219,10 +200,6 @@ describe('facesToPieceDefinitions: 3×3 grid', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// Image offset for non-origin pieces
-// ---------------------------------------------------------------------------
-
 describe('facesToPieceDefinitions: image offsets', () => {
     it('bottom-right piece has correct offset', () => {
         const pieces = buildPipeline(makeGrid(2, 2, 100, 100));
@@ -247,28 +224,19 @@ describe('facesToPieceDefinitions: image offsets', () => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// curvePoints
-// ---------------------------------------------------------------------------
-
 describe('facesToPieceDefinitions: curvePoints', () => {
     it('straight edges have no curvePoints (space optimization)', () => {
         const pieces = buildPipeline(makeGrid(2, 2, 100, 100));
         for (const piece of pieces) {
             for (const edge of piece.edges) {
-                // Straight grid → no curvePoints needed
                 expect(edge.curvePoints).toBeUndefined();
             }
         }
     });
 });
 
-// ---------------------------------------------------------------------------
-// Lens-face merging (issue #219/#220 — no holes from small faces)
-// ---------------------------------------------------------------------------
-
 /**
- * Generate a sine-wave curve (same algorithm as generator.ts).
+ * Same algorithm as generator.ts.
  */
 function generateSineCurve(
     start: { x: number; y: number },
@@ -323,6 +291,7 @@ function generateSineCurve(
     return Curve.fromBezierPath(bezierPoints);
 }
 
+// Lens-face merging (issue #219/#220 — no holes from small faces).
 describe('facesToPieceDefinitions: mate consistency under degenerate intersections', () => {
     it('merges 2-edge lens faces instead of creating holes', () => {
         // Two close parallel sine waves with opposite phase — creates lenses
@@ -338,7 +307,6 @@ describe('facesToPieceDefinitions: mate consistency under degenerate intersectio
         const dcel = buildDCEL({ curves });
         const pieces = facesToPieceDefinitions(dcel);
 
-        // Every non-border shared edge must have a valid mate piece
         for (const piece of pieces) {
             for (const edge of piece.edges) {
                 if (edge.matePieceId !== -1) {
@@ -397,7 +365,6 @@ describe('facesToPieceDefinitions: mate consistency under degenerate intersectio
 
         const pieceIds = new Set(pieces.map(p => p.id));
 
-        // Every mate reference must point to a piece that exists
         for (const piece of pieces) {
             for (const edge of piece.edges) {
                 if (edge.matePieceId !== -1) {
@@ -412,16 +379,11 @@ describe('facesToPieceDefinitions: mate consistency under degenerate intersectio
     });
 });
 
-// ---------------------------------------------------------------------------
-// Piece with hole (free-floating circle inside a frame)
-// ---------------------------------------------------------------------------
-
 describe('facesToPieceDefinitions: piece with hole', () => {
     /**
      * A flat edge list represents one or more loops, chained end-to-start
      * within each loop. Loop boundaries are detected by an edge whose
-     * `start` doesn't match the previous edge's `end`. This counts loops
-     * in a `PieceDefinition.edges` array.
+     * `start` doesn't match the previous edge's `end`.
      */
     function countLoops(edges: PieceDefinition['edges']): number {
         if (edges.length === 0) return 0;

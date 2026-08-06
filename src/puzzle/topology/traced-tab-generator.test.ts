@@ -53,7 +53,6 @@ describe('tracedTabGenerator.generateVariants', () => {
         const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
         let calls = 0;
         const counting = () => { calls++; return 0.5; };
-        // Drain ALL variants.
         const all = [...tracedTabGenerator.generateVariants!(edge, counting, {})];
         expect(all.length).toBeGreaterThan(1);
         expect(calls).toBe(3);
@@ -109,7 +108,6 @@ describe('tracedTabGenerator.generateVariants', () => {
             expect(def[i]).not.toBeNull();
             expect(deep[i]!.segments).toEqual(def[i]!.segments);
         }
-        // Diverges at rung 3.
         expect(deep[3]!.segments).not.toEqual(def[3]!.segments);
     });
 

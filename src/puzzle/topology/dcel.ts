@@ -1,18 +1,6 @@
 /**
- * DCEL (Doubly-Connected Edge List) for planar subdivision.
- *
  * Given a set of curves that may intersect, finds all enclosed faces.
  * Each face becomes a puzzle piece in the topology-driven pipeline.
- *
- * Algorithm:
- * 1. Find all pairwise intersections between curves
- * 2. Split curves at intersection points → curve segments
- * 3. Create vertices (with tolerance-based merging)
- * 4. For each segment, create twin half-edges
- * 5. At each vertex, sort outgoing half-edges by angle
- * 6. Link half-edges via the "next" pointer (CW face traversal)
- * 7. Traverse "next" chains to discover faces
- * 8. Identify and exclude the outer (unbounded) face
  *
  * See issue #168 for the design discussion.
  */
@@ -22,10 +10,6 @@ import { Curve } from './curve.js';
 import type { CurveIntersection, BoundingBox } from './curve.js';
 import { findComponents } from './components.js';
 import { assignHoles } from './holes.js';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface Vertex {
     id: number;
@@ -75,10 +59,6 @@ export interface Face {
     innerBoundaries: HalfEdge[];
 }
 
-/**
- * Input to the DCEL builder: a set of curves with optional
- * non-intersecting group hints for performance.
- */
 export interface CutSet {
     curves: Curve[];
     /**
@@ -105,43 +85,24 @@ export interface TopologyGraph {
     outerFace: Face;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 /** Distance threshold for merging nearby vertices. */
 const VERTEX_MERGE_TOLERANCE = 3;
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Build a DCEL from a set of curves.
- *
- * @param cutSet - The input curves (with optional non-intersecting hints)
- * @returns The complete DCEL with vertices, half-edges, and faces
- */
 export function buildDCEL(cutSet: CutSet): TopologyGraph {
     const { curves, nonIntersectingGroups } = cutSet;
 
-    // Step 1: Find all intersections
     const allIntersections = findAllIntersections(
         curves, nonIntersectingGroups,
     );
 
-    // Step 2: Split curves at intersection points → segments
     let segments = splitCurvesAtIntersections(curves, allIntersections);
 
-    // Step 2b: Split closed curves (start === end) at t=0.5 to create two half-edges
     segments = splitClosedCurves(segments);
 
-    // Step 3: Build vertices with merging
     const vertexMap = new VertexPool();
     const halfEdges: HalfEdge[] = [];
     let nextHalfEdgeId = 0;
 
-    // Step 4: Create twin half-edges for each segment
     for (const segment of segments) {
         const originVertex = vertexMap.getOrCreate(segment.start);
         const targetVertex = vertexMap.getOrCreate(segment.end);
@@ -157,33 +118,23 @@ export function buildDCEL(cutSet: CutSet): TopologyGraph {
 
         halfEdges.push(he1, he2);
 
-        // Register outgoing half-edges on vertices
         if (!originVertex.outgoing) originVertex.outgoing = he1;
         if (!targetVertex.outgoing) targetVertex.outgoing = he2;
     }
 
     const vertices = vertexMap.all();
 
-    // Step 5: At each vertex, sort outgoing half-edges by angle and link next pointers
     linkHalfEdges(vertices, halfEdges);
 
-    // Step 6: Discover faces
     const faces = discoverFaces(halfEdges);
 
-    // Step 7: Identify the outer face (largest area, negative signed area = CW)
     const outerFace = identifyOuterFace(faces);
 
-    // Step 8: Detect connected components and assign holes (inner
-    // boundaries) for non-primary components contained in inner faces.
     const result: TopologyGraph = { vertices, halfEdges, faces, outerFace };
     const components = findComponents(result);
     assignHoles(result, components);
     return result;
 }
-
-// ---------------------------------------------------------------------------
-// Step 1: Find all intersections
-// ---------------------------------------------------------------------------
 
 interface CurveIntersectionRecord {
     curveIndexA: number;
@@ -197,7 +148,6 @@ function findAllIntersections(
 ): CurveIntersectionRecord[] {
     const results: CurveIntersectionRecord[] = [];
 
-    // Build a set of curve pairs to skip (within the same non-intersecting group)
     const skipPairs = new Set<string>();
     if (nonIntersectingGroups) {
         for (const group of nonIntersectingGroups) {
@@ -350,8 +300,8 @@ export function curveBroadPhasePairs(
 }
 
 /**
- * Check if curve A's endpoints lie on curve B, and if so, add them
- * as intersection records (T-junctions).
+ * Curve A endpoints lying on curve B are added as intersection
+ * records (T-junctions).
  */
 function addEndpointOnCurve(
     curveA: Curve,
@@ -376,7 +326,6 @@ function addEndpointOnCurve(
             continue;
         }
 
-        // Check for duplicate
         const isDuplicate = results.some(
             r => pointDist(r.intersection.point, point) < VERTEX_MERGE_TOLERANCE,
         );
@@ -398,9 +347,6 @@ function addEndpointOnCurve(
     }
 }
 
-/**
- * Result of finding a point on a curve: both global and segment-level info.
- */
 interface PointOnCurveResult {
     globalT: number;
     segmentIndex: number;
@@ -436,10 +382,6 @@ function findPointOnCurve(curve: Curve, point: Point): PointOnCurveResult | null
         localT: bestLocalT,
     };
 }
-
-// ---------------------------------------------------------------------------
-// Step 2: Split curves at intersections
-// ---------------------------------------------------------------------------
 
 /**
  * A split point on a curve, identified by segment index + local t.
@@ -486,20 +428,17 @@ function splitCurvesAtIntersections(
 
         const numSegs = curves[i].segments.length;
 
-        // Filter out splits at curve endpoints
         const filtered = splits.filter(s =>
             !(s.segmentIndex === 0 && s.localT < 1e-4) &&
             !(s.segmentIndex === numSegs - 1 && s.localT > 1 - 1e-4),
         );
 
-        // Sort by segment index, then by local t
         filtered.sort((a, b) =>
             a.segmentIndex !== b.segmentIndex
                 ? a.segmentIndex - b.segmentIndex
                 : a.localT - b.localT,
         );
 
-        // Deduplicate splits on the same segment
         const deduped: SegmentSplit[] = [];
         for (const s of filtered) {
             const last = deduped[deduped.length - 1];
@@ -553,10 +492,6 @@ function splitCurvesAtIntersections(
     return allSegments;
 }
 
-// ---------------------------------------------------------------------------
-// Step 2b: Split closed curves
-// ---------------------------------------------------------------------------
-
 /**
  * Split any still-closed curves (where start === end within
  * VERTEX_MERGE_TOLERANCE) at t=0.5 to create two distinct half-edges.
@@ -580,7 +515,6 @@ function splitClosedCurves(segments: Curve[]): Curve[] {
     for (const segment of segments) {
         const startDist = pointDist(segment.start, segment.end);
         if (startDist < VERTEX_MERGE_TOLERANCE) {
-            // This is a closed curve; split it at t=0.5
             const [first, second] = segment.splitAt(0.5);
             result.push(first, second);
         } else {
@@ -590,10 +524,6 @@ function splitClosedCurves(segments: Curve[]): Curve[] {
 
     return result;
 }
-
-// ---------------------------------------------------------------------------
-// Vertex pool with tolerance-based merging
-// ---------------------------------------------------------------------------
 
 /**
  * Tolerance-based vertex deduplication, backed by a spatial hash.
@@ -695,12 +625,7 @@ function makeTwinPair(
     return [he1 as HalfEdge, he2 as HalfEdge];
 }
 
-// ---------------------------------------------------------------------------
-// Step 5: Link half-edges via angle sorting
-// ---------------------------------------------------------------------------
-
 function linkHalfEdges(_vertices: Vertex[], halfEdges: HalfEdge[]): void {
-    // Group outgoing half-edges by origin vertex
     const outgoingByVertex = new Map<number, HalfEdge[]>();
 
     for (const he of halfEdges) {
@@ -709,8 +634,6 @@ function linkHalfEdges(_vertices: Vertex[], halfEdges: HalfEdge[]): void {
         outgoingByVertex.get(vid)!.push(he);
     }
 
-    // At each vertex, sort outgoing half-edges by angle and link next pointers.
-    //
     // In screen coordinates (Y-down), atan2 ascending order = CW visual order.
     // For CW inner face traversal (standard with Y-down), when arriving at a
     // vertex we take the rightmost turn: outgoing[i].twin.next = outgoing[i-1]
@@ -724,11 +647,8 @@ function linkHalfEdges(_vertices: Vertex[], halfEdges: HalfEdge[]): void {
             continue;
         }
 
-        // Sort by outgoing angle (ascending = CW in screen space)
         outgoing.sort((a, b) => outgoingAngle(a) - outgoingAngle(b));
 
-        // Link: outgoing[i].twin.next = outgoing[(i-1+n) % n]
-        // This produces CW inner faces in screen coords (positive signed area).
         const n = outgoing.length;
         for (let i = 0; i < n; i++) {
             const prevInCW = outgoing[(i - 1 + n) % n];
@@ -738,18 +658,10 @@ function linkHalfEdges(_vertices: Vertex[], halfEdges: HalfEdge[]): void {
     }
 }
 
-/**
- * Compute the outgoing angle of a half-edge from its origin.
- * Uses the tangent at t=0 of the half-edge's curve.
- */
 function outgoingAngle(he: HalfEdge): number {
     const t = he.curve.tangentAt(0);
     return Math.atan2(t.y, t.x);
 }
-
-// ---------------------------------------------------------------------------
-// Step 6: Discover faces
-// ---------------------------------------------------------------------------
 
 function discoverFaces(halfEdges: HalfEdge[]): Face[] {
     const visited = new Set<number>();
@@ -759,7 +671,6 @@ function discoverFaces(halfEdges: HalfEdge[]): Face[] {
     for (const he of halfEdges) {
         if (visited.has(he.id)) continue;
 
-        // Walk the face boundary
         const face: Face = {
             id: nextFaceId++,
             outerEdge: he,
@@ -780,14 +691,8 @@ function discoverFaces(halfEdges: HalfEdge[]): Face[] {
     return faces;
 }
 
-// ---------------------------------------------------------------------------
-// Step 7: Identify outer face
-// ---------------------------------------------------------------------------
-
 function identifyOuterFace(faces: Face[]): Face {
-    // The outer face has the largest absolute area (or negative signed area
-    // if we're using CW winding for inner faces).
-    // In practice, the outer face is the one with the most negative signed area
+    // The outer face is the one with the most negative signed area
     // (CW winding in screen coords where Y grows downward).
     let outerFace = faces[0];
     let mostNegativeArea = Infinity;
@@ -805,9 +710,6 @@ function identifyOuterFace(faces: Face[]): Face {
 }
 
 /**
- * Compute the signed area of a face by walking its half-edge boundary.
- * Uses the shoelace formula on the half-edge endpoints.
- *
  * In screen coordinates (Y down):
  * - Positive area = CCW winding (inner face)
  * - Negative area = CW winding (outer face)
@@ -824,13 +726,6 @@ function computeSignedArea(face: Face): number {
     return area / 2;
 }
 
-// ---------------------------------------------------------------------------
-// Utility: get face boundary as points
-// ---------------------------------------------------------------------------
-
-/**
- * Walk a face boundary and collect the vertex positions.
- */
 export function getFaceVertices(face: Face): Point[] {
     const points: Point[] = [];
     let current = face.outerEdge;
@@ -841,9 +736,6 @@ export function getFaceVertices(face: Face): Point[] {
     return points;
 }
 
-/**
- * Walk a face boundary and collect the half-edges.
- */
 export function getFaceEdges(face: Face): HalfEdge[] {
     const edges: HalfEdge[] = [];
     let current = face.outerEdge;
@@ -854,9 +746,6 @@ export function getFaceEdges(face: Face): HalfEdge[] {
     return edges;
 }
 
-/**
- * Count the number of half-edges around a face.
- */
 export function countFaceEdges(face: Face): number {
     let count = 0;
     let current = face.outerEdge;
@@ -866,10 +755,6 @@ export function countFaceEdges(face: Face): number {
     } while (current !== face.outerEdge);
     return count;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function pointDist(a: Point, b: Point): number {
     const dx = a.x - b.x;

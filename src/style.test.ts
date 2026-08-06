@@ -1,6 +1,4 @@
 /**
- * Guard tests for the multi-select highlight glow.
- *
  * The glow is CSS-only: it reads the `--selection-glow` custom property,
  * which is defined light on `:root` and flipped dark in the
  * `[data-ui-scheme="light"]` block so a same-hue light background does not
@@ -12,7 +10,6 @@
 import { describe, it, expect } from 'vitest';
 import styleCss from './style.css?raw';
 
-/** Index of the `}` closing the block opened at `open`. */
 function matchingBrace(css: string, open: number): number {
     let depth = 0;
     for (let i = open; i < css.length; i++) {
