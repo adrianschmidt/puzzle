@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { GameState, PieceGroup, Point } from '../model/types.js';
 import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece, makeWideRowScenario } from '../test-helpers/fixtures.js';
 import { buildProximityContext, computeSnapProximityRotation, ROTATION_COMPLETE_AT_FRACTION as F, type ProximityContext } from './snap-proximity-rotation.js';
-import { getGroup, getPiece } from '../model/helpers.js';
+import { getGroup, getPiece, getWorldPosition } from '../model/helpers.js';
 import { rotateGroup } from './rotate-group.js';
 
 const D = 40; // tolerancePx used throughout these tests
@@ -256,12 +256,66 @@ describe('computeSnapProximityRotation', () => {
     );
 });
 
+/** Merge-default tolerances, which the wide-row scenario is built against. */
+const WIDE_TOL = { tolerancePx: 18, rotationToleranceDeg: 10 };
+
+/** Distance (world px) at ramp `fraction` under WIDE_TOL: the cap there is T·fraction. */
+function wideRampDistance(fraction: number): number {
+    return WIDE_TOL.tolerancePx * (F + fraction * (1 - F));
+}
+
+/**
+ * The wide row extended with a second mate at the far end: piece 1 (local
+ * center (50, 50)) mates group 10, piece 5 (local center (450, 50)) mates
+ * group 12, and at 8° both candidates qualify — one at ramp fraction 0.25
+ * (cap 2.5), the other at 0.5 (cap 5). Each target starts flush and is
+ * shifted away from the row along x, which the piece-anchored measurement
+ * reports directly as that candidate's distance.
+ *
+ * `closest` picks which piece carries the closer candidate. Both
+ * arrangements are needed because `getBorderEdges` always visits piece 1's
+ * candidate before piece 5's: a last-qualifying-wins pivot passes
+ * `closest: 5` and a first-qualifying-wins pivot passes `closest: 1`, so
+ * only running both pins the pivot to the winner.
+ */
+function makeTwoMatedEndsRow(closest: 1 | 5): { state: GameState; ctx: ProximityContext } {
+    const { state: base, movedGroup, targetGroup } = makeWideRowScenario(8);
+    const piece5 = getPiece(base, 5);
+    piece5.edges[1] = { ...piece5.edges[1], matePieceId: 6, mateEdgeId: 63 };
+    const piece6 = makePiece({ id: 6, edges: [
+        { id: 60, matePieceId: -1, mateEdgeId: -1, path: '', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
+        { id: 61, matePieceId: -1, mateEdgeId: -1, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
+        { id: 62, matePieceId: -1, mateEdgeId: -1, path: '', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
+        { id: 63, matePieceId: 5, mateEdgeId: 51, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
+    ] });
+
+    const [d1, d5] = closest === 1
+        ? [wideRampDistance(0.25), wideRampDistance(0.5)]
+        : [wideRampDistance(0.5), wideRampDistance(0.25)];
+    const center5 = getWorldPosition({ x: 50, y: 50 }, 5, movedGroup);
+    const state = makeGameState({
+        pieces: [...base.pieces, piece6],
+        groups: [
+            { ...targetGroup, position: { x: -d1, y: 0 } },
+            movedGroup,
+            {
+                id: 12,
+                pieces: new Map([[6, { x: 0, y: 0 }]]),
+                position: { x: center5.x + 50 + d5, y: center5.y - 50 },
+                rotation: 0,
+            },
+        ],
+        rotationMode: 'free',
+    });
+    const ctx = buildProximityContext(state, 11, WIDE_TOL);
+    if (!ctx) throw new Error('expected a proximity context');
+    return { state, ctx };
+}
+
 describe('piece-anchored assist pivot (issue #530)', () => {
     it('engages for a wide group flush at one piece and pivots on that piece', () => {
         const { state } = makeWideRowScenario(8);
-        const ctx = buildProximityContext(
-            state, 11, { tolerancePx: 18, rotationToleranceDeg: 10 },
-        );
+        const ctx = buildProximityContext(state, 11, WIDE_TOL);
         expect(ctx).not.toBeNull();
 
         const result = computeSnapProximityRotation(state, ctx!);
@@ -330,4 +384,20 @@ describe('sticky winner latch', () => {
         group.position = { ...group.position, x: group.position.x - 12 };
         expect(computeSnapProximityRotation(state, ctx)!.pivotLocal.x).toBeCloseTo(450);
     });
+
+    it.each([1, 5] as const)(
+        'pivots on the closest qualifying candidate, not the last one (piece %i closest)',
+        (closest) => {
+            // Two qualifying candidates on DIFFERENT pieces: the closer sits at
+            // ramp fraction 0.25 (cap 2.5) → excess 8 − 2.5 = 5.5, the farther
+            // at 0.5 (cap 5) → 3. The pivot is the winner's piece center:
+            // (50, 50) for piece 1, (450, 50) for piece 5.
+            const { state, ctx } = makeTwoMatedEndsRow(closest);
+
+            const result = computeSnapProximityRotation(state, ctx)!;
+            expect(result.deltaDeg).toBeCloseTo(-5.5);
+            expect(result.pivotLocal.x).toBeCloseTo(closest === 1 ? 50 : 450);
+            expect(result.pivotLocal.y).toBeCloseTo(50);
+        },
+    );
 });
