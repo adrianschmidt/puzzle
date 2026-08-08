@@ -194,9 +194,12 @@ export interface NewGameData {
      * indistinguishable from a failure (`resolveNewGameImageSource`).
      *
      * That exception is what makes the bundled:unsplash ratio the health check
-     * for the image path end to end — the only one in Umami that catches a
-     * proxy returning 500, 502 or 403 (see {@link ImageFetchFailedData}, which
-     * cannot). **Filter to `source = 'fresh'` first:** shared games set this
+     * for the image path end to end. A proxy returning 500, 502 or 403 now has
+     * a direct signal — `image-fetch-http-error`
+     * ({@link ImageFetchHttpErrorData}), which carries the real status — but
+     * the ratio still covers what no fetch-level event can: the no-response
+     * failures (stale `VITE_IMAGE_PROXY_URL`, CORS block) and every fallback
+     * cause upstream of the fetch. **Filter to `source = 'fresh'` first:** shared games set this
      * field too, from the URL the payload already carries, and no proxy call
      * happens there — leaving them in makes the ratio drift with sharing
      * volume rather than with proxy health. Resumed saves need no exclusion:
@@ -552,9 +555,10 @@ export interface SharedLoadFailedData {
 /**
  * Data attached to `image-fetch-failed` — fetching a random Unsplash image
  * threw (network/parse failure). This is NOT the "no image found" case:
- * `fetchRandomImage` returns `undefined` (and is untracked) on a 4xx/5xx
- * response, so this event only fires on a genuine throw. The new game still
- * proceeds with the fallback image. `reason` is the sanitized error message.
+ * `fetchRandomImage` returns `undefined` on a 4xx/5xx response, which is
+ * `image-fetch-http-error`'s case ({@link ImageFetchHttpErrorData}), so this
+ * event only fires on a genuine throw. The new game still proceeds with the
+ * fallback image. `reason` is the sanitized error message.
  *
  * `orientation` and `imageCategory` describe the request that failed, so a
  * portrait-specific or category-specific fetch problem is distinguishable
@@ -567,17 +571,65 @@ export interface SharedLoadFailedData {
  *
  * Do NOT use this event to answer "is the proxy up?". It cannot see the
  * Worker's own error statuses: a 500 (no key configured), a 502 (Unsplash
- * unreachable) and a passed-through 403 all arrive as `response.ok === false`,
- * which returns `undefined` without throwing, so this event stays flat through
- * the proxy's most likely misconfigurations. Two signals do move:
- * {@link NewGameData.imageSource} within Umami, and — answering the question
- * directly, per request and with the real status — Cloudflare's Workers Logs,
- * which `wrangler.jsonc` enables.
+ * unreachable) and a passed-through 403 all arrive as `response.ok === false`
+ * and land in `image-fetch-http-error`, so this event stays flat through the
+ * proxy's most likely misconfigurations. Ask `image-fetch-http-error` (which
+ * carries the real status) for those. The Cloudflare failure modes above
+ * that never yield a response DO land here — but from the single path only
+ * and with a generic reason, so {@link NewGameData.imageSource}'s
+ * bundled:unsplash ratio is the steadier signal for them. Per request, with
+ * the real status either way: Cloudflare's Workers Logs, which
+ * `wrangler.jsonc` enables.
  */
 export interface ImageFetchFailedData {
     reason: string;
     orientation: Orientation;
     imageCategory: string;
+}
+
+/**
+ * Data attached to `image-fetch-http-error` — the image-proxy Worker
+ * answered a random-photo request with an error status, which the fetch
+ * helpers turn into a handled "no image" result rather than a throw
+ * (#533). Disjoint from {@link ImageFetchFailedData} (a request is either
+ * answered or thrown, never both), but the pair is NOT exhaustive: only the
+ * single path reports its throws. A thrown *batch* fetch — CORS block, DNS
+ * failure, offline — is caught untracked in `fetch-candidate-images.ts`, so
+ * a picker-path transport failure produces zero rows in BOTH events, and a
+ * flat batch line during such an incident is absence, not health.
+ * `triggerPhotoDownload` failures are not covered either: a download
+ * trigger only follows a random fetch that just succeeded, so its errors
+ * are a trailing echo of conditions this event already shows.
+ *
+ * `status` is the HTTP status the client received. `status = 403` is the
+ * rate-limit segment this event exists for: Unsplash demo apps get 50
+ * requests/hour shared across every player, the Worker passes the 403
+ * through, and before this event a rate-limited hour was indistinguishable
+ * from a quiet one. The Worker's own failure statuses arrive too — 500 (no
+ * key configured), 502 (Unsplash unreachable) — so this is also the
+ * in-Umami proxy-health signal {@link ImageFetchFailedData} documents it
+ * cannot be, for every failure mode that yields a readable response. The
+ * modes that don't — a stale/absent `VITE_IMAGE_PROXY_URL`, an origin
+ * missing from the Worker's CORS allowlist — reject before any status
+ * exists and never land here; {@link NewGameData.imageSource}'s
+ * bundled:unsplash ratio remains the signal for those.
+ *
+ * `source` names the request shape; each shape has exactly one producer
+ * today. `'batch'` is the picker's grid fetch — one request per refresh,
+ * where "refresh" includes merely opening the New Game dialog (the picker
+ * auto-fetches on construction) alongside every category change, Vibrant
+ * toggle and ↻ tap — the likely budget-burner. `'single'` is the new-game
+ * resolve fetch, made only for a start WITHOUT a picked candidate
+ * ("Surprise me"); a picked-candidate start reuses the batch result and
+ * spends its request on `triggerPhotoDownload` instead, so `'single'`
+ * under-counts starts. On a `'single'` failure the player silently gets
+ * the fallback image. Both fields are set on every row, so status/source
+ * filters work directly — none of the absent-property arithmetic
+ * {@link SharedLoadFailedData} and {@link NewGameFailedData} need.
+ */
+export interface ImageFetchHttpErrorData {
+    status: number;
+    source: 'single' | 'batch';
 }
 
 /**
@@ -1404,6 +1456,7 @@ export function track(name: 'unhandled-error', data: UnhandledErrorData): void;
 export function track(name: 'csp-violation', data: CspViolationData): void;
 export function track(name: 'shared-load-failed', data: SharedLoadFailedData): void;
 export function track(name: 'image-fetch-failed', data: ImageFetchFailedData): void;
+export function track(name: 'image-fetch-http-error', data: ImageFetchHttpErrorData): void;
 export function track(name: 'new-game-failed', data: NewGameFailedData): void;
 export function track(name: 'piece-count-mismatch', data: PieceCountMismatchData): void;
 export function track(name: 'share-failed', data: ShareFailedData): void;
