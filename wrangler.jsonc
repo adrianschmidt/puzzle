@@ -17,12 +17,7 @@
     "main": "src/worker/image-proxy.ts",
     "compatibility_date": "2026-08-04",
 
-    // The only per-request view of the Worker's error statuses. Umami's
-    // `image-fetch-http-error` (see ImageFetchHttpErrorData in
-    // src/analytics/umami.ts) counts them client-side with the status
-    // attached, but as an aggregate — these logs remain the place to inspect
-    // an individual failing request. Captures request metadata only: this
-    // Worker makes no `console` calls, and `no-console` has no override for
-    // src/worker/.
+    // Captures request metadata only: this Worker makes no `console` calls,
+    // and `no-console` has no override for src/worker/.
     "observability": { "enabled": true }
 }
