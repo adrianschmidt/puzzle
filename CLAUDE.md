@@ -2,6 +2,17 @@
 
 ## Comment policy: intent and not-in-the-code information only
 
+**Every comment carries significant intrinsic cost — weigh it before writing
+or touching one.** Agent review loops in this repo have burned entire rounds
+discussing and "fixing" comments without changing a line of code, at real
+financial cost to the owner. The categories below are the floor, not the
+bar: even a category-5/6 comment is added only when it is *definitely*
+valuable against that cost. The same weighing applies before changing a
+comment — whether the impulse is yours or a reviewer's: a comment not
+clearly worth its upkeep is deleted in its entirety, not corrected. For
+reviewers, deletion is the default remedy to propose for any comment
+finding.
+
 Code Complete's six kinds of comments, applied to this repo. **Forbidden** —
 never write these, and delete them on sight when editing a file:
 
