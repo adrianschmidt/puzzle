@@ -12,6 +12,7 @@
  */
 
 import { diagnostics } from '../diagnostics.js';
+import { track } from '../analytics/index.js';
 import type { Orientation } from '../model/types.js';
 
 /** Proxy route that forwards to Unsplash's `/photos/random`. */
@@ -159,6 +160,16 @@ export function getImageProxyBaseUrl(): string | undefined {
     return url.trim().replace(/\/+$/, '');
 }
 
+function reportProxyHttpError(
+    response: Response,
+    source: 'single' | 'batch',
+): void {
+    diagnostics.warn(
+        `Image proxy error: ${response.status} ${response.statusText}`,
+    );
+    track('image-fetch-http-error', { status: response.status, source });
+}
+
 /** Resolves `undefined` on HTTP failure; throws on a malformed response body. */
 export async function fetchRandomImage(
     proxyBaseUrl: string,
@@ -171,9 +182,7 @@ export async function fetchRandomImage(
     const response = await fetchFn(url);
 
     if (!response.ok) {
-        diagnostics.warn(
-            `Image proxy error: ${response.status} ${response.statusText}`,
-        );
+        reportProxyHttpError(response, 'single');
 
         return undefined;
     }
@@ -201,9 +210,7 @@ export async function fetchRandomImages(
     const response = await fetchFn(url);
 
     if (!response.ok) {
-        diagnostics.warn(
-            `Image proxy error: ${response.status} ${response.statusText}`,
-        );
+        reportProxyHttpError(response, 'batch');
 
         return undefined;
     }

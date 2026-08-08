@@ -2,6 +2,17 @@
 
 ## Comment policy: intent and not-in-the-code information only
 
+**Every comment carries significant intrinsic cost — weigh it before writing
+or touching one.** Agent review loops in this repo have burned entire rounds
+discussing and "fixing" comments without changing a line of code, at real
+financial cost to the owner. The categories below are the floor, not the
+bar: even a category-5/6 comment is added only when it is *definitely*
+valuable against that cost. The same weighing applies before changing a
+comment — whether the impulse is yours or a reviewer's: a comment not
+clearly worth its upkeep is deleted in its entirety, not corrected. For
+reviewers, deletion is the default remedy to propose for any comment
+finding.
+
 Code Complete's six kinds of comments, applied to this repo. **Forbidden** —
 never write these, and delete them on sight when editing a file:
 
@@ -43,7 +54,12 @@ Scope and carve-outs:
   block — exactly the shape of a category-4 summary — and deleting it
   silently changes the file's test environment.
 - `src/analytics/umami.ts`'s doc comments are the operator-facing query spec
-  (category 6): keep them **accurate**, don't trim them.
+  (category 6): keep them **accurate**. Spec means facts the code cannot
+  express — external API behaviour, query semantics, absent-property
+  caveats. Never restate behaviour readable from the source (call sites,
+  spend patterns, coverage claims): those claims drift, and PR #543 spent an
+  entire review round on exactly that. When a change falsifies such a claim,
+  shed it rather than extend it.
 
 ## The oxlint config's disabled rules are load-bearing
 

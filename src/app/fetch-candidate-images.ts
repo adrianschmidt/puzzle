@@ -1,8 +1,9 @@
 /**
  * Returns `null` when the fetch fails or yields nothing — the picker
  * shows its inline error state and the player can retry via the refresh
- * button, so failures here are logged but not tracked as analytics
- * events.
+ * button. An error-status answer from the proxy is reported one layer
+ * down as `image-fetch-http-error`; the thrown path caught here stays
+ * untracked.
  */
 
 import { diagnostics } from '../diagnostics.js';

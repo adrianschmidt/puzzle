@@ -17,11 +17,7 @@
     "main": "src/worker/image-proxy.ts",
     "compatibility_date": "2026-08-04",
 
-    // The only place the Worker's own error statuses are visible. A 500, a 502
-    // or a passed-through 403 all reach the client as `!response.ok`, which
-    // `fetchRandomImage` turns into an untracked `undefined` — so the Umami
-    // event named for image failures cannot see them (see ImageFetchFailedData
-    // in src/analytics/umami.ts). Captures request metadata only: this Worker
-    // makes no `console` calls, and `no-console` has no override for src/worker/.
+    // Captures request metadata only: this Worker makes no `console` calls,
+    // and `no-console` has no override for src/worker/.
     "observability": { "enabled": true }
 }

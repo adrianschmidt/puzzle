@@ -240,6 +240,21 @@ describe('track', () => {
         });
     });
 
+    it('forwards image-fetch-http-error with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('image-fetch-http-error', {
+            status: 403,
+            source: 'batch',
+        });
+
+        expect(umamiTrack).toHaveBeenCalledWith('image-fetch-http-error', {
+            status: 403,
+            source: 'batch',
+        });
+    });
+
     it('forwards new-game-failed with the typed payload', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };

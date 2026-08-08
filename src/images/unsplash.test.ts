@@ -1,4 +1,8 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+/**
+ * @vitest-environment jsdom
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     buildRandomPhotoUrl,
     parseUnsplashResponse,
@@ -406,6 +410,88 @@ describe('triggerPhotoDownload', () => {
         ).resolves.toBeUndefined();
         expect(warnSpy).toHaveBeenCalledOnce();
         warnSpy.mockRestore();
+    });
+});
+
+describe('image-fetch-http-error tracking', () => {
+    let umamiTrack: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        delete (window as unknown as { umami?: unknown }).umami;
+        vi.restoreAllMocks();
+    });
+
+    it('reports status and source single when the single fetch gets an error response', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 403,
+            statusText: 'Forbidden',
+        });
+
+        await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
+
+        expect(umamiTrack).toHaveBeenCalledExactlyOnceWith('image-fetch-http-error', {
+            status: 403,
+            source: 'single',
+        });
+    });
+
+    it('reports status and source batch when the picker fetch gets an error response', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 502,
+            statusText: 'Bad Gateway',
+        });
+
+        await fetchRandomImages(PROXY, 4, mockFetch as unknown as typeof fetch);
+
+        expect(umamiTrack).toHaveBeenCalledExactlyOnceWith('image-fetch-http-error', {
+            status: 502,
+            source: 'batch',
+        });
+    });
+
+    it('reports nothing on a successful fetch', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve(makeUnsplashResponse()),
+        });
+
+        await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
+
+        expect(umamiTrack).not.toHaveBeenCalled();
+    });
+
+    it("reports nothing when the fetch itself throws — that is image-fetch-failed's case", async () => {
+        const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
+
+        await expect(
+            fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch),
+        ).rejects.toThrow('Network error');
+
+        expect(umamiTrack).not.toHaveBeenCalled();
+    });
+
+    it('reports nothing on a download-trigger error response', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 403,
+            statusText: 'Forbidden',
+        });
+
+        await triggerPhotoDownload(
+            'https://api.unsplash.com/photos/abc123/download?ixid=xyz',
+            PROXY,
+            mockFetch as unknown as typeof fetch,
+        );
+
+        expect(umamiTrack).not.toHaveBeenCalled();
     });
 });
 

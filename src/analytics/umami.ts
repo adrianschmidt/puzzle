@@ -194,9 +194,7 @@ export interface NewGameData {
      * indistinguishable from a failure (`resolveNewGameImageSource`).
      *
      * That exception is what makes the bundled:unsplash ratio the health check
-     * for the image path end to end — the only one in Umami that catches a
-     * proxy returning 500, 502 or 403 (see {@link ImageFetchFailedData}, which
-     * cannot). **Filter to `source = 'fresh'` first:** shared games set this
+     * for the image path end to end. **Filter to `source = 'fresh'` first:** shared games set this
      * field too, from the URL the payload already carries, and no proxy call
      * happens there — leaving them in makes the ratio drift with sharing
      * volume rather than with proxy health. Resumed saves need no exclusion:
@@ -552,9 +550,10 @@ export interface SharedLoadFailedData {
 /**
  * Data attached to `image-fetch-failed` — fetching a random Unsplash image
  * threw (network/parse failure). This is NOT the "no image found" case:
- * `fetchRandomImage` returns `undefined` (and is untracked) on a 4xx/5xx
- * response, so this event only fires on a genuine throw. The new game still
- * proceeds with the fallback image. `reason` is the sanitized error message.
+ * `fetchRandomImage` returns `undefined` on a 4xx/5xx response, which is
+ * `image-fetch-http-error`'s case ({@link ImageFetchHttpErrorData}), so this
+ * event only fires on a genuine throw. The new game still proceeds with the
+ * fallback image. `reason` is the sanitized error message.
  *
  * `orientation` and `imageCategory` describe the request that failed, so a
  * portrait-specific or category-specific fetch problem is distinguishable
@@ -564,20 +563,24 @@ export interface SharedLoadFailedData {
  * a spike here points at Cloudflare — an unreachable Worker, a stale
  * `VITE_IMAGE_PROXY_URL`, or an origin missing from its CORS allowlist — at
  * least as often as it points at Unsplash itself.
- *
- * Do NOT use this event to answer "is the proxy up?". It cannot see the
- * Worker's own error statuses: a 500 (no key configured), a 502 (Unsplash
- * unreachable) and a passed-through 403 all arrive as `response.ok === false`,
- * which returns `undefined` without throwing, so this event stays flat through
- * the proxy's most likely misconfigurations. Two signals do move:
- * {@link NewGameData.imageSource} within Umami, and — answering the question
- * directly, per request and with the real status — Cloudflare's Workers Logs,
- * which `wrangler.jsonc` enables.
  */
 export interface ImageFetchFailedData {
     reason: string;
     orientation: Orientation;
     imageCategory: string;
+}
+
+/**
+ * Data attached to `image-fetch-http-error` — the image proxy answered a
+ * random-photo request with an error status (#533). `status = 403` is
+ * Unsplash's rate limit: a 50-requests/hour demo-tier budget shared by
+ * every player, so one hot hour blanks the picker for everyone. Keep both
+ * fields mandatory — rows that all carry the keys never need the
+ * absent-property arithmetic {@link SharedLoadFailedData} documents.
+ */
+export interface ImageFetchHttpErrorData {
+    status: number;
+    source: 'single' | 'batch';
 }
 
 /**
@@ -1404,6 +1407,7 @@ export function track(name: 'unhandled-error', data: UnhandledErrorData): void;
 export function track(name: 'csp-violation', data: CspViolationData): void;
 export function track(name: 'shared-load-failed', data: SharedLoadFailedData): void;
 export function track(name: 'image-fetch-failed', data: ImageFetchFailedData): void;
+export function track(name: 'image-fetch-http-error', data: ImageFetchHttpErrorData): void;
 export function track(name: 'new-game-failed', data: NewGameFailedData): void;
 export function track(name: 'piece-count-mismatch', data: PieceCountMismatchData): void;
 export function track(name: 'share-failed', data: ShareFailedData): void;
