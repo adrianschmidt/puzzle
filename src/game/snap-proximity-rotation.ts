@@ -13,13 +13,28 @@
  * persists); moving away only loosens it, which never rotates the group
  * back.
  *
+ * The applied rotation pivots on the latched candidate piece's center —
+ * the same pivot the measurement simulates — so that candidate's measured
+ * distance is invariant under the rotation this module applies; the ramp
+ * is driven purely by how close the player drags the group. The winner is
+ * sticky: the first qualifying winner stays latched for as long as it
+ * keeps qualifying, so the pivot and target orientation cannot flip
+ * mid-drag; the latch re-arms onto the closest qualifying candidate only
+ * after the latched one stops qualifying.
+ *
  * Not an assist: the merge condition is unchanged — a qualifying group
  * would snap on drop regardless. This only surfaces the earned snap early.
  */
 
-import type { GameState } from '../model/types.js';
+import type { GameState, Point } from '../model/types.js';
 import { tryGetGroup } from '../model/helpers.js';
-import { measureEdgeAlignment, SNAP_EPSILON_DEG } from './merge-detection.js';
+import type { GroupBorderEdge } from '../model/helpers.js';
+import {
+    measureEdgeAlignment,
+    pieceCenterLocal,
+    SNAP_EPSILON_DEG,
+    type EdgeAlignmentMeasurement,
+} from './merge-detection.js';
 
 import {
     buildProximityContext,
@@ -43,13 +58,22 @@ export type { ProximityContext, SnapTolerances };
  */
 export const ROTATION_COMPLETE_AT_FRACTION = 0.2;
 
+export interface SnapProximityRotationResult {
+    /** Signed degrees to apply now via `rotateGroup`. */
+    deltaDeg: number;
+    /** Rotation pivot in un-rotated group-local space: the winning candidate piece's center. */
+    pivotLocal: Point;
+}
+
 /**
- * Compute the rotation to apply to the dragged group right now, in signed
- * degrees (apply via `rotateGroup`), or `null` when no correction is due.
+ * Compute the rotation to apply to the dragged group right now — apply
+ * `deltaDeg` around `pivotLocal` via `rotateGroup` — or `null` when no
+ * correction is due.
  *
  * A candidate qualifies exactly when a drop would merge it: simulated-snap
  * distance `d ≤ tolerancePx` AND angular error `|θ| ≤ rotationToleranceDeg`.
- * Among qualifying candidates the smallest `d` wins. The correction
+ * The latched candidate is used while it still qualifies; otherwise the
+ * smallest-`d` qualifying candidate wins and becomes the latch. The correction
  * reduces `|θ|` to a distance-driven `cap` that equals
  * `rotationToleranceDeg` at the zone edge (no jump on entry) and reaches
  * zero once `d` is within `ROTATION_COMPLETE_AT_FRACTION` of the snap
@@ -58,32 +82,52 @@ export const ROTATION_COMPLETE_AT_FRACTION = 0.2;
 export function computeSnapProximityRotation(
     state: GameState,
     ctx: ProximityContext,
-): number | null {
+): SnapProximityRotationResult | null {
     const group = tryGetGroup(state, ctx.groupId);
     if (!group) return null;
 
-    let bestDistance = Infinity;
-    let bestRotationDelta = 0;
-    for (const candidate of ctx.candidates) {
+    const measureQualifying = (
+        candidate: GroupBorderEdge,
+    ): EdgeAlignmentMeasurement | null => {
         const m = measureEdgeAlignment(
             candidate.piece, candidate.edge, group,
             candidate.matePiece, candidate.mateEdge, candidate.mateGroup,
         );
-        if (Math.abs(m.rotationDelta) > ctx.rotationToleranceDeg) continue;
-        if (m.distance > ctx.tolerancePx) continue;
-        if (m.distance < bestDistance) {
-            bestDistance = m.distance;
-            bestRotationDelta = m.rotationDelta;
+        // A NaN distance from corrupt geometry passes both `>` gates below;
+        // it must decline here or it would latch and emit a NaN delta.
+        if (!Number.isFinite(m.distance)) return null;
+        if (Math.abs(m.rotationDelta) > ctx.rotationToleranceDeg) return null;
+        if (m.distance > ctx.tolerancePx) return null;
+        return m;
+    };
+
+    let chosenIndex = ctx.latchedCandidateIndex;
+    let chosen: EdgeAlignmentMeasurement | null = null;
+    if (chosenIndex !== null) {
+        chosen = measureQualifying(ctx.candidates[chosenIndex]);
+    }
+    if (chosen === null) {
+        chosenIndex = null;
+        for (let i = 0; i < ctx.candidates.length; i++) {
+            const m = measureQualifying(ctx.candidates[i]);
+            if (m !== null && (chosen === null || m.distance < chosen.distance)) {
+                chosen = m;
+                chosenIndex = i;
+            }
         }
     }
-    if (!Number.isFinite(bestDistance)) return null;
+    ctx.latchedCandidateIndex = chosenIndex;
+    if (chosen === null || chosenIndex === null) return null;
 
     const ramp =
-        (bestDistance / ctx.tolerancePx - ROTATION_COMPLETE_AT_FRACTION) /
+        (chosen.distance / ctx.tolerancePx - ROTATION_COMPLETE_AT_FRACTION) /
         (1 - ROTATION_COMPLETE_AT_FRACTION);
     const cap = ctx.rotationToleranceDeg * clamp01(ramp);
-    const excess = Math.abs(bestRotationDelta) - cap;
+    const excess = Math.abs(chosen.rotationDelta) - cap;
     if (excess <= SNAP_EPSILON_DEG) return null;
 
-    return Math.sign(bestRotationDelta) * excess;
+    return {
+        deltaDeg: Math.sign(chosen.rotationDelta) * excess,
+        pivotLocal: pieceCenterLocal(group, ctx.candidates[chosenIndex].piece),
+    };
 }

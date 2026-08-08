@@ -8,10 +8,9 @@
  * owns that shared context so neither feature depends on the other.
  */
 
-import type { GameState, Point } from '../model/types.js';
+import type { GameState } from '../model/types.js';
 import { getBorderEdges, tryGetGroup } from '../model/helpers.js';
 import type { GroupBorderEdge } from '../model/helpers.js';
-import { getGroupLocalBounds } from './group-bounds.js';
 
 export function clamp01(value: number): number {
     return Math.min(1, Math.max(0, value));
@@ -39,12 +38,17 @@ export interface ProximityContext {
     groupId: number;
     /** Border edges of the dragged group and their mates (fixed during a gesture). */
     candidates: GroupBorderEdge[];
-    /** Dragged group's bbox center in un-rotated local space — the rotation pivot. */
-    centerLocal: Point;
     /** Active snap distance (D) in world px. */
     tolerancePx: number;
     /** Active rotation tolerance (T) in degrees. */
     rotationToleranceDeg: number;
+    /**
+     * Gesture-scoped memory for the rotation assist's sticky winner: index
+     * into `candidates`, or null when nothing is latched. Written only by
+     * `computeSnapProximityRotation`; the position assist ignores it.
+     * Cleared by construction — the context is rebuilt per gesture.
+     */
+    latchedCandidateIndex: number | null;
 }
 
 /**
@@ -70,15 +74,11 @@ export function buildProximityContext(
     const candidates = getBorderEdges(group, state);
     if (candidates.length === 0) return null;
 
-    const bounds = getGroupLocalBounds(group, state.piecesById);
     return {
         groupId: movedGroupId,
         candidates,
-        centerLocal: {
-            x: bounds.minX + bounds.width / 2,
-            y: bounds.minY + bounds.height / 2,
-        },
         tolerancePx,
         rotationToleranceDeg,
+        latchedCandidateIndex: null,
     };
 }
