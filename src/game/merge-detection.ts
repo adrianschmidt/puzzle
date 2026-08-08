@@ -13,7 +13,6 @@ import {
     signedAngularDelta,
     tryGetGroup,
 } from '../model/helpers.js';
-import { getGroupLocalBounds } from './group-bounds.js';
 
 /** Tolerance in pixels for edge alignment. */
 export const MERGE_TOLERANCE_PX = 18;
@@ -47,6 +46,15 @@ export interface MergeCandidate {
     snapDelta: Point;
 }
 
+export function pieceCenterLocal(group: PieceGroup, piece: Piece): Point {
+    const offset = group.pieces.get(piece.id);
+    if (!offset) throw new Error(`Piece ${piece.id} not in group ${group.id}`);
+    return {
+        x: offset.x + (piece.bounds.minX + piece.bounds.maxX) / 2,
+        y: offset.y + (piece.bounds.minY + piece.bounds.maxY) / 2,
+    };
+}
+
 /**
  * Per-snap, per-group cached quantities for `getWorldPositionAfterRotationSnap`.
  * Independent of which point on which piece we're projecting, so we build
@@ -56,39 +64,29 @@ export interface MergeCandidate {
  * can take the no-snap fast path.
  */
 interface RotationSnapContext {
-    /** Bbox center in un-rotated local space — the rotation pivot. */
-    centerLocal: Point;
+    /** Rotation pivot in un-rotated group-local space — the moved candidate piece's center. */
+    pivotLocal: Point;
     /** World-space pivot, fixed during the snap. */
-    worldCenter: Point;
+    worldPivot: Point;
     /** Group rotation after applying the snap delta, normalized to [0, 360). */
     newRotation: number;
 }
 
 function buildRotationSnapContext(
     group: PieceGroup,
-    piecesById: ReadonlyMap<number, Readonly<Piece>>,
     extraDeg: number,
-    precomputedCenterLocal?: Point,
-): RotationSnapContext | null {
-    if (Math.abs(extraDeg) < SNAP_EPSILON_DEG) return null;
-    let centerLocal = precomputedCenterLocal;
-    if (!centerLocal) {
-        const bounds = getGroupLocalBounds(group, piecesById);
-        centerLocal = {
-            x: bounds.minX + bounds.width / 2,
-            y: bounds.minY + bounds.height / 2,
-        };
-    }
+    pivotLocal: Point,
+): RotationSnapContext {
     return {
-        centerLocal,
-        worldCenter: localToWorld(centerLocal, group),
+        pivotLocal,
+        worldPivot: localToWorld(pivotLocal, group),
         newRotation: normalizeDegrees(group.rotation + extraDeg),
     };
 }
 
 /**
  * World position of a piece-local point AS IF the group had been rotated
- * by `extraDeg` around its bbox center — the way `rotateGroup` performs a
+ * by `extraDeg` around the given pivot — the way `rotateGroup` performs a
  * rotation snap. For a null `snapCtx` (caller saw `extraDeg ≈ 0`) this
  * collapses to the existing `getWorldPosition` path, so quarter-turn-mode
  * merges are unaffected.
@@ -107,14 +105,14 @@ function getWorldPositionAfterRotationSnap(
     if (!offset) throw new Error(`Piece ${pieceId} not in group ${group.id}`);
     const localInGroup = { x: offset.x + pieceLocal.x, y: offset.y + pieceLocal.y };
 
-    const offsetFromCenter = {
-        x: localInGroup.x - snapCtx.centerLocal.x,
-        y: localInGroup.y - snapCtx.centerLocal.y,
+    const offsetFromPivot = {
+        x: localInGroup.x - snapCtx.pivotLocal.x,
+        y: localInGroup.y - snapCtx.pivotLocal.y,
     };
-    const rotated = rotatePoint(offsetFromCenter, snapCtx.newRotation);
+    const rotated = rotatePoint(offsetFromPivot, snapCtx.newRotation);
     return {
-        x: snapCtx.worldCenter.x + rotated.x,
-        y: snapCtx.worldCenter.y + rotated.y,
+        x: snapCtx.worldPivot.x + rotated.x,
+        y: snapCtx.worldPivot.y + rotated.y,
     };
 }
 
@@ -145,10 +143,12 @@ export interface EdgeAlignmentMeasurement {
 
 /**
  * Measure how well a moved edge aligns with its mate, without applying
- * any tolerance. Pass `movedCenterLocal` (the moved group's bbox center
- * in un-rotated local space) to skip the per-call bounds traversal when
- * calling repeatedly for the same group — e.g. once per candidate per
- * animation frame during a drag.
+ * any tolerance.
+ *
+ * The simulated snap pivots on the MOVED PIECE's center, not the group's
+ * bbox center, so a flush edge measures flush no matter how large the
+ * group is (issue #530). `mergeGroups` must apply the real snap around
+ * the same pivot or `snapDelta` lands the group elsewhere.
  */
 export function measureEdgeAlignment(
     movedPiece: Piece,
@@ -157,14 +157,14 @@ export function measureEdgeAlignment(
     targetPiece: Piece,
     targetEdge: Edge,
     targetGroup: PieceGroup,
-    piecesById: ReadonlyMap<number, Readonly<Piece>>,
-    movedCenterLocal?: Point,
 ): EdgeAlignmentMeasurement {
     const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
 
-    const snapCtx = buildRotationSnapContext(
-        movedGroup, piecesById, rotDelta, movedCenterLocal,
-    );
+    const snapCtx = Math.abs(rotDelta) < SNAP_EPSILON_DEG
+        ? null
+        : buildRotationSnapContext(
+            movedGroup, rotDelta, pieceCenterLocal(movedGroup, movedPiece),
+        );
     const movedStart = getWorldPositionAfterRotationSnap(
         movedEdge.start, movedPiece.id, movedGroup, snapCtx,
     );
@@ -196,14 +196,12 @@ export function checkEdgeAlignment(
     targetPiece: Piece,
     targetEdge: Edge,
     targetGroup: PieceGroup,
-    piecesById: ReadonlyMap<number, Readonly<Piece>>,
     tolerance: number = MERGE_TOLERANCE_PX,
     rotationTolerance: number = MERGE_ROTATION_TOLERANCE_DEG,
 ): { aligned: boolean; snapDelta: Point } {
     const m = measureEdgeAlignment(
         movedPiece, movedEdge, movedGroup,
         targetPiece, targetEdge, targetGroup,
-        piecesById,
     );
 
     // Two groups can only mate when their rotations are close enough.
@@ -246,7 +244,6 @@ export function detectMerges(
             border.matePiece,
             border.mateEdge,
             border.mateGroup,
-            state.piecesById,
             tolerance,
             rotationTolerance,
         );

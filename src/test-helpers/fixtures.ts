@@ -198,6 +198,56 @@ export function makeCenteredGroup(
 }
 
 /**
+ * The issue-#530 scenario: a stationary single-piece target (piece 0,
+ * group 10, at the origin) and a five-piece 500×100 moved row (pieces
+ * 1–5, group 11) rotated `rotationDeg`, positioned so piece 1's center
+ * sits exactly at its aligned world position (150, 50). Piece 1 is the
+ * row's only mated piece and sits 200 px from the row's bbox center, so
+ * at 8° a group-center-pivot rotation snap sweeps its edge ≈ 27.9 px
+ * (2·200·sin 4°) — past MERGE_TOLERANCE_PX — while a piece-center pivot
+ * measures ≈ 0.
+ */
+export function makeWideRowScenario(rotationDeg: number): {
+    state: GameState;
+    movedGroup: PieceGroup;
+    targetGroup: PieceGroup;
+    piece0: Piece;
+    piece1: Piece;
+} {
+    const { piece0, piece1 } = makeMatedPiecePair();
+    const edge = (id: number, start: Point, end: Point): Edge =>
+        ({ id, matePieceId: -1, mateEdgeId: -1, path: '', start, end });
+    const fillers = [2, 3, 4, 5].map((id) => makePiece({ id, edges: [
+        edge(id * 10, { x: 0, y: 0 }, { x: 100, y: 0 }),
+        edge(id * 10 + 1, { x: 100, y: 0 }, { x: 100, y: 100 }),
+        edge(id * 10 + 2, { x: 100, y: 100 }, { x: 0, y: 100 }),
+        edge(id * 10 + 3, { x: 0, y: 100 }, { x: 0, y: 0 }),
+    ] }));
+    const r = rotatePoint({ x: 50, y: 50 }, rotationDeg);
+    const movedGroup: PieceGroup = {
+        id: 11,
+        pieces: new Map([
+            [1, { x: 0, y: 0 }], [2, { x: 100, y: 0 }], [3, { x: 200, y: 0 }],
+            [4, { x: 300, y: 0 }], [5, { x: 400, y: 0 }],
+        ]),
+        position: { x: 150 - r.x, y: 50 - r.y },
+        rotation: rotationDeg,
+    };
+    const targetGroup: PieceGroup = {
+        id: 10,
+        pieces: new Map([[0, { x: 0, y: 0 }]]),
+        position: { x: 0, y: 0 },
+        rotation: 0,
+    };
+    const state = makeGameState({
+        pieces: [piece0, piece1, ...fillers],
+        groups: [targetGroup, movedGroup],
+        rotationMode: 'free',
+    });
+    return { state, movedGroup, targetGroup, piece0, piece1 };
+}
+
+/**
  * A game state that round-trips through the persistence layer.
  *
  * `recombine` rejects an empty `pieces` array — which is exactly what

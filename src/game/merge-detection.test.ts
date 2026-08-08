@@ -7,8 +7,7 @@ import {
     MERGE_TOLERANCE_PX,
     MERGE_ROTATION_TOLERANCE_DEG,
 } from './merge-detection.js';
-import { getGroupLocalBounds } from './group-bounds.js';
-import { makePiece, makeGameState } from '../test-helpers/fixtures.js';
+import { makePiece, makeGameState, makeWideRowScenario } from '../test-helpers/fixtures.js';
 
 function makeEdge(
     id: number,
@@ -72,7 +71,6 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map(),
         );
 
         expect(result.aligned).toBe(true);
@@ -91,7 +89,6 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map(),
         );
 
         expect(result.aligned).toBe(true);
@@ -111,7 +108,6 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map(),
         );
 
         expect(result.aligned).toBe(false);
@@ -127,7 +123,6 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map(),
         );
 
         expect(result.aligned).toBe(true);
@@ -143,7 +138,6 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map(),
         );
 
         expect(result.aligned).toBe(true);
@@ -168,7 +162,6 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map(),
         );
 
         expect(result.aligned).toBe(false);
@@ -205,10 +198,6 @@ describe('checkEdgeAlignment', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map([
-                [0, piece0],
-                [1, piece1],
-            ]),
         );
 
         expect(result.aligned).toBe(true);
@@ -226,7 +215,6 @@ describe('checkEdgeAlignment', () => {
         const strictResult = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map(),
             10,
         );
         expect(strictResult.aligned).toBe(false);
@@ -234,7 +222,6 @@ describe('checkEdgeAlignment', () => {
         const lenientResult = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            new Map(),
             20,
         );
         expect(lenientResult.aligned).toBe(true);
@@ -249,7 +236,6 @@ describe('checkEdgeAlignment with angular tolerance', () => {
     it('rejects pairs whose rotations differ by more than the tolerance', () => {
         // 15° > 10° tolerance → must reject regardless of position
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
-        const piecesById = new Map([[0, piece0], [1, piece1]]);
 
         const group0: PieceGroup = {
             id: 0,
@@ -267,7 +253,6 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            piecesById,
         );
 
         expect(result.aligned).toBe(false);
@@ -278,18 +263,17 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         // movedGroup.rotation = 5°, targetGroup.rotation = 0°.
         // rotDelta = signedAngularDelta(0, 5) = -5°, within tolerance.
         //
-        // After a -5° snap around the bbox center (50,50 local for a 100×100
+        // After a -5° snap around the piece center (50,50 local for a 100×100
         // piece at offset (0,0)), the snapped world endpoints of the moved
         // right-edge are at approximately (95.45, 4.17) and (95.45, 104.17).
         // Placing targetGroup (rotation=0) at (95.45, 4.17) achieves perfect
         // positional alignment post-snap.
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
-        const piecesById = new Map([[0, piece0], [1, piece1]]);
 
-        // Derived: worldCenter of group0 = localToWorld({50,50}, rot=5°, pos=(0,0))
+        // Derived: worldPivot of group0 = localToWorld({50,50}, rot=5°, pos=(0,0))
         //  = rotatePoint({50,50},5°) = {45.45, 54.17}
         // Snapped movedStart (rightEdge.start={100,0}):
-        //  offsetFromCenter = {50,-50}, rotated by 0° = {50,-50}
+        //  offsetFromPivot = {50,-50}, rotated by 0° = {50,-50}
         //  world = {45.45+50, 54.17-50} = {95.45, 4.17}
         const group0: PieceGroup = {
             id: 0,
@@ -307,7 +291,6 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            piecesById,
         );
 
         expect(result.aligned).toBe(true);
@@ -319,18 +302,17 @@ describe('checkEdgeAlignment with angular tolerance', () => {
     it('rejects a 15° delta with default tolerance but accepts with rotationTolerance=20', () => {
         // rotDelta = signedAngularDelta(0, 15) = -15°
         //
-        // worldCenter of group0 = rotatePoint({50,50}, 15°):
+        // worldPivot of group0 = rotatePoint({50,50}, 15°):
         //   cos(15°)≈0.9659, sin(15°)≈0.2588
         //   x = 50*0.9659 - 50*0.2588 ≈ 35.36
         //   y = 50*0.2588 + 50*0.9659 ≈ 61.24
         //
         // After -15° snap of group0 (newRotation=0°), movedEdge.start={100,0}:
-        //   offsetFromCenter = {50,-50}, rotated by 0° = {50,-50}
+        //   offsetFromPivot = {50,-50}, rotated by 0° = {50,-50}
         //   world = {35.36+50, 61.24-50} = {85.36, 11.24}
         //
         // targetEdge.end={0,0}, group1 at pos=(85.36,11.24), rot=0° → targetEnd=(85.36,11.24) ✓
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
-        const piecesById = new Map([[0, piece0], [1, piece1]]);
 
         const group0: PieceGroup = {
             id: 0,
@@ -349,7 +331,6 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         const rejectedResult = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            piecesById,
         );
         expect(rejectedResult.aligned).toBe(false);
 
@@ -357,7 +338,6 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         const acceptedResult = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            piecesById,
             MERGE_TOLERANCE_PX,
             20,
         );
@@ -368,7 +348,6 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         // Both at rotation=90°. rotDelta=0, so getWorldPositionAfterRotationSnap
         // collapses to getWorldPosition.
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
-        const piecesById = new Map([[0, piece0], [1, piece1]]);
 
         const group0: PieceGroup = {
             id: 0,
@@ -386,7 +365,6 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            piecesById,
         );
 
         expect(result.aligned).toBe(true);
@@ -400,20 +378,18 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         // Position group0 at rotation=355°, group1 at rotation=5°, with
         // group1 positioned to align perfectly after the +10° snap of group0.
         const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
-        const piecesById = new Map([[0, piece0], [1, piece1]]);
 
         // rotDelta = signedAngularDelta(5, 355) = 10°
         // After +10° snap of group0 (rot=355°→365°=5°), endpoints match target (rot=5°).
         // If both groups effectively end up at rotation=5° with adjacent positions,
         // use the existing rotation=5° adjacent layout.
         //
-        // worldCenter of group0 = localToWorld({50,50}, rot=355°, pos=(0,0))
+        // worldPivot of group0 = localToWorld({50,50}, rot=355°, pos=(0,0))
         //  cos(355°)≈0.9962, sin(355°)≈-0.0872
         //  rotatePoint({50,50},355°) = {50*0.9962-50*(-0.0872), 50*(-0.0872)+50*0.9962}
         //                            = {49.81+4.36, -4.36+49.81} = {54.17, 45.45}
         //
         // After snap (newRotation=5°):
-        //  movedEdge.start={100,0}: offsetFromCenter={50,-50}
         //  rotated by 5°: x=50*cos5-(-50)*sin5=49.81+4.36=54.17, y=50*sin5+(-50)*cos5=4.36-49.81=-45.45
         //  world = {54.17+54.17, 45.45-45.45} = {108.34, 0}
         //
@@ -436,7 +412,6 @@ describe('checkEdgeAlignment with angular tolerance', () => {
         const result = checkEdgeAlignment(
             piece0, rightEdge, group0,
             piece1, leftEdge, group1,
-            piecesById,
         );
 
         expect(result.aligned).toBe(true);
@@ -454,7 +429,6 @@ describe('measureEdgeAlignment', () => {
         const m = measureEdgeAlignment(
             piece1, leftEdge, group1,
             piece0, rightEdge, group0,
-            new Map(),
         );
 
         expect(m.rotationDelta).toBeCloseTo(0);
@@ -473,36 +447,35 @@ describe('measureEdgeAlignment', () => {
         const m = measureEdgeAlignment(
             piece1, leftEdge, group1,
             piece0, rightEdge, group0,
-            new Map(),
         );
 
         // From 350° to 10° the short way is +20°, not −340°.
         expect(m.rotationDelta).toBeCloseTo(20);
     });
+});
 
-    it('a precomputed movedCenterLocal yields identical measurements', () => {
-        const { piece0, piece1, rightEdge, leftEdge } = createAdjacentPiecePair();
-        const group0 = makeGroup(0, 0, { x: 0, y: 0 });
-        const group1 = makeGroup(1, 1, { x: 108, y: 6 });
-        group1.rotation = 15;
-        const piecesById = new Map([[0, piece0], [1, piece1]]);
+describe('piece-anchored rotation snap pivot (issue #530)', () => {
+    it('measures a flush edge on a wide group as flush, regardless of group size', () => {
+        const { movedGroup, targetGroup, piece0, piece1 } = makeWideRowScenario(8);
 
-        const plain = measureEdgeAlignment(
-            piece1, leftEdge, group1, piece0, rightEdge, group0, piecesById,
-        );
-        const bounds = getGroupLocalBounds(group1, piecesById);
-        const center = {
-            x: bounds.minX + bounds.width / 2,
-            y: bounds.minY + bounds.height / 2,
-        };
-        const precomputed = measureEdgeAlignment(
-            piece1, leftEdge, group1, piece0, rightEdge, group0, piecesById, center,
+        const m = measureEdgeAlignment(
+            piece1, piece1.edges[3], movedGroup,
+            piece0, piece0.edges[1], targetGroup,
         );
 
-        expect(precomputed.rotationDelta).toBeCloseTo(plain.rotationDelta);
-        expect(precomputed.distance).toBeCloseTo(plain.distance);
-        expect(precomputed.snapDelta.x).toBeCloseTo(plain.snapDelta.x);
-        expect(precomputed.snapDelta.y).toBeCloseTo(plain.snapDelta.y);
+        expect(m.rotationDelta).toBeCloseTo(-8);
+        expect(m.distance).toBeCloseTo(0, 6);
+    });
+
+    it('accepts the wide-group flush edge within default tolerances', () => {
+        const { movedGroup, targetGroup, piece0, piece1 } = makeWideRowScenario(8);
+
+        const result = checkEdgeAlignment(
+            piece1, piece1.edges[3], movedGroup,
+            piece0, piece0.edges[1], targetGroup,
+        );
+
+        expect(result.aligned).toBe(true);
     });
 });
 
