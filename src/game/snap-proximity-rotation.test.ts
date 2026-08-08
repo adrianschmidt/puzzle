@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, PieceGroup, Point } from '../model/types.js';
-import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece } from '../test-helpers/fixtures.js';
+import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece, makeWideRowScenario } from '../test-helpers/fixtures.js';
 import { buildProximityContext, computeSnapProximityRotation, ROTATION_COMPLETE_AT_FRACTION as F, type ProximityContext } from './snap-proximity-rotation.js';
-import { getGroup } from '../model/helpers.js';
+import { getGroup, getPiece } from '../model/helpers.js';
 import { rotateGroup } from './rotate-group.js';
 
 const D = 40; // tolerancePx used throughout these tests
@@ -36,7 +36,7 @@ function makePairState(
 }
 
 describe('buildProximityContext', () => {
-    it('returns a context with the border candidates and bbox center', () => {
+    it('returns a context with the border candidates', () => {
         const state = makePairState({ x: 350, y: 50 });
         const ctx = buildProximityContext(state, 11, TOL);
 
@@ -44,8 +44,6 @@ describe('buildProximityContext', () => {
         expect(ctx!.groupId).toBe(11);
         expect(ctx!.candidates).toHaveLength(1);
         expect(ctx!.candidates[0].matePiece.id).toBe(0);
-        expect(ctx!.centerLocal.x).toBeCloseTo(50);
-        expect(ctx!.centerLocal.y).toBeCloseTo(50);
         expect(ctx!.tolerancePx).toBe(D);
         expect(ctx!.rotationToleranceDeg).toBe(T);
     });
@@ -195,11 +193,11 @@ describe('computeSnapProximityRotation', () => {
     it('rotates the error down to the distance-scaled cap, and is idempotent at rest', () => {
         // Ramp midpoint (fraction 0.5) → cap = T/2 = 10; error 18 → excess 8, toward alignment (negative).
         const { state, ctx } = makeComputeSetup(rampCenter(0.5), 18);
-        const delta = computeSnapProximityRotation(state, ctx);
-        expect(delta).toBeCloseTo(-8);
+        const result = computeSnapProximityRotation(state, ctx);
+        expect(result!.deltaDeg).toBeCloseTo(-8);
 
         // Applying the delta and re-evaluating without moving: no oscillation.
-        rotateGroup(getGroup(state, 11), state.piecesById, delta!);
+        rotateGroup(getGroup(state, 11), state.piecesById, result!.deltaDeg, result!.pivotLocal);
         expect(getGroup(state, 11).rotation).toBeCloseTo(10);
         expect(computeSnapProximityRotation(state, ctx)).toBeNull();
     });
@@ -207,13 +205,13 @@ describe('computeSnapProximityRotation', () => {
     it('fully aligns at the completion distance (F·D)', () => {
         // Ramp fraction 0 → d = F·D → cap = 0; error 15 fully corrected.
         const { state, ctx } = makeComputeSetup(rampCenter(0), 15);
-        expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-15);
+        expect(computeSnapProximityRotation(state, ctx)!.deltaDeg).toBeCloseTo(-15);
     });
 
     it('stays fully aligned across the inner plateau (below the completion distance)', () => {
         // d = F·D/2 < F·D → cap clamps to 0; error 15 fully corrected.
         const { state, ctx } = makeComputeSetup({ x: 150 + (D * F) / 2, y: 50 }, 15);
-        expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-15);
+        expect(computeSnapProximityRotation(state, ctx)!.deltaDeg).toBeCloseTo(-15);
     });
 
     it('leaves the full tolerance uncorrected at the zone edge (no jump on entry)', () => {
@@ -225,7 +223,7 @@ describe('computeSnapProximityRotation', () => {
     it('is wrap-aware: rotations just below 360° rotate forward through 0°', () => {
         // error = signedAngularDelta(0, 342) = +18; ramp midpoint → cap = 10 → +8.
         const { state, ctx } = makeComputeSetup(rampCenter(0.5), 342);
-        expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(8);
+        expect(computeSnapProximityRotation(state, ctx)!.deltaDeg).toBeCloseTo(8);
     });
 
     it('never rotates back as the distance increases again (one-way ratchet)', () => {
@@ -233,7 +231,8 @@ describe('computeSnapProximityRotation', () => {
         const group = getGroup(state, 11);
 
         // Approach: ramp midpoint (cap 10) → rotated down to 10°.
-        rotateGroup(group, state.piecesById, computeSnapProximityRotation(state, ctx)!);
+        const result = computeSnapProximityRotation(state, ctx)!;
+        rotateGroup(group, state.piecesById, result.deltaDeg, result.pivotLocal);
         expect(group.rotation).toBeCloseTo(10);
 
         // Retreat to fraction 0.75 (cap = 15 > held error 10): no correction, rotation stays.
@@ -252,7 +251,83 @@ describe('computeSnapProximityRotation', () => {
             // iteration-order (first/last-qualifying-wins) bugs, which would
             // yield −6.
             const { state, ctx } = makeRowState(closest);
-            expect(computeSnapProximityRotation(state, ctx)).toBeCloseTo(-11);
+            expect(computeSnapProximityRotation(state, ctx)!.deltaDeg).toBeCloseTo(-11);
         },
     );
+});
+
+describe('piece-anchored assist pivot (issue #530)', () => {
+    it('engages for a wide group flush at one piece and pivots on that piece', () => {
+        const { state } = makeWideRowScenario(8);
+        const ctx = buildProximityContext(
+            state, 11, { tolerancePx: 18, rotationToleranceDeg: 10 },
+        );
+        expect(ctx).not.toBeNull();
+
+        const result = computeSnapProximityRotation(state, ctx!);
+        // d ≈ 0 is inside the completion fraction → cap 0 → full correction.
+        expect(result!.deltaDeg).toBeCloseTo(-8);
+        expect(result!.pivotLocal.x).toBeCloseTo(50);
+        expect(result!.pivotLocal.y).toBeCloseTo(50);
+
+        // Applying the correction around the returned pivot is idempotent.
+        rotateGroup(getGroup(state, 11), state.piecesById, result!.deltaDeg, result!.pivotLocal);
+        expect(getGroup(state, 11).rotation).toBeCloseTo(0);
+        expect(computeSnapProximityRotation(state, ctx!)).toBeNull();
+    });
+});
+
+describe('sticky winner latch', () => {
+    // Both tests start from makeTwoMatedEndsRow(1): d1 = 7.2 (piece 1,
+    // latched on the first evaluation) and d5 = 10.8 (piece 5). A +x shift
+    // of the row moves it away from group 10 and toward group 12, so d1
+    // grows and d5 shrinks by the same amount.
+    it('keeps the latched candidate while it qualifies, even when another becomes closer', () => {
+        const { state, ctx } = makeTwoMatedEndsRow(1);
+        expect(computeSnapProximityRotation(state, ctx)!.pivotLocal.x).toBeCloseTo(50);
+
+        const group = getGroup(state, 11);
+        group.position = { ...group.position, x: group.position.x + 5.4 };
+
+        // Piece 5's candidate is now closer (5.4 vs 12.6), but piece 1 still
+        // qualifies, so the latch holds: the pivot stays on piece 1 and the
+        // cap comes from the latched candidate's distance (12.6 → cap 6.25,
+        // excess 1.75). Follow-the-winner would flip to (450, 50) / −6.75.
+        const result = computeSnapProximityRotation(state, ctx)!;
+        expect(result.pivotLocal.x).toBeCloseTo(50);
+        expect(result.deltaDeg).toBeCloseTo(-1.75);
+    });
+
+    it('declines a corrupt candidate (NaN distance) instead of latching it', () => {
+        const { state, ctx } = makeTwoMatedEndsRowCtx(1);
+        // An Infinity coordinate in a tab path makes piece 1's simulated-snap
+        // distance NaN, which every `>` tolerance gate waves through.
+        getPiece(state, 1).edges[0].path = 'M 1e999 0 L 0 0';
+
+        // The corrupt candidate must not win the latch; the healthy piece-5
+        // mate does (d = 10.8 → cap 5, error 8 → excess 3).
+        const result = computeSnapProximityRotation(state, ctx)!;
+        expect(result.pivotLocal.x).toBeCloseTo(450);
+        expect(result.deltaDeg).toBeCloseTo(-3);
+    });
+
+    it('re-latches onto the best qualifying candidate only when the latched one stops qualifying', () => {
+        const { state, ctx } = makeTwoMatedEndsRow(1);
+        expect(computeSnapProximityRotation(state, ctx)!.pivotLocal.x).toBeCloseTo(50);
+
+        const group = getGroup(state, 11);
+        group.position = { ...group.position, x: group.position.x + 12 };
+
+        // d1 = 19.2 > tolerance: piece 1 stops qualifying and the latch
+        // re-arms onto piece 5 (d5 = 1.2, inside the completion fraction →
+        // full correction).
+        const rearmed = computeSnapProximityRotation(state, ctx)!;
+        expect(rearmed.pivotLocal.x).toBeCloseTo(450);
+        expect(rearmed.deltaDeg).toBeCloseTo(-8);
+
+        // Back where piece 1 qualifies again AND is closer — the new latch
+        // holds regardless.
+        group.position = { ...group.position, x: group.position.x - 12 };
+        expect(computeSnapProximityRotation(state, ctx)!.pivotLocal.x).toBeCloseTo(450);
+    });
 });

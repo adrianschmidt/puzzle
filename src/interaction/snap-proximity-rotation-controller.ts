@@ -59,13 +59,13 @@ export class SnapProximityRotationController {
         this.scheduleFrame(() => { this.gated = false; });
 
         const state = this.getState();
-        const delta = computeSnapProximityRotation(state, this.ctx);
-        if (delta === null) return;
+        const result = computeSnapProximityRotation(state, this.ctx);
+        if (result === null) return;
 
         const group = tryGetGroup(state, this.ctx.groupId);
-        // ctx.centerLocal is valid for the whole drag (composition is fixed),
-        // so reuse it as the pivot instead of re-walking the group's bounds.
-        if (group) rotateGroup(group, state.piecesById, delta, this.ctx.centerLocal);
+        if (group) {
+            rotateGroup(group, state.piecesById, result.deltaDeg, result.pivotLocal);
+        }
     }
 
     stop(): void {
