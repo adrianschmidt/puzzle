@@ -43,7 +43,12 @@ Scope and carve-outs:
   block — exactly the shape of a category-4 summary — and deleting it
   silently changes the file's test environment.
 - `src/analytics/umami.ts`'s doc comments are the operator-facing query spec
-  (category 6): keep them **accurate**, don't trim them.
+  (category 6): keep them **accurate**. Spec means facts the code cannot
+  express — external API behaviour, query semantics, absent-property
+  caveats. Never restate behaviour readable from the source (call sites,
+  spend patterns, coverage claims): those claims drift, and PR #543 spent an
+  entire review round on exactly that. When a change falsifies such a claim,
+  shed it rather than extend it.
 
 ## The oxlint config's disabled rules are load-bearing
 
