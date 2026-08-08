@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Edge, Piece, PieceGroup } from '../model/types.js';
 import { rotateGroup } from './rotate-group.js';
 import { getGroupLocalBounds } from './group-bounds.js';
+import { localToWorld } from '../model/helpers.js';
 import { buildPiecesById } from '../test-helpers/fixtures.js';
 import { computePieceBounds } from '../model/derive.js';
 
@@ -167,7 +168,32 @@ describe('rotateGroup', () => {
         expect(worldCenterAfter.y).toBeCloseTo(worldCenterBefore.y);
     });
 
-    it('produces identical results with precomputedCenterLocal and computed bounds', () => {
+    it('holds a non-center pivotLocal fixed in world space', () => {
+        // Piece 0's center (50, 50), not the bbox center (100, 50): the
+        // parameter selects the anchor, so this must fail if it were ignored
+        // in favor of the computed-bounds default.
+        const p0 = makeSquarePiece(0);
+        const p1 = makeSquarePiece(1);
+        const group: PieceGroup = {
+            id: 0,
+            pieces: new Map([
+                [0, { x: 0, y: 0 }],
+                [1, { x: 100, y: 0 }],
+            ]),
+            position: { x: 500, y: 500 },
+            rotation: 30,
+        };
+        const pivot = { x: 50, y: 50 };
+        const before = localToWorld(pivot, group);
+
+        rotateGroup(group, buildPiecesById([p0, p1]), 47, pivot);
+
+        const after = localToWorld(pivot, group);
+        expect(after.x).toBeCloseTo(before.x);
+        expect(after.y).toBeCloseTo(before.y);
+    });
+
+    it('produces identical results with an explicit bbox-center pivotLocal and computed bounds', () => {
         const p0 = makeSquarePiece(0);
         const p1 = makeSquarePiece(1);
         const piecesById = buildPiecesById([p0, p1]);
