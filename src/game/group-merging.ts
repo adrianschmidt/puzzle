@@ -1,4 +1,4 @@
-import type { GameState, PieceGroup, Point } from '../model/types.js';
+import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
 import {
     getGroup,
     moveGroup,
@@ -7,7 +7,12 @@ import {
     rotatePoint,
     signedAngularDelta,
 } from '../model/helpers.js';
-import { detectMerges, SNAP_EPSILON_DEG, type MergeCandidate } from './merge-detection.js';
+import {
+    detectMerges,
+    pieceCenterLocal,
+    SNAP_EPSILON_DEG,
+    type MergeCandidate,
+} from './merge-detection.js';
 import { shouldSuppressMerge } from './pile-detection.js';
 import { rotateGroup } from './rotate-group.js';
 
@@ -30,17 +35,20 @@ export function mergeGroups(
     movedGroup: PieceGroup,
     targetGroup: PieceGroup,
     snapDelta: Point,
+    movedPiece: Piece,
 ): PieceGroup {
-    // Snap the moved group's rotation to the target's first. The pivot is
-    // the moved group's bbox center (rotateGroup's invariant) — the
-    // snapDelta returned by merge-detection was computed assuming this
-    // snap would happen first.
+    // Snap the moved group's rotation to the target's first, pivoting on
+    // the mated piece's center — the same pivot measureEdgeAlignment
+    // simulated, so the snapDelta below lands the group exactly.
     //
     // For quarter-turn merges the delta is always 0, so this is a no-op
     // and behavior is unchanged for classic/composable rotation modes.
     const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
     if (Math.abs(rotDelta) > SNAP_EPSILON_DEG) {
-        rotateGroup(movedGroup, state.piecesById, rotDelta);
+        rotateGroup(
+            movedGroup, state.piecesById, rotDelta,
+            pieceCenterLocal(movedGroup, movedPiece),
+        );
     }
 
     // Then snap position into perfect alignment. Both groups now share the
@@ -119,7 +127,7 @@ export function processDrop(
         // Merge one at a time — merging changes the group structure.
         const best = selectBestCandidate(candidates);
 
-        mergeGroups(state, best.movedGroup, best.targetGroup, best.snapDelta);
+        mergeGroups(state, best.movedGroup, best.targetGroup, best.snapDelta, best.movedPiece);
         removeGroup(state, best.movedGroup.id);
         totalMerges++;
 
