@@ -29,7 +29,7 @@
  * keeps running whatever bundle they precached until they accept an update,
  * so one deployed Worker serves every client generation that ever shipped.
  * Renaming or removing a route 404s those clients — they degrade to the
- * bundled image, but silently. Add the new route, wait, then remove the old.
+ * bundled image. Add the new route, wait, then remove the old.
  */
 
 /**

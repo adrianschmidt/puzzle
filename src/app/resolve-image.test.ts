@@ -54,7 +54,7 @@ describe('resolveUnsplashImage', () => {
         expect(umamiTrack).not.toHaveBeenCalled();
     });
 
-    it('returns null and reports nothing when no image is found (4xx/5xx)', async () => {
+    it('returns null and reports nothing itself when no image is found (4xx/5xx is tracked one layer down)', async () => {
         vi.mocked(fetchRandomImage).mockResolvedValue(undefined);
 
         const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'landscape', vi.fn());

@@ -1,7 +1,8 @@
 /**
- * A no-usable-photo result is a handled, untracked outcome; only a thrown
- * fetch is reported as `image-fetch-failed`. Either way the caller falls
- * back to its default image.
+ * A no-usable-photo result is a handled outcome, reported one layer down
+ * as `image-fetch-http-error`; only a thrown fetch is reported here, as
+ * `image-fetch-failed`. Either way the caller falls back to its default
+ * image.
  */
 
 import { diagnostics } from '../diagnostics.js';
