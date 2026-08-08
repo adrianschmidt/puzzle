@@ -343,8 +343,9 @@ describe('createGameSession', () => {
             // cannot also decide this case: both groups are placed by bbox
             // center, 100px apart, which is exactly where the mated pair
             // aligns. `measureEdgeAlignment` measures after simulating the
-            // rotation snap, and that snap pivots about the bbox center —
-            // so the residual distance here is ~0 under any tolerance, and
+            // rotation snap, and that snap pivots about the piece center —
+            // the same point for these single-piece groups — so the residual
+            // distance here is ~0 under any tolerance, and
             // only `rotationToleranceDeg` can gate the merge.
             //
             // Placing group 11 by raw `position` instead would not isolate

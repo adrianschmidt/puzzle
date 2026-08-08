@@ -11,10 +11,9 @@
  *
  * One-way by construction: the group's own position is the ratchet's memory.
  * Rotating closer shrinks the cap (translation is applied and persists);
- * rotating away only loosens the cap, which never moves the group back. The
- * rotation gesture pivots on the group's bbox center and `distance` is
- * measured after simulating the rotation snap, so `distance` is invariant to
- * the player's rotation — it responds only to the translation applied here.
+ * rotating away only loosens the cap, which never moves the group back.
+ * Corrections only ever shrink the measured distance toward the cap, and
+ * at θ = 0 the cap is 0, so the full merge correction lands there.
  *
  * Not an assist: the merge condition is unchanged — a qualifying group would
  * snap on drop regardless. This only surfaces the earned snap early.
@@ -58,7 +57,6 @@ export function computeSnapProximityPosition(
         const m = measureEdgeAlignment(
             candidate.piece, candidate.edge, group,
             candidate.matePiece, candidate.mateEdge, candidate.mateGroup,
-            state.piecesById, ctx.centerLocal,
         );
         if (Math.abs(m.rotationDelta) > ctx.rotationToleranceDeg) continue;
         if (m.distance > ctx.tolerancePx) continue;

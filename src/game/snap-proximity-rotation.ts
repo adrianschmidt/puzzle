@@ -11,10 +11,7 @@
  * reaches zero once within `ROTATION_COMPLETE_AT_FRACTION` of the snap
  * distance. Moving closer tightens the cap (rotation is applied and
  * persists); moving away only loosens it, which never rotates the group
- * back. Pivot-preserving rotation (`rotateGroup`) keeps the group's bbox
- * center fixed, so the measured distance is invariant under the rotation
- * this module applies — the ramp is driven purely by how close the player
- * drags the group.
+ * back.
  *
  * Not an assist: the merge condition is unchanged — a qualifying group
  * would snap on drop regardless. This only surfaces the earned snap early.
@@ -71,7 +68,6 @@ export function computeSnapProximityRotation(
         const m = measureEdgeAlignment(
             candidate.piece, candidate.edge, group,
             candidate.matePiece, candidate.mateEdge, candidate.mateGroup,
-            state.piecesById, ctx.centerLocal,
         );
         if (Math.abs(m.rotationDelta) > ctx.rotationToleranceDeg) continue;
         if (m.distance > ctx.tolerancePx) continue;
