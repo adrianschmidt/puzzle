@@ -200,6 +200,53 @@ export function getGroupImageCenter(
 }
 
 /**
+ * Center of one piece's tab-inclusive footprint in the group's un-rotated
+ * local space — the rotation-snap pivot shared by merge measurement, merge
+ * application, and the snap assists, which must agree on it or the measured
+ * snapDelta lands the group elsewhere.
+ *
+ * Sampled from edge path geometry (like `getGroupLocalBounds`) rather than
+ * `piece.bounds`: legacy-Classic edges carry no `curvePoints`, so their
+ * `bounds` exclude tab protrusions and the two centers diverge. Matching
+ * the group-bounds definition keeps a single-piece group's pivot identical
+ * to its pre-#530 group-center pivot. Throws if the piece is not in the
+ * group.
+ */
+export function pieceCenterLocal(group: PieceGroup, piece: Piece): Point {
+    const offset = group.pieces.get(piece.id);
+    if (!offset) throw new Error(`Piece ${piece.id} not in group ${group.id}`);
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    const expand = (x: number, y: number) => {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+    };
+    for (const edge of piece.edges) {
+        expand(edge.start.x, edge.start.y);
+        expand(edge.end.x, edge.end.y);
+        if (edge.path) {
+            const pb = cachedEdgePathBounds(edge);
+            expand(pb.minX, pb.minY);
+            expand(pb.maxX, pb.maxY);
+        }
+    }
+
+    if (!isFinite(minX)) {
+        return { x: offset.x, y: offset.y };
+    }
+
+    return {
+        x: offset.x + (minX + maxX) / 2,
+        y: offset.y + (minY + maxY) / 2,
+    };
+}
+
+/**
  * Compute the bounding box of a group as it actually renders, accounting
  * for `group.rotation`. Returned coordinates are offsets from the group's
  * `position` (pre-translation) in rotated local space, so

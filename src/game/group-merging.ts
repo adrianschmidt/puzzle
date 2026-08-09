@@ -9,10 +9,10 @@ import {
 } from '../model/helpers.js';
 import {
     detectMerges,
-    pieceCenterLocal,
     SNAP_EPSILON_DEG,
     type MergeCandidate,
 } from './merge-detection.js';
+import { pieceCenterLocal } from './group-bounds.js';
 import { shouldSuppressMerge } from './pile-detection.js';
 import { rotateGroup } from './rotate-group.js';
 
