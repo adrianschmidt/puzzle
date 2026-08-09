@@ -10,10 +10,9 @@
  * full merge correction is applied.
  *
  * One-way by construction: the group's own position is the ratchet's memory.
- * Rotating closer shrinks the cap (translation is applied and persists);
- * rotating away only loosens the cap, which never moves the group back.
- * Corrections only ever shrink the measured distance toward the cap, and
- * at θ = 0 the cap is 0, so the full merge correction lands there.
+ * Corrections only ever shrink the measured distance toward the cap — never
+ * move the group away from the mate — and at θ = 0 the cap is 0, so the
+ * full merge correction lands there.
  *
  * Not an assist: the merge condition is unchanged — a qualifying group would
  * snap on drop regardless. This only surfaces the earned snap early.

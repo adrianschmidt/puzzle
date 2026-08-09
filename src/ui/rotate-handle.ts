@@ -15,18 +15,23 @@ export interface RotateHandleOptions {
     onRotate: (groupId: number, deltaDegrees: number) => void;
     /** Emitted on drag end, after the final `onRotate`; the host runs merge-detection here. */
     onCommit: (groupId: number) => void;
-    /** Emitted at the start of a rotation drag (pointerdown), before the first onRotate. */
-    onRotateStart?: (groupId: number) => void;
-    /** Emitted when a drag ends — on commit AND on cancel — after any final onRotate/onCommit. */
-    onRotateEnd?: (groupId: number) => void;
+    /** Emitted at the start of a rotation drag (pointerdown), before the
+     * first onRotate. Returns the world-space rotation pivot for this drag,
+     * or null to decline it — no drag starts and no onRotateEnd follows.
+     * Fires exactly once per drag by construction, so hosts may latch
+     * per-gesture state here. */
+    onRotateStart: (groupId: number) => { x: number; y: number } | null;
+    /** Emitted when a drag ends — on commit AND on cancel — after any final
+     * onRotate/onCommit. Required because onRotateStart invites per-gesture
+     * latching: acquire without a guaranteed release would leak the latch
+     * into the next drag. */
+    onRotateEnd: (groupId: number) => void;
     getFocusedGroupScreenBounds: (groupId: number) =>
         | { left: number; right: number; top: number; bottom: number }
         | null;
     getViewportSize?: () => { width: number; height: number };
     /** Current rotation of the focused group, in degrees. */
     getGroupRotation: (groupId: number) => number | null;
-    /** World position of the focused group's bbox center. */
-    getGroupPivotWorld: (groupId: number) => { x: number; y: number } | null;
     screenToWorld: (clientX: number, clientY: number) => { x: number; y: number };
 }
 
@@ -133,7 +138,7 @@ export function createRotateHandle(
                 options.onCommit(groupIdRef);
             }
             if (groupIdRef !== undefined) {
-                options.onRotateEnd?.(groupIdRef);
+                options.onRotateEnd(groupIdRef);
             }
             startIdleTimer();
         }
@@ -144,9 +149,12 @@ export function createRotateHandle(
 
         button.addEventListener('pointerdown', (event) => {
             if (drag !== null) return;
-            const pivot = options.getGroupPivotWorld(groupId);
             const initialRotation = options.getGroupRotation(groupId);
-            if (!pivot || initialRotation === null) return;
+            if (initialRotation === null) return;
+            // The rotation guard runs first so a declined drag never leaves
+            // the host with an opened gesture it must unwind.
+            const pivot = options.onRotateStart(groupId);
+            if (!pivot) return;
 
             const Q0 = options.screenToWorld(event.clientX, event.clientY);
             const initialAngleRad = Math.atan2(Q0.y - pivot.y, Q0.x - pivot.x);
@@ -167,8 +175,6 @@ export function createRotateHandle(
                 pointerId: event.pointerId,
                 extraPointerListener,
             };
-
-            options.onRotateStart?.(groupId);
 
             if (active && active.state !== 'visible') rescueActive();
             clearIdleTimer();

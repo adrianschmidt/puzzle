@@ -15,7 +15,10 @@ import {
     makeMatedPiecePair,
     makePiece,
     makeRectPiece,
+    makeTwoMatedEndsRow,
 } from '../test-helpers/fixtures.js';
+import { getGroup, getWorldPosition, localToWorld } from '../model/helpers.js';
+import { getGroupLocalBounds } from '../game/index.js';
 import {
     createRotateButtons,
     createRotateHandle,
@@ -93,6 +96,15 @@ function makeStateWithGroup(): GameState {
     const pieces = [makeRectPiece({ id: 0, width: 100, height: 100 })];
     const groups: PieceGroup[] = [makeCenteredGroup(9, 0, { x: 100, y: 100 })];
     return makeGameState({ pieces, groups });
+}
+
+function groupBoundsCenterWorld(state: GameState, groupId: number): { x: number; y: number } {
+    const group = getGroup(state, groupId);
+    const bounds = getGroupLocalBounds(group, state.piecesById);
+    return localToWorld(
+        { x: bounds.minX + bounds.width / 2, y: bounds.minY + bounds.height / 2 },
+        group,
+    );
 }
 
 /**
@@ -326,27 +338,30 @@ describe('createRotationUi', () => {
 
         it('opens a snap-proximity gesture for the group being rotated', () => {
             make();
-            // Optional on `RotateHandleOptions`, but the rotation UI always
-            // supplies it — asserting that before calling keeps a silently
-            // dropped dependency from passing as "did not throw".
-            const onRotateStart = handleOptions().onRotateStart;
-            expect(onRotateStart).toBeDefined();
 
-            onRotateStart!(9);
+            handleOptions().onRotateStart(9);
 
             expect(snapStart).toHaveBeenCalledWith(9);
         });
 
-        it('tolerates a rotate start with no game, without opening a gesture', () => {
+        it('declines a rotate start with no game, without opening a gesture', () => {
             // `SnapProximityPositionController.start` already tolerates an
-            // undefined state on its own, so "did not throw" alone would pass
-            // just as well with `rotation-ui`'s own `if (!getState()) return`
-            // deleted. Asserting the controller is never entered is what
-            // actually pins that guard.
+            // undefined state on its own, so "returned null" alone would pass
+            // just as well with `rotation-ui`'s own state guard deleted.
+            // Asserting the controller is never entered is what actually pins
+            // that guard.
             make();
             state = undefined;
 
-            expect(() => handleOptions().onRotateStart!(9)).not.toThrow();
+            expect(handleOptions().onRotateStart(9)).toBeNull();
+
+            expect(snapStart).not.toHaveBeenCalled();
+        });
+
+        it('declines a rotate start for a group that is gone', () => {
+            make();
+
+            expect(handleOptions().onRotateStart(4242)).toBeNull();
 
             expect(snapStart).not.toHaveBeenCalled();
         });
@@ -355,10 +370,8 @@ describe('createRotationUi', () => {
             // Unconditional — the gesture has to be released on a canceled
             // drag too, or the stale context follows the next one.
             make();
-            const onRotateEnd = handleOptions().onRotateEnd;
-            expect(onRotateEnd).toBeDefined();
 
-            onRotateEnd!(9);
+            handleOptions().onRotateEnd(9);
 
             expect(snapStop).toHaveBeenCalledTimes(1);
         });
@@ -372,7 +385,7 @@ describe('createRotationUi', () => {
         });
     });
 
-    describe('getGroupPivotWorld', () => {
+    describe('drag pivot (onRotateStart return value)', () => {
         it('pivots about the tab-inclusive bounds center, in world space', () => {
             // The pivot the drag handle rotates the group around. Two things
             // are pinned by the exact number: that the bounds include tab
@@ -391,18 +404,84 @@ describe('createRotationUi', () => {
             state = makeGameState({ pieces, groups });
             make();
 
-            expect(handleOptions().getGroupPivotWorld(9)).toEqual({ x: 165, y: 350 });
+            expect(handleOptions().onRotateStart(9)).toEqual({ x: 165, y: 350 });
+        });
+    });
+
+    describe('manual rotation pivot latch', () => {
+        // makeTwoMatedEndsRow(1): group 11 is a five-piece row at 8° whose
+        // piece 1 (world center (150, 50)) sits 7.2 px from its mate —
+        // within the active tolerance — and piece 5 sits 10.8 px from its
+        // own. The row's bbox center is 200 px from piece 1's center, so a
+        // bbox-center pivot sweeps piece 1 far and every assertion below
+        // discriminates the two pivots.
+        it('onRotateStart returns the nearest mated piece center when in range', () => {
+            state = makeTwoMatedEndsRow(1).state;
+            make();
+
+            const pivot = handleOptions().onRotateStart(11);
+            expect(pivot!.x).toBeCloseTo(150);
+            expect(pivot!.y).toBeCloseTo(50);
         });
 
-        it('returns null for a group that is gone', () => {
+        it('free rotation pivots on the piece latched at drag start', () => {
+            state = makeTwoMatedEndsRow(1).state;
             make();
-            expect(handleOptions().getGroupPivotWorld(4242)).toBeNull();
+
+            handleOptions().onRotateStart(11); // pointerdown latches
+            handleOptions().onRotate(11, 30);
+
+            const center = getWorldPosition({ x: 50, y: 50 }, 1, getGroup(state!, 11));
+            expect(center.x).toBeCloseTo(150);
+            expect(center.y).toBeCloseTo(50);
         });
 
-        it('returns null when there is no game at all', () => {
+        it('never applies the latch to a group it was not computed for', () => {
+            // The real handle only rotates the group it started on; this
+            // guard is what keeps a future lifecycle change from rotating
+            // some other group about a pivot computed in the wrong frame.
+            state = makeTwoMatedEndsRow(5).state;
             make();
-            state = undefined;
-            expect(handleOptions().getGroupPivotWorld(9)).toBeNull();
+
+            handleOptions().onRotateStart(11); // latches piece 5's center (450, 50)
+
+            const before = groupBoundsCenterWorld(state!, 10);
+            handleOptions().onRotate(10, 30);
+            const after = groupBoundsCenterWorld(state!, 10);
+
+            expect(after.x).toBeCloseTo(before.x);
+            expect(after.y).toBeCloseTo(before.y);
+        });
+
+        it('releases the latch when the drag ends', () => {
+            state = makeTwoMatedEndsRow(1).state;
+            make();
+
+            handleOptions().onRotateStart(11);
+            handleOptions().onRotateEnd(11);
+
+            // Group-center pivot: the bounds center holds still under the
+            // rotation. Any still-latched piece pivot would sweep it — this
+            // names the expected pivot rather than just excluding piece 1's.
+            const before = groupBoundsCenterWorld(state!, 11);
+            handleOptions().onRotate(11, 30);
+            const after = groupBoundsCenterWorld(state!, 11);
+
+            expect(after.x).toBeCloseTo(before.x);
+            expect(after.y).toBeCloseTo(before.y);
+        });
+
+        it('quarter-turn taps always pivot on the group center, even near a mate', () => {
+            state = makeTwoMatedEndsRow(1).state;
+            make();
+
+            // Quarter-turn rotation is deliberately outside the latch.
+            const before = groupBoundsCenterWorld(state!, 11);
+            buttonsOptions().onRotate(11, 'cw');
+            const after = groupBoundsCenterWorld(state!, 11);
+
+            expect(after.x).toBeCloseTo(before.x);
+            expect(after.y).toBeCloseTo(before.y);
         });
     });
 

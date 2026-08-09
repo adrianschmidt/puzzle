@@ -20,7 +20,7 @@ describe('rotate-handle gesture', () => {
         rotationFocus = new RotationFocus();
         onRotate = vi.fn();
         onCommit = vi.fn();
-        onRotateStart = vi.fn();
+        onRotateStart = vi.fn(() => ({ x: 150, y: 150 }));
         onRotateEnd = vi.fn();
 
         // jsdom does not implement pointer capture — stub the methods on the
@@ -46,12 +46,11 @@ describe('rotate-handle gesture', () => {
             rotationFocus,
             onRotate: onRotate as (groupId: number, deltaDegrees: number) => void,
             onCommit: onCommit as (groupId: number) => void,
-            onRotateStart: onRotateStart as (groupId: number) => void,
+            onRotateStart: onRotateStart as (groupId: number) => { x: number; y: number } | null,
             onRotateEnd: onRotateEnd as (groupId: number) => void,
             getFocusedGroupScreenBounds: () => ({ left: 100, right: 200, top: 100, bottom: 200 }),
             getViewportSize: () => ({ width: 800, height: 600 }),
             getGroupRotation: () => 0,
-            getGroupPivotWorld: () => ({ x: 150, y: 150 }),
             screenToWorld: (cx, cy) => ({ x: cx, y: cy }), // identity for tests
             ...opts,
         });
@@ -192,6 +191,40 @@ describe('rotate-handle gesture', () => {
         dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
 
         expect(onRotateStart).toHaveBeenCalledWith(0);
+
+        handle.destroy();
+    });
+
+    it('never opens the gesture when the group rotation is unavailable', () => {
+        // Guard order in pointerdown is load-bearing: the rotation check must
+        // run before onRotateStart, or a declined drag leaves the host with
+        // an opened gesture (snap context, pivot latch) it never unwinds.
+        const handle = makeHandle({ getGroupRotation: () => null });
+        handle.show();
+        rotationFocus.setFocus(0);
+
+        const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
+        dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
+
+        expect(onRotateStart).not.toHaveBeenCalled();
+
+        handle.destroy();
+    });
+
+    it('declines the drag when onRotateStart returns null — no onRotate/onCommit/onRotateEnd', () => {
+        onRotateStart.mockReturnValue(null);
+        const handle = makeHandle();
+        handle.show();
+        rotationFocus.setFocus(0);
+
+        const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
+        dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
+        dispatchPointerEvent(button, 'pointermove', { clientX: 150, clientY: 250 });
+        dispatchPointerEvent(button, 'pointerup', { clientX: 150, clientY: 250 });
+
+        expect(onRotate).not.toHaveBeenCalled();
+        expect(onCommit).not.toHaveBeenCalled();
+        expect(onRotateEnd).not.toHaveBeenCalled();
 
         handle.destroy();
     });
