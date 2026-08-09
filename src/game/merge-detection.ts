@@ -13,6 +13,7 @@ import {
     signedAngularDelta,
     tryGetGroup,
 } from '../model/helpers.js';
+import { pieceCenterLocal } from './group-bounds.js';
 
 /** Tolerance in pixels for edge alignment. */
 export const MERGE_TOLERANCE_PX = 18;
@@ -46,19 +47,9 @@ export interface MergeCandidate {
     snapDelta: Point;
 }
 
-export function pieceCenterLocal(group: PieceGroup, piece: Piece): Point {
-    const offset = group.pieces.get(piece.id);
-    if (!offset) throw new Error(`Piece ${piece.id} not in group ${group.id}`);
-    return {
-        x: offset.x + (piece.bounds.minX + piece.bounds.maxX) / 2,
-        y: offset.y + (piece.bounds.minY + piece.bounds.maxY) / 2,
-    };
-}
-
 /**
- * Per-snap, per-group cached quantities for `getWorldPositionAfterRotationSnap`.
- * Independent of which point on which piece we're projecting, so we build
- * it once per `checkEdgeAlignment` call and reuse it for both endpoints.
+ * Per-candidate cached quantities for `getWorldPositionAfterRotationSnap`,
+ * built once per measurement and reused for both endpoints.
  *
  * `null` means the rotation delta is below `SNAP_EPSILON_DEG` and callers
  * can take the no-snap fast path.

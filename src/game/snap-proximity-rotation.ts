@@ -31,10 +31,10 @@ import { tryGetGroup } from '../model/helpers.js';
 import type { GroupBorderEdge } from '../model/helpers.js';
 import {
     measureEdgeAlignment,
-    pieceCenterLocal,
     SNAP_EPSILON_DEG,
     type EdgeAlignmentMeasurement,
 } from './merge-detection.js';
+import { pieceCenterLocal } from './group-bounds.js';
 
 import {
     buildProximityContext,

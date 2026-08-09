@@ -6,8 +6,11 @@ import {
     getGroupLocalBounds,
     getGroupVisualBounds,
     getGroupImageCenter,
+    pieceCenterLocal,
 } from './group-bounds.js';
 import { buildPiecesById, makePiece, makeRectPiece } from '../test-helpers/fixtures.js';
+import { generateProceduralPuzzle } from '../puzzle/procedural-generator.js';
+import { sealPieceGeometry } from '../model/seal-geometry.js';
 
 function makeGroup(id: number, x: number, y: number): PieceGroup {
     return { id, pieces: new Map([[id, { x: 0, y: 0 }]]), position: { x, y }, rotation: 0 };
@@ -351,5 +354,65 @@ describe('getGroupVisualBounds', () => {
 
         expect(bounds.width).toBeCloseTo(100);
         expect(bounds.height).toBeCloseTo(40);
+    });
+});
+
+describe('pieceCenterLocal', () => {
+    it('matches the tab-inclusive single-piece group center on legacy-Classic geometry', () => {
+        // Legacy-Classic edges carry no curvePoints, so piece.bounds is
+        // tab-exclusive there — the one generator family where an
+        // endpoint-derived pivot diverges from the group-bounds center.
+        const pieces = sealPieceGeometry(
+            generateProceduralPuzzle(6, 4, { width: 600, height: 400 }, 12345),
+        );
+        const piecesById = buildPiecesById(pieces);
+
+        // Collected rather than asserted per piece so a failure names the
+        // divergent pieces: one piece is a sliver edge case, all 24 means
+        // the pivot definition itself moved.
+        const divergent: { pieceId: number; dx: number; dy: number }[] = [];
+        let maxEndpointOnlyGap = 0;
+        for (const piece of pieces) {
+            const group: PieceGroup = {
+                id: piece.id,
+                pieces: new Map([[piece.id, { x: 0, y: 0 }]]),
+                position: { x: 0, y: 0 },
+                rotation: 0,
+            };
+            const b = getGroupLocalBounds(group, piecesById);
+            const center = pieceCenterLocal(group, piece);
+            const dx = center.x - (b.minX + b.width / 2);
+            const dy = center.y - (b.minY + b.height / 2);
+            if (Math.abs(dx) >= 5e-7 || Math.abs(dy) >= 5e-7) {
+                divergent.push({ pieceId: piece.id, dx, dy });
+            }
+
+            const endpointOnly = {
+                x: (piece.bounds.minX + piece.bounds.maxX) / 2,
+                y: (piece.bounds.minY + piece.bounds.maxY) / 2,
+            };
+            maxEndpointOnlyGap = Math.max(
+                maxEndpointOnlyGap,
+                Math.hypot(center.x - endpointOnly.x, center.y - endpointOnly.y),
+            );
+        }
+        expect(divergent).toEqual([]);
+        // The fixture must actually discriminate: at least one piece's tabs
+        // have to be invisible to piece.bounds for this test to pin anything.
+        expect(maxEndpointOnlyGap).toBeGreaterThan(1);
+    });
+
+    it('throws for a piece that is not in the group', () => {
+        const piece = makeRectPiece({ id: 3 });
+        const group = makeGroup(1, 0, 0);
+
+        expect(() => pieceCenterLocal(group, piece)).toThrow(/not in group/);
+    });
+
+    it('falls back to the piece offset for a zero-edge piece (the group-bounds siblings fall back to the origin)', () => {
+        const piece = makePiece({ id: 1 });
+        const group = makeMultiGroup(1, { x: 0, y: 0 }, [[1, { x: 30, y: 40 }]]);
+
+        expect(pieceCenterLocal(group, piece)).toEqual({ x: 30, y: 40 });
     });
 });

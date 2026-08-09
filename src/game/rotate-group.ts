@@ -15,10 +15,9 @@ import { getGroupLocalBounds } from './group-bounds.js';
  * keeping `pivotLocal` fixed in world space.
  *
  * `pivotLocal` must be in un-rotated group-local space. Callers pass one to
- * choose which point stays anchored — the mated piece's center for a merge
- * snap, or a cached bbox center matching the group's current composition to
- * skip the O(pieces) bounds traversal during a drag. Omitted, it defaults to
- * the group's bbox center computed from `piecesById`.
+ * choose which point stays anchored — e.g. the mated piece's center for a
+ * merge snap. Omitted, it defaults to the group's bbox center computed from
+ * `piecesById`.
  *
  * Mutates `group.rotation` and `group.position`. Returns the same group.
  */

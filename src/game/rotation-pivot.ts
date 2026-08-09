@@ -16,7 +16,8 @@
 
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
 import { getBorderEdges } from '../model/helpers.js';
-import { measureEdgeAlignment, pieceCenterLocal } from './merge-detection.js';
+import { measureEdgeAlignment } from './merge-detection.js';
+import { pieceCenterLocal } from './group-bounds.js';
 
 export function pickManualRotationPivot(
     state: GameState,
