@@ -7,8 +7,15 @@
  */
 
 import type { Edge, GameState, Piece, PieceBounds, PieceGroup, Point } from '../model/types.js';
-import { buildGroupIndexes, buildPiecesById, rotatePoint } from '../model/helpers.js';
+import {
+    buildGroupIndexes,
+    buildPiecesById,
+    getPiece,
+    getWorldPosition,
+    rotatePoint,
+} from '../model/helpers.js';
 import { computePieceBounds } from '../model/derive.js';
+import { ROTATION_COMPLETE_AT_FRACTION } from '../game/snap-proximity-rotation.js';
 
 /**
  * Re-export `buildPiecesById` for tests that call helpers expecting the
@@ -260,4 +267,55 @@ export function makeSavedGameState(): GameState {
         { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 },
     ];
     return makeGameState({ pieces, groups, imageUrl: 'test-image.jpg' });
+}
+
+/**
+ * The wide row extended with a second mate at the far end: piece 1 (local
+ * center (50, 50)) mates group 10, piece 5 (local center (450, 50)) mates
+ * group 12. Built against the merge-default tolerances (18 px / 10°): at
+ * 8° both candidates qualify, at ramp fractions 0.25 and 0.5 — anchored to
+ * `ROTATION_COMPLETE_AT_FRACTION` so the caps at those fractions survive a
+ * retune (7.2 px and 10.8 px at the current fraction). Each target starts
+ * flush and is shifted away from the row along x, which the piece-anchored
+ * measurement reports directly as that candidate's distance; a +x shift of
+ * the row moves it away from group 10 and toward group 12, so the two
+ * distances trade places.
+ *
+ * `closest` picks which piece carries the closer candidate. Run both
+ * arrangements when the subject picks between candidates: `getBorderEdges`
+ * always visits piece 1's candidate before piece 5's, so only running both
+ * separates closest-wins from iteration-order accidents.
+ */
+export function makeTwoMatedEndsRow(closest: 1 | 5): { state: GameState } {
+    const { state: base, movedGroup, targetGroup } = makeWideRowScenario(8);
+    const piece5 = getPiece(base, 5);
+    piece5.edges[1] = { ...piece5.edges[1], matePieceId: 6, mateEdgeId: 63 };
+    const piece6 = makePiece({ id: 6, edges: [
+        { id: 60, matePieceId: -1, mateEdgeId: -1, path: '', start: { x: 0, y: 0 }, end: { x: 100, y: 0 } },
+        { id: 61, matePieceId: -1, mateEdgeId: -1, path: '', start: { x: 100, y: 0 }, end: { x: 100, y: 100 } },
+        { id: 62, matePieceId: -1, mateEdgeId: -1, path: '', start: { x: 100, y: 100 }, end: { x: 0, y: 100 } },
+        { id: 63, matePieceId: 5, mateEdgeId: 51, path: '', start: { x: 0, y: 100 }, end: { x: 0, y: 0 } },
+    ] });
+
+    const rampDistance = (fraction: number): number =>
+        18 * (ROTATION_COMPLETE_AT_FRACTION + fraction * (1 - ROTATION_COMPLETE_AT_FRACTION));
+    const [d1, d5] = closest === 1
+        ? [rampDistance(0.25), rampDistance(0.5)]
+        : [rampDistance(0.5), rampDistance(0.25)];
+    const center5 = getWorldPosition({ x: 50, y: 50 }, 5, movedGroup);
+    const state = makeGameState({
+        pieces: [...base.pieces, piece6],
+        groups: [
+            { ...targetGroup, position: { x: -d1, y: 0 } },
+            movedGroup,
+            {
+                id: 12,
+                pieces: new Map([[6, { x: 0, y: 0 }]]),
+                position: { x: center5.x + 50 + d5, y: center5.y - 50 },
+                rotation: 0,
+            },
+        ],
+        rotationMode: 'free',
+    });
+    return { state };
 }

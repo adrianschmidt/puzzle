@@ -6,7 +6,7 @@
  * which pair is visible depends on the game's `rotationMode`.
  */
 
-import type { GameState } from '../model/types.js';
+import type { GameState, Point } from '../model/types.js';
 import type { MergeResult } from '../game/group-merging.js';
 import type { Renderer } from '../renderer/index.js';
 import type { ViewportTransform, RotationFocus } from '../interaction/index.js';
@@ -14,6 +14,7 @@ import type { SelectionManager } from '../interaction/selection-manager.js';
 import { createRotateButtons, createRotateHandle } from '../ui/index.js';
 import { SnapProximityPositionController } from '../interaction/snap-proximity-position-controller.js';
 import { rotateGroup } from '../game/rotate-group.js';
+import { pickManualRotationPivot } from '../game/rotation-pivot.js';
 import { getGroupLocalBounds, getGroupVisualBounds, processDrop } from '../game/index.js';
 import { localToWorld } from '../model/helpers.js';
 import { activeSnapTolerances } from './snap-tolerances.js';
@@ -107,19 +108,52 @@ export function createRotationUi(deps: {
         getTolerances: activeSnapTolerances,
     });
 
+    // Sticky pivot for the current handle drag: latched in onRotateStart —
+    // which fires exactly once per drag — and cleared on drag end. Never
+    // re-picked mid-gesture — that would move the pivot under the player's
+    // hand. Carries the group id so a latch can never be applied to a group
+    // it wasn't computed for.
+    let manualPivot: { groupId: number; pivotLocal: Point } | null = null;
+
     const rotateHandle = createRotateHandle({
         container,
         rotationFocus,
         onRotateStart: (groupId) => {
-            if (!getState()) return;
+            const state = getState();
+            if (!state) return null;
+            const group = state.groupsById.get(groupId);
+            if (!group) return null;
             snapPosition.start(groupId);
+            // A mate within snap distance pins the pivot to that piece for
+            // the whole drag (rotation-pivot.ts). Away from any mate,
+            // interactive rotation pivots about the tab-inclusive bounds
+            // center so the handle tracks the visible footprint of a
+            // mid-assembly group with exposed tabs/blanks. (The completion
+            // spin instead pivots about the corner-only image center via
+            // getGroupImageCenter — a deliberately different point, since a
+            // solved puzzle has a flat border.)
+            let pivotLocal = pickManualRotationPivot(
+                state, group, activeSnapTolerances(state).tolerancePx,
+            );
+            if (!pivotLocal) {
+                const bounds = getGroupLocalBounds(group, state.piecesById);
+                pivotLocal = {
+                    x: bounds.minX + bounds.width / 2,
+                    y: bounds.minY + bounds.height / 2,
+                };
+            }
+            manualPivot = { groupId, pivotLocal };
+            return localToWorld(pivotLocal, group);
         },
         onRotate: (groupId, deltaDegrees) => {
             const state = getState();
             if (!state) return;
             const group = state.groupsById.get(groupId);
             if (!group) return;
-            rotateGroup(group, state.piecesById, deltaDegrees);
+            rotateGroup(
+                group, state.piecesById, deltaDegrees,
+                manualPivot?.groupId === groupId ? manualPivot.pivotLocal : undefined,
+            );
             snapPosition.onGroupRotated();
             renderer.renderState(state);
             // Re-apply selection visuals after re-render (renderState may
@@ -142,27 +176,11 @@ export function createRotationUi(deps: {
             save(state);
         },
         onRotateEnd: () => {
+            manualPivot = null;
             snapPosition.stop();
         },
         getFocusedGroupScreenBounds,
         getGroupRotation: (groupId) => getState()?.groupsById.get(groupId)?.rotation ?? null,
-        getGroupPivotWorld: (groupId) => {
-            const state = getState();
-            if (!state) return null;
-            const group = state.groupsById.get(groupId);
-            if (!group) return null;
-            // Interactive rotation pivots about the tab-inclusive bounds center so
-            // the handle tracks the visible footprint of a mid-assembly group with
-            // exposed tabs/blanks. (The completion spin instead pivots about the
-            // corner-only image center via getGroupImageCenter — a deliberately
-            // different point, since a solved puzzle has a flat border.)
-            const bounds = getGroupLocalBounds(group, state.piecesById);
-            const centerLocal = {
-                x: bounds.minX + bounds.width / 2,
-                y: bounds.minY + bounds.height / 2,
-            };
-            return localToWorld(centerLocal, group);
-        },
         screenToWorld: (clientX, clientY) => viewportTransform.screenToWorld({ x: clientX, y: clientY }),
     });
 
