@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, PieceGroup, Point } from '../model/types.js';
-import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece } from '../test-helpers/fixtures.js';
+import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece, makeWideRowScenario } from '../test-helpers/fixtures.js';
 import { buildProximityContext, type ProximityContext } from './snap-proximity-context.js';
 import { computeSnapProximityPosition } from './snap-proximity-position.js';
 import { getGroup, moveGroup, rotatePoint } from '../model/helpers.js';
@@ -183,3 +183,28 @@ function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: Proxi
     if (!ctx) throw new Error('expected a proximity context');
     return { state, ctx };
 }
+
+describe('multi-piece groups (piece-anchored measurement)', () => {
+    it('slides a wide group toward its mate and stops at the cap', () => {
+        // makeWideRowScenario(2): the five-piece row flush at piece 1, 2° off,
+        // then shifted 10 px away from its mate: d = 10 under the
+        // merge-default tolerances, cap = 18·(2/10) = 3.6 → correction 6.4
+        // back along snapDelta. Pins that the assist engages for a group far
+        // wider than its mated piece — the case the piece-anchored pivot
+        // exists for.
+        const { state, movedGroup } = makeWideRowScenario(2);
+        movedGroup.position = { ...movedGroup.position, x: movedGroup.position.x + 10 };
+        const ctx = buildProximityContext(
+            state, 11, { tolerancePx: 18, rotationToleranceDeg: 10 },
+        );
+        expect(ctx).not.toBeNull();
+
+        const delta = computeSnapProximityPosition(state, ctx!);
+        expect(delta!.x).toBeCloseTo(-6.4);
+        expect(delta!.y).toBeCloseTo(0);
+
+        // Applying the correction is idempotent: d now sits at the cap.
+        moveGroup(getGroup(state, 11), delta!);
+        expect(computeSnapProximityPosition(state, ctx!)).toBeNull();
+    });
+});
