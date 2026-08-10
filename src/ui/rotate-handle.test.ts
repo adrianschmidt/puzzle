@@ -229,6 +229,26 @@ describe('rotate-handle gesture', () => {
         handle.destroy();
     });
 
+    it('calls onRotateEnd (no onCommit) when focus switches mid-drag', () => {
+        // This cancel path nulls the module-level active handle before the
+        // drag is cancelled; the drag must still end for the group it
+        // belonged to, or a host's per-gesture latch survives into the next
+        // drag.
+        const handle = makeHandle();
+        handle.show();
+        rotationFocus.setFocus(0);
+
+        const button = container.querySelector('.rotate-handle')! as HTMLButtonElement;
+        dispatchPointerEvent(button, 'pointerdown', { clientX: 250, clientY: 150 });
+
+        rotationFocus.setFocus(1);
+
+        expect(onRotateEnd).toHaveBeenCalledWith(0);
+        expect(onCommit).not.toHaveBeenCalled();
+
+        handle.destroy();
+    });
+
     it('calls onRotateEnd on pointerup (commit)', () => {
         const handle = makeHandle();
         handle.show();

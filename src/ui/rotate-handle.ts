@@ -132,14 +132,15 @@ export function createRotateHandle(
                 button.releasePointerCapture(drag.pointerId);
             }
             window.removeEventListener('pointerdown', drag.extraPointerListener, true);
-            const groupIdRef = active?.groupId;
             drag = null;
-            if (commit && groupIdRef !== undefined) {
-                options.onCommit(groupIdRef);
+            // The spawn closure's groupId, not `active?.groupId`: a focus
+            // change nulls `active` before cancelling the drag, and skipping
+            // onRotateEnd there would leak the host's per-gesture pivot
+            // latch into the next drag.
+            if (commit) {
+                options.onCommit(groupId);
             }
-            if (groupIdRef !== undefined) {
-                options.onRotateEnd(groupIdRef);
-            }
+            options.onRotateEnd(groupId);
             startIdleTimer();
         }
 
