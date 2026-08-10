@@ -1,4 +1,4 @@
-import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
+import type { GameState, PieceGroup, Point } from '../model/types.js';
 import {
     getGroup,
     moveGroup,
@@ -29,14 +29,19 @@ export interface MergeResult {
  * The target group is the "anchor" — its position stays fixed while the
  * moved group's pieces are absorbed into it. The moved group itself is
  * left intact — `processDrop` removes it via `removeGroup` afterwards.
+ *
+ * Takes the candidate rather than loose fields: `snapDelta` was measured
+ * under `movedPiece`'s pivot, and a mismatched pair would compile but land
+ * the group elsewhere.
  */
 export function mergeGroups(
     state: GameState,
-    movedGroup: PieceGroup,
-    targetGroup: PieceGroup,
-    snapDelta: Point,
-    movedPiece: Piece,
+    candidate: Pick<
+        MergeCandidate,
+        'movedGroup' | 'targetGroup' | 'movedPiece' | 'snapDelta'
+    >,
 ): PieceGroup {
+    const { movedGroup, targetGroup, movedPiece, snapDelta } = candidate;
     // Snap the moved group's rotation to the target's first, pivoting on
     // the mated piece's center — the same pivot measureEdgeAlignment
     // simulated, so the snapDelta below lands the group exactly.
@@ -127,7 +132,7 @@ export function processDrop(
         // Merge one at a time — merging changes the group structure.
         const best = selectBestCandidate(candidates);
 
-        mergeGroups(state, best.movedGroup, best.targetGroup, best.snapDelta, best.movedPiece);
+        mergeGroups(state, best);
         removeGroup(state, best.movedGroup.id);
         totalMerges++;
 
