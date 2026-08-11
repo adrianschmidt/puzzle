@@ -327,6 +327,23 @@ describe('sticky winner latch', () => {
         expect(result.deltaDeg).toBeCloseTo(-1.75);
     });
 
+    it('clears the latch when nothing qualifies, re-picking fresh on return', () => {
+        const { state, ctx } = makeTwoMatedEndsRowCtx(1);
+        expect(computeSnapProximityRotation(state, ctx)!.pivotLocal.x).toBeCloseTo(50);
+
+        const group = getGroup(state, 11);
+        // Straight down: both mates leave the snap zone at once (an x shift
+        // only trades one distance for the other, so it can't empty the zone).
+        group.position = { ...group.position, y: group.position.y + 30 };
+        expect(computeSnapProximityRotation(state, ctx)).toBeNull();
+
+        // Return with piece 5 closest (5.4 vs 12.6): a cleared latch
+        // re-picks it; a latch surviving the empty sweep would hand the win
+        // back to the still-qualifying piece 1.
+        group.position = { ...group.position, y: group.position.y - 30, x: group.position.x + 5.4 };
+        expect(computeSnapProximityRotation(state, ctx)!.pivotLocal.x).toBeCloseTo(450);
+    });
+
     it('declines a corrupt candidate (NaN distance) instead of latching it', () => {
         const { state, ctx } = makeTwoMatedEndsRowCtx(1);
         // An Infinity coordinate in a tab path makes piece 1's simulated-snap
