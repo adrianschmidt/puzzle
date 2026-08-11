@@ -28,17 +28,13 @@
 
 import type { GameState, Point } from '../model/types.js';
 import { tryGetGroup } from '../model/helpers.js';
-import type { GroupBorderEdge } from '../model/helpers.js';
-import {
-    measureEdgeAlignment,
-    SNAP_EPSILON_DEG,
-    type EdgeAlignmentMeasurement,
-} from './merge-detection.js';
+import { SNAP_EPSILON_DEG } from './merge-detection.js';
 import { pieceCenterLocal } from './group-bounds.js';
 
 import {
     buildProximityContext,
     clamp01,
+    selectStickyWinner,
     type ProximityContext,
     type SnapTolerances,
 } from './snap-proximity-context.js';
@@ -86,38 +82,9 @@ export function computeSnapProximityRotation(
     const group = tryGetGroup(state, ctx.groupId);
     if (!group) return null;
 
-    const measureQualifying = (
-        candidate: GroupBorderEdge,
-    ): EdgeAlignmentMeasurement | null => {
-        const m = measureEdgeAlignment(
-            candidate.piece, candidate.edge, group,
-            candidate.matePiece, candidate.mateEdge, candidate.mateGroup,
-        );
-        // A NaN distance from corrupt geometry passes both `>` gates below;
-        // it must decline here or it would latch and emit a NaN delta.
-        if (!Number.isFinite(m.distance)) return null;
-        if (Math.abs(m.rotationDelta) > ctx.rotationToleranceDeg) return null;
-        if (m.distance > ctx.tolerancePx) return null;
-        return m;
-    };
-
-    let chosenIndex = ctx.latchedCandidateIndex;
-    let chosen: EdgeAlignmentMeasurement | null = null;
-    if (chosenIndex !== null) {
-        chosen = measureQualifying(ctx.candidates[chosenIndex]);
-    }
-    if (chosen === null) {
-        chosenIndex = null;
-        for (let i = 0; i < ctx.candidates.length; i++) {
-            const m = measureQualifying(ctx.candidates[i]);
-            if (m !== null && (chosen === null || m.distance < chosen.distance)) {
-                chosen = m;
-                chosenIndex = i;
-            }
-        }
-    }
-    ctx.latchedCandidateIndex = chosenIndex;
-    if (chosen === null || chosenIndex === null) return null;
+    const winner = selectStickyWinner(group, ctx);
+    if (winner === null) return null;
+    const chosen = winner.measurement;
 
     const ramp =
         (chosen.distance / ctx.tolerancePx - ROTATION_COMPLETE_AT_FRACTION) /
@@ -128,6 +95,6 @@ export function computeSnapProximityRotation(
 
     return {
         deltaDeg: Math.sign(chosen.rotationDelta) * excess,
-        pivotLocal: pieceCenterLocal(group, ctx.candidates[chosenIndex].piece),
+        pivotLocal: pieceCenterLocal(group, winner.candidate.piece),
     };
 }

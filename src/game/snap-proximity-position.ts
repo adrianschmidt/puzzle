@@ -20,8 +20,11 @@
 
 import type { GameState, Point } from '../model/types.js';
 import { tryGetGroup } from '../model/helpers.js';
-import { measureEdgeAlignment } from './merge-detection.js';
-import { clamp01, type ProximityContext } from './snap-proximity-context.js';
+import {
+    clamp01,
+    selectStickyWinner,
+    type ProximityContext,
+} from './snap-proximity-context.js';
 
 /**
  * Float-comparison epsilon (world px) for "is this translation effectively
@@ -37,8 +40,11 @@ export const SNAP_EPSILON_PX = 1e-6;
  *
  * A candidate qualifies exactly when a drop would merge it: simulated-snap
  * distance `d ≤ tolerancePx` AND angular error `|θ| ≤ rotationToleranceDeg`.
- * Among qualifying candidates the smallest `d` wins. The correction reduces
- * `d` to a rotation-driven `cap` that equals `tolerancePx` at the
+ * The winner is sticky per gesture (`selectStickyWinner`): with each
+ * candidate measured about its own piece's pivot, a manual rotation shifts
+ * the non-pivot candidates' distances, so a per-call smallest-`d` pick
+ * could flip the slide target mid-rotate. The correction reduces the
+ * winner's `d` to a rotation-driven `cap` that equals `tolerancePx` at the
  * rotation-tolerance edge (no jump on entry) and reaches zero at θ = 0,
  * where the full `snapDelta` is applied.
  */
@@ -49,31 +55,17 @@ export function computeSnapProximityPosition(
     const group = tryGetGroup(state, ctx.groupId);
     if (!group) return null;
 
-    let bestDistance = Infinity;
-    let bestSnapDelta: Point = { x: 0, y: 0 };
-    let bestRotationDelta = 0;
-    for (const candidate of ctx.candidates) {
-        const m = measureEdgeAlignment(
-            candidate.piece, candidate.edge, group,
-            candidate.matePiece, candidate.mateEdge, candidate.mateGroup,
-        );
-        if (Math.abs(m.rotationDelta) > ctx.rotationToleranceDeg) continue;
-        if (m.distance > ctx.tolerancePx) continue;
-        if (m.distance < bestDistance) {
-            bestDistance = m.distance;
-            bestSnapDelta = m.snapDelta;
-            bestRotationDelta = m.rotationDelta;
-        }
-    }
-    if (!Number.isFinite(bestDistance)) return null;
+    const winner = selectStickyWinner(group, ctx);
+    if (winner === null) return null;
+    const { distance, rotationDelta, snapDelta } = winner.measurement;
 
     const cap = ctx.tolerancePx *
-        clamp01(Math.abs(bestRotationDelta) / ctx.rotationToleranceDeg);
-    const excess = bestDistance - cap;
+        clamp01(Math.abs(rotationDelta) / ctx.rotationToleranceDeg);
+    const excess = distance - cap;
     if (excess <= SNAP_EPSILON_PX) return null;
 
     // Move along snapDelta so the remaining measured distance is `cap`.
-    // excess > 0 here implies bestDistance > cap ≥ 0, so bestDistance > 0.
-    const factor = excess / bestDistance;
-    return { x: bestSnapDelta.x * factor, y: bestSnapDelta.y * factor };
+    // excess > 0 here implies distance > cap ≥ 0, so distance > 0.
+    const factor = excess / distance;
+    return { x: snapDelta.x * factor, y: snapDelta.y * factor };
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { GameState, PieceGroup, Point } from '../model/types.js';
-import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece, makeWideRowScenario } from '../test-helpers/fixtures.js';
+import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makePiece, makeTwoMatedEndsRow, makeWideRowScenario } from '../test-helpers/fixtures.js';
 import { buildProximityContext, type ProximityContext } from './snap-proximity-context.js';
 import { computeSnapProximityPosition } from './snap-proximity-position.js';
 import { getGroup, moveGroup, rotatePoint } from '../model/helpers.js';
@@ -206,5 +206,54 @@ describe('multi-piece groups (piece-anchored measurement)', () => {
         // Applying the correction is idempotent: d now sits at the cap.
         moveGroup(getGroup(state, 11), delta!);
         expect(computeSnapProximityPosition(state, ctx!)).toBeNull();
+    });
+});
+
+describe('sticky winner latch', () => {
+    // makeTwoMatedEndsRow(1) under the merge-default tolerances (18 px /
+    // 10°): d1 = 7.2 (piece 1), d5 = 10.8 (piece 5), rotation error 8° →
+    // cap = 18·(8/10) = 14.4. A +x shift grows d1 and shrinks d5 px for px.
+    function makeCtx(): { state: GameState; ctx: ProximityContext } {
+        const { state } = makeTwoMatedEndsRow(1);
+        const ctx = buildProximityContext(
+            state, 11, { tolerancePx: 18, rotationToleranceDeg: 10 },
+        );
+        if (!ctx) throw new Error('expected a proximity context');
+        return { state, ctx };
+    }
+
+    it('slides toward the latched mate, not a closer one that appears mid-gesture', () => {
+        const { state, ctx } = makeCtx();
+        // First evaluation latches piece 1 (closest); d 7.2 < cap → null.
+        expect(computeSnapProximityPosition(state, ctx)).toBeNull();
+
+        const group = getGroup(state, 11);
+        group.position = { ...group.position, x: group.position.x + 7.5 };
+
+        // d1 = 14.7 (excess 0.3), d5 = 3.3 — closer, but the latch holds and
+        // the slide keeps targeting piece 1's mate. A per-call smallest-d
+        // pick would choose piece 5, sit under the cap, and return null.
+        const delta = computeSnapProximityPosition(state, ctx)!;
+        expect(delta.x).toBeCloseTo(-0.3);
+        expect(delta.y).toBeCloseTo(0);
+    });
+
+    it('re-latches only when the latched mate stops qualifying', () => {
+        const { state, ctx } = makeCtx();
+        expect(computeSnapProximityPosition(state, ctx)).toBeNull(); // latches piece 1
+
+        const group = getGroup(state, 11);
+        group.position = { ...group.position, x: group.position.x + 12 };
+        // d1 = 19.2 > tolerance: piece 1 stops qualifying and the latch
+        // re-arms onto piece 5 (d 1.2, under the cap → null).
+        expect(computeSnapProximityPosition(state, ctx)).toBeNull();
+
+        group.position = { ...group.position, x: group.position.x - 16 };
+        // d1 = 3.2 is now closest, but the re-armed latch holds piece 5
+        // (d 14.8, excess 0.4): the slide targets piece 5's mate. A per-call
+        // smallest-d pick would choose piece 1 and return null.
+        const delta = computeSnapProximityPosition(state, ctx)!;
+        expect(delta.x).toBeCloseTo(0.4);
+        expect(delta.y).toBeCloseTo(0);
     });
 });
