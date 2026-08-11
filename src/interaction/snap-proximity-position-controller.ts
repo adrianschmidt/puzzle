@@ -56,12 +56,14 @@ export class SnapProximityPositionController {
 
     /**
      * Cheap no-op context (null) unless the game is in free-rotation mode
-     * and the group has cross-group mates.
+     * and the group has cross-group mates. `anchorPieceId` restricts the
+     * assist to the manual pivot's piece for the gesture — see
+     * `buildProximityContext`.
      */
-    start(groupId: number): void {
+    start(groupId: number, anchorPieceId?: number): void {
         const state = this.getState();
         this.ctx = state
-            ? buildProximityContext(state, groupId, this.getTolerances(state))
+            ? buildProximityContext(state, groupId, this.getTolerances(state), anchorPieceId)
             : null;
         this.gated = false;
     }

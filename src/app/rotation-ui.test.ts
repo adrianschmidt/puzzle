@@ -336,12 +336,28 @@ describe('createRotationUi', () => {
             expect(save).not.toHaveBeenCalled();
         });
 
-        it('opens a snap-proximity gesture for the group being rotated', () => {
+        it('does not open a snap-proximity gesture when no mate is in range', () => {
+            // Unanchored, the assist keeps every candidate live, and
+            // bbox-center rotation sweeps their piece-anchored distances —
+            // a far mate could latch mid-drag and translate a gesture the
+            // player meant as a pure rotation.
             make();
 
             handleOptions().onRotateStart(9);
 
-            expect(snapStart).toHaveBeenCalledWith(9);
+            expect(snapStart).not.toHaveBeenCalled();
+        });
+
+        it('anchors the snap-proximity gesture to the manual pivot piece', () => {
+            // The assist must target the same mate the rotation is anchored
+            // on — an unanchored assist could chase a different mate and
+            // slide the pivot piece out of merge range mid-rotate.
+            state = makeTwoMatedEndsRow(1).state;
+            make();
+
+            handleOptions().onRotateStart(11);
+
+            expect(snapStart).toHaveBeenCalledWith(11, 1);
         });
 
         it('declines a rotate start with no game, without opening a gesture', () => {

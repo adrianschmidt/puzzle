@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { GameState, Point } from '../model/types.js';
-import { makeCenteredGroup, makeGameState, makeMatedPiecePair } from '../test-helpers/fixtures.js';
-import { getGroup, rotatePoint } from '../model/helpers.js';
+import { makeCenteredGroup, makeGameState, makeMatedPiecePair, makeTwoMatedEndsRow } from '../test-helpers/fixtures.js';
+import { getBorderEdges, getGroup, rotatePoint } from '../model/helpers.js';
 import { rotateGroup } from '../game/rotate-group.js';
+import { detectMerges, measureEdgeAlignment } from '../game/merge-detection.js';
+import { pickManualRotationPivot } from '../game/rotation-pivot.js';
 import { SnapProximityPositionController } from './snap-proximity-position-controller.js';
 
 const D = 40;
@@ -160,5 +162,51 @@ describe('SnapProximityPositionController', () => {
         // Evaluates again: d still 10, cap 4 → excess 6 → move another −6.
         controller.onGroupRotated();
         expect(centerX() - startCenterX).toBeCloseTo(-16);
+    });
+
+    it('anchored to the manual pivot piece, seats that piece instead of chasing another mate', () => {
+        // Round-5 blocker repro. Piece 1's mate (group 10, at 0°) is
+        // closest — the manual pivot — while piece 5's mate (group 12,
+        // rotated to the row's own 8° and nudged) sits at θ = 0 where the
+        // cap is 0: the bait an unanchored assist latches and chases,
+        // sliding the anchored piece 1 out of merge range as the player
+        // rotates toward alignment.
+        const { state } = makeTwoMatedEndsRow(5);
+        const group12 = getGroup(state, 12);
+        group12.rotation = 8;
+        group12.position = { ...group12.position, y: group12.position.y - 4 };
+        const group = getGroup(state, 11);
+
+        const picked = pickManualRotationPivot(state, group, 18)!;
+        expect(picked.pieceId).toBe(1);
+
+        let pending: Array<() => void> = [];
+        const controller = new SnapProximityPositionController({
+            getState: () => state,
+            getTolerances: () => ({ tolerancePx: 18, rotationToleranceDeg: 10 }),
+            scheduleFrame: (cb) => { pending.push(cb); },
+        });
+
+        // Drive the drag the way rotation-ui does: rotate about the latched
+        // pivot, then let the assist evaluate, one frame per degree.
+        controller.start(11, picked.pieceId);
+        for (let step = 0; step < 8; step++) {
+            rotateGroup(group, state.piecesById, -1, picked.pivotLocal);
+            controller.onGroupRotated();
+            const cbs = pending;
+            pending = [];
+            for (const cb of cbs) cb();
+        }
+
+        // The anchored piece is fully seated (θ = 0 → cap 0 → d driven to
+        // 0) and the drop merges on its own mate.
+        expect(group.rotation).toBeCloseTo(0);
+        const anchored = getBorderEdges(group, state).find((c) => c.piece.id === 1)!;
+        const m = measureEdgeAlignment(
+            anchored.piece, anchored.edge, group,
+            anchored.matePiece, anchored.mateEdge, anchored.mateGroup,
+        );
+        expect(m.distance).toBeCloseTo(0);
+        expect(detectMerges(11, state, 18, 10).some((c) => c.movedPiece.id === 1)).toBe(true);
     });
 });

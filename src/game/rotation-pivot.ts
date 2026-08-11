@@ -19,11 +19,18 @@ import { getBorderEdges } from '../model/helpers.js';
 import { measureEdgeAlignment } from './merge-detection.js';
 import { pieceCenterLocal } from './group-bounds.js';
 
+export interface ManualRotationPivot {
+    /** The anchored piece (moved-group side) — also the position assist's anchor. */
+    pieceId: number;
+    /** The piece's center in un-rotated group-local space. */
+    pivotLocal: Point;
+}
+
 export function pickManualRotationPivot(
     state: GameState,
     group: PieceGroup,
     tolerancePx: number,
-): Point | null {
+): ManualRotationPivot | null {
     if (state.rotationMode !== 'free') return null;
     if (!Number.isFinite(tolerancePx) || tolerancePx <= 0) return null;
 
@@ -43,6 +50,6 @@ export function pickManualRotationPivot(
     if (bestPiece === null) return null;
     const pivotLocal = pieceCenterLocal(group, bestPiece);
     return Number.isFinite(pivotLocal.x) && Number.isFinite(pivotLocal.y)
-        ? pivotLocal
+        ? { pieceId: bestPiece.id, pivotLocal }
         : null;
 }
