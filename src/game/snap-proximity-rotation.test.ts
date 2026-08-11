@@ -91,6 +91,17 @@ describe('buildProximityContext', () => {
         expect(buildProximityContext(state(), 11, { ...TOL, rotationToleranceDeg: NaN })).toBeNull();
         expect(buildProximityContext(state(), 11, { ...TOL, rotationToleranceDeg: Infinity })).toBeNull();
     });
+
+    it('restricts candidates to the anchor piece when one is given', () => {
+        const { state } = makeTwoMatedEndsRow(1);
+
+        const anchored = buildProximityContext(state, 11, TOL, 5);
+        expect(anchored!.candidates).toHaveLength(1);
+        expect(anchored!.candidates[0].piece.id).toBe(5);
+
+        // An anchor with no border candidates leaves nothing to assist.
+        expect(buildProximityContext(state, 11, TOL, 3)).toBeNull();
+    });
 });
 
 /** Build the pair state + context in one go; throws if the context is unexpectedly null. */

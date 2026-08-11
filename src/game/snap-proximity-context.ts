@@ -107,11 +107,20 @@ export function selectStickyWinner(
  * degenerate tolerance. Non-finite tolerances (possible from corrupted
  * saved state upstream) are rejected here so `NaN`/`Infinity` can never
  * flow into the assist math and get persisted onto a group.
+ *
+ * `anchorPieceId` restricts the candidates to that moved-group piece. A
+ * manual rotation pivots on the anchored piece's center, which leaves that
+ * piece's candidates' measured distances invariant while every other
+ * candidate's shifts — so an unrestricted assist could latch a different
+ * mate mid-rotate and slide the anchored piece out of merge range. The
+ * rotate gesture passes its manual-pivot piece here so "which mate wins
+ * this gesture" has exactly one owner.
  */
 export function buildProximityContext(
     state: GameState,
     movedGroupId: number,
     tolerances: SnapTolerances,
+    anchorPieceId?: number,
 ): ProximityContext | null {
     const { tolerancePx, rotationToleranceDeg } = tolerances;
     if (state.rotationMode !== 'free') return null;
@@ -121,7 +130,10 @@ export function buildProximityContext(
     const group = tryGetGroup(state, movedGroupId);
     if (!group) return null;
 
-    const candidates = getBorderEdges(group, state);
+    let candidates = getBorderEdges(group, state);
+    if (anchorPieceId !== undefined) {
+        candidates = candidates.filter((c) => c.piece.id === anchorPieceId);
+    }
     if (candidates.length === 0) return null;
 
     return {

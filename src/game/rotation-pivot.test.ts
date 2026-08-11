@@ -14,8 +14,9 @@ describe('pickManualRotationPivot', () => {
         const pivot = pickManualRotationPivot(state, movedGroup, TOLERANCE_PX);
 
         expect(pivot).not.toBeNull();
-        expect(pivot!.x).toBeCloseTo(50);
-        expect(pivot!.y).toBeCloseTo(50);
+        expect(pivot!.pieceId).toBe(1);
+        expect(pivot!.pivotLocal.x).toBeCloseTo(50);
+        expect(pivot!.pivotLocal.y).toBeCloseTo(50);
     });
 
     it('returns null when no mate is within the snap distance', () => {
@@ -32,8 +33,9 @@ describe('pickManualRotationPivot', () => {
 
             const pivot = pickManualRotationPivot(state, getGroup(state, 11), TOLERANCE_PX);
 
-            expect(pivot!.x).toBeCloseTo(closest === 1 ? 50 : 450);
-            expect(pivot!.y).toBeCloseTo(50);
+            expect(pivot!.pieceId).toBe(closest);
+            expect(pivot!.pivotLocal.x).toBeCloseTo(closest === 1 ? 50 : 450);
+            expect(pivot!.pivotLocal.y).toBeCloseTo(50);
         },
     );
 

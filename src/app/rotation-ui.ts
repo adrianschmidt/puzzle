@@ -123,18 +123,25 @@ export function createRotationUi(deps: {
             if (!state) return null;
             const group = state.groupsById.get(groupId);
             if (!group) return null;
-            snapPosition.start(groupId);
             // A mate within snap distance pins the pivot to that piece for
-            // the whole drag (rotation-pivot.ts). Away from any mate,
-            // interactive rotation pivots about the tab-inclusive bounds
-            // center so the handle tracks the visible footprint of a
-            // mid-assembly group with exposed tabs/blanks. (The completion
-            // spin instead pivots about the corner-only image center via
-            // getGroupImageCenter — a deliberately different point, since a
-            // solved puzzle has a flat border.)
-            let pivotLocal = pickManualRotationPivot(
+            // the whole drag (rotation-pivot.ts), and the position assist is
+            // anchored to the same piece so the gesture has one winner —
+            // unanchored, the assist could latch a different mate and slide
+            // the anchored piece out of merge range. With no mate in range
+            // the assist stays off entirely: bbox-center rotation sweeps
+            // each candidate's piece-anchored distance, so a far mate could
+            // latch mid-drag and translate a gesture the player meant as a
+            // pure rotation. The rotation then pivots about the
+            // tab-inclusive bounds center so the handle tracks the visible
+            // footprint of a mid-assembly group with exposed tabs/blanks.
+            // (The completion spin instead pivots about the corner-only
+            // image center via getGroupImageCenter — a deliberately
+            // different point, since a solved puzzle has a flat border.)
+            const picked = pickManualRotationPivot(
                 state, group, activeSnapTolerances(state).tolerancePx,
             );
+            if (picked) snapPosition.start(groupId, picked.pieceId);
+            let pivotLocal = picked?.pivotLocal ?? null;
             if (!pivotLocal) {
                 const bounds = getGroupLocalBounds(group, state.piecesById);
                 pivotLocal = {
