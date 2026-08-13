@@ -23,7 +23,7 @@
     "vitest": "^4.1.10",
     "workbox-precaching": "^7.4.0",
     "workbox-routing": "^7.4.0",
-    "wrangler": "^4.118.0"
+    "wrangler": "^4.119.0"
   },
   "dependencies": {
     "bezier-js": "^6.1.4",
