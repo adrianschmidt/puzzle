@@ -322,8 +322,9 @@ describe('the lint scripts', () => {
  * `tsconfig.json`. `finally` does not run on SIGINT, so an interrupted
  * `npm test` can strand one inside the linted tree, where it would redden the
  * next `npm run lint` with a violation nobody wrote. Swept below rather than
- * ignored: adding the prefix to `ignorePatterns` would make every case here
- * vacuous.
+ * ignored: adding the prefix to `ignorePatterns` — or to `.gitignore`, which
+ * oxlint ≥1.77 honors even for explicitly passed paths (oxc-project/oxc#25133)
+ * — would make every case here vacuous.
  */
 const FIXTURE_PREFIX = 'src/.oxlint-gate-';
 
