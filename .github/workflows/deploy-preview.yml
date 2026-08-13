@@ -43,7 +43,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - run: npm ci --legacy-peer-deps
+      - run: npm ci
 
       # Same check as deploy.yml, which carries the full reasoning. Worth
       # having on both: the preview at /puzzle/dev/ is the surface PRs are

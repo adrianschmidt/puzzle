@@ -27,7 +27,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - run: npm ci --legacy-peer-deps
+      - run: npm ci
 
       # Deliberately a step in this job rather than a job of its own. Required
       # status checks are named in the "Protect main" ruleset, not inferred

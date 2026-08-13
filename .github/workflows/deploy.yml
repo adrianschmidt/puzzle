@@ -40,7 +40,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - run: npm ci --legacy-peer-deps
+      - run: npm ci
 
       # GitHub substitutes an empty string for an undefined variable, so an
       # unset or renamed VITE_IMAGE_PROXY_URL would otherwise publish a fully
