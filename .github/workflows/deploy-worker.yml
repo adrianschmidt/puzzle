@@ -39,7 +39,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       # Skips rather than fails when the token is absent, so this workflow can
       # merge before the Cloudflare account exists and start working the moment
