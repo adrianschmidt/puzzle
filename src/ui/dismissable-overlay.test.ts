@@ -206,8 +206,8 @@ describe('attachDismissablePopover', () => {
         anchor = document.createElement('button');
         document.body.appendChild(anchor);
 
-        // Run the listener-installation RAF synchronously so tests don't
-        // need to wait a frame to dispatch outside-pointerdown.
+        // Run the install RAF synchronously so tests needn't wait a frame to
+        // dispatch outside-pointerdown.
         originalRAF = window.requestAnimationFrame;
         window.requestAnimationFrame = ((cb: FrameRequestCallback) => {
             cb(0);

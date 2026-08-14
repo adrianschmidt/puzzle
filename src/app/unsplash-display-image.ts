@@ -1,12 +1,8 @@
 /**
- * Shared Unsplash-result → display-model mapping used by both the single-image
- * resolver (`resolve-image.ts`) and the candidate-grid fetcher
- * (`fetch-candidate-images.ts`), so the 1080-scale math and attribution shape
- * stay in one place.
- *
- * The Unsplash "regular" URL delivers images scaled to 1080px wide; the height
- * is computed from the original aspect ratio so the puzzle generator produces
- * correctly proportioned pieces.
+ * Shared Unsplash-result → display-model mapping (used by `resolve-image.ts` and
+ * `fetch-candidate-images.ts`), so the 1080-scale math and attribution shape
+ * stay in one place. The "regular" URL is 1080px wide; height comes from the
+ * original aspect ratio.
  */
 
 import type { UnsplashImageResult } from '../images/index.js';

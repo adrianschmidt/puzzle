@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
-// Passthrough mock so we can inspect the config the wavy strategy builds while
-// still running real generation (needed to prove the classic path is unchanged
-// and the traced path actually generates). See reference_vitest_spy_internal_module_call.
+// Passthrough mock: inspect the config the wavy strategy builds while still
+// running real generation. See reference_vitest_spy_internal_module_call.
 vi.mock('../puzzle/composable-generator.js', async (importActual) => {
     const actual = await importActual<typeof import('../puzzle/composable-generator.js')>();
     return { ...actual, generateComposablePuzzle: vi.fn(actual.generateComposablePuzzle) };

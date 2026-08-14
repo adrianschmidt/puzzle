@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // `importOriginal` keeps the real `tracedTabGeneratorStub` export intact —
-// `generator-registry.ts` imports it too (to pre-register the 'traced' tab
-// generator id), and a factory that replaces the whole module would hand
-// that registration `undefined`, throwing at import time before any test
-// runs. Only `preloadTracedTabGenerator` is swapped for a mock.
+// `generator-registry.ts` imports it to pre-register the 'traced' id, and
+// replacing the whole module would hand that registration `undefined`, throwing
+// at import time. Only `preloadTracedTabGenerator` is mocked.
 vi.mock('../puzzle/topology/traced-tab-loader.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../puzzle/topology/traced-tab-loader.js')>();
     return { ...actual, preloadTracedTabGenerator: vi.fn() };
@@ -30,10 +29,9 @@ const LEGACY_CLASSIC: GenerationRequest = {
 const TRACED: GenerationRequest = { ...LEGACY_CLASSIC, cutStyle: 'triangles' };
 
 /**
- * Stand in for the generator the lazy chunk registers under `'traced'`,
- * so a test can exercise the happy traced path without the trace dataset.
- * Delegating to the classic tab generator keeps the produced geometry
- * real; only the registry id matters here.
+ * Stand in for the generator the lazy chunk registers under `'traced'`, so a
+ * test can exercise the happy traced path without the trace dataset. Delegates
+ * to the classic generator; only the registry id matters here.
  */
 function registerTracedStandIn(): void {
     registerTabGenerator({ ...classicTabGenerator, id: 'traced' });
@@ -57,10 +55,9 @@ describe('handleGenerationRequest', () => {
     });
 
     it('awaits the traced chunk before generating a traced request', async () => {
-        // A pending preload must keep the whole handler pending. Asserting
-        // only `toHaveBeenCalledOnce()` would pass just as happily against a
-        // fire-and-forget implementation, which is the regression that
-        // matters: generation would then run against an unloaded chunk.
+        // A pending preload must keep the whole handler pending. Asserting only
+        // `toHaveBeenCalledOnce()` would also pass a fire-and-forget impl — the
+        // regression that matters: generation running against an unloaded chunk.
         let releasePreload!: () => void;
         vi.mocked(preloadTracedTabGenerator).mockReturnValue(
             new Promise<void>((resolve) => { releasePreload = resolve; }),
@@ -92,9 +89,9 @@ describe('handleGenerationRequest', () => {
         vi.mocked(preloadTracedTabGenerator)
             .mockRejectedValue(new TypeError('chunk fetch failed'));
         const response = await handleGenerationRequest(TRACED);
-        // `kind: 'infrastructure'` is what tells the client to retry on the
-        // main thread, which has its own copy of the chunk; `name` survives
-        // the boundary so the analytics reason isn't a bare message.
+        // `kind: 'infrastructure'` tells the client to retry on the main thread
+        // (its own chunk copy); `name` survives the boundary so the analytics
+        // reason isn't a bare message.
         expect(response).toEqual({
             ok: false,
             kind: 'infrastructure',
@@ -105,19 +102,15 @@ describe('handleGenerationRequest', () => {
 
     it('reports an unloaded traced library as infrastructure, not generation', async () => {
         // Traced generation with a resolved-but-empty registry: the real
-        // `tracedTabGeneratorStub` (preserved by `importOriginal` above) is
-        // still registered under 'traced', but its delegate slot is unfilled
-        // because the mocked preload never actually registers a real
-        // generator. Its `ensureLoaded()` throws — a real failure mode, not
-        // a test artifact: it is what production sees if
-        // `requestNeedsTracedTabs` ever drifts out of step with what
-        // generation reaches for.
+        // `tracedTabGeneratorStub` is registered under 'traced' but its delegate
+        // is unfilled (the mocked preload registers nothing), so `ensureLoaded()`
+        // throws — the real failure mode if `requestNeedsTracedTabs` drifts from
+        // what generation reaches for.
         //
-        // `'infrastructure'` even though the throw came out of
-        // `runGeneration`: it says the chunk is missing from THIS realm, and
-        // both orchestrators preload it on the main thread, so the fallback
-        // rerun there succeeds. `'generation'` would have the client rethrow
-        // the one error the fallback exists to rescue.
+        // `'infrastructure'`, though the throw came from `runGeneration`: it
+        // means the chunk is missing from THIS realm, and the main-thread
+        // fallback (which preloads it) succeeds. `'generation'` would have the
+        // client rethrow the one error the fallback exists to rescue.
         const response = await handleGenerationRequest(TRACED);
         expect(response.ok).toBe(false);
         if (!response.ok) {
@@ -128,9 +121,9 @@ describe('handleGenerationRequest', () => {
     });
 
     it('reports any other generation throw as a deterministic generation failure', async () => {
-        // The counterpart to the test above: a throw that IS a function of
-        // the request stays `'generation'`, so the client surfaces it rather
-        // than paying a second full generation to reproduce it.
+        // Counterpart to the test above: a throw that IS a function of the
+        // request stays `'generation'`, so the client surfaces it rather than
+        // paying a second generation to reproduce it.
         registerTabGenerator({
             ...classicTabGenerator,
             id: 'traced',

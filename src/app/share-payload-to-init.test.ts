@@ -3,11 +3,8 @@ import type { SharePayload } from '../sharing/index.js';
 import { needsTracedTabChunk, shareInitOptions } from './share-payload-to-init.js';
 
 /**
- * Minimal decoded payload, matching the base literal used across
- * `src/sharing/share-link.test.ts` (e.g. its `base` const at the top of the
- * "attribution scheme validation" describe block): the required fields
- * `{ v, i, is, g, c, s, r }` with no optional blocks. Callers override the
- * fields each test cares about.
+ * Minimal decoded payload: the required fields `{ v, i, is, g, c, s, r }` with
+ * no optional blocks. Callers override what each test cares about.
  */
 function payload(overrides: Partial<SharePayload> = {}): SharePayload {
     return {
@@ -44,11 +41,10 @@ describe('needsTracedTabChunk', () => {
     });
 
     it('denies a chunk fetch to a crafted link whose clf is falsy', () => {
-        // Narrower than the truthiness check the config reconstruction uses:
-        // this link would never consume the chunk, so it must not fetch it.
-        // `clf` is deliberately malformed here (its real type is
-        // `{ tv: number } | undefined`, never `0`) to exercise that rejection
-        // path, hence the cast.
+        // Narrower than the config-reconstruction truthiness check: this link
+        // never consumes the chunk, so it must not fetch it. `clf` is
+        // deliberately malformed (never `0` in its real type) to exercise the
+        // rejection, hence the cast.
         expect(needsTracedTabChunk(payload({ c: 'classic', clf: 0 as unknown as SharePayload['clf'] }))).toBe(false);
     });
 
@@ -82,12 +78,10 @@ describe('shareInitOptions', () => {
     });
 
     it('reconstructs the classicConfig the payload carries', () => {
-        // classicConfig's presence is the discriminator between the
-        // sine-based Classic generator and the legacy straight-grid one, so
-        // its populated mapping needs its own assertion, not just the
-        // omitted-case coverage above. tv: 4 is distinct from every other
-        // fixture's tv in this file so a cross-wired mapping can't
-        // accidentally pass.
+        // classicConfig's presence discriminates the sine-based Classic
+        // generator from the legacy straight-grid one, so its populated mapping
+        // needs its own assertion. tv: 4 is distinct from every other fixture's
+        // tv so a cross-wired mapping can't pass.
         const options = shareInitOptions(payload({ c: 'classic', clf: { tv: 4 } }));
         expect(options.classicConfig).toEqual({ traceSetVersion: 4 });
     });

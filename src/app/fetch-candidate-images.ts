@@ -1,9 +1,7 @@
 /**
- * Returns `null` when the fetch fails or yields nothing — the picker
- * shows its inline error state and the player can retry via the refresh
- * button. An error-status answer from the proxy is reported one layer
- * down as `image-fetch-http-error`; the thrown path caught here stays
- * untracked.
+ * Returns `null` when the fetch fails or yields nothing — the picker shows its
+ * inline error state. An error-status answer is tracked one layer down as
+ * `image-fetch-http-error`; the thrown path caught here stays untracked.
  */
 
 import { diagnostics } from '../diagnostics.js';
@@ -12,10 +10,7 @@ import { findImageCategory, buildImageQuery } from '../game/image-categories.js'
 import { CANDIDATE_COUNT, toDisplayImage, type CandidateImage } from './unsplash-display-image.js';
 import type { Orientation } from '../model/types.js';
 
-/**
- * How many candidates one picker fetch requests (a single API call) — one per
- * grid tile, so the request count is tied to the picker's tile count.
- */
+/** Candidates per picker fetch — one per grid tile, so tied to the tile count. */
 export const CANDIDATE_IMAGE_COUNT = CANDIDATE_COUNT;
 
 export async function fetchCandidateImages(

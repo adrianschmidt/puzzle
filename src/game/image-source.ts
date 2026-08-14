@@ -1,7 +1,7 @@
 /**
- * The "image source" is the provider/strategy used to obtain the
- * puzzle image (e.g. `'unsplash'`, `'blank'`), distinct from the image
- * *category* (the Unsplash search query) in `image-categories.ts`.
+ * The image source is the provider/strategy for the puzzle image (`'unsplash'`,
+ * `'blank'`), distinct from the image *category* (the Unsplash query) in
+ * `image-categories.ts`.
  */
 
 import { createStringPreference } from '../ui/preference-store.js';

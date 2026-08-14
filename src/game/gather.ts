@@ -4,9 +4,7 @@ import { getGroupVisualBounds } from './group-bounds.js';
 export const GATHER_PADDING = 50;
 
 export interface WorldRect {
-    /** Left edge (world x). */
     x: number;
-    /** Top edge (world y). */
     y: number;
     width: number;
     height: number;
@@ -20,11 +18,9 @@ export interface GatherResult {
 }
 
 /**
- * Uses actual visual bounding boxes for each group, so it works
- * correctly with both classic and fractal piece shapes. Does not mutate
- * the groups. After calling this, the caller should zoom-to-fit the
- * returned layoutBounds so all pieces are visible regardless of
- * current zoom.
+ * Uses each group's visual bounding box, so it handles classic and fractal
+ * shapes. Does not mutate the groups; the caller should zoom-to-fit the
+ * returned `layoutBounds`.
  */
 export function computeGatheredPositions(
     groups: ReadonlyArray<Readonly<PieceGroup>>,
@@ -147,7 +143,7 @@ export function computeGatheredPositions(
     }
     totalHeight -= margin;
 
-    // Layout centered at origin (0,0) — the caller will handle viewport positioning
+    // Centered at origin; the caller handles viewport positioning.
     const startX = -maxRowWidth / 2;
     const startY = -totalHeight / 2;
 

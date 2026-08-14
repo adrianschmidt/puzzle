@@ -148,8 +148,7 @@ describe('facesToPieceDefinitions: 2×2 grid', () => {
     it('edges are in piece-local coordinates', () => {
         const pieces = buildPipeline(curves);
         for (const p of pieces) {
-            // All edge start/end points should be non-negative
-            // (relative to piece bbox top-left)
+            // Piece-local coords (relative to bbox top-left) are non-negative.
             for (const edge of p.edges) {
                 expect(edge.start.x).toBeGreaterThanOrEqual(-0.5);
                 expect(edge.start.y).toBeGreaterThanOrEqual(-0.5);
@@ -204,8 +203,7 @@ describe('facesToPieceDefinitions: image offsets', () => {
     it('bottom-right piece has correct offset', () => {
         const pieces = buildPipeline(makeGrid(2, 2, 100, 100));
 
-        // One of the pieces should have imageOffset near (-50, -50)
-        // (the piece in the bottom-right quadrant)
+        // The bottom-right quadrant piece has imageOffset near (-50, -50).
         const bottomRight = pieces.find(p =>
             Math.abs(p.imageOffset.x - (-50)) < 2 &&
             Math.abs(p.imageOffset.y - (-50)) < 2,
@@ -235,9 +233,7 @@ describe('facesToPieceDefinitions: curvePoints', () => {
     });
 });
 
-/**
- * Same algorithm as generator.ts.
- */
+/** Same algorithm as generator.ts. */
 function generateSineCurve(
     start: { x: number; y: number },
     end: { x: number; y: number },
@@ -373,17 +369,16 @@ describe('facesToPieceDefinitions: mate consistency under degenerate intersectio
             }
         }
 
-        // Should produce at least cols*rows pieces (may be more due to
-        // extra intersections, but never fewer — no holes)
+        // At least cols*rows pieces — extra intersections may add more, but
+        // never fewer (no holes).
         expect(pieces.length).toBeGreaterThanOrEqual(cols * rows);
     });
 });
 
 describe('facesToPieceDefinitions: piece with hole', () => {
     /**
-     * A flat edge list represents one or more loops, chained end-to-start
-     * within each loop. Loop boundaries are detected by an edge whose
-     * `start` doesn't match the previous edge's `end`.
+     * A flat edge list is one or more loops chained end-to-start; a loop
+     * boundary is an edge whose `start` doesn't match the previous `end`.
      */
     function countLoops(edges: PieceDefinition['edges']): number {
         if (edges.length === 0) return 0;

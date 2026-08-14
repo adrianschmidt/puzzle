@@ -1,8 +1,6 @@
 /**
- * Given a set of curves that may intersect, finds all enclosed faces.
- * Each face becomes a puzzle piece in the topology-driven pipeline.
- *
- * See issue #168 for the design discussion.
+ * Given curves that may intersect, finds all enclosed faces — each
+ * becomes a puzzle piece. See issue #168 for the design discussion.
  */
 
 import type { Point } from '../../model/types.js';
@@ -25,15 +23,15 @@ export interface HalfEdge {
     next: HalfEdge;
     prev: HalfEdge;
     face: Face | null;
-    /** The curve segment this half-edge represents (in the direction of travel). */
+    /** Curve this half-edge represents, in its direction of travel. */
     curve: Curve;
 }
 
 /**
- * Construction-only shape for half-edges. The cyclic fields (`twin`, `next`,
- * `prev`) cannot be populated at allocation time, so they start as null and
- * are wired up by `makeTwinPair` (twins) and Step 5 `linkHalfEdges`
- * (next/prev). Narrowed to `HalfEdge` once wiring is complete.
+ * Construction-only shape: the cyclic fields (`twin`, `next`, `prev`)
+ * can't be set at allocation, so they start null and are wired by
+ * `makeTwinPair` (twins) and `linkHalfEdges` (next/prev), then narrowed
+ * to `HalfEdge`.
  */
 interface MutableHalfEdge {
     id: number;
@@ -52,9 +50,8 @@ export interface Face {
     /** Whether this is the unbounded outer face. */
     isOuter: boolean;
     /**
-     * Inner-boundary loop starting half-edges. Empty for faces
-     * without holes. One half-edge per loop; walk via .next to
-     * collect the full loop.
+     * One starting half-edge per inner-boundary (hole) loop; walk .next
+     * to collect each loop. Empty for faces without holes.
      */
     innerBoundaries: HalfEdge[];
 }
@@ -62,21 +59,17 @@ export interface Face {
 export interface CutSet {
     curves: Curve[];
     /**
-     * Optional: groups of curves known not to intersect each other.
-     * The builder skips intersection checks within each group.
+     * Groups of curves known not to intersect; the builder skips
+     * intersection checks within each group.
      */
     nonIntersectingGroups?: Curve[][];
 }
 
 /**
- * A topology graph: vertices (intersection points), half-edges
- * (oriented arcs between vertices, each carrying a curve), and faces
- * (regions enclosed by half-edge cycles).
- *
- * Implemented as a DCEL (Doubly-Connected Edge List). Built once from
- * a set of input cuts, then never re-derived — subsequent stages
- * (tab application, face → piece extraction) operate on this graph
- * directly.
+ * DCEL (Doubly-Connected Edge List): vertices (intersection points),
+ * half-edges (oriented arcs carrying a curve), faces (regions enclosed
+ * by half-edge cycles). Built once from the input cuts, then never
+ * re-derived — later stages operate on it directly.
  */
 export interface TopologyGraph {
     vertices: Vertex[];
@@ -160,11 +153,10 @@ function findAllIntersections(
         }
     }
 
-    // Spatial broad-phase: instead of the full n²/2 pair loop, test only
-    // curve pairs whose bounding boxes lie close enough to possibly produce
-    // a result. Pairs are returned in ascending (i, j) order — identical to
-    // the old nested loop with the provably-empty pairs removed — so the
-    // results array (and its order-dependent T-junction dedup) is built
+    // Spatial broad-phase: test only curve pairs whose boxes are close
+    // enough to possibly produce a result, in ascending (i, j) order —
+    // identical to the old n²/2 loop minus provably-empty pairs, so the
+    // results array and its order-dependent T-junction dedup stay
     // byte-for-byte the same. See curveBroadPhasePairs for the margin proof.
     const boxes = curves.map(c => c.boundingBox());
     const pairs = curveBroadPhasePairs(boxes, BROAD_PHASE_MARGIN);
@@ -181,9 +173,8 @@ function findAllIntersections(
             });
         }
 
-        // T-junction detection: check if either curve's endpoints lie
-        // on the other curve. This handles cuts that START or END on
-        // another curve (e.g. internal cuts meeting the border).
+        // T-junction: an endpoint of one curve lying on the other (e.g.
+        // an internal cut meeting the border).
         addEndpointOnCurve(curves[i], curves[j], i, j, results);
         addEndpointOnCurve(curves[j], curves[i], j, i, results);
     }
@@ -192,48 +183,35 @@ function findAllIntersections(
 }
 
 /**
- * Broad-phase proximity margin, in pixels.
- *
- * A curve pair can only contribute a result if it's within this distance:
- * curve-curve crossings need overlapping segment boxes (intersect's 0.5px
- * tolerance), and endpoint-on-curve T-junctions need an endpoint within
- * `2 · VERTEX_MERGE_TOLERANCE` of the other curve (findPointOnCurve's
- * threshold). The margin covers the larger of the two, so any pair the
- * broad-phase skips provably produces nothing.
+ * Broad-phase proximity margin, in pixels. A pair can only produce a
+ * result within this distance — curve-curve crossings need overlapping
+ * segment boxes (0.5px), T-junctions need an endpoint within
+ * `2 · VERTEX_MERGE_TOLERANCE` — so the margin covers the larger and any
+ * skipped pair provably produces nothing.
  */
 const BROAD_PHASE_MARGIN = 2 * VERTEX_MERGE_TOLERANCE;
 
 /**
- * Lower bound on the broad-phase grid cell size, in pixels.
- *
- * Floors the extent-derived cell size so a degenerate all-points input (every
- * box zero-extent → average extent 0) can't collapse the grid to a zero-width
- * cell. The exact value is arbitrary: cell size never affects correctness (the
- * candidate set is a superset for any positive cell size), only how tightly
- * the grid prunes. It is conceptually unrelated to VERTEX_MERGE_TOLERANCE —
- * they merely happen to share the value 3.
+ * Lower bound on the broad-phase grid cell size, in pixels. Floors the
+ * extent-derived cell size so a degenerate all-points input can't collapse
+ * the grid to a zero-width cell. The value is arbitrary (cell size never
+ * affects correctness, only pruning tightness) and unrelated to
+ * VERTEX_MERGE_TOLERANCE despite sharing the value 3.
  */
 const MIN_CELL = 3;
 
 /**
- * Conservative spatial broad-phase over curve bounding boxes.
+ * Conservative spatial broad-phase over curve bounding boxes. Returns
+ * curve-index pairs (i < j) whose boxes lie within `margin`, in ascending
+ * (i, j) order; any pair not returned is separated by more than `margin`
+ * in some axis, so skipping it changes no output.
  *
- * Returns the curve-index pairs (i < j) whose bounding boxes lie within
- * `margin` of each other, in ascending (i, j) order. Any pair NOT returned
- * is separated by more than `margin` in at least one axis, so it can
- * produce neither a curve-curve crossing nor a T-junction — skipping it
- * changes no output. It only removes the ~n²/2 dead iterations the old full
- * loop spent cheaply rejecting non-adjacent pairs.
- *
- * Method: a uniform grid sized to the average curve extent. Each curve is
+ * Method: a uniform grid sized to the average curve extent; each curve is
  * rasterized into every cell its margin-expanded box covers, so two curves
- * within `margin` are guaranteed to share at least one cell; cell
- * co-occupants are the candidate pairs (deduped). For lattice/grid geometry
- * each cell holds O(1) curves → ~O(n) candidate pairs. The result is sorted
- * to reproduce the original loop's exact (i, j) ordering.
+ * within `margin` share a cell. Co-occupants are the candidate pairs,
+ * sorted to reproduce the original loop's exact (i, j) ordering.
  *
- * Exported for the focused broad-phase unit test in dcel.test.ts; not part
- * of the public DCEL API.
+ * Exported for the broad-phase unit test in dcel.test.ts; not public API.
  */
 export function curveBroadPhasePairs(
     boxes: BoundingBox[],
@@ -242,21 +220,11 @@ export function curveBroadPhasePairs(
     const n = boxes.length;
     if (n < 2) return [];
 
-    // Cell size = average max-extent of the boxes, floored at MIN_CELL so it
-    // never collapses to ~0 on degenerate (point) inputs. Robust for our
-    // distribution (many lattice-scale curves + a few full-span borders):
-    // the average tracks the lattice scale, so normal curves occupy O(1)
-    // cells while the few oversized borders rasterize to O(span/scale)
-    // cells — still linear overall. Cell size never affects correctness
-    // (the candidate set is a superset for any positive cell size), only
-    // how tightly the grid prunes.
-    //
-    // Worst case: many large, mutually-overlapping curves all share most
-    // cells, so the candidate set — and the `seen`/`pairs` aux memory —
-    // degrades toward the full O(n²) pair count, no better than the old
-    // nested loop. No current generator produces that geometry (our cuts are
-    // either lattice-scale or a handful of full-span borders), but a future
-    // one that does would lose the broad-phase's pruning benefit.
+    // Cell size = average box max-extent, floored at MIN_CELL so degenerate
+    // (point) inputs don't collapse it to ~0. For our distribution
+    // (lattice-scale curves + a few full-span borders) this stays ~linear.
+    // Worst case — many large mutually-overlapping curves — degrades toward
+    // O(n²) pairs, but no current generator emits that geometry.
     let extentSum = 0;
     for (const b of boxes) {
         extentSum += Math.max(b.maxX - b.minX, b.maxY - b.minY);
@@ -320,7 +288,7 @@ function addEndpointOnCurve(
         const result = findPointOnCurve(curveB, point);
         if (result === null) continue;
 
-        // Skip if this is a shared endpoint (both curves meet at the same point)
+        // Skip shared endpoints (both curves meet at their own endpoint).
         if ((result.globalT < 1e-4 || result.globalT > 1 - 1e-4) &&
             (tA < 1e-4 || tA > 1 - 1e-4)) {
             continue;
@@ -354,9 +322,8 @@ interface PointOnCurveResult {
 }
 
 /**
- * Find where a point lies on a curve, or null if the point
- * is not on the curve (within tolerance).
- * Returns both global t and segment-level info for precise splitting.
+ * Where a point lies on a curve (within tolerance), or null. Returns
+ * global t plus segment-level info for precise splitting.
  */
 function findPointOnCurve(curve: Curve, point: Point): PointOnCurveResult | null {
     const n = curve.segments.length;
@@ -384,8 +351,8 @@ function findPointOnCurve(curve: Curve, point: Point): PointOnCurveResult | null
 }
 
 /**
- * A split point on a curve, identified by segment index + local t.
- * No global t conversion needed — this is exact.
+ * A split point identified by segment index + local t (exact, no
+ * global-t conversion).
  */
 interface SegmentSplit {
     segmentIndex: number;
@@ -396,9 +363,8 @@ function splitCurvesAtIntersections(
     curves: Curve[],
     intersections: CurveIntersectionRecord[],
 ): Curve[] {
-    // Collect segment-level split info per curve.
-    // Each split is identified by the exact Bézier segment + local t
-    // from bezier-js, avoiding any global-t round-trip imprecision.
+    // Segment-level splits (exact Bézier segment + local t), avoiding
+    // global-t round-trip imprecision.
     const splitsByCurve: Map<number, SegmentSplit[]> = new Map();
 
     for (const record of intersections) {
@@ -454,14 +420,13 @@ function splitCurvesAtIntersections(
             continue;
         }
 
-        // Split from end to start to preserve segment indices.
-        // When multiple splits land on the same segment, we must
-        // remap localT after each split (the segment gets shorter).
+        // Split end-to-start to preserve segment indices; when multiple
+        // splits hit one segment, remap localT after each (segment shrinks).
         let current = curves[i];
         const pieces: Curve[] = [];
 
-        // Track the "consumed" portion of each segment
-        // for remapping subsequent splits on the same segment.
+        // Track the consumed portion of each segment to remap later splits
+        // on the same segment.
         let lastSplitSeg = -1;
         let lastSplitLocalT = 1; // upper bound of remaining segment
 
@@ -470,9 +435,8 @@ function splitCurvesAtIntersections(
 
             let adjustedLocalT: number;
             if (segmentIndex === lastSplitSeg) {
-                // Same segment as previous split (going backwards).
-                // The previous split truncated this segment at lastSplitLocalT.
-                // Remap: localT in [0, lastSplitLocalT] → [0, 1]
+                // Previous split truncated this segment at lastSplitLocalT;
+                // remap localT from [0, lastSplitLocalT] → [0, 1].
                 adjustedLocalT = localT / lastSplitLocalT;
             } else {
                 adjustedLocalT = localT;
@@ -493,21 +457,11 @@ function splitCurvesAtIntersections(
 }
 
 /**
- * Split any still-closed curves (where start === end within
- * VERTEX_MERGE_TOLERANCE) at t=0.5 to create two distinct half-edges.
- *
- * Runs AFTER intersection-splitting because closed curves that cross
- * other curves are already split at the crossings into open arcs and
- * don't need this treatment. Only truly free-floating closed inputs
- * (e.g. an isolated `Curve.circle` that doesn't cross anything else)
- * survive intersection-splitting still-closed and need to be cracked
- * here so the DCEL doesn't reject them as zero-length self-loops.
- *
- * The t=0.5 split is arbitrary; for a 4-segment kappa-circle it lands
- * at the leftmost cardinal point, which is fine. For other closed
- * curves with non-uniform segment distribution it could land in a
- * numerically awkward spot, but no current generator emits such
- * inputs.
+ * Split still-closed curves (start === end within VERTEX_MERGE_TOLERANCE)
+ * at t=0.5 into two half-edges. Runs AFTER intersection-splitting: only
+ * free-floating closed inputs (e.g. an isolated `Curve.circle`) survive
+ * still-closed, and the DCEL would otherwise reject them as zero-length
+ * self-loops. The t=0.5 split is arbitrary; fine for current generators.
  */
 function splitClosedCurves(segments: Curve[]): Curve[] {
     const result: Curve[] = [];
@@ -526,25 +480,17 @@ function splitClosedCurves(segments: Curve[]): Curve[] {
 }
 
 /**
- * Tolerance-based vertex deduplication, backed by a spatial hash.
+ * Tolerance-based vertex dedup via a spatial hash. Buckets vertices into
+ * a uniform grid with cell size {@link VERTEX_MERGE_TOLERANCE}; a query
+ * point can only merge within its own cell or the 8 neighbors (cell size =
+ * merge radius), so lookup is O(1) amortized vs a naive O(V²) scan.
  *
- * A naive linear scan over every existing vertex on each insertion is
- * O(V²) over a build — the dominant cost once a generator emits tens of
- * thousands of segment endpoints. Instead we bucket vertices into a
- * uniform grid with cell size {@link VERTEX_MERGE_TOLERANCE}; a query
- * point can only merge with a vertex in its own cell or the 8 neighbors
- * (any closer vertex is at most one cell away when the cell size equals
- * the merge radius), so lookup is O(1) amortized.
+ * Byte-identity with the old linear scan (preserves the share-link
+ * contract): among vertices within tolerance the scan took the first
+ * inserted = lowest id, which is what {@link getOrCreate} picks across the
+ * 9 cells.
  *
- * Byte-identity with the old linear scan: when several existing vertices
- * lie within tolerance of a query point, the linear scan returned the
- * first one in insertion order. Ids are assigned sequentially, so that
- * is exactly the lowest-id candidate — which is what {@link getOrCreate}
- * selects across the 9 inspected cells. The merge decision is therefore
- * identical regardless of bucketing, preserving the share-link contract.
- *
- * Exported for the focused merge-equivalence unit test in dcel.test.ts;
- * not part of the public DCEL API.
+ * Exported for the merge-equivalence test in dcel.test.ts; not public API.
  */
 export class VertexPool {
     private vertices: Vertex[] = [];
@@ -556,9 +502,8 @@ export class VertexPool {
         const cx = Math.floor(point.x / VERTEX_MERGE_TOLERANCE);
         const cy = Math.floor(point.y / VERTEX_MERGE_TOLERANCE);
 
-        // Scan the point's cell + 8 neighbors; among all vertices within
-        // tolerance, pick the lowest-id one to match the old linear scan's
-        // "first inserted wins" merge.
+        // Scan the cell + 8 neighbors; pick the lowest-id vertex within
+        // tolerance to match the old scan's "first inserted wins".
         let best: Vertex | null = null;
         for (let gx = cx - 1; gx <= cx + 1; gx++) {
             for (let gy = cy - 1; gy <= cy + 1; gy++) {
@@ -593,15 +538,10 @@ export class VertexPool {
 }
 
 /**
- * Allocate a pair of twin half-edges for a curve segment.
- *
- * Wires up the cyclic `twin` field (which can't be set at allocation time
- * due to the chicken-and-egg of mutual references) and seeds `next`/`prev`
- * with self-pointers; Step 5 `linkHalfEdges` overwrites those once the
- * angular ordering at each vertex is known.
- *
- * The returned pair is narrowed to `HalfEdge` because all cyclic fields
- * are non-null after this function returns.
+ * Allocate a twin half-edge pair for a segment. Wires the `twin` field
+ * (unsettable at allocation) and seeds `next`/`prev` as self-pointers;
+ * `linkHalfEdges` overwrites those once the angular ordering is known.
+ * Narrowed to `HalfEdge` — all cyclic fields are non-null on return.
  */
 function makeTwinPair(
     id1: number,
@@ -634,10 +574,9 @@ function linkHalfEdges(_vertices: Vertex[], halfEdges: HalfEdge[]): void {
         outgoingByVertex.get(vid)!.push(he);
     }
 
-    // In screen coordinates (Y-down), atan2 ascending order = CW visual order.
-    // For CW inner face traversal (standard with Y-down), when arriving at a
-    // vertex we take the rightmost turn: outgoing[i].twin.next = outgoing[i-1]
-    // (the previous edge in CW order).
+    // Screen coords (Y-down): atan2 ascending = CW visual order. For CW
+    // inner-face traversal we take the rightmost turn at each vertex:
+    // outgoing[i].twin.next = outgoing[i-1] (previous edge in CW order).
     for (const [_vid, outgoing] of outgoingByVertex) {
         if (outgoing.length <= 1) {
             if (outgoing.length === 1) {
@@ -692,8 +631,7 @@ function discoverFaces(halfEdges: HalfEdge[]): Face[] {
 }
 
 function identifyOuterFace(faces: Face[]): Face {
-    // The outer face is the one with the most negative signed area
-    // (CW winding in screen coords where Y grows downward).
+    // Outer face = most negative signed area (CW winding, Y-down screen coords).
     let outerFace = faces[0];
     let mostNegativeArea = Infinity;
 
@@ -710,9 +648,8 @@ function identifyOuterFace(faces: Face[]): Face {
 }
 
 /**
- * In screen coordinates (Y down):
- * - Positive area = CCW winding (inner face)
- * - Negative area = CW winding (outer face)
+ * Signed area in screen coords (Y-down): positive = CCW (inner face),
+ * negative = CW (outer face).
  */
 function computeSignedArea(face: Face): number {
     let area = 0;

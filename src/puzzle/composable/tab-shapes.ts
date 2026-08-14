@@ -1,15 +1,9 @@
 /**
- * Tab shapes are standalone Bézier paths defined in normalized space:
+ * Tab shapes are standalone Bézier paths in normalized space:
  * - x runs along the edge, y perpendicular to it
- * - Start and end points sit on the y = 0 baseline at the neck, not at
- *   x = 0 / x = 1 — consumers renormalize from the path's own endpoints
- * - The tab protrudes in the positive Y direction
- * - A blank protrudes in the negative Y direction
- *
- * The composition layer transforms these onto actual edges.
- *
- * See issue #127 for the composable architecture design,
- * and #137 for this layer specifically.
+ * - Start and end sit on the y=0 baseline at the neck, not at x=0/x=1 —
+ *   consumers renormalize from the path's own endpoints
+ * - A tab protrudes in +Y, a blank in −Y
  */
 
 import type { Point } from '../../model/types.js';
@@ -26,10 +20,7 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 /**
- * The classic jigsaw tab shape: a mushroom/knob with a narrow neck
- * and wide head.
- *
- * Inspired by Dillo's CodePen `twist0` function.
+ * Classic jigsaw tab: a mushroom/knob with a narrow neck and wide head.
  */
 export const classicTabTemplate: TabTemplate = {
     name: 'Classic',
@@ -43,9 +34,7 @@ export const classicTabTemplate: TabTemplate = {
         const halfWidth = 0.17 * scalex;
         const neckHalfWidth = halfWidth * neckRatio;
 
-        // Point in normalized space (h = along edge, v = perpendicular).
-        // Shift y down so the neck entry/exit sits at y=0 — no flat flanges
-        // needed. The shape starts and ends exactly at the neck points.
+        // Shift y down so the neck entry/exit sits at y=0 — no flat flanges needed.
         const yShift = 0.08 * scaley;
         const pt = (h: number, v: number): Point => ({ x: h, y: v - yShift });
 

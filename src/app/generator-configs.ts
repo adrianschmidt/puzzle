@@ -1,8 +1,7 @@
 /**
- * The decision is asymmetric by style: Wavy and Triangles always get their
- * versions because those styles have no fallback; Classic only when traced
- * tabs loaded (otherwise it falls back to legacy); Composable never (it is
- * not a trace consumer); and Fractal passes through regardless of cutStyle.
+ * Asymmetric by style: Wavy and Triangles always get their trace-set version
+ * (no fallback); Classic only when traced tabs loaded (else legacy); Composable
+ * never (not a trace consumer); Fractal passes through regardless of cutStyle.
  */
 
 import type { CutStyle } from '../game/cut-styles.js';
@@ -17,10 +16,9 @@ export interface GeneratorConfigs {
 }
 
 /**
- * Withholding `classicConfig` is not an omission; it is a decision. A Classic
- * game without `classicConfig` falls back to the legacy straight-grid
- * generator. So `cutStyle === 'classic' && !tracedTabsOk` producing `{}` is
- * the `legacy-classic` outcome, deliberately.
+ * A Classic game without `classicConfig` falls back to the legacy
+ * straight-grid generator, so `classic && !tracedTabsOk` producing `{}` is the
+ * `legacy-classic` outcome, deliberately — not an omission.
  */
 export function generatorConfigsForNewGame(opts: {
     cutStyle: CutStyle;
@@ -35,10 +33,9 @@ export function generatorConfigsForNewGame(opts: {
         configs.fractalConfig = { borderless: opts.fractalConfig.borderless };
     }
 
-    // Every new Wavy game uses traced tabs at the current trace-set version.
-    // Older saves/links carry their own (or no) version and are reproduced
-    // verbatim elsewhere; this path only ever creates fresh puzzles, so
-    // stamping the current version is always correct.
+    // This path only creates fresh puzzles, so stamping the current trace-set
+    // version is always correct; older saves/links are reproduced verbatim
+    // elsewhere.
     if (opts.cutStyle === 'wavy') {
         configs.wavyConfig = {
             borderless: opts.wavyConfig?.borderless ?? false,
@@ -46,17 +43,13 @@ export function generatorConfigsForNewGame(opts: {
         };
     }
 
-    // Every new Triangles game uses traced tabs at the current trace-set
-    // version — same stamping rationale as wavyConfig above.
+    // Same stamping rationale as wavyConfig above.
     if (opts.cutStyle === 'triangles') {
         configs.trianglesConfig = { traceSetVersion: CURRENT_TRACE_SET_VERSION };
     }
 
-    // Every new Classic game uses the sine-based generator with traced tabs at
-    // the current trace-set version. A Classic game without this config falls
-    // back to the legacy generator, so stamping it is what activates the
-    // upgrade for fresh puzzles, and withholding it is what the
-    // `legacy-classic` outcome means.
+    // Stamping activates the sine-based generator for fresh Classic puzzles;
+    // withholding it is the `legacy-classic` fallback (see the function doc).
     if (opts.cutStyle === 'classic' && opts.tracedTabsOk) {
         configs.classicConfig = { traceSetVersion: CURRENT_TRACE_SET_VERSION };
     }

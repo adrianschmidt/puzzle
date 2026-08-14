@@ -1,7 +1,7 @@
 /**
- * Rotation is no longer part of this config — it lives as its own
- * top-level preference in `src/ui/rotation-preference.ts` because it
- * applies to every cut style, not just fractal.
+ * Rotation lives as its own top-level preference in
+ * `src/ui/rotation-preference.ts` — it applies to every cut style, not just
+ * fractal.
  */
 
 import { createJsonPreference } from '../ui/preference-store.js';

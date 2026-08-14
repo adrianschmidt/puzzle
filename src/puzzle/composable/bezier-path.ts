@@ -1,15 +1,11 @@
 /**
- * A `BezierPath` is a flat point array storing one start point followed by
- * groups of three (cp1, cp2, end) per cubic segment:
- * `[p0, cp1_1, cp2_1, p1, cp1_2, cp2_2, p2, ...]`. Both the procedural
- * generator and the composable/topology pipelines emit and consume paths
- * in this format.
+ * A `BezierPath` is a flat point array: one start point then groups of three
+ * (cp1, cp2, end) per cubic segment — `[p0, cp1, cp2, p1, cp1, cp2, p2, ...]`.
+ * Shared by the procedural and composable/topology pipelines.
  *
- * `bezierPathToSvg` assumes the caller has already moved to `path[0]`
- * (e.g. via an `M` or preceding `L` command) and emits only the `C`
- * commands for each segment. Short paths (fewer than 4 points) fall back
- * to a single `L` to the last point so the caller's sub-path stays
- * connected.
+ * `bezierPathToSvg` assumes the caller already moved to `path[0]` and emits
+ * only `C` commands; short paths (<4 points) fall back to a single `L` to the
+ * last point so the caller's sub-path stays connected.
  */
 
 import type { Point } from '../../model/types.js';
@@ -64,9 +60,8 @@ export function mirrorBezierPathY(path: BezierPath): BezierPath {
 }
 
 /**
- * Used to shrink a tab (smaller footprint and depth) without regenerating
- * its shape. Tab placement positions everything relative to the path's own
- * midpoint, so scaling about the origin uniformly shrinks the tab.
+ * Shrink a tab (footprint and depth) without regenerating it. Placement is
+ * relative to the path's midpoint, so scaling about the origin shrinks uniformly.
  */
 export function scaleBezierPath(path: BezierPath, sx: number, sy: number): BezierPath {
     return path.map(p => ({ x: p.x * sx, y: p.y * sy }));

@@ -1,9 +1,7 @@
 /**
- * "Selection" here is a user-created grouping for batch movement,
- * completely separate from PieceGroup (which represents physically
- * connected/merged pieces). The user taps individual pieces to add
- * their PieceGroup to the selection, then drags any selected piece
- * to move all selected groups together.
+ * "Selection" is a user-created grouping for batch movement, separate from
+ * PieceGroup (physically connected/merged pieces): tapping pieces adds their
+ * PieceGroup to the selection, then dragging any one moves them all.
  */
 
 export type SelectionChangeCallback = (selectedGroupIds: ReadonlySet<number>) => void;
@@ -29,9 +27,7 @@ export class SelectionManager {
         this._toolActive = active;
         if (!active) {
             this.clearAll();
-            // Invariant: the marquee can only be armed while the multi-select
-            // tool is on (a marquee builds a multi-select selection). Turning
-            // the tool off therefore disarms the marquee too.
+            // Invariant "marquee implies tool": disabling the tool disarms the marquee.
             this.setMarqueeActive(false);
         }
         for (const listener of this.toolActiveListeners) {
@@ -58,18 +54,14 @@ export class SelectionManager {
     }
 
     /**
-     * Returns the new state.
-     *
-     * Enabling the marquee also enables the multi-select tool — a marquee
-     * can only build a selection while the tool is on (the invariant
-     * "marquee implies tool"). Disabling the marquee leaves the current
-     * selection intact; only the gesture is turned off.
+     * Returns the new state. Enabling also enables the tool ("marquee implies
+     * tool"); disabling leaves the selection intact, only turning off the gesture.
      */
     toggleMarquee(): boolean {
         if (this._marqueeActive) {
             this.setMarqueeActive(false);
         } else {
-            this.toolActive = true; // invariant: marquee implies tool
+            this.toolActive = true;
             this.setMarqueeActive(true);
         }
         return this._marqueeActive;
@@ -120,11 +112,9 @@ export class SelectionManager {
     }
 
     /**
-     * Select many groups at once, firing `onChange` a single time for the
-     * whole batch (only if at least one ID was newly added). Returns true if
-     * the selection grew. Used by the marquee, which can add many groups in
-     * one gesture — selecting them one-by-one would fan out the listener (and
-     * its all-groups visual re-apply) once per match.
+     * Add many groups, firing onChange once for the batch (only if ≥1 was new);
+     * returns whether the selection grew. Used by the marquee — per-group adds
+     * would fan out the listener's all-groups visual re-apply once per match.
      */
     selectMany(groupIds: Iterable<number>): boolean {
         let changed = false;
@@ -157,10 +147,9 @@ export class SelectionManager {
     }
 
     /**
-     * Expand a single group ID to all selected IDs when the multi-select
-     * tool is active and the given ID is part of the selection; otherwise
-     * return just `[id]`. Used by drag handlers to fan out a single-group
-     * operation to every selected group. The given `id` is always first.
+     * When the tool is active and `id` is selected, return all selected IDs with
+     * `id` first; otherwise just `[id]`. Lets drag handlers fan out to the whole
+     * selection. `id` is always first.
      */
     expandToSelectionIfActive(id: number): readonly number[] {
         if (!this._toolActive || !this.selected.has(id)) return [id];
@@ -168,9 +157,7 @@ export class SelectionManager {
         return [id, ...others];
     }
 
-    /**
-     * Update selection after a merge: oldGroupId was absorbed into newGroupId.
-     */
+    /** After a merge: oldGroupId was absorbed into newGroupId. */
     handleMerge(oldGroupId: number, newGroupId: number): void {
         if (this.selected.has(oldGroupId)) {
             this.selected.delete(oldGroupId);
@@ -200,8 +187,7 @@ export class SelectionManager {
     }
 
     private notify(): void {
-        // Snapshot so listeners that retain the reference don't observe
-        // future mutations — the ReadonlySet type is compile-time only.
+        // Snapshot — ReadonlySet is compile-time only, so retained refs must not see later mutations.
         const snapshot: ReadonlySet<number> = new Set(this.selected);
         for (const listener of this.listeners) {
             listener(snapshot);

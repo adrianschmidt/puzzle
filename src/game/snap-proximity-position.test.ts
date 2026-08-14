@@ -14,12 +14,10 @@ function makeGroupOf(id: number, pieceId: number, position: Point, rotation = 0)
 }
 
 /**
- * Piece 0 fixed at the origin (group 10); piece 1 in its own group (11),
- * placed by bbox center. Correct placement for group 11 is bbox center
- * (150, 50). `distance` is measured after simulating the rotation snap, so
- * for a group whose bbox center sits at (150 + k, 50) the simulated-snap
- * distance is k regardless of the group's current rotation, and snapDelta ≈
- * (-k, 0).
+ * Piece 0 fixed at origin (group 10); piece 1 in group 11, placed by bbox
+ * center. Aligned center for group 11 is (150, 50). `distance` is measured
+ * after the simulated rotation snap, so a bbox center at (150 + k, 50) gives
+ * distance k (any rotation) and snapDelta ≈ (−k, 0).
  */
 function makePairState(group1Center: Point, group1Rotation = 0): GameState {
     const { piece0, piece1 } = makeMatedPiecePair();
@@ -47,16 +45,14 @@ describe('computeSnapProximityPosition', () => {
     });
 
     it('returns null when the context targets an unknown group', () => {
-        // The group vanished (or the id is stale): tryGetGroup misses → null,
-        // before any candidate is measured.
+        // Stale/vanished group: tryGetGroup misses → null before measuring.
         const { state, ctx } = makeSetup({ x: 170, y: 50 }, 5);
         expect(computeSnapProximityPosition(state, { ...ctx, groupId: 999 })).toBeNull();
     });
 
     it('returns null near the distance boundary at the rotation edge (no jump on entry)', () => {
-        // d = D − 1 = 39 (just inside the snap zone), |θ| = T → cap = D = 40 >
-        // d → excess < 0 → null. Complements the d = 20 edge case: a group that
-        // enters the zone at the rotation edge must not jump, even at d ≈ D.
+        // d = D−1 = 39 (just inside), |θ| = T → cap = D = 40 > d → excess < 0 →
+        // null. Entering at the rotation edge must not jump, even at d ≈ D.
         const { state, ctx } = makeSetup({ x: 150 + D - 1, y: 50 }, T);
         expect(computeSnapProximityPosition(state, ctx)).toBeNull();
     });
@@ -113,10 +109,9 @@ describe('computeSnapProximityPosition', () => {
         // Approach at |θ| = 5 (cap 10): translate from d = 20 down to d = 10.
         const { state, ctx } = makeSetup({ x: 170, y: 50 }, 5);
         const group = getGroup(state, 11);
-        // `group.position` is the raw anchor `moveGroup` translates, not the
-        // bbox center: `makeCenteredGroup` offsets it by the group's ROTATED
-        // local center, so at rotation 5 it is center.x − rotatePoint({50,
-        // 50}, 5).x, not center.x − 50 (that only holds at rotation 0).
+        // `group.position` is the raw anchor, not the bbox center:
+        // `makeCenteredGroup` offsets it by the ROTATED local center, so at
+        // rotation 5 it is center.x − rotatePoint({50,50}, 5).x, not center.x − 50.
         const initialX = 170 - rotatePoint({ x: 50, y: 50 }, 5).x;
         moveGroup(group, computeSnapProximityPosition(state, ctx)!);
         const heldX = group.position.x;
@@ -144,16 +139,11 @@ describe('computeSnapProximityPosition', () => {
 });
 
 /**
- * A 1×3 row: piece 0 — piece 1 — piece 2, mated along vertical edges. The
- * middle group (11) is rotated 8° (cap = D·8/20 = 16). One mate sits at
- * simulated-snap distance 24 (qualifies, excess 8), the other at 32 (also
- * qualifies, larger excess is NOT chosen). Group 1 is placed to the RIGHT of
- * group 0's alignment (pull −x) and to the LEFT of group 2's alignment (pull
- * +x), so the sign of the returned translation reveals which mate won —
- * discriminating closest-wins from first/last-qualifying-wins bugs.
- *
- * - 'left':  closer to group 0 (d = 24, pull −x); group 2 far (d = 32).
- * - 'right': closer to group 2 (d = 24, pull +x); group 0 far (d = 32).
+ * A 1×3 row (piece 0 — 1 — 2), mated on vertical edges. Middle group 11 is
+ * rotated 8° (cap = D·8/20 = 16). One mate sits at simulated-snap distance 24
+ * (qualifies, excess 8), the other at 32 (also qualifies, not chosen). Group 1
+ * is right of group 0's alignment (pull −x) and left of group 2's (pull +x), so
+ * the translation sign reveals which mate won — closest-wins vs first/last-wins.
  */
 function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: ProximityContext } {
     const { piece0, piece1 } = makeMatedPiecePair();
@@ -186,12 +176,9 @@ function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: Proxi
 
 describe('multi-piece groups (piece-anchored measurement)', () => {
     it('slides a wide group toward its mate and stops at the cap', () => {
-        // makeWideRowScenario(2): the five-piece row flush at piece 1, 2° off,
-        // then shifted 10 px away from its mate: d = 10 under the
-        // merge-default tolerances, cap = 18·(2/10) = 3.6 → correction 6.4
-        // back along snapDelta. Pins that the assist engages for a group far
-        // wider than its mated piece — the case the piece-anchored pivot
-        // exists for.
+        // makeWideRowScenario(2): five-piece row flush at piece 1, 2° off, then
+        // shifted 10 px away: d = 10, cap = 18·(2/10) = 3.6 → correction 6.4.
+        // Pins that the assist engages for a group far wider than its mated piece.
         const { state, movedGroup } = makeWideRowScenario(2);
         movedGroup.position = { ...movedGroup.position, x: movedGroup.position.x + 10 };
         const ctx = buildProximityContext(

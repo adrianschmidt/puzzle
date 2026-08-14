@@ -1,8 +1,6 @@
 /**
- * When enabled, the dragged piece or group is shifted upward on drag
- * start so the user's finger doesn't block the view on touch devices.
- * Only applies when a single group moves — multi-select drags of
- * several groups are excluded.
+ * Preference: shift the dragged group upward on drag start so a finger doesn't
+ * block it on touch. Single-group drags only — multi-select is excluded.
  */
 
 import { createBooleanPreference } from './preference-store.js';

@@ -65,10 +65,10 @@ describe('resolveTracedTabOutcome', () => {
 
     it('keeps the boot fallback undegraded even if a chunk error is somehow reported', () => {
         // Unreachable through `planTracedTabs`, which never pairs
-        // `forceLegacyClassic` with a fetch — that is exactly why the
-        // short-circuit order needs pinning here. Reversing the two checks
-        // would turn this into `degraded: true`, and for a non-Classic
-        // request into `kind: 'fail'`, i.e. the safety net rethrowing.
+        // `forceLegacyClassic` with a fetch — which is why the short-circuit
+        // order needs pinning. Reversing the checks would make this
+        // `degraded: true`, and a non-Classic request `kind: 'fail'` — the
+        // safety net rethrowing.
         expect(resolveTracedTabOutcome({
             plan: { cutStyle: 'classic', preloadChunk: false, forceLegacyClassic: true },
             chunkError: error,

@@ -1,58 +1,20 @@
-// Convention: any UI factory or helper consumed from outside `src/ui/`
-// (app/, interaction/, …) is re-exported here, and consumers import
-// via `./ui/index.js`. Direct deep imports between files inside
-// `src/ui/` are fine — those are internal collaborators (e.g.
-// `share-section` is consumed only by `info-modal`).
+// Barrel for `src/ui/`: modules consumed from outside `src/ui/` are re-exported
+// here; deep imports between files inside `src/ui/` are fine. An options type is
+// re-exported alongside the function that takes it; a caller-only result type is not.
 //
-// Types follow the same rule with one refinement: an options/parameter
-// type is re-exported alongside the function that takes it, because a
-// caller may need to name it to build the argument. A type a caller only
-// ever receives — an inferred result type, a string-literal union written
-// as a literal — is not, since naming it buys nothing.
+// `preference-store.ts` is deliberately NOT re-exported: `game/` uses it directly
+// and some of those load transitively through this barrel, so routing it here
+// would create an import cycle.
 //
-// Exception: `preference-store.ts` is intentionally not re-exported.
-// It is shared infrastructure that `game/` modules use directly, and
-// some of those modules are loaded transitively by UI dialogs through
-// this barrel — routing them through here would create an import cycle.
+// Mocking this barrel needs the `importOriginal` passthrough form — the module
+// under test reaches other names here too (often transitively), else the run
+// fails with "No export is defined on the mock". Type-only names are erased;
+// value names pass through unchanged.
 //
-// The convention governs *production* code; `src/app/` and
-// `src/interaction/` hold zero deep imports into `src/ui/`. Test files
-// there deep-import only for two reasons the barrel cannot serve:
-//
-//   1. `vi.mock` targets. Targeting the leaf is a preference, not a
-//      necessity: a one-export factory is enough, whereas mocking this
-//      barrel needs the `importOriginal` passthrough form because the
-//      module under test reaches other names here too — usually
-//      transitively, which is easy to miss until the run fails with
-//      "No export is defined on the mock".
-//   2. Names the barrel does not export — test-only setup (e.g.
-//      `COLOR_PREFERENCE_KEY`), which stays unexported here.
-//
-// Anything else a test needs comes through the barrel, as production code
-// does. Mocking it is no reason to route around it: type-only names are
-// erased and never meet the mock at all, and value names come back
-// unchanged through the passthrough.
-//
-// The dependency direction is otherwise one-way (`app/` consumes `ui/`);
-// the only `ui/ → app/` edges go to `app/unsplash-display-image.ts`,
-// which imports nothing from `src/ui/`, so the graph is acyclic.
-//
-// Return-shape convention for UI factory functions:
-//
-//   1. Default — return a cleanup function `() => void`. Use this when
-//      the component fully self-manages its state from injected
-//      dependencies (e.g. a `SelectionManager` it subscribes to).
-//
-//   2. When external collaborators legitimately need to drive component
-//      state — return a handle of shape
-//      `{ ...handlers; destroy: () => void }`. The `destroy` method
-//      replaces the cleanup function. Example: `createRotateButtons`
-//      exposes `show()` / `hide()` because rotate-buttons visibility is
-//      driven by the host based on the active cut style, and there is
-//      no shared reactive source it could subscribe to.
-//
-// Prefer (1). Reach for (2) only when the component genuinely cannot
-// self-manage the state in question.
+// UI factory return shape: default to a cleanup fn `() => void` (component
+// self-manages from injected deps); return `{ ...handlers; destroy }` only when
+// external collaborators must drive state with no reactive source to subscribe
+// (e.g. `createRotateButtons` show()/hide(), driven by the host's cut style).
 
 export {
     shouldConfirmNewGame,

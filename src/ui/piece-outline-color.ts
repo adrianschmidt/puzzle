@@ -1,12 +1,7 @@
 /**
- * Each preset's `color` is a `var(--color-<id>)` reference, so the chosen
- * outline color flips between light/dark shades with the OS theme for
- * free. The choice is saved by its stable string id.
- *
- * The localStorage key and CSS variable are scoped to the *outline* style
- * specifically (the `puzzle-piece-<styleId>-color` convention), so a future
- * per-style color (e.g. a Shadow color) is a new, independent key: purely
- * additive, no migration.
+ * Each preset's `color` is a `var(--color-<id>)` reference, so the outline flips
+ * with the OS theme for free; the choice is saved by its stable string id under
+ * the outline-scoped `puzzle-piece-<styleId>-color` key.
  */
 
 import { createStringPreference } from './preference-store.js';
@@ -16,10 +11,8 @@ import type { SwatchEntry } from './swatch-picker.js';
 export type PieceOutlineColorPreset = PaletteSwatch;
 
 /**
- * Default outline color — near-black `gray-darker-3` (#080808). It's a
- * palette member (so it highlights as selected in the picker) and is
- * effectively black in both light and dark mode, matching the old
- * hardcoded outline.
+ * Default outline color — `gray-darker-3` (#080808): a palette member (so it
+ * highlights as selected) that's effectively black in both light and dark mode.
  */
 export const DEFAULT_PIECE_OUTLINE_COLOR_ID = 'gray-darker-3';
 
@@ -40,10 +33,7 @@ if (defaultSwatchOrUndef === undefined) {
 }
 const defaultSwatch: PaletteSwatch = defaultSwatchOrUndef;
 
-/**
- * `satisfies` documents that a preset is a valid `SwatchEntry`, so it
- * feeds the swatch picker directly.
- */
+/** `satisfies SwatchEntry` so presets feed the swatch picker directly. */
 export const PIECE_OUTLINE_COLOR_PRESETS: readonly PieceOutlineColorPreset[] =
     PALETTE_SWATCHES satisfies readonly SwatchEntry[];
 

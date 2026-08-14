@@ -10,9 +10,8 @@ import type { Point } from '../model/types.js';
 export type ClassifyTarget = (
     target: EventTarget | null,
     /**
-     * Screen coordinates of the event, when available (pointerdown). Lets the
-     * classifier widen a background hit into a nearby piece via a screen-space
-     * probe. Omitted for events where a probe makes no sense (e.g. wheel).
+     * Event screen coords (pointerdown only). Lets the classifier widen a
+     * background hit into a nearby piece; omitted where a probe makes no sense (e.g. wheel).
      */
     point?: Point,
 ) =>
@@ -41,17 +40,14 @@ export interface PointerRouterOptions {
         end: (evt: PointerEvent) => void;
         cancel: () => void;
     };
-    /**
-     * Pinch has no separate cancel — `end` fires for both clean lift and
-     * `pointercancel`, since the end-state is the same regardless of cause.
-     */
+    /** No separate cancel — end fires for both clean lift and pointercancel. */
     onPinch: {
         start: (a: PointerEvent, b: PointerEvent) => void;
         move: (a: PointerEvent, b: PointerEvent) => void;
         end: () => void;
     };
     onWheelZoom: (evt: WheelEvent) => void;
-    /** Fired when a background pointerdown/up resolves without crossing the tap threshold. */
+    /** Fired when a background pointerdown/up stays under the tap threshold. */
     onBackgroundTap?: (evt: PointerEvent) => void;
 }
 
@@ -149,8 +145,7 @@ export class PointerRouter {
             lastY: evt.clientY,
         });
 
-        // Try to start a pinch first — a 2nd touch landing supersedes any
-        // single-pointer candidate logic.
+        // A 2nd touch landing supersedes single-pointer logic, so try pinch first.
         if (this.tryStartPinch()) return;
 
         if (this.state.kind !== 'idle') return;
@@ -206,8 +201,7 @@ export class PointerRouter {
     }
 
     private onPointerUp(evt: PointerEvent): void {
-        // Compute pair-membership BEFORE delete so the lifting pointer is
-        // still in `tracked` for the check.
+        // Check pair-membership before delete, while the lifting pointer is still tracked.
         const wasPinchPair = this.pinch.kind === 'active' &&
             (evt.pointerId === this.pinch.a || evt.pointerId === this.pinch.b);
 
@@ -263,15 +257,11 @@ export class PointerRouter {
     }
 
     /**
-     * Returns true and starts a pinch (with the locked pair = first two
-     * touch pointers tracked) when the just-arrived pointerdown brings
-     * the touch-pointer count to 2. Returns false otherwise.
-     *
-     * Resolves any active single-pointer state before starting the pinch:
-     * - candidates are silently discarded,
-     * - an active drag inside the grace window is canceled,
-     * - an active drag outside the grace window survives concurrently,
-     * - an active pan is always canceled.
+     * Start a pinch (locked to the first two tracked touch pointers) when a new
+     * pointerdown brings the touch count to 2; return whether it did. First
+     * resolves single-pointer state: candidates and pans are dropped/canceled,
+     * and a drag is canceled only inside the grace window — outside it the drag
+     * survives concurrently with the pinch.
      */
     private tryStartPinch(): boolean {
         if (this.pinch.kind !== 'inactive') return false;

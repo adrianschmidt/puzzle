@@ -39,9 +39,8 @@ describe('computeMergedOffsets', () => {
 
     it('traverses a three-piece horizontal chain via BFS', () => {
         const pieces = generatePieces(4, 3, { width: 400, height: 300 }, 123);
-        // Pieces 0, 1, 2 form a chain along the top row. Piece 2 is only
-        // reachable from the anchor (0) via piece 1 — a BFS that stopped
-        // after processing the anchor's direct neighbours would fail.
+        // Pieces 0,1,2 chain along the top row; piece 2 is reachable from anchor
+        // 0 only via piece 1, so a BFS stopping at direct neighbors would fail.
         const offsets = computeMergedOffsets(pieces, [0, 1, 2]);
         expect(offsets).not.toBeNull();
         expect(offsets!.get(0)).toEqual({ x: 0, y: 0 });
@@ -136,9 +135,8 @@ describe('applyProgress', () => {
     });
 
     it('normalizes out-of-range free-mode mr values into [0, 360)', () => {
-        // The encoder always emits values in [0, 360), but a hand-edited
-        // share link could plant negatives or values ≥ 360. Mirror the
-        // encoder's clamp on read so they don't reach group.rotation.
+        // The encoder emits [0, 360), but a hand-edited share link could plant
+        // out-of-range values; the read mirrors the encoder's clamp.
         const state = fresh(123, 'free');
         const ok = applyProgress(state, { m: [[0, 1]], mr: [-90] });
         expect(ok).toBe(true);
@@ -181,12 +179,9 @@ describe('applyProgress', () => {
 });
 
 /**
- * Replace `state.groups` with a synthetic partition where pieces `mergedIds`
- * (which must be a connected subgraph in the live puzzle) form a single
- * starting group, and every other piece is solo. Mirrors what
- * `createInitialGroups` produces when `autoGroups` is supplied (composable
- * cut style with `minPieceArea`), without forcing a full composable puzzle
- * generation in the test.
+ * Replace `state.groups` with a synthetic partition: `mergedIds` (must be a
+ * connected subgraph) form one starting group, every other piece solo. Mirrors
+ * `createInitialGroups` with `autoGroups`, without a full composable generation.
  */
 function replaceWithAutoGroupPartition(state: GameState, mergedIds: number[]): void {
     const offsets = computeMergedOffsets(state.pieces, mergedIds);
@@ -219,27 +214,23 @@ function replaceWithAutoGroupPartition(state: GameState, mergedIds: number[]): v
 
 describe('applyProgress: starting auto-groups (Plan 3)', () => {
     it('does not duplicate a starting auto-group when its pieces appear in pr.m', () => {
-        // Reproduces the bug: extractProgress emits every group with
-        // size >= 2 into pr.m, including starting auto-groups. Without the
-        // dedup filter the receiver ends up with both the starting auto-
-        // group AND a reconstructed merge containing the same pieces.
+        // Reproduces the bug: extractProgress emits every size>=2 group into
+        // pr.m, so without the dedup filter the receiver keeps both the starting
+        // auto-group and a reconstructed merge of the same pieces.
         const state = fresh(123);
         replaceWithAutoGroupPartition(state, [0, 1]);
         const totalPieces = state.pieces.length;
 
-        // Wire payload contains the auto-group [0, 1] plus a real user
-        // merge [2, 3] (pieces 2 and 3 are horizontally adjacent in the
-        // top row of the 4x3 grid).
+        // Payload: auto-group [0,1] plus a real user merge [2,3] (adjacent in
+        // the top row of the 4x3 grid).
         const ok = applyProgress(state, { m: [[0, 1], [2, 3]] });
         expect(ok).toBe(true);
 
-        // After progress reload: 2 multi-piece groups (one for [0,1],
-        // one for [2,3]) plus solos for every other piece.
+        // Expect 2 multi-piece groups ([0,1] and [2,3]) plus solos.
         const multiGroups = state.groups.filter((g) => g.pieces.size >= 2);
         expect(multiGroups.length).toBe(2);
 
-        // Total piece count across all groups must match the puzzle
-        // exactly — no piece is missing, no piece appears twice.
+        // Every piece appears exactly once — none missing, none duplicated.
         let countedPieces = 0;
         const seen = new Set<number>();
         for (const g of state.groups) {
@@ -251,8 +242,7 @@ describe('applyProgress: starting auto-groups (Plan 3)', () => {
         }
         expect(countedPieces).toBe(totalPieces);
 
-        // pieceToGroup must agree with state.groups (every piece points to
-        // the single group that actually contains it).
+        // pieceToGroup agrees with state.groups.
         for (const g of state.groups) {
             for (const pid of g.pieces.keys()) {
                 expect(state.pieceToGroup.get(pid)).toBe(g);
@@ -261,9 +251,8 @@ describe('applyProgress: starting auto-groups (Plan 3)', () => {
     });
 
     it('replaces a starting auto-group with the reconstructed merged group', () => {
-        // The reconstructed group should be the one in state.groups after
-        // applyProgress — confirming the starting auto-group was filtered
-        // out, not retained alongside.
+        // The group containing piece 0 after applyProgress must be the
+        // reconstructed one, confirming the starting auto-group was filtered out.
         const state = fresh(123);
         replaceWithAutoGroupPartition(state, [0, 1]);
         const startingAutoGroupId = state.pieceToGroup.get(0)!.id;
@@ -272,8 +261,8 @@ describe('applyProgress: starting auto-groups (Plan 3)', () => {
         expect(ok).toBe(true);
 
         const groupContaining0 = state.pieceToGroup.get(0)!;
-        // The reconstructed group has a freshly-allocated id (max+1), so
-        // it must NOT match the original starting auto-group's id.
+        // The reconstructed group gets a fresh id (max+1), so it won't match the
+        // original auto-group's id.
         expect(groupContaining0.id).not.toBe(startingAutoGroupId);
         expect(groupContaining0.pieces.size).toBe(2);
         expect(groupContaining0.pieces.has(1)).toBe(true);

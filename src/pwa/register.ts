@@ -1,8 +1,8 @@
 /**
- * Kept as thin glue: decision logic lives in `update-controller.ts`
- * (unit-tested). `virtual:pwa-register` only exists at build time, so this
- * file is intentionally not imported from the `pwa/index.ts` barrel (that
- * would pull the virtual module into unit tests).
+ * Thin glue; decision logic lives in `update-controller.ts` (unit-tested).
+ * `virtual:pwa-register` only exists at build time, so this file is
+ * deliberately not re-exported from `pwa/index.ts` — that would pull the
+ * virtual module into unit tests.
  */
 
 import { registerSW } from 'virtual:pwa-register';
@@ -24,9 +24,8 @@ export interface PwaUpdates {
 }
 
 /**
- * @param flush  Flush pending autosave before any reload, so a change made
- *               within the autosave debounce window survives the version
- *               switch.
+ * @param flush  Flush pending autosave before any reload, so a change inside
+ *               the debounce window survives the version switch.
  */
 export function initPwaUpdates(flush: () => void): PwaUpdates {
     const controller = createUpdateController({
@@ -36,10 +35,9 @@ export function initPwaUpdates(flush: () => void): PwaUpdates {
         },
     });
 
-    // Rescue deps: the registration arrives asynchronously via
-    // onRegisteredSW; a rescue started before then awaits this promise
-    // (bounded by the rescue's own deadline — in particular it never
-    // resolves on the dev server, where no SW is registered at all).
+    // The registration arrives asynchronously via onRegisteredSW; a rescue
+    // started earlier awaits this promise (bounded by its own deadline — it
+    // never resolves on the dev server, where no SW registers).
     let resolveRegistration: (r: RescueRegistration | null) => void = () => {};
     const registrationPromise = new Promise<RescueRegistration | null>(
         (resolve) => { resolveRegistration = resolve; },
@@ -55,11 +53,9 @@ export function initPwaUpdates(flush: () => void): PwaUpdates {
             if (registration) setupUpdateChecks(registration, controller);
             resolveRegistration(registration ?? null);
         },
-        // The registration precondition: if the service worker can't be
-        // registered at all, there is no controller-driven funnel and no
-        // update checks for the session. Label it instead of letting it
-        // surface as a generic `unhandled-error`. Fires at most once per page
-        // load, so — unlike the update-check path — it needs no flood guard.
+        // If the SW can't register, there's no update funnel for the session.
+        // Label it rather than let it surface as a generic unhandled-error.
+        // Fires at most once per load, so it needs no flood guard.
         onRegisterError(error) {
             resolveRegistration(null);
             diagnostics.warn('[pwa] service worker registration failed', error);

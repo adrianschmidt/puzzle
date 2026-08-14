@@ -18,9 +18,8 @@ import { makeSavedGameState } from '../test-helpers/fixtures.js';
 import { createShareLinkLoader } from './share-link-loader.js';
 
 /**
- * Minimal payload that satisfies the share codec, matching the base literal
- * used across `src/sharing/share-link.test.ts`. Encoded fresh per call so
- * each test that needs a real decodable `#p=` link gets its own hash body.
+ * Minimal payload that satisfies the share codec. Encoded fresh per call so
+ * each test gets its own hash body.
  */
 function decodablePayload(): SharePayload {
     return { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 42, r: 'none' };
@@ -46,9 +45,8 @@ describe('createShareLinkLoader', () => {
         delete (window as unknown as { umami?: unknown }).umami;
         vi.mocked(showToast).mockClear();
         vi.restoreAllMocks();
-        // The loading overlay is real DOM, not mocked; strip any leftover
-        // between tests so a prior test's overlay can't be mistaken for this
-        // one's.
+        // The loading overlay is real DOM, not mocked; strip any leftover so a
+        // prior test's overlay can't be mistaken for this one's.
         document.querySelectorAll('.loading-overlay').forEach((el) => el.remove());
     });
 
@@ -97,16 +95,14 @@ describe('createShareLinkLoader', () => {
         await make().tryLoad();
         expect(showToast).toHaveBeenCalledWith('Invalid share link');
         expect(window.location.hash).toBe('');
-        // The hashchange listener has no `finally` backstop the way the boot
-        // flow does, so the overlay put up for the rescue check must be torn
-        // down explicitly by this path itself.
+        // The hashchange listener has no `finally` backstop like the boot flow,
+        // so this path must tear down the rescue-check overlay itself.
         expect(document.querySelector('.loading-overlay')).toBeNull();
     });
 
     it('does not retry the rescue for the same link after a reload', async () => {
         // The guard survives the reload; a second attempt would loop forever.
-        // First pass: the rescue applies an update and a reload becomes
-        // imminent — the guard is left in place, not cleared, for the
+        // First pass applies an update and leaves the guard in place for the
         // reload's own load to find.
         history.replaceState(null, '', '/#p=not-a-real-payload');
         attemptRescue.mockResolvedValueOnce('updated');
@@ -144,13 +140,11 @@ describe('createShareLinkLoader', () => {
     });
 
     it('lets a newer link supersede the toast/strip decision after the rescue await', async () => {
-        // A hashchange lands mid-rescue: a different, decodable link now sits
-        // in the address bar. The stale invocation's rescue still resolves,
-        // but it must not steal the toast/strip decision from the newer one.
-        // This simulates the *state* a concurrent hashchange/tryLoad would
-        // leave behind (hash mutated mid-await) rather than dispatching a
-        // real `hashchange` and running a second `tryLoad()` concurrently —
-        // `history.replaceState` deliberately doesn't fire that event.
+        // A hashchange lands mid-rescue: a different, decodable link now sits in
+        // the address bar. The stale invocation's rescue still resolves but must
+        // not steal the toast/strip decision. This simulates the state (hash
+        // mutated mid-await); `history.replaceState` deliberately doesn't fire
+        // `hashchange`.
         history.replaceState(null, '', '/#p=not-a-real-payload');
         attemptRescue.mockImplementation(async () => {
             history.replaceState(null, '', '/#p=superseded-elsewhere');
@@ -167,11 +161,9 @@ describe('createShareLinkLoader', () => {
     it('leaves the guard and overlay alone when a newer rescue supersedes this one', async () => {
         // A concurrent hashchange started its own rescue for a different,
         // still-undecodable link while this one was in flight. That newer
-        // rescue's guard entry (and its loading overlay) must survive — this
-        // stale invocation is no longer the one that owns either. As above,
-        // this simulates the state a concurrent rescue would leave (guard
-        // overwritten, hash mutated) rather than running a second `tryLoad()`
-        // concurrently via a real dispatched `hashchange`.
+        // rescue's guard entry and overlay must survive — this stale invocation
+        // owns neither. Simulates the state (guard overwritten, hash mutated)
+        // rather than a real concurrent `tryLoad`.
         history.replaceState(null, '', '/#p=stale-link');
         attemptRescue.mockImplementation(async () => {
             history.replaceState(null, '', '/#p=newer-undecodable-link');
@@ -190,8 +182,8 @@ describe('createShareLinkLoader', () => {
     it('closes the rescue funnel when the updated build decodes the link', async () => {
         const payload = decodablePayload();
         const hashBody = encodePayload(payload);
-        // Simulate the guard a pre-reload rescue attempt left behind for this
-        // exact link — this load is the post-reload re-check.
+        // The guard a pre-reload rescue left for this link — this load is the
+        // post-reload re-check.
         recordRescueAttempt(hashBody);
         history.replaceState(null, '', '/#p=' + hashBody);
 
@@ -208,10 +200,9 @@ describe('createShareLinkLoader', () => {
     });
 
     it('does not report a rescue-funnel result for an ordinary share-link load', async () => {
-        // No prior recordRescueAttempt: this load is a plain, first-time
-        // visit to a decodable link, not the back half of a rescue reload.
-        // The `share-link-rescue-result` event must stay scoped to actual
-        // rescues, or its funnel numerator silently inflates.
+        // No prior recordRescueAttempt: a plain first-time visit, not the back
+        // half of a rescue reload. `share-link-rescue-result` must stay scoped
+        // to actual rescues, or its funnel numerator inflates.
         const payload = decodablePayload();
         const hashBody = encodePayload(payload);
         history.replaceState(null, '', '/#p=' + hashBody);
@@ -245,10 +236,9 @@ describe('createShareLinkLoader', () => {
         const hashBody = encodePayload(payload);
         saveNewPuzzle(makeSavedGameState());
         history.replaceState(null, '', '/#p=' + hashBody);
-        // Production's `loadShared` is `loadSharedPuzzle`, which persists the
-        // new puzzle itself (via `persistNewPuzzle`) once generation succeeds
-        // — `share-link-loader.ts` no longer clears storage on its own, so
-        // the stub has to model that side effect to exercise "replaced".
+        // Production's `loadShared` (`loadSharedPuzzle`) persists the new puzzle
+        // itself once generation succeeds — the loader no longer clears storage,
+        // so the stub must model that side effect to exercise "replaced".
         loadShared.mockImplementation(async () => {
             saveNewPuzzle({ ...makeSavedGameState(), imageUrl: 'shared-puzzle.jpg' });
         });
@@ -256,22 +246,18 @@ describe('createShareLinkLoader', () => {
         const handled = await make(true).tryLoad();
 
         expect(handled).toBe(true);
-        // `recipientHadSavedState` — true here — feeds shared-load analytics,
-        // so it has to be the real "had progress" reading, not a hardcoded
-        // constant.
+        // `recipientHadSavedState` (true here) feeds shared-load analytics, so
+        // it must be the real "had progress" reading, not a constant.
         expect(loadShared).toHaveBeenCalledWith(payload, true);
-        // The previous save is gone, replaced by the shared puzzle's own —
-        // not merely cleared: `loadShared`'s own persist is what did it.
+        // Previous save replaced by the shared puzzle's own — not merely
+        // cleared: `loadShared`'s persist did it.
         expect(loadState()?.imageUrl).toBe('shared-puzzle.jpg');
     });
 
     it('leaves the previous save intact when the shared load is canceled', async () => {
-        // The loading overlay's Cancel affordance (#489) makes `loadShared`
-        // (real `loadSharedPuzzle`) resolve normally without ever calling
-        // `persistNewPuzzle` — canceling means "return to your current
-        // puzzle", so its save must still be there afterwards. The default
-        // `loadShared` stub (a no-op `async () => {}`) models exactly that:
-        // it resolves without touching storage.
+        // Cancel (#489) makes `loadShared` resolve normally without calling
+        // `persistNewPuzzle` — canceling means "return to your current puzzle",
+        // so the save must survive. The default no-op stub models that.
         const payload = decodablePayload();
         const hashBody = encodePayload(payload);
         saveNewPuzzle(makeSavedGameState());
@@ -302,8 +288,7 @@ describe('createShareLinkLoader', () => {
         // The hash is stripped before the load is attempted, regardless of
         // whether generation goes on to succeed.
         expect(window.location.hash).toBe('');
-        // A throw never reaches `persistNewPuzzle`, so the previous save
-        // survives — matching the previous puzzle still on screen.
+        // A throw never reaches `persistNewPuzzle`, so the previous save survives.
         expect(loadState()?.imageUrl).toBe('test-image.jpg');
     });
 });

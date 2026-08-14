@@ -138,10 +138,8 @@ export function createRotateButtons(
         container.appendChild(ccw);
         container.appendChild(cw);
 
-        // Force a layout pass so the browser registers the buttons at the
-        // base rule's opacity:0 BEFORE we add --fade-in. Without this the
-        // browser sees both classes from the first paint and computes the
-        // static end-state (opacity 1), skipping the transition.
+        // Force a layout pass so the browser paints opacity:0 before --fade-in
+        // lands; otherwise it sees both classes at once and skips the transition.
         void ccw.offsetHeight;
 
         ccw.classList.add('rotate-button--fade-in');
@@ -243,10 +241,9 @@ export function createRotateButtons(
         };
         pair.transitionEndListener = onEnd;
         pair.ccw.addEventListener('transitionend', onEnd);
-        // Fallback in case transitionend doesn't fire (e.g. element was
-        // removed before the transition kicked in, or display: none).
-        // The +100 buffer absorbs jitter from late layout / paint timing
-        // — the goal is to outlast a normal transition, not to race it.
+        // Fallback in case transitionend never fires (element removed before the
+        // transition, or display:none). +100 outlasts a normal transition rather
+        // than racing it.
         pair.removalTimerId = setTimeout(onEnd, fallbackMs + 100);
     }
 
@@ -280,9 +277,8 @@ export function createRotateButtons(
             return;
         }
         if (active && active.groupId === focusedGroupId) {
-            // RotationFocus only fires on actual change, so this branch means
-            // focus was cleared and re-set on the same piece within the
-            // quick-fade window.
+            // RotationFocus fires only on change, so reaching here means focus was
+            // cleared and re-set on the same piece within the quick-fade window.
             if (active.state !== 'visible') {
                 rescueActive();
                 startIdleTimer();

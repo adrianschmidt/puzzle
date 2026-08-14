@@ -14,9 +14,8 @@ function makeGroupOf(id: number, pieceId: number, position: Point, rotation = 0)
 }
 
 /**
- * State with piece 0 fixed at the origin (group 10) and piece 1 in its
- * own group (11), placed by bbox center. Correct placement for group 11
- * is bbox center (150, 50).
+ * Piece 0 fixed at origin (group 10); piece 1 in group 11, placed by bbox
+ * center. Aligned center for group 11 is (150, 50).
  */
 function makePairState(
     group1Center: Point,
@@ -29,8 +28,7 @@ function makePairState(
     return makeGameState({
         pieces: [piece0, piece1],
         groups: [group0, group1],
-        // The presence check distinguishes "omitted → 'free'" from an
-        // explicitly passed `rotationMode: undefined` (kept as undefined).
+        // `in opts` distinguishes omitted (→ 'free') from explicit undefined.
         rotationMode: 'rotationMode' in opts ? opts.rotationMode : 'free',
     });
 }
@@ -113,12 +111,10 @@ function makeComputeSetup(center: Point, rotation: number): { state: GameState; 
 }
 
 /**
- * Bbox-center point placing the moved group (aligned center (150, 50)) at a
- * given fraction along the cap ramp. The ramp runs from the completion
- * distance (fraction 0 → d = F·D, cap 0) to the zone edge (fraction 1 →
- * d = D, cap T); at fraction `f` the cap is exactly `T · f`. Anchoring
- * fixtures to F keeps these tests valid when ROTATION_COMPLETE_AT_FRACTION is
- * retuned — the caps at these fractions (0, T/4, T/2, 3T/4, T) don't move.
+ * Bbox-center placing the moved group (aligned center (150, 50)) at a given
+ * fraction along the cap ramp: fraction 0 → d = F·D (cap 0), fraction 1 → d = D
+ * (cap T), so cap = T·f. Anchored to F so fixtures survive retuning
+ * ROTATION_COMPLETE_AT_FRACTION.
  */
 function rampCenter(fraction: number): Point {
     return { x: 150 + D * (F + fraction * (1 - F)), y: 50 };
@@ -130,24 +126,12 @@ function rampStep(fromFraction: number, toFraction: number): number {
 }
 
 /**
- * A 1×3 row: piece 0 — piece 1 — piece 2, each 100×100, mated along
- * vertical edges. Piece 1 (the moved group, id 11) is rotated 16° and both
- * mates are un-rotated; `closest` picks which mate piece 1 sits nearer.
- * Alignment with group 0 (origin) puts piece 1's center at (150, 50);
- * alignment with group 2 puts it at group2.position + (−50, 50). The two
- * mates sit at ramp fractions 0.25 (cap T/4 = 5) and 0.5 (cap T/2 = 10) —
- * both in the outer half of the zone with distinct non-zero caps, anchored
- * to F so the arrangement holds when the fraction is retuned:
- *
- * - 'right': right mate at fraction 0.25 (d = D·(F + 0.25·(1−F)), cap 5),
- *   left mate at fraction 0.5 (cap 10).
- * - 'left':  left mate at fraction 0.25 (cap 5), right mate at fraction 0.5.
- *
- * `getBorderEdges` iterates piece 1's right mate (edge index 1) before its
- * left mate (index 3), so testing BOTH arrangements discriminates genuine
- * closest-wins from first-qualifying-wins and last-qualifying-wins
- * iteration bugs: either bug picks the cap-10 mate (16 − 10 = −6) in one of
- * the arrangements instead of the closest cap-5 mate (16 − 5 = −11).
+ * A 1×3 row (piece 0 — 1 — 2), 100×100, mated on vertical edges. Piece 1 (moved
+ * group 11) is rotated 16°, mates un-rotated; `closest` picks which mate it sits
+ * nearer. The two mates sit at ramp fractions 0.25 (cap 5) and 0.5 (cap 10).
+ * `getBorderEdges` visits the right mate (edge 1) before the left (edge 3), so
+ * running BOTH arrangements discriminates closest-wins from first/last-
+ * qualifying-wins (either bug picks the cap-10 mate, −6, instead of cap-5, −11).
  */
 function makeRowState(closest: 'left' | 'right'): { state: GameState; ctx: ProximityContext } {
     const { piece0, piece1 } = makeMatedPiecePair();
@@ -255,12 +239,9 @@ describe('computeSnapProximityRotation', () => {
     it.each(['left', 'right'] as const)(
         'the closest qualifying mate wins (%s mate closest)',
         (closest) => {
-            // Middle piece (1) mated on both sides; see makeRowState above.
-            // Closer mate at ramp fraction 0.25 (cap 5), farther at 0.5 (cap
-            // 10); error 16 on both. Closest wins: excess = 16 − 5 = 11,
-            // toward alignment. Running both arrangements rules out
-            // iteration-order (first/last-qualifying-wins) bugs, which would
-            // yield −6.
+            // Closest mate (cap 5) vs farther (cap 10), error 16 on both →
+            // excess 16 − 5 = 11. Both arrangements rule out iteration-order
+            // bugs (which yield −6). See makeRowState.
             const { state, ctx } = makeRowState(closest);
             expect(computeSnapProximityRotation(state, ctx)!.deltaDeg).toBeCloseTo(-11);
         },
@@ -271,9 +252,8 @@ describe('computeSnapProximityRotation', () => {
 const WIDE_TOL = { tolerancePx: 18, rotationToleranceDeg: 10 };
 
 /**
- * The shared two-mates fixture with a proximity context under WIDE_TOL.
- * Its distances 7.2 / 10.8 sit at ramp fractions 0.25 (cap 2.5) and 0.5
- * (cap 5) under WIDE_TOL and F.
+ * The shared two-mates fixture with a context under WIDE_TOL. Distances 7.2 /
+ * 10.8 sit at ramp fractions 0.25 (cap 2.5) and 0.5 (cap 5).
  */
 function makeTwoMatedEndsRowCtx(closest: 1 | 5): { state: GameState; ctx: ProximityContext } {
     const { state } = makeTwoMatedEndsRow(closest);

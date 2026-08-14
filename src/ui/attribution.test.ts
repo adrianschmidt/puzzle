@@ -60,8 +60,7 @@ describe('createAttributionElement', () => {
         });
         const links = el.querySelectorAll('a');
 
-        // The href is left unset (empty), so no javascript: URL reaches the
-        // DOM; the name still renders as text.
+        // href left unset, so no javascript: URL reaches the DOM.
         expect(links[0].getAttribute('href')).toBeNull();
         expect(links[1].getAttribute('href')).toBeNull();
         expect(el.textContent).toBe('Photo by Jane Doe on Unsplash');

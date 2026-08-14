@@ -3,37 +3,16 @@
  */
 
 /**
- * Wiring-order tests for the composition root.
+ * Wiring-order tests for the composition root. These orderings held only
+ * because of where statements sat in `main.ts` — a file no test could import;
+ * pinned here as contracts. Includes the one agreement no statement order can
+ * enforce: `installDevHooks` and `installToolbar` must get the *same* `solve`
+ * reference, or `window.__solvePuzzle` and the Solve button drift apart.
  *
- * Four orderings used to hold only because of where statements happened to
- * sit in `main.ts` — a file no test could import. They are contracts, so
- * they are pinned here:
- *
- *  1. `installGlobalHandlers` runs before anything that can throw, so
- *     analytics and error reporting are up to see it.
- *  2. The rotation UI is built before the session, whose `onInstalled` reads
- *     `syncVisibility` as a bare value.
- *  3. The `hashchange` listener is registered *after* boot is kicked off —
- *     boot runs synchronously to its first await, so the order is observable.
- *  4. The background-color control lands between the deselect and Info
- *     buttons. `install-toolbar.test.ts` owns that tab-order contract with a
- *     full DOM-order assertion; this file checks the real DOM `bootstrap`
- *     builds still satisfies it.
- *  5. Invalidation of the geometry-ownership token is installed, and
- *     installed before boot is kicked off — storage events are delivered
- *     only to a document already listening, never replayed.
- *
- * Plus the one agreement no statement order can enforce: `installDevHooks`
- * and `installToolbar` must receive the *same* `solve` reference, or
- * `window.__solvePuzzle` and the info modal's Solve button can silently
- * drift apart.
- *
- * Most collaborators are spy-*wrapped* rather than replaced, so the real
- * implementations still run and the DOM assertions exercise real code.
+ * Most collaborators are spy-*wrapped* so the real implementations still run.
  * `global-handlers`, `boot-sequence`, `start-new-game`, `load-shared-puzzle`
  * and `new-game-flow` are replaced outright: they reach analytics, the
- * network, the save file, or the new-game dialog's own preference loading
- * and DOM, none of which this file is about.
+ * network, the save file, or the dialog's own preference loading and DOM.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock, type MockInstance } from 'vitest';
@@ -42,8 +21,8 @@ import type { MergeResult } from '../game/group-merging.js';
 import type { SharePayload } from '../sharing/index.js';
 import { makeGameState, makeRectPiece } from '../test-helpers/fixtures.js';
 
-// `virtual:pwa-register` only exists at build time (see `pwa/register.ts`'s
-// module doc), so the real module cannot be loaded under Vitest at all.
+// `virtual:pwa-register` exists only at build time, so the real module can't
+// load under Vitest (see `pwa/register.ts`).
 vi.mock('../pwa/register.js', () => ({
     initPwaUpdates: vi.fn(() => ({
         attemptShareLinkRescue: vi.fn(async () => 'no-update' as const),
@@ -54,18 +33,16 @@ vi.mock('./global-handlers.js', () => ({ installGlobalHandlers: vi.fn() }));
 vi.mock('./boot-sequence.js', () => ({ runBootSequence: vi.fn(async () => {}) }));
 vi.mock('./start-new-game.js', () => ({ startNewGame: vi.fn(async () => {}) }));
 vi.mock('./load-shared-puzzle.js', () => ({ loadSharedPuzzle: vi.fn(async () => {}) }));
-// Only its `start` binding matters here (see the source-labeling tests
-// below); replaced outright rather than spy-wrapped so calling `onNewGame`
-// doesn't run the real dialog's preference loading and DOM construction.
+// Replaced outright, not spy-wrapped, so calling `onNewGame` doesn't run the
+// real dialog's preference loading and DOM construction.
 vi.mock('./new-game-flow.js', () => ({ openNewGameDialog: vi.fn() }));
 
 vi.mock('./rotation-ui.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('./rotation-ui.js')>();
     return {
         ...actual,
-        // `syncVisibility` is spied on the *returned* object because
-        // `bootstrap` reads it as a bare value at construction time — a spy
-        // installed afterwards would never be the reference the session got.
+        // Spy the *returned* `syncVisibility`: `bootstrap` reads it as a bare
+        // value at construction, so a later spy wouldn't be the session's ref.
         createRotationUi: vi.fn((deps: Parameters<typeof actual.createRotationUi>[0]) => {
             const ui = actual.createRotationUi(deps);
             return { ...ui, syncVisibility: vi.fn(ui.syncVisibility) };
@@ -89,10 +66,9 @@ vi.mock('./share-link-loader.js', async (importOriginal) => {
     };
 });
 
-// The real zoom waits on `requestAnimationFrame` plus a `transitionend`
-// that never fires in jsdom, so the settle callback is captured from the
-// mock and invoked by hand — which is also the only way to observe what the
-// completion overlay reads *at settle time* rather than at call time.
+// The real zoom waits on rAF plus a `transitionend` that never fires in
+// jsdom, so the settle callback is captured from the mock and invoked by
+// hand — also the only way to observe what the overlay reads at settle time.
 vi.mock('./viewport-fit.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('./viewport-fit.js')>();
     return { ...actual, zoomToFitCompletedPuzzle: vi.fn() };
@@ -139,8 +115,8 @@ import { createShareLinkLoader } from './share-link-loader.js';
 import { installBackgroundColor } from './install-background-color.js';
 import { installToolbar } from './install-toolbar.js';
 import { installDevHooks } from './dev-hooks.js';
-// Straight from the module rather than the barrel: the token key is
-// deliberately not part of the persistence layer's public surface.
+// From the module, not the barrel: the token key is deliberately not part of
+// the persistence layer's public surface.
 import { STORAGE_KEY, GEOMETRY_SEED_KEY } from '../persistence/storage.js';
 import { bootstrap } from './bootstrap.js';
 
@@ -152,12 +128,9 @@ const HOOK_NAMES = [
 ] as const;
 
 /**
- * Evidence that importing `./bootstrap.js` above did nothing at all.
- *
- * Captured at module-evaluation time rather than asserted inside a test,
- * because `beforeEach`'s `vi.clearAllMocks()` would have erased it by then.
- * A `bootstrap.ts` that ran on import would boot the app the moment any test
- * imported it — the untestability this whole refactor exists to remove.
+ * Evidence that importing `./bootstrap.js` ran nothing. Captured at
+ * module-evaluation time because `beforeEach`'s `vi.clearAllMocks()` would
+ * erase it: a `bootstrap.ts` that ran on import would boot the app on import.
  */
 const atImportTime = {
     globalHandlerCalls: vi.mocked(installGlobalHandlers).mock.calls.length,
@@ -179,9 +152,8 @@ function createdCompletionPresenter(): { show: Mock<(state: GameState) => void> 
 }
 
 /**
- * A state whose single group holds every piece — what `checkAndMarkWin`
- * reads as a completed puzzle, so `applyMergeResult` reaches the
- * composition root's completion handler for the real reason.
+ * A state whose single group holds every piece — what `checkAndMarkWin` reads
+ * as completed, so `applyMergeResult` reaches the completion handler for real.
  */
 function makeCompletedState(): GameState {
     const pieces = [
@@ -217,22 +189,19 @@ function windowListenerOrder(spy: MockInstance<typeof window.addEventListener>, 
 
 describe('bootstrap', () => {
     let root: HTMLElement;
-    // Recording pass-throughs, not replacements: they exist so `afterEach` can
-    // undo every listener a `bootstrap()` call installs on a shared target.
-    // Ten boots into one jsdom would otherwise leave ten `hashchange`
-    // listeners plus the save coordinator's `pagehide`/`visibilitychange`
-    // pairs behind, making any future test that counts listeners or asserts a
-    // global side effect silently order-dependent. (Nothing tracks the
-    // `MediaQueryList` listener `onColorSchemeChange` adds: `matchMedia()`
-    // returns a fresh object per call, so those cannot accumulate on anything
-    // a later test can see.)
+    // Recording pass-throughs so `afterEach` can undo every listener a
+    // `bootstrap()` call installs on a shared target; otherwise repeated boots
+    // accumulate `hashchange`/`pagehide`/`visibilitychange` listeners and make
+    // later listener-counting tests order-dependent. (`onColorSchemeChange`'s
+    // `MediaQueryList` listener needs no cleanup — `matchMedia()` returns a
+    // fresh object per call.)
     let windowListeners: MockInstance<typeof window.addEventListener>;
     let documentListeners: MockInstance<typeof document.addEventListener>;
 
     beforeEach(() => {
         localStorage.clear();
-        // Clears call records only. The spy-wrapped implementations set via
-        // `vi.fn(actual.…)` survive, which is what these tests rely on.
+        // Clears call records only; the `vi.fn(actual.…)` implementations
+        // survive, which these tests rely on.
         vi.clearAllMocks();
         root = document.createElement('div');
         document.body.replaceChildren(root);
@@ -282,10 +251,9 @@ describe('bootstrap', () => {
     });
 
     it("hands the session's onInstalled the rotation UI's syncVisibility", () => {
-        // This is what makes the ordering above a data dependency rather than
-        // a convention: `onInstalled` is built from `rotationUi.syncVisibility`
-        // read as a bare value, so the rotation UI must already exist when the
-        // session is constructed.
+        // Makes the ordering a data dependency, not a convention: `onInstalled`
+        // is built from `rotationUi.syncVisibility` read as a bare value, so
+        // the rotation UI must exist when the session is constructed.
         bootstrap(root);
 
         const { onInstalled } = vi.mocked(createGameSession).mock.calls[0][0];
@@ -296,9 +264,9 @@ describe('bootstrap', () => {
     });
 
     it('registers the hashchange listener after kicking off the boot sequence', () => {
-        // Boot runs synchronously up to its first await, so this order is
-        // observable: registering the listener first would let a hashchange
-        // that lands during boot race the boot flow's own share-link read.
+        // Boot runs synchronously to its first await, so this order is
+        // observable: registering first would let a hashchange during boot
+        // race the boot flow's own share-link read.
         bootstrap(root);
 
         expect(windowListenerOrder(windowListeners, 'hashchange')).toBeGreaterThan(
@@ -307,9 +275,8 @@ describe('bootstrap', () => {
     });
 
     it('routes a later hashchange through the share-link loader', () => {
-        // A `#p=` link pasted into an already-open tab changes the hash but
-        // triggers no reload, so without this listener nothing reacts. The
-        // loader handles it — not a second boot sequence.
+        // A `#p=` link pasted into an open tab changes the hash but triggers
+        // no reload; the loader handles it, not a second boot sequence.
         bootstrap(root);
         const { tryLoad } = createdShareLinks();
         vi.mocked(runBootSequence).mockClear();
@@ -322,12 +289,9 @@ describe('bootstrap', () => {
     });
 
     it('installs cross-tab invalidation of the geometry-ownership token', () => {
-        // Nothing else re-derives the token while the app is running, so if
-        // this is not wired the app trusts a token another tab has already
-        // invalidated — which is #404's torn save, the thing the #490 fast
-        // path is not allowed to give back. Asserted through the behavior
-        // rather than "addEventListener was called", so it stays honest if
-        // the listener moves.
+        // Unwired, the app trusts a token another tab already invalidated —
+        // #404's torn save, which the #490 fast path must not give back.
+        // Asserted through behavior, not "addEventListener was called".
         bootstrap(root);
         localStorage.setItem(GEOMETRY_SEED_KEY, '5');
 
@@ -343,13 +307,11 @@ describe('bootstrap', () => {
     });
 
     it('installs geometry-token invalidation before boot is kicked off', () => {
-        // Not about this tab's own writes — storage events never fire in the
-        // window that made the change. About another tab's: a storage event
-        // reaches only a document that is already listening, and is never
-        // replayed, so every turn of the event loop that precedes the install
-        // is a turn whose cross-tab geometry writes are lost. `bootstrap` is
-        // synchronous down to `runBootSequence`, so no turn passes today —
-        // this is what holds if a statement above it ever gains an `await`.
+        // A storage event reaches only a document already listening and is
+        // never replayed (and never fires in the tab that wrote), so any event
+        // loop turn before the install loses another tab's geometry writes.
+        // `bootstrap` is synchronous to `runBootSequence`, so none passes
+        // today — this holds if a statement above ever gains an `await`.
         bootstrap(root);
 
         expect(windowListenerOrder(windowListeners, 'storage')).toBeLessThan(
@@ -358,9 +320,8 @@ describe('bootstrap', () => {
     });
 
     it('passes one and the same solve reference to the dev hooks and the toolbar', () => {
-        // `window.__solvePuzzle` and the info modal's Solve button are the
-        // same action. Binding it once here is what stops a later edit to one
-        // call site from silently desynchronizing them.
+        // `window.__solvePuzzle` and the Solve button are one action; binding
+        // it once stops a later edit desynchronizing them.
         bootstrap(root);
 
         const devSolve = vi.mocked(installDevHooks).mock.calls[0][0].solve;
@@ -370,14 +331,10 @@ describe('bootstrap', () => {
     });
 
     it("wires both start/share deps objects' hasCurrentGame to the session", () => {
-        // `startNewGame` and `loadSharedPuzzle` are both replaced outright
-        // (see the module doc at the top of this file), so the third
-        // argument each mocked call captures *is* the real `startNewGameDeps`
-        // / `sharedDeps` object bootstrap built — not a copy — letting
-        // `hasCurrentGame` be called directly rather than only through a
-        // downstream effect. Both bindings are reached through
-        // `installDevHooks`, mirroring "hands the background-color handle to
-        // the share-link load path" below.
+        // Both are replaced outright, so the third argument each mocked call
+        // captures *is* the real deps object bootstrap built, letting
+        // `hasCurrentGame` be called directly. Reached through
+        // `installDevHooks`.
         bootstrap(root);
         const session = createdSession();
 
@@ -396,16 +353,12 @@ describe('bootstrap', () => {
         expect(startNewGameDeps.hasCurrentGame(), 'startNewGameDeps: a game is now installed').toBe(true);
         expect(sharedDeps.hasCurrentGame(), 'sharedDeps: a game is now installed').toBe(true);
 
-        // One binding, not two spellings — the point of the deps objects,
-        // and the thing the three adjacent `sharedDeps` lines already do.
         expect(sharedDeps.hasCurrentGame).toBe(startNewGameDeps.hasCurrentGame);
 
-        // And it asks `hasGame()`, not `current() !== undefined`: `install`
-        // makes the state current before it renders and wires interaction,
-        // so the two disagree over a blank canvas (#488) — where Cancel's
-        // "return to your current puzzle" must read false. The predicates
-        // only diverge inside `install`, so pin the call rather than a
-        // state this test cannot construct.
+        // Asks `hasGame()`, not `current() !== undefined`: `install` makes the
+        // state current before wiring interaction, so they disagree over a
+        // blank canvas (#488). They diverge only inside `install`, so pin the
+        // call rather than a state this test can't construct.
         const hasGameSpy = vi.spyOn(session, 'hasGame');
         const currentSpy = vi.spyOn(session, 'current');
         try {
@@ -419,10 +372,9 @@ describe('bootstrap', () => {
     });
 
     it('keeps the background-color control between deselect and Info', () => {
-        // Every one of these controls is absolutely positioned in one visual
-        // top-to-bottom stack, so DOM order alone sets keyboard tab order
-        // (WCAG 2.4.3). `install-toolbar.test.ts` pins the full seven-element
-        // order; this checks the DOM `bootstrap` actually builds.
+        // The controls are absolutely positioned in one stack, so DOM order
+        // sets keyboard tab order (WCAG 2.4.3). `install-toolbar.test.ts` pins
+        // the full order; this checks the DOM `bootstrap` builds.
         bootstrap(root);
 
         const classNames = [...root.children].map((el) => el.className);
@@ -435,12 +387,11 @@ describe('bootstrap', () => {
     });
 
     it('hands the background-color handle to the share-link load path', () => {
-        // The handle only exists once `installToolbar` has invoked
-        // `installBackgroundColorControl`, so the shared-puzzle deps have to
-        // be built after that call. An `undefined` handle here would silently
-        // stop a sharer's color ever being offered to a recipient — and
+        // The handle exists only after `installToolbar` invokes
+        // `installBackgroundColorControl`, so the shared-puzzle deps must be
+        // built after. Asserted present first because
         // `objectContaining({ backgroundColor: undefined })` matches an absent
-        // key, so the handle has to be asserted present before it is compared.
+        // key.
         bootstrap(root);
         const installed = vi.mocked(installBackgroundColor).mock.results[0];
         expect(installed.type, 'installBackgroundColor did not return').toBe('return');
@@ -458,21 +409,12 @@ describe('bootstrap', () => {
         );
     });
 
-    // #512: the two `loadSharedPuzzle` bindings must not converge on the
-    // same `source` — a real recipient's link has to stay distinguishable
-    // from a developer's `__reproPuzzle` replay of a known-bad puzzle, or
-    // the latter would inflate the `piece-count-mismatch` incident count.
-    // The dev-hooks binding above is asserted 'repro'; this pins the
-    // share-link binding at the *resolved* default ('shared') rather than
-    // "not 'repro'", so a future edit that starts passing 'repro' here too
-    // — or anything else — fails this assertion.
-    //
-    // Asserted via the resolved value (`?? 'shared'`), not
-    // `toHaveBeenCalledWith` on a fixed 3-argument call: the latter pins
-    // *arity*, not behavior — making the source explicit
-    // (`loadSharedPuzzle(payload, recipient, deps, 'shared')`) is
-    // semantically identical to omitting it, but fails a length-sensitive
-    // `toHaveBeenCalledWith` for a maintainer who did that for readability.
+    // #512: the share-link binding must not converge on the dev-hooks
+    // 'repro' source, or a `__reproPuzzle` replay of a known-bad puzzle would
+    // inflate the `piece-count-mismatch` count. Pinned at the *resolved*
+    // default ('shared') via `?? 'shared'`, not a fixed-arity
+    // `toHaveBeenCalledWith`: making the source explicit is semantically
+    // identical to omitting it but would fail an arity-sensitive matcher.
     it('leaves the real share-link binding at the default source', () => {
         bootstrap(root);
         const { loadShared } = vi.mocked(createShareLinkLoader).mock.calls[0][0];
@@ -484,11 +426,10 @@ describe('bootstrap', () => {
         expect(call?.[3] ?? 'shared').toBe('shared');
     });
 
-    // #512: the same split as above, for `startNewGame`'s `'dev'` source.
-    // `installDevHooks`'s `start` binding is the only way to reach
-    // `__newComposableGame`'s arbitrary sine configs outside a crafted share
-    // link, so a piece-count mismatch it surfaces must not be
-    // indistinguishable from a real player's game in the incident count.
+    // #512: the same split for `startNewGame`'s `'dev'` source. The dev-hooks
+    // `start` binding is the only route to `__newComposableGame`'s arbitrary
+    // sine configs outside a crafted link, so a mismatch it surfaces must not
+    // look like a real player's game.
     it('labels the dev-hooks start binding as a dev-console start', () => {
         bootstrap(root);
         const { start } = vi.mocked(installDevHooks).mock.calls[0][0];
@@ -498,13 +439,10 @@ describe('bootstrap', () => {
         expect(call?.[3]).toBe('dev');
     });
 
-    // The two real player paths must both stay at the default. Asserted via
-    // the resolved value, not a fixed-arity `toHaveBeenCalledWith` — see the
-    // share-link binding test above for why. The `toBeDefined` floor is what
-    // keeps `?? 'fresh'` from passing vacuously: without it, a binding that
-    // stopped calling `startNewGame` at all leaves `call` undefined and the
-    // defaulted assertion still holds. (The share-link test doesn't need the
-    // floor — its `expect(call?.[0]).toEqual({})` already fails on undefined.)
+    // The two real player paths stay at the default. The `toBeDefined` floor
+    // keeps `?? 'fresh'` from passing vacuously: without it a binding that
+    // stopped calling `startNewGame` leaves `call` undefined and the defaulted
+    // assertion still holds.
     it('leaves the boot-path start binding at the default source', () => {
         bootstrap(root);
         const { start } = vi.mocked(runBootSequence).mock.calls[0][0];
@@ -529,13 +467,11 @@ describe('bootstrap', () => {
     });
 
     it('reads the session late before showing the completion overlay', () => {
-        // The celebratory zoom lands up to ~1000ms after the win, so `main.ts` read
-        // its `gameState` global inside the settle callback rather than
-        // capturing it: by then a new game may have replaced the finished
-        // one, and the overlay's "Challenge a friend" link is built from
-        // whatever state it is handed. Nothing installed — which is all this
-        // bootstrap has, since no game was ever installed here — means no
-        // overlay at all. Capturing the completed state instead would show it.
+        // The zoom settles up to ~1000ms after the win, so the session is read
+        // inside the settle callback, not captured: by then a new game may
+        // have replaced the finished one, and the overlay's "Challenge a
+        // friend" link is built from the state it's handed. Nothing installed
+        // means no overlay; capturing the completed state would show it.
         bootstrap(root);
         const { applyMerge } = vi.mocked(createGameSession).mock.calls[0][0];
         const completed = makeCompletedState();
@@ -549,12 +485,9 @@ describe('bootstrap', () => {
     });
 
     it('shows the completion overlay for the game installed when the zoom settles', () => {
-        // The counterpart to the test above: reading the session late is only
-        // half the contract, and a `bootstrap` that never showed the overlay
-        // at all would satisfy that half. This is the app's payoff moment —
-        // the win screen and its "Challenge a friend" link — so the positive
-        // direction is pinned too, with a real game installed through the
-        // session rather than a hand-rolled stand-in.
+        // Counterpart to the test above: the late read is only half the
+        // contract, and a `bootstrap` that never showed the overlay satisfies
+        // that half. Pins the positive direction with a real installed game.
         bootstrap(root);
         const session = createdSession();
         const completed = makeCompletedState();
@@ -566,24 +499,19 @@ describe('bootstrap', () => {
         const [, , , onSettled] = vi.mocked(zoomToFitCompletedPuzzle).mock.calls[0];
         onSettled();
 
-        // Asserted against what the session reports rather than the local
-        // `completed`, so the pair reads as "the overlay gets the game that
-        // is still installed"; the `toBe` first keeps that from degenerating
-        // into a comparison of two `undefined`s if nothing installed.
+        // Asserted against the session's report, not local `completed`, so it
+        // reads as "the overlay gets the still-installed game"; the `toBe`
+        // first guards against comparing two `undefined`s.
         expect(session.current(), 'nothing installed to celebrate').toBe(completed);
         expect(createdCompletionPresenter().show).toHaveBeenCalledTimes(1);
         expect(createdCompletionPresenter().show).toHaveBeenCalledWith(session.current());
     });
 
     it('skips the completion overlay when a fresh game is installed by the time the zoom settles', () => {
-        // Reading the session late is not enough on its own: the settle has
-        // no cancel handle, so a win followed by a New Game inside the ~1s
-        // zoom still lands, and "something is installed" is true — of the
-        // *fresh* puzzle. Showing the win screen over it would hand the
-        // player a "Challenge a friend" link to a puzzle they never
-        // finished, which is the exact failure the late read exists to
-        // prevent. Identity with the game that was zoomed for is the
-        // discriminator.
+        // The settle has no cancel handle, so a win then New Game inside the
+        // ~1s zoom still lands with "something installed" true — of the fresh
+        // puzzle. Showing the win screen over it links a friend to an
+        // unfinished puzzle. Identity with the zoomed-for game discriminates.
         bootstrap(root);
         const session = createdSession();
         const completed = makeCompletedState();
@@ -592,9 +520,9 @@ describe('bootstrap', () => {
         const { applyMerge } = vi.mocked(createGameSession).mock.calls[0][0];
         applyMerge(completed, { group: completed.groups[0], mergeCount: 1 } satisfies MergeResult, [0]);
 
-        // The player starts a new puzzle while the completion zoom is still
-        // running. `makeCompletedState` is un-won until `applyMerge` marks
-        // it, so a second one stands in for any fresh game.
+        // A new puzzle starts while the completion zoom runs.
+        // `makeCompletedState` is un-won until `applyMerge` marks it, so a
+        // second one stands in for any fresh game.
         const fresh = makeCompletedState();
         session.install(fresh);
         expect(fresh, 'a fresh game must be a different object').not.toBe(completed);
@@ -607,15 +535,11 @@ describe('bootstrap', () => {
     });
 
     it('skips the completion overlay when the game installed at settle time is a different finished one', () => {
-        // Why identity rather than "the installed game is finished": that
-        // weaker test passes here, and showing this zoom's win screen for a
-        // puzzle it was never framing is the same wrong-link defect one step
-        // along. The debug Solve hook is the only route in: it can finish a
-        // second puzzle inside the ~1s window, bringing its own zoom and its
-        // own overlay. No production path installs a finished game there —
-        // `boot-sequence.ts` is the sole installer of a restored save and
-        // runs once, before any puzzle exists to complete, while the fresh
-        // and share-link routes both install `completed: false`.
+        // Identity, not "the installed game is finished": that weaker test
+        // passes here, yet showing this zoom's win screen for a puzzle it
+        // never framed is the same wrong-link defect. Only the debug Solve
+        // hook can finish a second puzzle inside the ~1s window; no production
+        // path installs a finished game there.
         bootstrap(root);
         const session = createdSession();
         const completed = makeCompletedState();
@@ -628,9 +552,8 @@ describe('bootstrap', () => {
         otherFinished.completed = true;
         session.install(otherFinished);
 
-        // Installing a finished game opens its *own* overlay, from the
-        // install path — that is not what is under test, so the settle is
-        // measured against the count it inherits rather than against zero.
+        // Installing a finished game opens its own overlay from the install
+        // path, so the settle is measured against that count, not zero.
         const beforeSettle = createdCompletionPresenter().show.mock.calls.length;
         expect(beforeSettle, 'the installed finished game shows its own overlay').toBe(1);
 
@@ -648,8 +571,8 @@ describe('bootstrap', () => {
     });
 
     it('falls back to #app when no root is given', () => {
-        // The default argument is evaluated at call time, which is what keeps
-        // `main.ts` free of a DOM lookup while leaving this module importable.
+        // The default argument is evaluated at call time, keeping `main.ts`
+        // free of a DOM lookup while leaving this module importable.
         const app = document.createElement('div');
         app.id = 'app';
         document.body.replaceChildren(app);

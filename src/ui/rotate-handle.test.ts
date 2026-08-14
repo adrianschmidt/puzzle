@@ -157,7 +157,6 @@ describe('rotate-handle gesture', () => {
         // Second move: pointer at angle 90° → target 90°, delta = 90 − 45 = 45°.
         dispatchPointerEvent(button, 'pointermove', { clientX: 150, clientY: 250 });
 
-        // Floating-point: allow 1° tolerance.
         expect(currentRotation).toBeCloseTo(90, 0);
 
         handle.destroy();

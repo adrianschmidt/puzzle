@@ -2,11 +2,10 @@ import { type SharePayload, shareCfToComposableConfig } from '../sharing/index.j
 import type { InitOptions } from '../game/init.js';
 
 /**
- * Narrower than the `payload.clf ?` truthiness check the config
- * reconstruction below uses, deliberately: the two agree on every decoded
- * payload (`decodePayload` deletes a `clf` whose `tv` doesn't clamp), but
- * checking `tv` here also spares a crafted link with a falsy `clf`
- * (null / 0 / "") a chunk fetch it will never use.
+ * Deliberately narrower than the `payload.clf ?` truthiness check below: the
+ * two agree on every decoded payload (`decodePayload` deletes a `clf` whose
+ * `tv` doesn't clamp), but checking `tv` also spares a crafted link with a
+ * falsy `clf` a chunk fetch it will never use.
  */
 export function needsTracedTabChunk(payload: SharePayload): boolean {
     return payload.cf?.tg === 'traced'

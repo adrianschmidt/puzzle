@@ -32,12 +32,9 @@ function dismissCorruptSaveDialog(container: HTMLElement): void {
 }
 
 /**
- * `runBootSequence` awaits `tryLoadShared()` before anything else, and even
- * a mock async function that "resolves immediately" still defers past that
- * await via the microtask queue — so state right after calling (not
- * awaiting) `runBootSequence` proves nothing. This polls a real condition
- * (never a fixed tick count) until it holds, so it advances exactly as far
- * as the step under test requires and no further.
+ * Poll a real condition rather than a fixed tick count: `runBootSequence`
+ * defers past its `tryLoadShared()` await via the microtask queue, so state
+ * right after calling (not awaiting) it proves nothing.
  */
 async function flushUntil(predicate: () => boolean): Promise<void> {
     for (let i = 0; i < 50; i++) {
@@ -87,10 +84,8 @@ describe('runBootSequence', () => {
     }
 
     it('stops after a share link handled the boot, even with a readable save waiting', async () => {
-        // A save alone would `install`; seeding one and still asserting
-        // `install` was never called is what actually pins share > saved —
-        // without it, this test would pass even if saved-game handling ran
-        // first and just happened to find nothing to install.
+        // Seed a save so asserting `install` was never called actually pins
+        // share > saved, not just "saved handling found nothing".
         saveNewPuzzle(makeSavedGameState(), [0]);
         const d = deps({ tryLoadShared: vi.fn(async () => true) });
         await runBootSequence(d);
@@ -106,8 +101,8 @@ describe('runBootSequence', () => {
     });
 
     it('marks a brand-new visitor as first-run', async () => {
-        // A visitor with no save and no touched image preference gets the
-        // hand-picked bundled image, not a random one.
+        // No save and no touched image preference: gets the bundled image,
+        // not a random one.
         await runBootSequence(deps());
         expect(start.mock.calls[0][1].imageSource).toBe('first-run');
         expect(console.error).not.toHaveBeenCalled();
@@ -116,9 +111,8 @@ describe('runBootSequence', () => {
     it('is not first-run when an image-source preference exists, even with no save', async () => {
         saveImageSourcePreference('unsplash');
         await runBootSequence(deps());
-        // The concrete preference value, not just "isn't the sentinel" —
-        // `not.toBe('first-run')` would pass for `undefined` too and prove
-        // nothing about the preference actually being read.
+        // Assert the concrete value, not `not.toBe('first-run')` — that would
+        // pass for `undefined` too and prove nothing was read.
         expect(start.mock.calls[0][1].imageSource).toBe('unsplash');
         expect(console.error).not.toHaveBeenCalled();
     });
@@ -126,8 +120,8 @@ describe('runBootSequence', () => {
     it('is not first-run when an image-category preference exists, even with no save', async () => {
         saveImageCategoryPreference('nature');
         await runBootSequence(deps());
-        // No image-source preference was saved, so the concrete non-first-run
-        // reading is `undefined` (unset), not the 'first-run' sentinel.
+        // No image-source preference saved, so the non-first-run reading is
+        // `undefined` (unset), not the 'first-run' sentinel.
         expect(start.mock.calls[0][1].imageSource).toBeUndefined();
         expect(console.error).not.toHaveBeenCalled();
     });
@@ -158,8 +152,8 @@ describe('runBootSequence', () => {
     });
 
     it('drops the per-style configs but keeps size, image, vibrancy and rotation in the fallback', async () => {
-        // Seed every per-style preference the fallback must NOT forward,
-        // plus the ones it must.
+        // Seed both the per-style preferences the fallback must drop and the
+        // ones it must keep.
         saveCutStylePreference('fractal');
         saveFractalConfigPreference({ borderless: true });
         saveWavyConfigPreference({ borderless: true });
@@ -173,9 +167,8 @@ describe('runBootSequence', () => {
             .mockImplementationOnce(async () => { hasGame = true; });
         await runBootSequence(deps({ start: failing }));
 
-        // The contrast case: the *preferred* start must still carry the
-        // per-style configs (and the cut style itself) — without this, an
-        // implementation that dropped them from both calls would also pass.
+        // Contrast case: the preferred start must still carry the per-style
+        // configs, or dropping them from both calls would also pass.
         const preferredOptions = failing.mock.calls[0][1];
         expect(preferredOptions).toEqual({
             cutStyle: 'fractal',
@@ -197,8 +190,7 @@ describe('runBootSequence', () => {
             rotationEnabled: true,
         });
 
-        // Same grid size on both attempts — the fallback keeps the size,
-        // it doesn't drop or resize it.
+        // The fallback keeps the grid size, doesn't resize it.
         expect(failing.mock.calls[1][0]).toEqual(failing.mock.calls[0][0]);
     });
 
@@ -226,8 +218,7 @@ describe('runBootSequence', () => {
     });
 
     it('does not convert a stale composable preference when the cut style is not composable', async () => {
-        // A player who tried Composable once, then switched to Fractal,
-        // still has a composable slider preference sitting in storage. It
+        // A stale composable slider preference (player switched to Fractal)
         // must not leak into a Fractal start.
         saveCutStylePreference('fractal');
         saveComposableConfigPreference({
@@ -323,10 +314,9 @@ describe('runBootSequence', () => {
                 'save-recovery',
                 expect.objectContaining({ downloaded: false }),
             );
-            // A returning user with an unreadable save keeps today's
-            // random-image behavior rather than the first-run bundled image.
-            // No image-source preference was saved in this test, so the
-            // concrete non-first-run reading is `undefined` (unset).
+            // A returning user (unreadable save) keeps random-image behavior,
+            // not first-run. No source preference saved here, so it reads
+            // `undefined` (unset).
             expect(start.mock.calls[0][1].imageSource).toBeUndefined();
             expect(console.error).not.toHaveBeenCalled();
         });

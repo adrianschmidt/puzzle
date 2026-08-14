@@ -1,14 +1,10 @@
 import { BUNDLED_IMAGE_URL, BUNDLED_PORTRAIT_IMAGE_URL } from './bundled-image.js';
 
 /**
- * Used when the puzzle origin (a share payload, or a resumed save) only
- * carries the URL — not the choice that produced it.
- *
- * `'bundled'` is the shipped image (first-run puzzles and
- * Unsplash-failure fallbacks — the fresh-game path distinguishes the
- * two itself), in either the landscape or portrait variant;
- * `'fallback'` covers the legacy `puzzle-image.jpg` from
- * old saves/links plus anything unrecognized.
+ * Classifies a puzzle image URL when only the URL survived (a share payload or
+ * resumed save), not the choice behind it. `'bundled'` is the shipped image
+ * (first-run and Unsplash-failure fallbacks, landscape or portrait);
+ * `'fallback'` covers the legacy `puzzle-image.jpg` and anything unrecognized.
  */
 export function classifyImageSource(
     imageUrl: string | null,
@@ -25,17 +21,15 @@ export function classifyImageSource(
             return 'unsplash';
         }
     } catch {
-        // Fall through to 'fallback' on malformed URLs.
+        // Malformed URL: fall through to 'fallback'.
     }
     return 'fallback';
 }
 
 /**
- * A first-run start reuses the bundled image URL, so
- * {@link classifyImageSource} alone can't tell it from an
- * Unsplash-fetch-failure fallback (both land on the bundled URL). The
- * caller's `'first-run'` sentinel is the only signal, so honor it here;
- * otherwise classify by URL.
+ * A first-run start reuses the bundled URL, so {@link classifyImageSource}
+ * can't tell it from an Unsplash-failure fallback. The caller's `'first-run'`
+ * sentinel is the only signal; honor it, else classify by URL.
  */
 export function resolveNewGameImageSource(
     imageSource: string | undefined,

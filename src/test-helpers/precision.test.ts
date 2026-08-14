@@ -2,11 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { decimals, worstPrecision } from './precision.js';
 
 /**
- * These helpers *define* the geometry-precision invariant (#487), so they are
- * tested as units rather than only through their two consumers. Neither
- * consumer can reach `decimals`'s exponential branch — both quantize their
- * near-zero values to `0` before the probe sees them — which is exactly the
- * blindness that let the branch ship broken in the first place.
+ * These helpers *define* the geometry-precision invariant (#487), so they're
+ * unit-tested, not only through their two consumers — neither of which reaches
+ * `decimals`'s exponential branch (both quantize near-zero values to 0 first),
+ * the blindness that let it ship broken.
  */
 describe('decimals', () => {
     it('counts the digits after the decimal point', () => {
@@ -38,10 +37,9 @@ describe('decimals', () => {
         expect(decimals(1.5e21)).toBe(0);
     });
 
-    // Non-finite values carry no fraction, so they read as 0 decimals and sail
-    // through the invariant. Pinned so nobody mistakes the precision check for
-    // a finiteness check — `quantizePieceGeometry` passes non-finite inputs
-    // through by design.
+    // Non-finite values read as 0 decimals and sail through the invariant.
+    // Pinned so nobody mistakes the precision check for a finiteness check —
+    // quantizePieceGeometry passes non-finite inputs through by design.
     it('reports zero decimals for non-finite values', () => {
         expect(decimals(NaN)).toBe(0);
         expect(decimals(Infinity)).toBe(0);
@@ -91,8 +89,8 @@ describe('worstPrecision', () => {
     });
 
     // A Map's contents are invisible to Object.entries, so walking one would
-    // report 0 decimals and pass without checking anything. The obvious next
-    // target is `state.groups`, whose `PieceGroup.pieces` is a Map.
+    // report 0 decimals and pass vacuously — and the obvious next target,
+    // state.groups, holds a Map (PieceGroup.pieces).
     it('throws rather than passing vacuously on a Map or Set', () => {
         expect(() => worstPrecision({ pieces: new Map([[1, { x: 0.125 }]]) }))
             .toThrow(/Map \(at `\.pieces`\)/);

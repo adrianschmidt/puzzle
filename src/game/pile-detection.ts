@@ -1,38 +1,21 @@
 /**
- * Problem: when sorting through a pile of loose pieces, dragging one
- * piece near a pile can accidentally snap it to a matching edge even
- * though the player clearly didn't intend to place it there — so merges
- * are suppressed when many non-matching groups overlap the drop.
- *
- * Exception: don't suppress when placing a piece into a gap in an
- * assembled section — there, neighboring pieces are expected to be
- * close, but they're typically larger groups, not a pile of loose
- * singles.
+ * Suppress accidental merges when dragging a loose piece through a pile: if
+ * many non-matching groups overlap the drop, skip the merge. Exception:
+ * placing into a gap in an assembled section, where matching neighbors are
+ * expected to be close (and are larger groups, not loose singles).
  */
 
 import type { GameState, PieceGroup } from '../model/types.js';
 import { tryGetGroup } from '../model/helpers.js';
 import { getGroupBounds, type BoundingRect } from './group-bounds.js';
 
-/**
- * If this many or more non-matching groups overlap the dropped group,
- * and their count exceeds the matching count by this ratio,
- * suppress the merge.
- */
+/** Min non-matching overlapping groups (also must exceed matching count) to suppress. */
 export const PILE_OVERLAP_THRESHOLD = 3;
 
-/**
- * Padding in pixels added around a group's bounding rect when
- * checking for overlap. This accounts for tabs extending beyond
- * the piece edges and gives some spatial margin.
- */
+/** Padding (px) around a group's bounds for overlap checks; compensates for tabs. */
 export const OVERLAP_PADDING_PX = 20;
 
-/**
- * World-space AABB using just edge corner endpoints (no tab geometry).
- * Pile detection has always used corner-only bounds — the
- * `OVERLAP_PADDING_PX` constant exists to compensate for tabs.
- */
+/** World-space AABB from corner endpoints only (no tabs; padding compensates). */
 function pileBounds(group: PieceGroup, state: GameState): BoundingRect {
     return getGroupBounds(group, state.piecesById, {
         space: 'world',
@@ -84,8 +67,7 @@ export function shouldSuppressMerge(
     const movedGroup = tryGetGroup(state, movedGroupId);
     if (!movedGroup) return false;
 
-    // Don't suppress merges for larger assembled groups — players
-    // are more intentional when dragging a big chunk.
+    // Don't suppress for larger groups: dragging a big chunk is intentional.
     if (movedGroup.pieces.size > 1) return false;
 
     const movedBounds = padRect(
@@ -111,8 +93,7 @@ export function shouldSuppressMerge(
         }
     }
 
-    // The outnumber requirement keeps placement into gaps in assembled
-    // sections working, where matching groups are expected to overlap.
+    // Outnumber requirement keeps gap-placement in assembled sections working.
     return nonMateOverlapCount >= PILE_OVERLAP_THRESHOLD &&
            nonMateOverlapCount > mateOverlapCount;
 }

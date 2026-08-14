@@ -1,9 +1,3 @@
-/**
- * Both payload builders live in one file because they derive
- * `traceSetVersion` off the generated state the same way — see the comment
- * on that call in `buildFreshGameData`.
- */
-
 import type { GameState, GridSize, Orientation } from '../model/types.js';
 import type { NewGameData } from '../analytics/index.js';
 import type { GenerationOutcome } from '../game/index.js';
@@ -38,9 +32,8 @@ export function buildFreshGameData(opts: {
         cols: oriented.cols,
         rows: oriented.rows,
         pieceCount: state.pieces.length,
-        // resolveNewGameImageSource honors the 'first-run' sentinel, which
-        // classifyImageSource can't distinguish from a fallback-after-
-        // failed-fetch (both reuse the bundled URL).
+        // resolveNewGameImageSource honors the 'first-run' sentinel;
+        // classifyImageSource can't (both reuse the bundled URL).
         imageSource: resolveNewGameImageSource(imageSource, state.imageUrl),
         generationMode: generation.mode,
         generationMs: generation.durationMs,
@@ -51,29 +44,20 @@ export function buildFreshGameData(opts: {
     if (generation.fallbackReason !== undefined) {
         data.generationFallbackReason = generation.fallbackReason;
     }
-    // Same reader as the shared-link path, so the derivation has one
-    // spelling in this file. `createNewGame` stored whichever of the four
-    // configs `generatorConfigsForNewGame` (`generator-configs.ts`) emitted
-    // for `cutStyle`, so reading it back off the state returns exactly what
-    // those configs stamped — including the degraded Classic case, where
-    // `classicConfig` is the one deliberately withheld, so the state
-    // carries no trace-set version at all.
+    // Read off the generated state: createNewGame kept only the config
+    // matching cutStyle. Degraded Classic withholds classicConfig, so no version.
     const traceSetVersion = traceSetVersionOf(state);
     if (traceSetVersion !== undefined) {
         data.traceSetVersion = traceSetVersion;
     }
-    // Only Classic reaches here with a chunk error — for every other style
-    // `start-new-game.ts` threw on the `'fail'` outcome before building this
-    // payload. Without this flag a degraded game is
-    // indistinguishable from genuine pre-upgrade Classic traffic (both
-    // are `classic` with no `traceSetVersion`), which is the metric that
-    // decides when the legacy generator can be retired.
+    // Only degraded Classic reaches here (start-new-game.ts threw for other
+    // styles). Without the flag it's indistinguishable from pre-upgrade Classic
+    // traffic — both classic with no traceSetVersion.
     if (chunkDegraded) {
         data.tracedChunkDegraded = true;
     }
-    // Same bucket, different cause: the boot fallback never fetched the
-    // chunk, so it has no failure to record — but its game is legacy
-    // geometry too and has to be excludable from that same query.
+    // Boot fallback never fetched the chunk (no failure to record) but is
+    // legacy geometry too, so it must be excludable from the same query.
     if (bootFallback) {
         data.bootFallback = true;
     }
@@ -99,9 +83,8 @@ export function buildSharedGameData(opts: {
         source: 'shared',
         cutStyle: state.cutStyle ?? 'classic',
         rotationMode: state.rotationMode ?? 'none',
-        // The link stores the post-transpose grid, so orientation is the
-        // taller-than-wide test on it (square grids read as landscape,
-        // matching orientGridSize's normalization).
+        // Link stores the post-transpose grid; taller-than-wide, squares read
+        // landscape (matches orientGridSize's normalization).
         orientation:
             state.gridSize.rows > state.gridSize.cols ? 'portrait' : 'landscape',
         cols: state.gridSize.cols,
@@ -120,13 +103,9 @@ export function buildSharedGameData(opts: {
     if (generation.fallbackReason !== undefined) {
         data.generationFallbackReason = generation.fallbackReason;
     }
-    // Read off the generated state rather than off the payload: the link's
-    // config blocks have already been through `createNewGame`, which keeps
-    // only the one matching the selected cut style, so the crafted-link
-    // guard is structural instead of restated per style. Present for a
-    // traced-tab Wavy link, a Triangles link, or a sine-based Classic
-    // link; a legacy (classic-tab) Wavy link — or a pre-upgrade Classic
-    // link — carries no version, matching the fresh path.
+    // Read off the generated state, not the payload: createNewGame kept only
+    // the config matching the cut style, so the crafted-link guard is
+    // structural instead of per-style.
     const traceSetVersion = traceSetVersionOf(state);
     if (traceSetVersion !== undefined) {
         data.traceSetVersion = traceSetVersion;

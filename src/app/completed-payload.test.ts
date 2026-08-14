@@ -5,8 +5,8 @@ import { buildPuzzleCompletedData } from './completed-payload.js';
 
 describe('buildPuzzleCompletedData', () => {
     it('derives geometry and style from state when nothing was cached', () => {
-        // A resumed session has no cached NewGameData, so the event still has
-        // to be useful from gameState alone.
+        // A resumed session has no cached NewGameData, so the event must be
+        // useful from gameState alone.
         const state = makeGameState({
             cutStyle: 'triangles',
             rotationMode: 'free',
@@ -32,7 +32,7 @@ describe('buildPuzzleCompletedData', () => {
     });
 
     it('lets cached fields win over the derived ones', () => {
-        // The cached payload knows things state cannot recover — image source,
+        // The cached payload knows what state cannot recover — image source,
         // category, vibrancy.
         const cached = {
             source: 'fresh', cutStyle: 'wavy', rotationMode: 'none',
@@ -56,10 +56,9 @@ describe('buildPuzzleCompletedData', () => {
     });
 
     it('omits traceSetVersion rather than setting it undefined when the state carries none', () => {
-        // Presence is the generator discriminator for Classic — the
-        // pre-upgrade-tail query in umami.ts subtracts on presence, not on a
-        // negated equality check, so an unconditional `undefined` would
-        // silently break it.
+        // Presence is the Classic generator discriminator: umami.ts's
+        // pre-upgrade-tail query subtracts on presence, so an unconditional
+        // `undefined` would silently break it.
         const state = makeGameState({ cutStyle: 'classic' });
         expect('traceSetVersion' in buildPuzzleCompletedData(state, null)).toBe(false);
     });

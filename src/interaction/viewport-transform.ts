@@ -1,10 +1,7 @@
 /**
- * Pure logic, no DOM dependency. The transform defines a mapping
- * from world coordinates (where puzzle pieces live) to screen
- * coordinates (what the user sees).
- *
- * Screen = World × scale + offset
- * World = (Screen - offset) / scale
+ * Maps world coordinates (where pieces live) to screen coordinates:
+ *   Screen = World × scale + offset
+ *   World  = (Screen - offset) / scale
  */
 
 import type { Point } from '../model/types.js';
@@ -12,7 +9,7 @@ import type { Point } from '../model/types.js';
 export const MIN_SCALE = 0.2;
 export const MAX_SCALE = 5.0;
 
-/** Default zoom step for scroll wheel (multiplier per tick). */
+/** Scroll-wheel zoom step (multiplier per tick). */
 export const WHEEL_ZOOM_FACTOR = 1.1;
 
 export interface ViewportState {

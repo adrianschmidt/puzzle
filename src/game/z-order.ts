@@ -1,18 +1,13 @@
 /**
- * After a drop, a large group can fully cover a smaller one, hiding it
- * in stacking order. Covered groups are raised so smaller pieces are
- * never lost beneath larger ones.
+ * After a drop a large group can fully cover a smaller one; covered groups are
+ * raised so smaller pieces aren't lost beneath larger ones.
  */
 
 import type { GameState, Piece, PieceGroup } from '../model/types.js';
 import { tryGetGroup } from '../model/helpers.js';
 import { getGroupBounds, type BoundingRect } from './group-bounds.js';
 
-/**
- * World-space AABB using just edge corner endpoints (no tab geometry).
- * Corner-only bounds are a fast, conservative approximation — good
- * enough for "is this small group fully covered by that big group".
- */
+/** World-space AABB from corner endpoints only (no tabs); a fast, conservative approximation. */
 function zOrderBounds(
     group: PieceGroup,
     piecesById: ReadonlyMap<number, Piece>,

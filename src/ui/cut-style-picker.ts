@@ -1,7 +1,6 @@
 /**
  * The caller decides which options to show — on production builds,
- * `getVisibleCutStyleOptions()` in `game/cut-styles.ts` filters
- * Composable out.
+ * `getVisibleCutStyleOptions()` in `game/cut-styles.ts` filters Composable out.
  */
 
 import { CUT_STYLE_OPTIONS } from '../game/cut-styles.js';

@@ -44,12 +44,9 @@ describe('runGeneration', () => {
     });
 
     it('survives structuredClone losslessly with autoGroups and tabDebugReport populated', () => {
-        // Legacy classic leaves autoGroups/tabDebugReport undefined, which
-        // clones trivially. Wavy always routes through the composable
-        // pipeline (autoGroups is populated whenever minPieceArea is set,
-        // which the wavy strategy always does) and tabDebug:true forces a
-        // TabDebugSession, so this request exercises both non-trivial
-        // fields' clone-ability, not just their absence.
+        // Wavy populates autoGroups (its minPieceArea is always set) and
+        // tabDebug:true forces a TabDebugSession, so this exercises both fields'
+        // clone-ability — legacy classic leaves them undefined, cloning trivially.
         const request: GenerationRequest = {
             cutStyle: 'wavy',
             gridSize: { cols: 4, rows: 3 },

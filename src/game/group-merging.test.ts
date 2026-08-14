@@ -29,11 +29,8 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
 }
 
 /**
- * Create two pieces that share a vertical edge.
- *
- * Piece 0 (100×100): right edge from (100,0) to (100,100)
- * Piece 1 (100×100): left edge from (0,100) to (0,0)
- * Edges are mates of each other.
+ * Two 100×100 pieces sharing a vertical mated edge (piece 0's right ↔ piece 1's
+ * left).
  */
 function createAdjacentPiecePair(): {
     piece0: Piece;
@@ -62,11 +59,8 @@ function createAdjacentPiecePair(): {
 }
 
 /**
- * Create three pieces in a row (left-center-right), each 100×100.
- *
- * Piece 0: right edge mates with piece 1's left
- * Piece 1: left mates with piece 0, right mates with piece 2
- * Piece 2: left mates with piece 1
+ * Three 100×100 pieces in a row: piece 0's right ↔ piece 1's left, piece 1's
+ * right ↔ piece 2's left.
  */
 function createThreePieceRow(): {
     pieces: Piece[];
@@ -520,23 +514,12 @@ describe('processDrop', () => {
 
 describe('mergeGroups with rotation snap', () => {
     it('snaps the moved group rotation to the target rotation before merging', () => {
-        // Use a real piece with geometry so rotateGroup has a non-trivial
-        // center to pivot around. piece0 is a 100×100 square; when placed at
-        // offset (0,0) in a group, its center is (50,50) in local coords.
-        //
-        // Setup:
-        //   movedGroup:  rotation=92°, piece0 at offset (0,0)
-        //   targetGroup: rotation=90°, piece1 at offset (0,0)
-        //   snapDelta: {0, 0}  (position already aligned after rotation snap)
-        //
-        // rotateGroup snaps movedGroup from 92° to 90° while keeping piece0's
-        // center fixed in world space.  The position shift is:
-        //   adj = rotatePoint({50,50}, 92°) − rotatePoint({50,50}, 90°)
-        //
-        // Without the rotation snap the world position of piece0 computed
-        // through targetGroup after merge would use the un-snapped (92°)
-        // movedGroup.position, which differs from the snapped position by
-        // that same adjustment — so the assertion below fails without the fix.
+        // piece0 is a 100×100 square, so at offset (0,0) its local center is
+        // (50,50) — a non-trivial pivot for rotateGroup. movedGroup starts at
+        // 92°, targetGroup at 90°, snapDelta 0. Without the rotation snap,
+        // piece0's world position through targetGroup would use the un-snapped
+        // (92°) position and diverge by rotatePoint(center,92°) −
+        // rotatePoint(center,90°) — the assertion below catches exactly that.
         const { piece0, piece1 } = createAdjacentPiecePair();
 
         const movedGroup: PieceGroup = {
@@ -553,11 +536,9 @@ describe('mergeGroups with rotation snap', () => {
         };
         const state = makeGameState({ pieces: [piece0, piece1], groups: [movedGroup, targetGroup] });
 
-        // Record what movedGroup's world-space position becomes after the
-        // expected rotation snap; piece0 at offset (0,0) means its world pos
-        // equals movedGroup.position itself (rotatePoint({0,0}) = {0,0}).
-        // After rotateGroup snap the position moves slightly; we capture it by
-        // performing the same rotation math the implementation will use:
+        // piece0 at offset (0,0) means its world pos equals movedGroup.position.
+        // Recompute the expected post-snap position with the same rotation math
+        // the implementation uses:
         const pivotLocal = { x: 50, y: 50 }; // piece0 center in local coords
         const rotOld = rotatePoint(pivotLocal, 92);
         const rotNew = rotatePoint(pivotLocal, 90);
@@ -582,7 +563,6 @@ describe('mergeGroups with rotation snap', () => {
     });
 
     it('is a no-op for already-aligned rotations', () => {
-        // Both groups at rotation 90°; same behavior as the existing tests.
         const movedGroup: PieceGroup = {
             id: 0,
             pieces: new Map([[0, { x: 0, y: 0 }]]),

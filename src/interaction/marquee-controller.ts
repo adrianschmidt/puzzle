@@ -1,11 +1,8 @@
 /**
- * Owns one rubber-band gesture: a transient screen-space overlay rectangle,
- * and, on release, an additive selection of every group whose projected
- * screen bounds match the box. Whether a group "matches" depends on the
- * intersect-vs-contain setting read at release time.
- *
- * The gesture is driven by `setupInteraction`, which forwards the same
- * background-drag pointer events the router emits for a viewport pan.
+ * Owns one rubber-band gesture: a transient overlay rectangle, then on release
+ * an additive selection of every group whose screen bounds match the box
+ * (intersect vs contain read at release time). Driven by setupInteraction,
+ * which forwards the router's background-drag pointer events.
  */
 
 import { getGroupVisualBounds } from '../game/index.js';
@@ -25,12 +22,9 @@ export interface MarqueeControllerOptions {
     selectionManager: SelectionManager;
     /** Read at release time so a setting change applies without a rebuild. */
     isContainMode: () => boolean;
-    /**
-     * Projected screen rectangles for every selectable group, evaluated at
-     * release time against the current viewport transform.
-     */
+    /** Screen rects for every selectable group, evaluated at release time. */
     getGroupScreenRects: () => ReadonlyArray<{ id: number; rect: ScreenRect }>;
-    /** Called once after a marquee adds at least one group to the selection. */
+    /** Called once when a marquee adds ≥1 group to the selection. */
     onSelectionCommitted: () => void;
 }
 
@@ -81,8 +75,7 @@ export class MarqueeController {
                 : rectsIntersect(marquee, rect);
             if (hit) matched.push(id);
         }
-        // Batch the additions so the selection's `onChange` (which re-applies
-        // visuals across every group) fires once, not once per matched group.
+        // Batch so selection onChange (re-applies visuals across every group) fires once, not per match.
         const changed = this.opts.selectionManager.selectMany(matched);
         if (changed) this.opts.onSelectionCommitted();
     }
@@ -107,10 +100,9 @@ export class MarqueeController {
 }
 
 /**
- * Project a group's rotation-aware, tab-inclusive world bounds into a
- * screen-space rectangle. Returns null for a group with no findable
- * geometry (so callers can skip it). The viewport has no rotation, so an
- * axis-aligned world box maps to an axis-aligned screen box.
+ * Project a group's rotation-aware, tab-inclusive world bounds to a screen
+ * rectangle, or null when the group has no findable geometry. The viewport
+ * has no rotation, so an axis-aligned world box stays axis-aligned on screen.
  */
 export function groupScreenRect(
     group: PieceGroup,
@@ -118,10 +110,7 @@ export function groupScreenRect(
     worldToScreen: (p: Point) => Point,
 ): ScreenRect | null {
     const vb = getGroupVisualBounds(group, piecesById);
-    // `getGroupVisualBounds` returns its `{minX:0, minY:0, width:0, height:0}`
-    // sentinel when a group has no findable geometry. A real group always has
-    // a footprint, so a zero-by-zero box can only be that sentinel; skip it
-    // rather than project a degenerate point.
+    // getGroupVisualBounds returns a 0×0 box as its no-geometry sentinel; a real group always has a footprint, so skip it.
     if (vb.width === 0 && vb.height === 0) return null;
 
     const tl = worldToScreen({

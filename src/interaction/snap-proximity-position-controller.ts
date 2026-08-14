@@ -1,16 +1,12 @@
 /**
- * Gesture-lifecycle wrapper around snap proximity position (the mirror of
- * SnapProximityRotationController).
+ * Gesture-lifecycle wrapper around snap proximity position (mirror of
+ * SnapProximityRotationController). Owns the per-gesture context and frame
+ * gating: rotates can outpace the refresh, so evaluation runs at most once per
+ * frame (first in a frame runs immediately, later ones skipped). Geometry lives
+ * in game/snap-proximity-position.ts.
  *
- * Owns the per-gesture context (built once at rotation start) and frame
- * gating: pointer-move events can outpace the display refresh, so evaluation
- * runs at most once per animation frame. The first rotate in a frame
- * evaluates immediately (no added latency); later rotates in the same frame
- * are skipped. All the geometry lives in `game/snap-proximity-position.ts`.
- *
- * `stop()` only discards the context — translation already applied stays,
- * including on a canceled rotation (it moved toward the correct placement,
- * so keeping it is harmless), mirroring the rotation controller.
+ * stop() only discards the context — translation already applied stays, even on
+ * a canceled rotation (it moved toward the correct placement).
  */
 
 import type { GameState } from '../model/types.js';
@@ -24,14 +20,10 @@ import { computeSnapProximityPosition } from '../game/snap-proximity-position.js
 
 export interface SnapProximityPositionOptions {
     /**
-     * The installed game, or `undefined` when there is none. Boot can fail
-     * and leave nothing installed (#488); with no game there is no gesture
-     * to track, so the controller stays inert rather than making its caller
-     * prove otherwise.
-     *
-     * Called on every rotation frame, including gated ones — `onGroupRotated`
-     * reads it before the `!this.ctx || this.gated` early return, so it must
-     * be cheap and side-effect-free.
+     * The installed game, or undefined when boot failed and left none installed
+     * (#488) — then the controller stays inert. Called on every rotation frame
+     * including gated ones (before the early return), so keep it cheap and
+     * side-effect-free.
      */
     getState: () => GameState | undefined;
     /** Active snap tolerances for `state`; read once per gesture, at start(). */
@@ -55,10 +47,9 @@ export class SnapProximityPositionController {
     }
 
     /**
-     * Cheap no-op context (null) unless the game is in free-rotation mode
-     * and the group has cross-group mates. `anchorPieceId` restricts the
-     * assist to the manual pivot's piece for the gesture — see
-     * `buildProximityContext`.
+     * Null (no-op) context unless the game is free-rotation and the group has
+     * cross-group mates. anchorPieceId restricts the assist to the manual
+     * pivot's piece — see buildProximityContext.
      */
     start(groupId: number, anchorPieceId?: number): void {
         const state = this.getState();

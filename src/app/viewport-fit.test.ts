@@ -12,17 +12,15 @@ import { VIEWPORT_TRANSITION_MS } from '../renderer/index.js';
 import { gatherAndZoomToFit, SETTLE_GRACE_MS, zoomToFitCompletedPuzzle } from './viewport-fit.js';
 
 /**
- * The two deadlines the fallback timer is armed to, derived rather than
- * spelled out: raising the renderer's transition has to move these with it,
- * or the suite reddens on tests that report nothing wrong.
+ * The two deadlines the fallback timer is armed to, derived not hardcoded:
+ * raising the renderer's transition moves these with it.
  */
 const TABLE_DEADLINE_MS = VIEWPORT_TRANSITION_MS + SETTLE_GRACE_MS;
 const NO_TABLE_DEADLINE_MS = VIEWPORT_TRANSITION_MS;
 
 /**
- * A state with two real, well-formed groups (rather than the default empty
- * `groups: []`) so `computeGatheredPositions`/`applyGatheredPositions` have
- * something to actually pack and move.
+ * Two real groups so `computeGatheredPositions`/`applyGatheredPositions` have
+ * something to pack and move.
  */
 function makeMultiGroupState(): GameState {
     const pieces = [
@@ -37,8 +35,8 @@ function makeMultiGroupState(): GameState {
 }
 
 /**
- * A state with the single group a completed puzzle would have — one piece
- * is enough since the completion math only needs a group with real bounds.
+ * The single group a completed puzzle has — one piece suffices, the completion
+ * math only needs real bounds.
  */
 function makeCompletedState(): GameState {
     const pieces = [makeRectPiece({ id: 0, width: 100, height: 100 })];
@@ -50,9 +48,8 @@ describe('gatherAndZoomToFit', () => {
     let container: HTMLElement;
     let renderer: FakeRenderer;
     let viewportTransform: ViewportTransform;
-    // `Mock<() => void>` rather than bare `ReturnType<typeof vi.fn>`: the
-    // latter widens to vi.fn's full generic constraint and stops being
-    // assignable to `ViewportFitDeps.applyTransform: () => void`.
+    // `Mock<() => void>`, not `ReturnType<typeof vi.fn>` — the latter widens
+    // and stops being assignable to `ViewportFitDeps.applyTransform`.
     let applyTransform: Mock<() => void>;
     let renderCurrent: Mock<() => void>;
 
@@ -68,11 +65,10 @@ describe('gatherAndZoomToFit', () => {
 
     it('scales to fit with 10% padding and centers the layout', () => {
         const state = makeMultiGroupState();
-        // Independent reference computation: computeGatheredPositions is
-        // deterministic for this fixture (two identically-sized groups, so
-        // the internal shuffle can't change the resulting bounds), which
-        // lets the expected scale/offset be derived from the real layout
-        // instead of hardcoded magic pixel numbers.
+        // Independent reference: computeGatheredPositions is deterministic for
+        // this fixture (two identical groups, so the shuffle can't change the
+        // bounds), so the expected scale/offset derive from the real layout
+        // instead of magic numbers.
         const aspectRatio = window.innerWidth / window.innerHeight;
         const { layoutBounds } = computeGatheredPositions(state.groups, aspectRatio, state.piecesById);
         const expectedScale = Math.min(
@@ -106,9 +102,8 @@ describe('zoomToFitCompletedPuzzle', () => {
     let container: HTMLElement;
     let renderer: FakeRenderer;
     let viewportTransform: ViewportTransform;
-    // `Mock<() => void>` rather than bare `ReturnType<typeof vi.fn>`: the
-    // latter widens to vi.fn's full generic constraint and stops being
-    // assignable to `ViewportFitDeps.applyTransform: () => void`.
+    // `Mock<() => void>`, not `ReturnType<typeof vi.fn>` — the latter widens
+    // and stops being assignable to `ViewportFitDeps.applyTransform`.
     let applyTransform: Mock<() => void>;
     let renderCurrent: Mock<() => void>;
     let deps: Parameters<typeof zoomToFitCompletedPuzzle>[2];
@@ -145,9 +140,9 @@ describe('zoomToFitCompletedPuzzle', () => {
     });
 
     it('spins the DOM element the short way (+10°), not the long way (-350°)', () => {
-        // The settled model rotation is always normalized to 0, so it can't
-        // distinguish a +10° turn from a -350° one — only the CSS transition
-        // target actually written to the element shows which way it spins.
+        // The settled model rotation is always 0, so it can't distinguish +10°
+        // from -350° — only the CSS transition target written to the element
+        // shows which way it spins.
         const state = makeCompletedState();
         const group = state.groups[0];
         group.rotation = 350;
@@ -158,21 +153,18 @@ describe('zoomToFitCompletedPuzzle', () => {
 
         zoomToFitCompletedPuzzle(state, group, deps, () => {});
 
-        // 350° should animate to 360° (the +10° short way), not 0° (the
-        // -350° long way), even though both are visually upright at rest.
+        // 350° animates to 360° (the +10° short way), not 0° (the -350° way),
+        // though both rest upright.
         expect(groupEl.style.transform).toContain('rotate(360deg)');
-        // The origin must be pinned to the image center (50,50 for this
-        // fixture's single 100×100 piece) — without it the rotation would
-        // pivot about the group's default (0,0) origin and orbit instead of
-        // spinning in place.
+        // The origin must be pinned to the image center (50,50 here) — without
+        // it the rotation pivots about (0,0) and orbits instead of spinning in place.
         expect(groupEl.style.transformOrigin).toBe('50px 50px');
     });
 
     it('forces a reflow between the re-anchor frame and the spin frame', () => {
-        // Without the forced reflow, the browser can coalesce the re-anchor
-        // (transition: none) and the spin (a real transition) style writes
-        // into a single paint, collapsing the animation to one frame instead
-        // of animating from the re-anchored start.
+        // Without the forced reflow, the browser coalesces the re-anchor
+        // (transition: none) and the spin (a real transition) into one paint,
+        // collapsing the animation to a single frame.
         const state = makeCompletedState();
         const group = state.groups[0];
         group.rotation = 90;
@@ -189,10 +181,9 @@ describe('zoomToFitCompletedPuzzle', () => {
 
     it('compensates position so the puzzle does not move when the pivot changes', () => {
         // Re-anchoring transform-origin to the image center must keep the same
-        // world point under the puzzle, or it jumps before the spin starts.
-        // Exact value, not just "changed": position {50,50}, image center
-        // {50,50}, rotated 90° — a sign flip or wrong angle would also
-        // change the position but land on the wrong point.
+        // world point, or it jumps before the spin. Exact value, not just
+        // "changed": a sign flip or wrong angle would also change position but
+        // land wrong.
         const state = makeCompletedState();
         const group = state.groups[0];
         group.rotation = 90;
@@ -248,9 +239,8 @@ describe('zoomToFitCompletedPuzzle', () => {
     });
 
     it('does not fire onComplete twice for a repeated transitionend', () => {
-        // The handler must unsubscribe itself once it fires, or a second
-        // "transform" transitionend (e.g. from an unrelated later zoom)
-        // would run the completion callback again.
+        // The handler must unsubscribe once it fires, or a second "transform"
+        // transitionend would run the completion callback again.
         const state = makeCompletedState();
         const table = document.createElement('div');
         table.dataset.puzzleTable = 'true';
@@ -268,14 +258,13 @@ describe('zoomToFitCompletedPuzzle', () => {
     });
 
     it('settles on the timer when the transform never transitions', () => {
-        // A `transform` transition only starts when the transform actually
-        // changes. Two Solves in a row frame the same completed group from
-        // the same viewport, so the second computes a target identical to
-        // what is already applied, no transition runs and `transitionend`
-        // never fires. Without a timer armed in this branch too, the
-        // viewport transition is never disabled — so every later pan and
-        // zoom animates for 0.8s — the listener stays on an element the
-        // renderer never replaces, and the spun group's element is retained.
+        // A `transform` transition only starts when the transform changes. Two
+        // Solves in a row frame the same group from the same viewport, so the
+        // second target is identical, no transition runs and `transitionend`
+        // never fires. Without a timer here too, the viewport transition is
+        // never disabled (every later pan/zoom animates), the listener stays on
+        // an element the renderer never replaces, and the spun group's element
+        // is retained.
         const state = makeCompletedState();
         const group = state.groups[0];
         group.rotation = 90;
@@ -289,9 +278,9 @@ describe('zoomToFitCompletedPuzzle', () => {
         const onComplete = vi.fn();
         zoomToFitCompletedPuzzle(state, group, deps, onComplete);
 
-        // The zoom, then the grace on top. Not settled at the nominal
-        // duration: on the ordinary path the real transitionend has to win
-        // this race, or the timer would cut the zoom short.
+        // The zoom, then the grace on top. Not settled at the nominal duration:
+        // the real transitionend must win the ordinary race, or the timer cuts
+        // the zoom short.
         vi.advanceTimersByTime(VIEWPORT_TRANSITION_MS);
         expect(onComplete).not.toHaveBeenCalled();
 
@@ -302,12 +291,10 @@ describe('zoomToFitCompletedPuzzle', () => {
     });
 
     it('removes its transitionend listener when the timer settles it', () => {
-        // The listener lands on `[data-puzzle-table]`, which `renderer.init`
-        // creates once and `renderState` never replaces — so one that is
-        // never removed lives on the element for the rest of the session,
-        // one per completion. A leaked listener cannot re-run `onComplete`
-        // — the `settled` latch stops that — so no callback assertion can
-        // see this; the registration itself is what has to be checked.
+        // The listener lands on `[data-puzzle-table]`, which `renderState` never
+        // replaces — one never removed lives for the session, one per
+        // completion. A leaked listener can't re-run `onComplete` (the latch
+        // stops that), so the registration itself has to be checked.
         const state = makeCompletedState();
         const table = document.createElement('div');
         table.dataset.puzzleTable = 'true';
@@ -318,8 +305,8 @@ describe('zoomToFitCompletedPuzzle', () => {
         zoomToFitCompletedPuzzle(state, state.groups[0], deps, () => {});
         vi.advanceTimersByTime(TABLE_DEADLINE_MS);
 
-        // Same handler identities, same order: what was wired is exactly
-        // what was unwired, rather than merely "something was removed".
+        // Same handler identities and order: what was wired is exactly what was
+        // unwired, not merely "something was removed".
         expect(add.mock.calls.length).toBeGreaterThan(0);
         expect(remove.mock.calls).toEqual(add.mock.calls);
     });
@@ -343,12 +330,10 @@ describe('zoomToFitCompletedPuzzle', () => {
     });
 
     it('re-renders whatever game is current when the cleanup fires, not the state captured at call time', () => {
-        // The cleanup can fire up to 1000ms after this call (transitionend or
-        // the timer fallback) — by which time a new game may have started.
-        // It must read gameState fresh via `renderCurrent`, not repaint the
-        // `state` this call was made with. The cleanup only exists when the
-        // group had a non-zero rotation and its DOM element was found, so
-        // both must be set up for this test to exercise it at all.
+        // The cleanup can fire up to 1000ms after this call, by which time a new
+        // game may have started, so it must read state fresh via `renderCurrent`,
+        // not repaint the captured `state`. The cleanup only exists for a
+        // non-zero rotation with a found DOM element, so both are set up here.
         const state = makeCompletedState();
         const group = state.groups[0];
         group.rotation = 90;

@@ -63,8 +63,8 @@ describe('createCompletionPresenter', () => {
         const onDismiss = vi.mocked(showCompletionOverlay).mock.calls[0][0].onDismiss!;
         onDismiss();
 
-        // The dismiss path only clears the handle; the overlay already tore
-        // itself down, so calling hide here would be wrong (that's remove()'s job).
+        // Dismiss only clears the handle; the overlay already tore itself
+        // down, so calling hide here would be wrong (that's remove()'s job).
         expect(hide).not.toHaveBeenCalled();
 
         presenter.show(makeGameState());

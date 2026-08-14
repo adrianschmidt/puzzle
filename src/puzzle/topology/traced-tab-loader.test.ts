@@ -41,9 +41,8 @@ describe('preloadTracedTabGenerator analytics', () => {
         expect(loaded.durationMs).toEqual(expect.any(Number));
         expect(loaded.durationMs as number).toBeGreaterThanOrEqual(0);
         expect(loaded.attempt).toBe(1);
-        // The mocked import has no real Resource Timing entry, so this
-        // resolves to 'unknown' here; the cacheState branches are
-        // exercised directly below.
+        // Mocked import has no Resource Timing entry → 'unknown' here; the
+        // cacheState branches are covered below.
         expect(['cold', 'warm', 'revalidated', 'unknown']).toContain(loaded.cacheState);
     });
 
@@ -62,10 +61,9 @@ describe('preloadTracedTabGenerator analytics', () => {
     });
 
     it('emits failed with reason, kind and attempt on rejection', async () => {
-        // Simulate a failed dynamic import by exposing `tracedTabGenerator`
-        // as a throwing getter — the loader's `.then(m => m.tracedTabGenerator)`
-        // turns the throw into a promise rejection, matching the real
-        // network-failure shape for the catch handler under test.
+        // Simulate a failed import: a throwing getter — the loader's
+        // `.then(m => m.tracedTabGenerator)` turns the throw into a rejection,
+        // matching the real network-failure shape.
         vi.doMock('./traced-tab-generator.js', () => ({
             get tracedTabGenerator(): never {
                 throw new Error('Failed to fetch dynamically imported module');
@@ -103,8 +101,8 @@ describe('preloadTracedTabGenerator analytics', () => {
         expect(callsNamed('traced-chunk-preload-started')).toHaveLength(2);
         expect(callsNamed('traced-chunk-load-failed')).toHaveLength(1);
         expect(callsNamed('traced-chunk-loaded')).toHaveLength(1);
-        // The attempt counter advances across the retry, so a
-        // failed -> loaded recovery isn't confused with two cold loads.
+        // The attempt counter advances across the retry, so failed→loaded isn't
+        // confused with two cold loads.
         expect(payloadOf('traced-chunk-load-failed').attempt).toBe(1);
         expect(payloadOf('traced-chunk-loaded').attempt).toBe(2);
     });
@@ -191,11 +189,9 @@ describe('preloadTracedTabGenerator analytics', () => {
 
     it('treats a missing tracedTabGenerator export as a parse failure, not a load', async () => {
         vi.doMock('./traced-tab-generator.js', () => ({
-            // Chunk resolves and parses, but the expected export is absent
-            // (a tree-shake / rename regression). A real ESM namespace
-            // returns undefined for a missing export; declare it
-            // explicitly so the loader's guard — not vitest's mock proxy —
-            // is what fires.
+            // Chunk parses but the export is absent (tree-shake/rename regression).
+            // A real ESM namespace returns undefined for a missing export; declare
+            // it explicitly so the loader's guard, not vitest's mock proxy, fires.
             tracedTabGenerator: undefined,
         }));
 
@@ -216,10 +212,9 @@ describe('tracedTabGeneratorStub delegation', () => {
     });
 
     it('forwards generateVariants to the loaded generator after preload', async () => {
-        // Regression: the stub must expose generateVariants so applyTabs
-        // runs the retry ladder via the registry path. A stub that only
-        // forwards generate() makes applyTabs fall back to a single
-        // candidate and the ladder never runs in the app.
+        // Regression: the stub must expose generateVariants so applyTabs runs the
+        // retry ladder via the registry path; a generate()-only stub falls back to
+        // a single candidate and the ladder never runs in the app.
         const fakeVariants = ['v0', 'v1', 'v2'];
         vi.doMock('./traced-tab-generator.js', () => ({
             tracedTabGenerator: {

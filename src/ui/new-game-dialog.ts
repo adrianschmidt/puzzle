@@ -1,7 +1,6 @@
 /**
- * Despite the legacy `.size-picker-*` CSS classes, the dialog owns the
- * cut-style picker, fractal/composable options, image-options controls,
- * the size select, and the image picker itself.
+ * Despite the legacy `.size-picker-*` CSS classes, this dialog owns the whole
+ * New Game UI (cut-style, size, image picker, and per-style options).
  */
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
@@ -68,10 +67,8 @@ export interface NewGameDialogOptions {
     /** Called when the dialog is dismissed without selecting. */
     onCancel?: () => void;
     /**
-     * Fires as soon as the dialog's effective tab generator becomes
-     * `'traced'`. The host uses it to kick off the traced-tab lazy chunk
-     * in the background so the click-to-puzzle path stays snappy. Safe to
-     * invoke repeatedly — the preload helper is idempotent.
+     * Fires when the effective tab generator becomes `'traced'`, so the host can
+     * preload the traced-tab lazy chunk. Idempotent — safe to call repeatedly.
      */
     onPreloadTracedTabs?: () => void;
 }
@@ -127,10 +124,9 @@ function buildSizeSelectRow(args: {
     select.value = args.selectedSizeId;
 
     function updateLabels(): void {
-        // Fractal and Triangles piece counts are approximate: fractal scales
-        // an internal grid, and the triangle lattice derives its column count
-        // from the image aspect ratio (unknown until the photo is fetched).
-        // Both therefore show ~N rather than an exact piece count.
+        // Fractal and Triangles piece counts are approximate (~N): fractal scales
+        // an internal grid; triangles derive column count from the image aspect
+        // ratio, unknown until the photo is fetched.
         const cutStyleId = args.getCutStyleId();
         const isApproximate = cutStyleId === 'fractal' || cutStyleId === 'triangles';
         const optionEls = select.querySelectorAll('option');
@@ -198,8 +194,7 @@ function buildImageOptionsSection(args: {
     categoryRow.appendChild(categorySelect);
     section.appendChild(categoryRow);
 
-    // Vibrant-colors toggle — appends keywords like "vibrant colorful" to
-    // the Unsplash query to bias results toward saturated photos.
+    // Appends keywords to the Unsplash query to bias results toward saturated photos.
     const vibrantRow = document.createElement('div');
     vibrantRow.className = 'dialog-row';
     const vibrantLabel = document.createElement('label');
@@ -239,8 +234,7 @@ function buildComposableSlidersSection(args: {
     const triangularControls = document.createElement('div');
     triangularControls.dataset.testid = 'composable-triangular-controls';
 
-    // Created up front so the visibility helper can toggle it; appended to
-    // the section later in DOM order.
+    // Created up front so the visibility helper can toggle it; appended below in DOM order.
     const borderlessWrap = document.createElement('div');
 
     const applyBaseCutVisibility = (baseCut: 'sine' | 'triangular'): void => {
@@ -344,11 +338,8 @@ function buildComposableSlidersSection(args: {
 
     section.appendChild(triangularControls);
 
-    // Traced has no dev/prod gate of its own — it inherits Composable's
-    // visibility via `getVisibleCutStyleOptions()`. When Composable is
-    // promoted to production, the 'Traced' radio ships with it. If
-    // Traced should graduate independently (or stay dev-only), add an
-    // explicit gate here before omitting/including the option.
+    // Traced has no gate of its own — it inherits Composable's visibility via
+    // `getVisibleCutStyleOptions()`, so promoting Composable ships Traced too.
     const tabGeneratorRow = appendSegmentedRow<'classic' | 'traced' | 'none'>(
         section,
         'Tab style',
@@ -379,10 +370,9 @@ function buildComposableSlidersSection(args: {
             verticalAmplitude: parseFloat(sliderInputs.get('verticalAmplitude')!.value),
             verticalFrequency: parseFloat(sliderInputs.get('verticalFrequency')!.value),
             tabGenerator: tabGeneratorRow.getValue(),
-            // Report the raw checkbox state; composableSliderToGeneratorConfig
-            // forces borderless off for the triangular base cut, so coercing it
-            // here too would be redundant — and would clobber the player's sine
-            // borderless choice when they toggle back from triangular.
+            // Raw checkbox state: composableSliderToGeneratorConfig already forces
+            // borderless off for triangular. Coercing here too would clobber the
+            // player's sine choice on toggle-back.
             borderless: borderlessCheckbox?.checked ?? false,
             jitter: parseFloat(jitterInput.value),
             smooth: smoothCheckbox.checked,
@@ -398,10 +388,7 @@ interface SegmentedRow<T extends string> {
     getValue(): T;
 }
 
-/**
- * Increments on each row so two rows with the same label still get
- * distinct ids (multiple rows may share a label).
- */
+/** Ensures rows sharing a label still get distinct ids. */
 let nextSegmentedRowSuffix = 0;
 
 function appendSegmentedRow<T extends string>(
@@ -501,9 +488,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         currentCutStyleId = DEFAULT_CUT_STYLE_ID;
     }
 
-    // The helper owns Escape/backdrop dismissal and fires onCancel only on
-    // those paths — not when the caller invokes dismiss() after picking an
-    // image.
+    // onCancel fires only on Escape/backdrop dismissal, not on dismiss() after a pick.
     const { overlay, dismiss } = createDismissableOverlay({
         container,
         className: 'size-picker-overlay',
@@ -543,10 +528,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
         onChange: () => imagePicker?.refresh(),
     });
 
-    /**
-     * Kicking the preload off here is what keeps the fetch off the
-     * critical path in `startNewGame`.
-     */
+    // Preloading here keeps the traced-tab fetch off startNewGame's critical path.
     const needsTracedTabs = (id: string): boolean =>
         cutStyleNeedsTracedTabs(id, composableSection.getSelectedTabGenerator());
 
@@ -608,15 +590,12 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     wavySection.setVisible(currentCutStyleId === 'wavy');
     composableSection.setVisible(currentCutStyleId === 'composable');
 
-    // Cover the "open with traced tabs already selected" paths so the lazy
-    // chunk starts loading even if the user never touches a radio — which is
-    // the common case now that the default style (Classic) is traced.
+    // Preload when opening with traced already selected (the default), so the
+    // chunk loads without needing a radio toggle.
     if (needsTracedTabs(currentCutStyleId)) options.onPreloadTracedTabs?.();
 
-    // Scrollable body: the title stays pinned above; everything else lives in
-    // two groups so the short-and-wide layout can place them side by side.
-    // The start group holds only the image picker, since picking an image
-    // launches the game.
+    // Two groups so the short-and-wide layout can place them side by side; the
+    // start group holds only the image picker (picking one launches the game).
     const content = document.createElement('div');
     content.className = 'dialog-content';
 

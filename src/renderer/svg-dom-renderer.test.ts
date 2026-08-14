@@ -344,8 +344,7 @@ describe('SvgDomRenderer', () => {
         it('sets fill-rule=evenodd on clip-path, hit-area, and debug fill for a piece with nested subpaths', () => {
             renderer.init(container);
 
-            // Create a piece with a hole: outer square M..Z and inner triangle M..Z
-            // This creates two subpaths, which with evenodd fill-rule should produce a hole
+            // A piece with a hole: outer square + inner triangle subpaths, evenodd = hole.
             const pieceWithHole = {
                 id: 0,
                 edges: [],
@@ -563,19 +562,12 @@ describe('SvgDomRenderer', () => {
 
     describe('viewport transition', () => {
         it('writes a CSS duration derived from VIEWPORT_TRANSITION_MS', () => {
-            // `app/viewport-fit.ts` arms a fallback timer against this same
-            // constant and hands the transition a 200ms grace period on top.
-            // While the CSS was a literal, raising it to e.g. 1.2s left the
-            // timer at 1.0s and silently truncated every completion zoom —
-            // nothing typed or tested linked the two.
-            //
-            // What this pins is the shape of the derivation, not the link
-            // itself: at 800 the expected value below is character-identical
-            // to `'transform 0.8s ease-in-out'`, so re-hardcoding *that*
-            // literal still passes. Writing any other duration, unit,
-            // property or easing fails here, and the link proper is
-            // structural now — `viewport-fit.ts` imports both the constant
-            // and this exact string rather than restating either.
+            // `app/viewport-fit.ts` arms a fallback timer against this constant,
+            // so a mismatched CSS duration silently truncates the completion
+            // zoom. This pins the derivation's shape, not the link itself: at
+            // 800 the expected string equals `'transform 0.8s ease-in-out'`, so
+            // re-hardcoding that still passes; any other duration/unit/easing
+            // fails. The real link is structural — `viewport-fit.ts` imports both.
             renderer.init(container);
             const table = container.querySelector<HTMLElement>('[data-puzzle-table]');
 
@@ -606,9 +598,7 @@ describe('SvgDomRenderer', () => {
             const fill = pieceEl.querySelector('[data-piece-blank]')!;
             expect(fill.tagName).toBe('path');
             expect(fill.getAttribute('fill-rule')).toBe('evenodd');
-            // The color is CSS (`--piece-blank-fill`), asserted in
-            // style.test.ts — jsdom applies no stylesheet, so there is
-            // nothing to read here.
+            // Color is CSS (`--piece-blank-fill`), asserted in style.test.ts; jsdom applies no stylesheet.
             expect(fill.hasAttribute('fill')).toBe(false);
         });
 
@@ -626,8 +616,7 @@ describe('SvgDomRenderer', () => {
             renderer.renderState(makeBlankState());
 
             const pieceEl = container.querySelector('[data-piece-id="0"]')!;
-            // An unreferenced clipPath would be a second copy of `piece.shape`
-            // on every piece — ~1.2 KB each on a large puzzle.
+            // An unreferenced clipPath would duplicate `piece.shape` per piece (~1.2 KB each on a large puzzle).
             expect(pieceEl.querySelector('defs')).toBeNull();
             expect(pieceEl.querySelector('clipPath')).toBeNull();
         });
@@ -659,8 +648,7 @@ describe('SvgDomRenderer', () => {
 
             const image = pieceEl.querySelector('image')!;
             expect(image.getAttribute('clip-path')).toBe('url(#clip-piece-0)');
-            // The clip the image renders through is the same `d` the blank arm
-            // fills, which is what makes the two silhouettes identical.
+            // Same `d` the blank arm fills, so the two silhouettes are identical.
             expect(
                 pieceEl.querySelector('clipPath path')!.getAttribute('d'),
             ).toBe(state.pieces[0].shape);

@@ -1,11 +1,8 @@
 /**
  * @vitest-environment jsdom
  *
- * buildFreshGameData/buildSharedGameData route imageUrl through
- * classifyImageSource, which resolves relative URLs against
- * window.location.href — the Unsplash-host cases below need a real DOM to
- * classify correctly instead of falling back to 'fallback' on a missing
- * `window`.
+ * classifyImageSource resolves relative URLs against window.location.href,
+ * so the Unsplash-host cases below need a real DOM.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -49,8 +46,6 @@ describe('buildFreshGameData', () => {
     });
 
     it('flags a degraded traced-tab chunk', () => {
-        // Without this flag a degraded game is indistinguishable from genuine
-        // pre-upgrade Classic traffic — both are classic with no traceSetVersion.
         expect(buildFreshGameData(freshOpts({ chunkDegraded: true })).tracedChunkDegraded).toBe(true);
     });
 
@@ -64,8 +59,7 @@ describe('buildFreshGameData', () => {
     });
 
     it('omits bootFallback rather than setting it false', () => {
-        // Same reasoning as tracedChunkDegraded above: absence, not `false`,
-        // is what the pre-upgrade-tail query in umami.ts subtracts on.
+        // Same reasoning as tracedChunkDegraded above.
         expect('bootFallback' in buildFreshGameData(freshOpts())).toBe(false);
     });
 
@@ -90,9 +84,8 @@ describe('buildFreshGameData', () => {
     });
 
     it('omits imageCategory, vibrant, and imagePicked when the source is not Unsplash', () => {
-        // freshOpts()'s default state resolves to a non-unsplash imageSource
-        // ('fallback'), so the trio must not appear at all — not even as
-        // falsy values — the way it would for an Unsplash photo above.
+        // freshOpts()'s default state is non-Unsplash ('fallback'), so the
+        // trio must be absent, not falsy.
         const data = buildFreshGameData(freshOpts());
         expect('imageCategory' in data).toBe(false);
         expect('vibrant' in data).toBe(false);
@@ -108,8 +101,7 @@ describe('buildFreshGameData', () => {
     });
 
     it('omits traceSetVersion when the generated state carries none', () => {
-        // freshOpts()'s default state is Classic with no classicConfig — the
-        // legacy-generator case, which must not carry the key at all.
+        // freshOpts()'s default is Classic with no classicConfig (legacy case).
         expect('traceSetVersion' in buildFreshGameData(freshOpts())).toBe(false);
     });
 
@@ -132,15 +124,14 @@ describe('buildFreshGameData', () => {
             },
         }));
         expect(data.generationMode).toBe('sync-fallback');
-        // The kind is the low-cardinality field an operator segments on;
-        // the reason is free text for reading individual cases.
+        // The kind is low-cardinality (operators segment on it); the reason is free text.
         expect(data.generationFallbackKind).toBe('worker-error');
         expect(data.generationFallbackReason).toBe('Generation worker error');
     });
 
     it('omits the fallback fields rather than setting them undefined', () => {
         // Umami cannot filter on absence, so an explicit `undefined` would
-        // become a value in the dashboard rather than a missing key.
+        // show as a value rather than a missing key.
         const data = buildFreshGameData(freshOpts({
             generation: { mode: 'worker', durationMs: 250 },
         }));
@@ -165,8 +156,7 @@ describe('buildSharedGameData', () => {
     });
 
     it('derives orientation from the post-transpose grid, squares reading landscape', () => {
-        // The link stores the post-transpose grid, matching orientGridSize's
-        // normalization.
+        // Link stores the post-transpose grid (matches orientGridSize).
         expect(buildSharedGameData(sharedOpts({
             state: makeGameState({ gridSize: { cols: 4, rows: 9 } }),
         })).orientation).toBe('portrait');
@@ -186,9 +176,7 @@ describe('buildSharedGameData', () => {
     });
 
     it('omits traceSetVersion when the generated state carries none', () => {
-        // A pre-upgrade Classic link (or any style with no matching config
-        // block) must not carry the key at all — the fresh path's absence
-        // reading is what this matches.
+        // Pre-upgrade Classic link (no matching config block) carries no key.
         const state = makeGameState({ gridSize: { cols: 4, rows: 7 } });
         const data = buildSharedGameData(sharedOpts({ state }));
         expect('traceSetVersion' in data).toBe(false);
@@ -213,15 +201,14 @@ describe('buildSharedGameData', () => {
             },
         }));
         expect(data.generationMode).toBe('sync-fallback');
-        // The kind is the low-cardinality field an operator segments on;
-        // the reason is free text for reading individual cases.
+        // The kind is low-cardinality (operators segment on it); the reason is free text.
         expect(data.generationFallbackKind).toBe('worker-error');
         expect(data.generationFallbackReason).toBe('Generation worker error');
     });
 
     it('omits the fallback fields rather than setting them undefined', () => {
         // Umami cannot filter on absence, so an explicit `undefined` would
-        // become a value in the dashboard rather than a missing key.
+        // show as a value rather than a missing key.
         const data = buildSharedGameData(sharedOpts({
             generation: { mode: 'worker', durationMs: 250 },
         }));

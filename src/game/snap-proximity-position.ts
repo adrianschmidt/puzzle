@@ -1,21 +1,14 @@
 /**
- * Snap proximity position — progressive translation feedback while rotating.
+ * Progressive translation feedback while rotating — the mirror of
+ * `snap-proximity-rotation.ts`. When a group is already within snap distance of
+ * a mate, rotating toward correct orientation slides it toward the snapped
+ * placement: positional error is capped by a ramp equal to the snap distance at
+ * the rotation-tolerance edge (no jump on entry) and 0 at θ = 0 (full merge
+ * correction).
  *
- * The mirror of `snap-proximity-rotation.ts`. When free rotation is enabled
- * and a group is already within the snap distance of a matching neighbor
- * (a drop would merge), rotating it toward the correct orientation slides it
- * toward the snapped placement: the allowed positional error is capped by a
- * ramp that equals the snap distance at the rotation-tolerance edge (no jump
- * on entry) and reaches zero at exactly-correct rotation (θ = 0), where the
- * full merge correction is applied.
- *
- * One-way by construction: the group's own position is the ratchet's memory.
- * Corrections only ever shrink the measured distance toward the cap — never
- * move the group away from the mate — and at θ = 0 the cap is 0, so the
- * full merge correction lands there.
- *
- * Not an assist: the merge condition is unchanged — a qualifying group would
- * snap on drop regardless. This only surfaces the earned snap early.
+ * One-way by construction — the group's position is the ratchet's memory, so
+ * corrections only shrink distance toward the cap, never push away. The merge
+ * condition is unchanged; this only surfaces the earned snap early.
  */
 
 import type { GameState, Point } from '../model/types.js';
@@ -26,27 +19,16 @@ import {
     type ProximityContext,
 } from './snap-proximity-context.js';
 
-/**
- * Float-comparison epsilon (world px) for "is this translation effectively
- * zero?" — the positional analog of `SNAP_EPSILON_DEG`. Drives the
- * "already under the cap → return null" short circuit and the one-way
- * ratchet.
- */
+/** Epsilon (world px) for treating a translation as zero; positional analog of `SNAP_EPSILON_DEG`. */
 export const SNAP_EPSILON_PX = 1e-6;
 
 /**
- * Compute the translation to apply to the group right now, in world px
- * (apply via `moveGroup`), or `null` when no correction is due.
- *
- * A candidate qualifies exactly when a drop would merge it: simulated-snap
- * distance `d ≤ tolerancePx` AND angular error `|θ| ≤ rotationToleranceDeg`.
- * The winner is sticky per gesture (`selectStickyWinner`): with each
- * candidate measured about its own piece's pivot, a manual rotation shifts
- * the non-pivot candidates' distances, so a per-call smallest-`d` pick
- * could flip the slide target mid-rotate. The correction reduces the
- * winner's `d` to a rotation-driven `cap` that equals `tolerancePx` at the
- * rotation-tolerance edge (no jump on entry) and reaches zero at θ = 0,
- * where the full `snapDelta` is applied.
+ * Translation to apply now (world px, via `moveGroup`), or `null` when no
+ * correction is due. A candidate qualifies when a drop would merge it
+ * (`d ≤ tolerancePx` AND `|θ| ≤ rotationToleranceDeg`); the winner is sticky
+ * (`selectStickyWinner`) so a manual rotation can't flip the slide target. The
+ * correction reduces `d` to a `cap` that equals `tolerancePx` at the rotation-
+ * tolerance edge and 0 at θ = 0 (full `snapDelta`).
  */
 export function computeSnapProximityPosition(
     state: GameState,
@@ -64,8 +46,8 @@ export function computeSnapProximityPosition(
     const excess = distance - cap;
     if (excess <= SNAP_EPSILON_PX) return null;
 
-    // Move along snapDelta so the remaining measured distance is `cap`.
-    // excess > 0 here implies distance > cap ≥ 0, so distance > 0.
+    // Move along snapDelta so remaining distance is `cap`. excess > 0 implies
+    // distance > cap ≥ 0, so distance > 0 (safe divide).
     const factor = excess / distance;
     return { x: snapDelta.x * factor, y: snapDelta.y * factor };
 }

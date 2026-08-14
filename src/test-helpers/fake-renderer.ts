@@ -1,34 +1,21 @@
 /**
- * The app layer talks to the renderer through the `Renderer` port only, so a
- * fake made of spies is enough to assert what the layer asked for — no real
- * DOM, no `SvgDomRenderer`.
- *
- * The two hit-test methods answer `null` for everything: this fake has no
- * geometry to hit-test against. They are spies like the rest, not bare
- * stubs, because they *are* reached — `game-session.test.ts` hands this fake
- * to the real `setupInteraction`, which calls `pieceIdFromTarget` on every
- * pointerdown and `pieceIdAtPoint` for the snap probe. A test that drives a
- * real pointer sequence therefore gets "no piece hit" from every event; that
- * is a limit of the fake, not a behavior failure. Give the relevant one a
- * `mockReturnValue(pieceId)` when a test here needs a hit.
+ * The app talks to the renderer through the `Renderer` port only, so a fake of
+ * spies is enough — no real DOM. The two hit-test methods answer `null` (this
+ * fake has no geometry) but are spies, not stubs, because they *are* reached:
+ * `game-session.test.ts` hands this fake to the real `setupInteraction`, which
+ * calls `pieceIdFromTarget` on every pointerdown and `pieceIdAtPoint` for the
+ * snap probe. A driven pointer sequence therefore gets "no piece hit" from
+ * every event; give the relevant one a `mockReturnValue(pieceId)` for a hit.
  */
 
 import { vi, type Mock } from 'vitest';
 import type { Renderer } from '../renderer/types.js';
 
-// `Mock<Renderer['x']>` (not bare `Mock`/`ReturnType<typeof vi.fn>`, which
-// widens to vi.fn's full `Procedure | Constructable` generic constraint and
-// stops being callable — TypeScript then rejects assigning these fields to
-// a real `Renderer`) — parameterizing each field on its real method
-// signature also means a signature change on `Renderer` breaks this file's
-// typecheck instead of silently losing argument typing in
-// `toHaveBeenCalledWith`.
-//
-// Extending `Renderer` directly needs no `Omit` of the overridden keys:
-// `Mock<T>` is callable with `T`'s own signature, so each field below is
-// assignable to the member it overrides. Keeping the members inherited is
-// what makes that assignability checked — a wrong `Mock<…>` parameter here
-// fails at this declaration (TS2430) rather than only at distant call sites.
+// `Mock<Renderer['x']>`, not bare `Mock`: bare widens to vi.fn's generic
+// constraint, stops being callable against `Renderer`, and loses argument
+// typing in `toHaveBeenCalledWith`. Extending `Renderer` directly (no `Omit`)
+// makes a wrong `Mock<…>` parameter fail here (TS2430), not at distant call
+// sites.
 export interface FakeRenderer extends Renderer {
     init: Mock<Renderer['init']>;
     renderState: Mock<Renderer['renderState']>;

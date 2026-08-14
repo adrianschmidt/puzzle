@@ -1,9 +1,8 @@
 /**
- * Page-realm half of the service-worker error backstop (#430) — the worker
- * can't call `track()` itself because the Umami script only lives in the
- * page. The worker has already sanitized and rate-limited, so this side only
- * validates the message shape (an untrusted `postMessage` payload) and
- * forwards it.
+ * Page-realm half of the service-worker error backstop (#430): the worker
+ * can't call `track()` (Umami only lives in the page). The worker already
+ * sanitized and rate-limited, so this side only validates the message shape
+ * (an untrusted `postMessage` payload) and forwards.
  */
 
 import { track } from '../analytics/index.js';
@@ -53,10 +52,9 @@ export function initSwErrorReporting(deps: SwErrorReportingDeps = {}): () => voi
     const trackFn = deps.track ?? track;
     const handler = (event: MessageEvent): void => {
         if (!isSwErrorReport(event.data)) {
-            // Our discriminator + a failed shape check can only be a
-            // worker↔bridge protocol desync — surface it in dev/test.
-            // Gating on the discriminator keeps unrelated
-            // `navigator.serviceWorker` messages silent. No-op in prod.
+            // A claimed type + failed shape check means a worker↔bridge
+            // protocol desync — surface it in dev/test. The discriminator gate
+            // keeps unrelated serviceWorker messages silent. No-op in prod.
             if (claimsToBeSwErrorReport(event.data)) {
                 diagnostics.warn('Dropped malformed sw-error report:', event.data);
             }

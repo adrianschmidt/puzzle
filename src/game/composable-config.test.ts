@@ -127,7 +127,6 @@ describe('composable base-cut + jitter', () => {
     beforeEach(() => localStorage.clear());
 
     it('defaults baseCut to sine and jitter to 0.15 for legacy saved configs', () => {
-        // A pre-existing preference written before baseCut/jitter existed.
         localStorage.setItem(COMPOSABLE_CONFIG_KEY, JSON.stringify({
             horizontalAmplitude: 0.2,
             horizontalFrequency: 1,
@@ -142,8 +141,6 @@ describe('composable base-cut + jitter', () => {
     });
 
     it('clamps an out-of-range jitter to the [0, 0.5] slider range', () => {
-        // A hand-edited or stale localStorage value must not smuggle an
-        // out-of-range jitter back into the UI; parseComposableConfig clamps it.
         localStorage.setItem(COMPOSABLE_CONFIG_KEY, JSON.stringify({
             baseCut: 'triangular',
             horizontalAmplitude: 0.15,

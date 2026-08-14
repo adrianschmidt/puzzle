@@ -18,10 +18,9 @@ export const PIECE_OUTLINE_PRESETS: readonly PieceOutlinePreset[] = [
         id: 'none',
         label: 'None',
         description: 'No edge',
-        // `opacity(1)` is a no-op filter function. We use it instead of the
-        // bare `none` keyword so the value composes with state-variant
-        // filters (e.g. `.selected`'s blue glow). `filter: none drop-shadow(...)`
-        // is invalid CSS — the whole declaration gets dropped.
+        // `opacity(1)` is a no-op filter that composes with state-variant filters;
+        // the bare `none` keyword doesn't — `filter: none drop-shadow(...)` is
+        // invalid CSS and the whole declaration is dropped.
         filter: 'opacity(1)',
     },
     {

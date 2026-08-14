@@ -61,8 +61,7 @@ describe('DragController', () => {
             requestRender: vi.fn(),
         };
 
-        // Provide a large viewport so pointer clamping doesn't
-        // affect existing test values.
+        // Large viewport so pointer clamping doesn't affect these values.
         controller = new DragController(
             lookupsFor(() => groups),
             callbacks,
@@ -340,8 +339,7 @@ describe('DragController', () => {
     });
 
     describe('viewport clamping', () => {
-        // These tests use a small viewport to exercise pointer clamping.
-        // The margin constant in drag-controller.ts is 40px.
+        // Small viewport to exercise clamping; the margin constant is 40px.
         const MARGIN = 40;
         const VP_W = 400;
         const VP_H = 300;
@@ -572,8 +570,7 @@ describe('DragController', () => {
 
             vi.mocked(callbacks.moveGroup).mockClear();
 
-            // Move even further left — should still clamp to MARGIN,
-            // producing zero delta since lastPointer is already at MARGIN.
+            // Further left still clamps to MARGIN, so zero delta (lastPointer already at MARGIN).
             clampedController.handlePointerMove(
                 fakePointerEvent({
                     clientX: -100,
@@ -608,8 +605,7 @@ describe('DragController', () => {
                 }),
             );
 
-            // Second move: back to center — delta should be from
-            // clamped position (MARGIN), not from -50
+            // Back to center — delta from clamped position (MARGIN), not from -50.
             clampedController.handlePointerMove(
                 fakePointerEvent({
                     clientX: 200,
@@ -655,10 +651,7 @@ describe('DragController', () => {
                 }),
             );
 
-            // X: pointer at VP_W - MARGIN (360) clamps to new vp 200 - 40 = 160
-            // Delta from start (350) → 160 = -190
-            // Y: pointer at 150 is within new vp margin (40..160), no clamp
-            // Delta = 150 - 150 = 0
+            // Pointer at VP_W-MARGIN (360) clamps to the shrunk vp (200-40=160); y stays (within margin).
             expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
                 x: 160 - (VP_W - MARGIN - 10),
                 y: 0,
@@ -695,7 +688,6 @@ describe('DragController', () => {
                 }),
             );
 
-            // Screen delta (20, 10) → world delta (10, 5)
             expect(callbacks.moveGroup).toHaveBeenCalledWith(1, {
                 x: 10,
                 y: 5,
@@ -791,7 +783,7 @@ describe('DragController', () => {
 
     describe('cancel', () => {
         it('should cancel an active drag and restore the group position', () => {
-            const group = groups[0]; // Group 1 at position (0, 0)
+            const group = groups[0]; // Group 1 at (0, 0)
 
             controller.handlePointerDown(
                 10,
@@ -810,7 +802,7 @@ describe('DragController', () => {
                 }),
             );
 
-            // Simulate group position updated by moveGroup callback
+            // Simulate the moveGroup callback updating position.
             group.position = { x: 50, y: 20 };
 
             vi.mocked(callbacks.moveGroup).mockClear();

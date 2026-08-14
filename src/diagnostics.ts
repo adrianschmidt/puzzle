@@ -1,19 +1,9 @@
 /**
- * - `diagnostics.log(stage, message, data?)` collects structured entries
- *   when enabled.
- * - `diagnostics.warn(...args)` writes to console.warn when enabled.
- *   Used for runtime issues that developers should see in dev/test
- *   builds but stay silent in production.
- *
- * Auto-enabled in dev and test (Vite's `import.meta.env.DEV`), and off in
- * every production build — which includes `/puzzle/dev/`, a production build
- * served from a subpath, so `diagnostics.warn` is silent there too.
- *
- * `enableDiagnostics()` flips the singleton for code that imports it — no
- * call site does today. It is bound to no `window` property and no
- * dev-console hook, so nothing can turn diagnostics on at runtime in a
- * deployed build — treat `warn` as a local-loop signal only, and don't build
- * a production diagnostic on top of it.
+ * Auto-enabled in dev and test, off in every production build — including
+ * `/puzzle/dev/`, a production build served from a subpath, so `warn` is
+ * silent there too. Nothing binds `enableDiagnostics` to a window/dev-console
+ * hook, so a deployed build can't turn it on at runtime — treat `warn` as a
+ * local-loop signal only, not a base for production diagnostics.
  */
 
 export interface DiagnosticEntry {

@@ -55,7 +55,6 @@ function makeSquarePiece(id: number): Piece {
 function makeTabbedPiece(id: number): Piece {
     const base = id * 4;
     return makePiece({ id, edges: [
-        // Top edge: cubic with control points above the start/end line.
         makeEdge(
             base,
             { x: 0, y: 0 },
@@ -360,16 +359,16 @@ describe('getGroupVisualBounds', () => {
 describe('pieceCenterLocal', () => {
     it('matches the tab-inclusive single-piece group center on legacy-Classic geometry', () => {
         // Legacy-Classic edges carry no curvePoints, so piece.bounds is
-        // tab-exclusive there — the one generator family where an
-        // endpoint-derived pivot diverges from the group-bounds center.
+        // tab-exclusive — the one generator family where an endpoint-derived
+        // pivot diverges from the group-bounds center.
         const pieces = sealPieceGeometry(
             generateProceduralPuzzle(6, 4, { width: 600, height: 400 }, 12345),
         );
         const piecesById = buildPiecesById(pieces);
 
-        // Collected rather than asserted per piece so a failure names the
-        // divergent pieces: one piece is a sliver edge case, all 24 means
-        // the pivot definition itself moved.
+        // Collected, not asserted per piece, so a failure names the divergent
+        // pieces: one is a sliver edge case, all 24 means the pivot definition
+        // itself moved.
         const divergent: { pieceId: number; dx: number; dy: number }[] = [];
         let maxEndpointOnlyGap = 0;
         for (const piece of pieces) {
@@ -397,8 +396,8 @@ describe('pieceCenterLocal', () => {
             );
         }
         expect(divergent).toEqual([]);
-        // The fixture must actually discriminate: at least one piece's tabs
-        // have to be invisible to piece.bounds for this test to pin anything.
+        // The fixture must discriminate: at least one piece's tabs must be
+        // invisible to piece.bounds or this test pins nothing.
         expect(maxEndpointOnlyGap).toBeGreaterThan(1);
     });
 

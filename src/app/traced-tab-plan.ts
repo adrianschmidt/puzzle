@@ -1,8 +1,7 @@
 /**
- * Reproducing an existing save or share link is a different question and
- * does not go through here: those carry their own per-style config, and
- * a pre-upgrade Classic link or a legacy-tab Wavy link needs no chunk
- * even though the style declares `'always'`.
+ * Reproducing an existing save or share link doesn't go through here: those
+ * carry their own per-style config, and a pre-upgrade Classic or legacy-tab Wavy
+ * link needs no chunk even though the style declares `'always'`.
  */
 
 import { cutStyleNeedsTracedTabs, type CutStyle } from '../game/cut-styles.js';
@@ -12,34 +11,28 @@ export interface TracedTabPlan {
     cutStyle: CutStyle;
     preloadChunk: boolean;
     /**
-     * Generate the legacy straight-grid Classic cut whatever the chunk
-     * fetch reports. Only the boot fallback sets it, always paired with
-     * `preloadChunk: false`.
-     *
-     * It rides on the plan rather than being re-derived at the
-     * fetch-outcome site so the two halves of the decision cannot drift
-     * apart. `resolveTracedTabOutcome` without it would read the skipped
-     * fetch as a success, the caller would stamp the sine config, and
-     * generation would run the traced pipeline against a registry whose
-     * chunk was never loaded — the safety net failing in exactly the
-     * scenario it exists for.
+     * Generate the legacy straight-grid Classic cut whatever the chunk fetch
+     * reports. Only the boot fallback sets it, always with `preloadChunk: false`.
+     * It rides on the plan rather than being re-derived at the fetch-outcome site
+     * so the two halves can't drift: without it, the skipped fetch reads as a
+     * success, the caller stamps the sine config, and generation runs the traced
+     * pipeline against a registry whose chunk was never loaded.
      */
     forceLegacyClassic: boolean;
 }
 
 /**
- * The cut style the boot fallback is forced to. Exported so the analytics
- * attribution on the fallback's own failure event names the style it
- * actually attempted, without a second literal to keep in step.
+ * The cut style the boot fallback is forced to. Exported so the fallback's
+ * failure-event attribution names the style it attempted, without a second
+ * literal to keep in step.
  */
 export const BOOT_FALLBACK_CUT_STYLE: CutStyle = 'classic';
 
 /**
- * `bootFallback` is the last-resort boot puzzle (#488): the boot path's
- * preferred start already failed, so this one forces the legacy Classic
- * cut and never touches the chunk. Forcing the style here rather than
- * trusting the caller is deliberate — a safety net that can be handed
- * `'wavy'` is not a safety net.
+ * `bootFallback` is the last-resort boot puzzle (#488): forces the legacy
+ * Classic cut and never touches the chunk. Forcing the style here rather than
+ * trusting the caller is deliberate — a safety net that can be handed `'wavy'`
+ * is not one.
  */
 export function planTracedTabs(opts: {
     cutStyle: CutStyle;
@@ -57,14 +50,10 @@ export function planTracedTabs(opts: {
 }
 
 /**
- * What the settled chunk fetch means for generation.
- *
- * - `ok` — generate as requested.
- * - `legacy-classic` — Classic without its sine config, i.e. the legacy
- *   straight-grid cut. `degraded` separates "a fetch failed" (warn, and
- *   flag the analytics event) from "we never tried" (the boot fallback).
- * - `fail` — the style needs traced tabs and cannot be generated without
- *   them; the caller rethrows `error`.
+ * What the settled chunk fetch means for generation. `legacy-classic` is
+ * Classic without its sine config (the straight-grid cut); `degraded` separates
+ * "a fetch failed" (warn + flag analytics) from "never tried" (boot fallback).
+ * `fail` means the style can't generate without the chunk; the caller rethrows.
  */
 export type TracedTabOutcome =
     | { kind: 'ok' }
@@ -75,23 +64,21 @@ export type TracedTabOutcome =
 export function resolveTracedTabOutcome(opts: {
     plan: TracedTabPlan;
     /**
-     * Why the chunk fetch rejected, or `null` for "it succeeded, or it was
-     * never started". Typed `unknown` rather than `unknown | null` — the
-     * union collapses to `unknown` anyway — so the `null` sentinel is a
-     * documented convention, not a type-enforced one. The caller already
-     * has to coerce a falsy rejection reason (`reject()`, `reject(null)`)
-     * into a real Error for it to hold.
+     * Why the chunk fetch rejected, or `null` for "succeeded, or never started".
+     * The `null` sentinel is a documented convention, not type-enforced (the
+     * union collapses to `unknown`), so the caller must coerce a falsy rejection
+     * reason into a real Error.
      */
     chunkError: unknown;
 }): TracedTabOutcome {
-    // Before the `chunkError` check, not after: the boot fallback never
-    // started a fetch, so its `null` would otherwise read as a success and
-    // license the sine config it must not have.
+    // Before the `chunkError` check, not after: the boot fallback never started
+    // a fetch, so its `null` would otherwise read as success and license the
+    // sine config it must not have.
     if (opts.plan.forceLegacyClassic) return { kind: 'legacy-classic', degraded: false };
     if (opts.chunkError === null) return { kind: 'ok' };
-    // Classic is the only style whose generator works without the chunk,
-    // so it degrades instead of failing the whole start. That is what
-    // keeps the default style booting when the fetch fails.
+    // Classic is the only style whose generator works without the chunk, so it
+    // degrades instead of failing the start — keeping the default style booting
+    // when the fetch fails.
     if (opts.plan.cutStyle !== 'classic') return { kind: 'fail', error: opts.chunkError };
     return { kind: 'legacy-classic', degraded: true, error: opts.chunkError };
 }

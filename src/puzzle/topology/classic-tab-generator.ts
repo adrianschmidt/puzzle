@@ -1,7 +1,6 @@
 /**
- * Uses the standard (no-smoothing) splicer to keep the existing
- * Classic / Wavy splice geometry — and the existing PRNG-snapshot
- * test — stable.
+ * Standard (no-smoothing) splicer keeps the existing Classic/Wavy splice
+ * geometry and the PRNG-snapshot test stable.
  */
 
 import type { Curve } from './curve.js';

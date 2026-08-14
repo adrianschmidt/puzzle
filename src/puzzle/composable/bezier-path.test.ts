@@ -38,7 +38,6 @@ describe('reverseBezierPath', () => {
     });
 
     it('swaps control points within each segment', () => {
-        // Single-segment path: [p0, cp1, cp2, p1]
         const path: BezierPath = [
             { x: 0, y: 0 },
             { x: 0.25, y: 0.5 },
@@ -47,7 +46,6 @@ describe('reverseBezierPath', () => {
         ];
         const reversed = reverseBezierPath(path);
 
-        // After reversal: [p1, cp2, cp1, p0]
         expect(reversed).toEqual([
             { x: 1, y: 0 },
             { x: 0.75, y: 0.5 },

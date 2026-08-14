@@ -1,15 +1,10 @@
 /**
- * Modals (info modal, new-game dialog, completion screen) and popovers
- * (background-color picker) all reimplement the same pattern: a div that
- * dismisses on Escape / backdrop click / outside pointerdown, plus the
- * document-level listener cleanup. This file owns those mechanics so each
- * consumer only needs to think about its content.
+ * Shared dismiss mechanics (Escape / backdrop click / outside pointerdown +
+ * document-listener cleanup) for modals and popovers.
  *
- * `onDismiss` fires only for helper-owned dismissal paths, not when the
- * caller invokes `dismiss()` directly. That way "user closed without
- * choosing" callbacks (size-picker `onCancel`) can be wired through
- * without a flag, while button handlers can dismiss without spuriously
- * firing the cancel hook.
+ * `onDismiss` fires only for helper-owned dismissal paths, not when the caller
+ * invokes `dismiss()` directly — so a "closed without choosing" callback can be
+ * wired through while button handlers dismiss without firing it.
  */
 
 export type ModalDismissTrigger = 'backdrop' | 'any-click' | 'none';
@@ -90,8 +85,8 @@ export function createDismissableOverlay(
 export interface DismissablePopoverOptions {
     panel: HTMLElement;
     /**
-     * Pointerdowns on this element (or its descendants) are ignored, so
-     * the toggle's own click handler can own open/close behavior.
+     * Pointerdowns on this element (or its descendants) are ignored, so the
+     * toggle's own click handler owns open/close.
      */
     anchor?: HTMLElement;
     /** Not fired when the caller invokes `dismiss()` directly. */

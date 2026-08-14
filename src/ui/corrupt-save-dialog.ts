@@ -1,7 +1,6 @@
 /**
- * Rather than silently regenerating over an unreadable save, the app stops
- * and offers a verbatim download of the raw save blobs (for recovery or a
- * bug report) before starting a new game.
+ * Rather than silently regenerating over an unreadable save, stop and offer a
+ * verbatim download of the raw save blobs (recovery / bug report) first.
  */
 
 import type { CorruptSaveData } from '../persistence/index.js';
@@ -11,10 +10,8 @@ export interface CorruptSaveDialogOptions {
     container: HTMLElement;
     raw: CorruptSaveData;
     /**
-     * Fires once regardless of dismissal path ("Start new game" or Escape);
-     * the host proceeds with the fresh-start boot from here. `downloaded`
-     * reports whether the player took a copy first, for recovery-usage
-     * telemetry.
+     * Fires once regardless of dismissal path (button or Escape). `downloaded`
+     * reports whether the player took a copy first, for recovery-usage telemetry.
      */
     onDismiss: (info: { downloaded: boolean }) => void;
     /** Injectable so tests can capture filename/contents without a real download. */
@@ -69,9 +66,8 @@ export function createCorruptSaveDialog(options: CorruptSaveDialogOptions): () =
         onDismiss({ downloaded });
     }
 
-    // No backdrop dismissal: losing the only copy of the data to a stray
-    // click would defeat the point. Escape still works (it routes through
-    // onDismiss, same as "Start new game").
+    // No backdrop dismissal: a stray click losing the only copy would defeat the
+    // point. Escape still works (routes through onDismiss, like "Start new game").
     const { overlay, dismiss } = createDismissableOverlay({
         container,
         className: 'corrupt-save-overlay',
@@ -108,13 +104,11 @@ export function createCorruptSaveDialog(options: CorruptSaveDialogOptions): () =
         const { filename, contents } = buildCorruptSaveDownload(raw, now());
         triggerDownload(filename, contents);
         downloaded = true;
-        // Keep the dialog open after a download so the player can read it and
-        // then dismiss deliberately; mark the button as done for feedback.
+        // Keep the dialog open after download so the player dismisses deliberately.
         downloadBtn.textContent = 'Downloaded ✓';
         downloadBtn.disabled = true;
-        // Disabling the focused button would drop focus to <body>; move it to
-        // the remaining action so keyboard/screen-reader users keep a focus
-        // anchor and hear the next step announced.
+        // Disabling the focused button drops focus to <body>; move it to the
+        // remaining action so keyboard/screen-reader users keep a focus anchor.
         newGameBtn.focus();
     });
     buttons.appendChild(downloadBtn);

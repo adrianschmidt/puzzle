@@ -37,8 +37,7 @@ describe('PIECE_OUTLINE_PRESETS', () => {
     });
 
     it('none preset uses a no-op filter so it composes with state variants', () => {
-        // Must NOT be the bare `none` keyword — `filter: none drop-shadow(...)`
-        // is invalid CSS. `opacity(1)` is a no-op filter function.
+        // Bare `none` is invalid in `filter: none drop-shadow(...)`; `opacity(1)` is a no-op.
         expect(getPieceOutlinePreset('none').filter).toBe('opacity(1)');
     });
 

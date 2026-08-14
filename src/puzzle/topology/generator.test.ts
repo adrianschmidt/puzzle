@@ -176,27 +176,21 @@ describe('generateTopologyPuzzle', () => {
     });
 
     it('wavy 2×2 with freq 10 produces at least 4 pieces', () => {
-        // High-frequency waves may create extra "island" pieces
-        // from multiple crossings — at least the base grid count
+        // High-frequency waves may carve extra "island" pieces from multiple
+        // crossings — at least the base grid count.
         const { pieces, pieceCountMismatch } = generateTopologyPuzzle(
             2, 2, { width: 200, height: 200 },
             seededRandom(42),
             sineConfig({ ha: 0.15, hf: 10, va: 0.15, vf: 10, disableTabs: true }),
         );
         expect(pieces.length).toBeGreaterThanOrEqual(4);
-        // This IS a real piece-count mismatch, and a legitimate one, not a
-        // fused-piece bug: at this frequency the sine cuts self-intersect and
-        // carve extra "island" faces, so the DCEL genuinely yields more faces
-        // than cols x rows predicts. Pinned rather than left to fire
-        // unasserted, so a change to this extreme-config behavior is caught
-        // here instead of showing up as incidental console noise.
-        //
-        // `actual: 6` is an island-face count straight out of bezier-js's
-        // curve intersections, which makes this a geometry tripwire in the
-        // sense `dcel-broad-phase-equivalence.test.ts` describes. If it goes
-        // red, work out what moved generated geometry — a bezier-js bump, a
-        // change to the cut or DCEL code — and decide whether to take it. Do
-        // NOT re-record it to whatever the run produced.
+        // A real, legitimate mismatch (not a fused-piece bug): at this
+        // frequency the sine cuts self-intersect and carve extra "island"
+        // faces, so the DCEL yields more than cols x rows. `actual: 6` comes
+        // straight out of bezier-js's intersections, making this a geometry
+        // tripwire like dcel-broad-phase-equivalence.test.ts. If it goes red,
+        // find what moved geometry (a bezier-js bump, cut/DCEL change) and
+        // decide whether to take it — do NOT re-record.
         expect(pieceCountMismatch).toEqual({ expected: 4, actual: 6, baseCutId: 'sine' });
     });
 
@@ -292,14 +286,12 @@ describe('generateTopologyPuzzle borderless', () => {
 });
 
 describe('generateTopologyPuzzle with triangular base cut', () => {
-    // Unlike the unit tests in triangular-cut-generator.test.ts (which inspect
-    // the raw Curve[]), these run the lattice through the full DCEL builder and
-    // assert the result is well-formed: valid M…Z piece shapes, unique piece
-    // IDs, and bidirectional edge mates. Mate-consistency is a topological proxy
-    // for a sound face set (these tests do not measure area coverage, so they do
-    // not directly prove the tiling is gap-free) — the degree-6 vertices a
-    // triangular lattice produces are exactly the case a per-curve test can't
-    // exercise.
+    // Unlike triangular-cut-generator.test.ts (which inspects raw Curve[]),
+    // these run the lattice through the full DCEL and assert well-formedness
+    // (M…Z shapes, unique ids, bidirectional mates). Mate-consistency is a
+    // topological proxy for a sound face set (no area-coverage check here) —
+    // the degree-6 vertices a triangular lattice produces are what a per-curve
+    // test can't exercise.
     function triangularConfig(jitter: number): TopologyGeneratorConfig {
         return {
             baseCutGeneratorId: 'triangular',
@@ -366,11 +358,10 @@ describe('generateTopologyPuzzle with triangular base cut', () => {
 
 describe('generateTopologyPuzzle grid-dim clamp (issue #440)', () => {
     // A crafted share link can smuggle an out-of-range `rows`/`cols` into the
-    // opaque `baseCutConfig` (the share-link `cf.bgc` blob). The generator must
-    // never let that override the clamped grid dims it was handed: a generator
-    // that scales its work by `rows`/`cols` (notably sine) would otherwise
-    // allocate unbounded cuts and hang the tab. The clamp lives in the shared
-    // path so it covers every base-cut generator, not just sine.
+    // opaque `baseCutConfig` (`cf.bgc`). The generator must not let that
+    // override the clamped dims — a generator that scales work by rows/cols
+    // (sine) would otherwise allocate unbounded cuts and hang the tab. The
+    // clamp lives in the shared path, covering every base-cut generator.
     const FLAT_SINE = { ha: 0, hf: 0, va: 0, vf: 0 } as const;
 
     it('ignores rows/cols smuggled into baseCutConfig (override neutralized)', () => {
@@ -396,9 +387,8 @@ describe('generateTopologyPuzzle grid-dim clamp (issue #440)', () => {
 
     it('clamps oversized grid args themselves to MAX_GRID_DIM (defense in depth)', () => {
         // The decoder already clamps `g` to 64 upstream; this asserts the
-        // generator independently bounds an out-of-range dimension instead of
-        // attempting an unbounded grid. A 1000×1000 request must behave exactly
-        // like the clamped 64×64 grid, not blow up.
+        // generator independently bounds an out-of-range dimension. A
+        // 1000×1000 request must behave like the clamped 64×64 grid.
         const clamped = generateTopologyPuzzle(
             1000, 1000, { width: 640, height: 640 }, seededRandom(42),
             { baseCutGeneratorId: 'sine', baseCutConfig: { ...FLAT_SINE }, tabGeneratorId: 'none' },
@@ -411,14 +401,12 @@ describe('generateTopologyPuzzle grid-dim clamp (issue #440)', () => {
     });
 
     it('an in-range rows/cols in baseCutConfig is inert (no crash, identical geometry)', () => {
-        // Companion to the out-of-range case above. The generator overwrites
-        // `cols`/`rows` unconditionally, so a `bgc` override is always dropped —
-        // this can't distinguish "honored" from "dropped" on its own. What it
-        // does prove is that supplying an in-range rows/cols in `baseCutConfig`
-        // (a shape a real share link could carry) neither throws nor perturbs
-        // the seeded geometry: the pieces are byte-identical to passing no
-        // override at all. Together with the override-neutralization test above,
-        // this shows a `bgc` rows/cols never affects output, in range or out.
+        // Companion to the out-of-range case. The generator overwrites
+        // `cols`/`rows` unconditionally, so this can't distinguish "honored"
+        // from "dropped" alone; it proves an in-range rows/cols in
+        // `baseCutConfig` neither throws nor perturbs the seeded geometry
+        // (pieces byte-identical to no override). Together they show a `bgc`
+        // rows/cols never affects output, in range or out.
         const withoutOverride = generateTopologyPuzzle(
             4, 5, { width: 400, height: 500 }, seededRandom(7),
             { baseCutGeneratorId: 'sine', baseCutConfig: { ...FLAT_SINE }, tabGeneratorId: 'none' },
@@ -434,9 +422,9 @@ describe('generateTopologyPuzzle grid-dim clamp (issue #440)', () => {
 });
 
 describe('generateTopologyPuzzle deep-resolution gating', () => {
-    // A fake tab generator that records the opaque config it is handed, so we
-    // can assert the deepResolve flag is threaded through the real generator
-    // path (not by reading generator internals). Applies no tabs.
+    // A fake tab generator that records the opaque config it's handed, so we
+    // assert deepResolve is threaded through the real path (not by reading
+    // internals). Applies no tabs.
     function recordingTabGenerator(id: string, sink: { config?: unknown }): TabGenerator {
         return {
             id,
@@ -473,10 +461,9 @@ describe('generateTopologyPuzzle deep-resolution gating', () => {
 
 describe('generateTopologyPuzzle piece-count invariant', () => {
     it('reports a mismatch when a generator produces fewer faces than it declared', () => {
-        // Declares a 2x2 grid but emits only the horizontal internal cut, so
-        // the DCEL extracts 2 faces, not 4. This is the shape of the real
-        // failure mode (a missed cut crossing fusing faces) without depending
-        // on a bug that is now fixed.
+        // Declares a 2x2 grid but emits only the horizontal cut, so the DCEL
+        // extracts 2 faces, not 4 — the shape of the real failure mode (a
+        // missed crossing fusing faces) without relying on a now-fixed bug.
         const fake: BaseCutGenerator = {
             id: 'fake-declares-4-emits-2',
             expectedPieceCount: () => 4,
@@ -552,9 +539,9 @@ describe('generateTopologyPuzzle piece-count invariant', () => {
     it.each(['venn', 'triangular'])(
         'exempts the real %s generator, which declares no count',
         (baseCutGeneratorId) => {
-            // These legitimately produce counts unrelated to cols x rows. If
-            // someone later adds an expectedPieceCount to either, this test
-            // goes red and forces them to prove the derivation is right.
+            // These legitimately produce counts unrelated to cols x rows;
+            // adding an expectedPieceCount to either turns this red, forcing a
+            // proof the derivation is right.
             expect(getBaseCutGenerator(baseCutGeneratorId).expectedPieceCount)
                 .toBeUndefined();
         },
@@ -575,11 +562,10 @@ describe('generateTopologyPuzzle piece-count invariant', () => {
 });
 
 /**
- * The `diagnostics.warn` the check emits alongside the returned
- * `PieceCountMismatch`. Worth its own coverage: on a local `npm run dev` it is
- * the only signal a developer sees (the Umami event needs a website ID), so a
- * transposed `cols`/`rows` or a dropped borderless arm would degrade it
- * silently. Both cases below go red on exactly those mutations.
+ * Covers the `diagnostics.warn` the check emits alongside `PieceCountMismatch`.
+ * On a local `npm run dev` it's the only signal a developer sees (the Umami
+ * event needs a website ID), so a transposed `cols`/`rows` or a dropped
+ * borderless arm would degrade it silently.
  */
 describe('generateTopologyPuzzle piece-count warning', () => {
     function spyOnWarn() {
@@ -588,9 +574,9 @@ describe('generateTopologyPuzzle piece-count warning', () => {
     let warn: ReturnType<typeof spyOnWarn> | undefined;
 
     afterEach(() => {
-        // `diagnostics` is a module singleton shared with every other test in
-        // this file, and `vite.config.ts` sets no `restoreMocks` — restore
-        // explicitly rather than leaving a stubbed warn installed.
+        // `diagnostics` is a module singleton and `vite.config.ts` sets no
+        // `restoreMocks`, so restore explicitly or the stubbed warn leaks to
+        // other tests.
         warn?.mockRestore();
         warn = undefined;
     });
@@ -628,10 +614,10 @@ describe('generateTopologyPuzzle piece-count warning', () => {
     });
 
     it('says so when the expectation counts an oversized borderless grid', () => {
-        // The user grid and the counted grid legitimately disagree under
-        // borderless, so the message has to say which is which — otherwise
-        // "16x12 … expected 252" reads as arithmetic nonsense. This fake
-        // declares 99 against a real 4x4 layout purely to force the branch.
+        // User grid and counted grid legitimately disagree under borderless, so
+        // the message must say which is which (else "16x12 … expected 252"
+        // reads as nonsense). The fake declares 99 against a 4x4 layout to
+        // force the branch.
         const fake: BaseCutGenerator = {
             id: 'fake-warns-borderless',
             supportsBorderless: true,

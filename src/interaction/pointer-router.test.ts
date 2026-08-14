@@ -330,8 +330,7 @@ describe('PointerRouter — background tap', () => {
     });
 
     it('callback is optional (no error when not provided)', () => {
-        // Construct a router without onBackgroundTap by going through the
-        // PointerRouter constructor directly (the harness always supplies one).
+        // Construct directly (not via the harness) to omit onBackgroundTap.
         const container = document.createElement('div');
         container.setPointerCapture = vi.fn();
         container.hasPointerCapture = vi.fn(() => false);

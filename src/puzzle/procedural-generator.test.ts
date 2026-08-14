@@ -220,13 +220,10 @@ describe('edge path variation', () => {
             p.edges.filter((e) => e.mateEdgeId !== -1).map((e) => e.path),
         );
 
-        // There should be many unique paths (not all identical like old generator)
         const uniquePaths = new Set(internalPaths);
 
-        // With a 4×4 grid there are 24 shared internal edges (×2 sides = 48 internal edge paths)
-        // Each shared edge has unique params, so paths should be varied
-        // We expect at least half to be unique (both sides of a shared edge differ
-        // because one is tab and one is blank with same params)
+        // 4×4 grid: 24 shared internal edges × 2 sides = 48 paths. Both sides of a
+        // shared edge differ (tab vs blank), so many should be unique.
         expect(uniquePaths.size).toBeGreaterThan(internalPaths.length / 4);
     });
 });
@@ -234,23 +231,17 @@ describe('edge path variation', () => {
 describe('legacy geometry contract', () => {
     /**
      * Every pre-upgrade Classic share link and save reproduces its puzzle by
-     * replaying this generator from the stored seed, so its output for a given
-     * seed is a compatibility contract, not an implementation detail. The other
-     * tests here are same-run self-consistency checks — they would pass just as
-     * happily if the geometry moved. This one pins it.
+     * replaying this generator from the stored seed, so its output for a seed is a
+     * compatibility contract. The other tests are same-run self-consistency checks
+     * that would pass even if the geometry moved; this one pins it. If these shapes
+     * change, the count/order of `random()` calls (or the geometry) changed and
+     * every existing Classic link renders different pieces — do NOT edit the
+     * expected values to make this pass.
      *
-     * If these shapes change, the number or order of `random()` calls (or the
-     * geometry built from them) changed, and every existing Classic link and
-     * save now renders different pieces than the one that created it. Do not
-     * edit the expected values to make this pass.
-     *
-     * Spelled out inline rather than kept in a `.snap` file on purpose: a file
-     * snapshot is silently rewritten by `vitest -u`, which is precisely the
-     * failure this fixture exists to catch.
-     *
-     * Safe to freeze: the generator's only non-arithmetic operation is
-     * `Math.sqrt`, which IEEE-754 specifies as correctly rounded, so the
-     * output is bit-identical across engines and platforms.
+     * Inline rather than a `.snap` file on purpose: `vitest -u` silently rewrites a
+     * snapshot, the exact failure this fixture catches. Safe to freeze — the only
+     * non-arithmetic op is `Math.sqrt` (IEEE-754 correctly rounded), so output is
+     * bit-identical across engines.
      */
     it('produces byte-identical shapes for a fixed seed and grid', () => {
         const pieces = generateProceduralPuzzle(3, 2, { width: 300, height: 200 }, 12345);

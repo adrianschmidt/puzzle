@@ -28,11 +28,9 @@ describe('installGlobalHandlers', () => {
     });
 
     afterEach(() => {
-        // Tests below overwrite (or delete) this method on the shared global
-        // `performance` object; leaving it changed would make later tests
-        // (in this file or, under `--sequence.shuffle`, in whatever order
-        // they land) silently run against a leftover spy or a deleted
-        // method instead of the real starting state.
+        // Tests below overwrite/delete this on the shared `performance`
+        // global; restore it so later tests (any shuffle order) don't inherit
+        // a leftover spy or deleted method.
         if (originalSetResourceTimingBufferSize === undefined) {
             delete (performance as unknown as { setResourceTimingBufferSize?: unknown })
                 .setResourceTimingBufferSize;
@@ -51,9 +49,8 @@ describe('installGlobalHandlers', () => {
             vi.mocked(initSwErrorReporting).mock.invocationCallOrder[0],
         ];
         expect(order).toEqual([...order].sort((a, b) => a - b));
-        // `sort` parks `undefined` last regardless of comparator, so a
-        // dropped call (an `undefined` entry) wouldn't perturb the order
-        // assertion above — pin that every one of the three actually ran.
+        // `sort` parks `undefined` last, so a dropped call wouldn't perturb
+        // the order assertion — pin that all three actually ran.
         expect(initAnalytics).toHaveBeenCalledTimes(1);
         expect(initErrorTracking).toHaveBeenCalledTimes(1);
         expect(initSwErrorReporting).toHaveBeenCalledTimes(1);
@@ -68,10 +65,9 @@ describe('installGlobalHandlers', () => {
     });
 
     it('does not throw when setResourceTimingBufferSize is unavailable', () => {
-        // Defensive against real environments that don't implement the
-        // Resource Timing Level 2 API, even though the DOM lib types claim
-        // the method is always present — the `?.` at global-handlers.ts is
-        // what this pins.
+        // Defensive against environments without the Resource Timing Level 2
+        // API (the DOM types claim it's always present) — pins the `?.` in
+        // global-handlers.ts.
         delete (performance as unknown as { setResourceTimingBufferSize?: unknown })
             .setResourceTimingBufferSize;
         expect(() => installGlobalHandlers(container)).not.toThrow();
@@ -107,9 +103,8 @@ describe('installGlobalHandlers', () => {
     });
 
     it('omits the version badge when VITE_APP_VERSION is unset', () => {
-        // Unset under Vitest by default (not defined in .env/.env.local) —
-        // if the `if (appVersion)` guard were ever dropped, an empty badge
-        // div would be appended instead of nothing.
+        // Unset under Vitest by default; if the `if (appVersion)` guard were
+        // dropped, an empty badge div would be appended instead of nothing.
         installGlobalHandlers(container);
         expect(container.querySelector('.app-version')).toBeNull();
     });

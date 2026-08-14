@@ -1,7 +1,7 @@
 /**
- * The base-cut and tab generators are looked up from the registry by
- * id, so the same code path serves the sine grid, Venn diagrams, and
- * any future plug-ins. See issue #166 for the architecture.
+ * Base-cut and tab generators are looked up from the registry by id, so
+ * one code path serves the sine grid, Venn, and future plug-ins. See
+ * issue #166 for the architecture.
  */
 
 import type { GeneratedPiece, Point, Size } from '../../model/types.js';
@@ -20,10 +20,8 @@ import { clampGridDim } from './grid-dim.js';
 import { diagnostics } from '../../diagnostics.js';
 
 /**
- * The base-cut and tab generators are referenced by id (looked up
- * via the registry); their parameters are passed as opaque records
- * that each generator validates internally. Use `tabGeneratorId:
- * 'none'` to skip tab application entirely.
+ * Generators are referenced by id; their parameters are opaque records
+ * each generator validates internally. `tabGeneratorId: 'none'` skips tabs.
  */
 export interface TopologyGeneratorConfig {
     /** Base-cut generator id (default: 'sine'). */
@@ -36,48 +34,33 @@ export interface TopologyGeneratorConfig {
     tabConfig?: Record<string, unknown>;
     /**
      * Minimum area (px²) below which a piece is auto-grouped with its
-     * largest neighbour by {@link autoGroupSmallPieces}, run as a
-     * post-pass over the generated DCEL. The resulting groups are
-     * surfaced via {@link TopologyPuzzle.autoGroups} so the gameplay
-     * layer can glue tiny noise faces (sub-pixel slivers from sine/Voronoi
-     * intersections) into their neighbours instead of shipping them as
-     * standalone pieces.
-     *
-     * Omit (default `undefined`) to skip auto-grouping entirely; in that
-     * case `autoGroups` is empty and every piece stands alone. Direct
-     * callers in tests typically leave this unset.
+     * largest neighbour by {@link autoGroupSmallPieces} (a post-pass);
+     * groups surface via {@link TopologyPuzzle.autoGroups} to glue tiny
+     * noise slivers into neighbours. Omit (`undefined`) to skip — then
+     * `autoGroups` is empty and every piece stands alone.
      */
     minPieceArea?: number;
     /**
-     * Borderless mode. When true AND the resolved base cut generator
-     * advertises `supportsBorderless`, the base cut config is told to
-     * oversize its grid and the outer ring of pieces is stripped (see
-     * strip-border-ring.ts). Ignored when the generator doesn't support it.
+     * Borderless mode. When true AND the base cut advertises
+     * `supportsBorderless`, its grid is oversized and the outer ring is
+     * stripped (see strip-border-ring.ts); otherwise ignored.
      */
     borderless?: boolean;
     /**
-     * Optional dev-time debug session. When provided, the session
-     * captures every tab candidate the generator produces plus, for
-     * traced tabs, the template-selection and transform parameters.
-     * The aggregated report is returned via
-     * {@link TopologyPuzzle.tabDebugReport}. Production paths omit
-     * this; the only overhead when absent is one undefined-check per
-     * tab generation.
+     * Optional dev-time debug session capturing every tab candidate (plus
+     * traced-tab template/transform params); report via
+     * {@link TopologyPuzzle.tabDebugReport}. Production omits it.
      */
     tabDebug?: TabDebugSession;
 }
 
 /**
- * A generated puzzle whose face count did not match what its base-cut
- * generator declared via {@link BaseCutGenerator.expectedPieceCount}.
- *
- * Both counts are pre-composition and pre-border-strip, so they are directly
- * comparable: for a borderless puzzle they describe the oversized grid, not
- * the smaller set the player ends up with.
- *
- * This is a diagnostic, not an error. The puzzle is returned and played as
- * normal; the count is reported so a fused-piece bug stops being invisible
- * (#512).
+ * A generated puzzle whose face count didn't match its base-cut generator's
+ * {@link BaseCutGenerator.expectedPieceCount}. Both counts are
+ * pre-composition and pre-border-strip, so directly comparable (for
+ * borderless they describe the oversized grid). A diagnostic, not an error —
+ * the puzzle still plays; the count is reported so a fused-piece bug isn't
+ * invisible (#512).
  */
 export interface PieceCountMismatch {
     /** Faces the base-cut generator intended to produce. */
@@ -89,28 +72,23 @@ export interface PieceCountMismatch {
 }
 
 /**
- * `autoGroups` is populated when the caller supplied
- * {@link TopologyGeneratorConfig.minPieceArea}; the gameplay layer
- * uses it to glue together tiny noise faces (sub-pixel slivers from
- * curve-intersection rounding) into starting groups so the player
- * never sees them as solo pieces. When `minPieceArea` is omitted,
- * `autoGroups` is empty — every piece becomes its own group via the
- * caller's normal one-group-per-piece initialization.
+ * Populated when the caller supplied
+ * {@link TopologyGeneratorConfig.minPieceArea}; empty otherwise (every
+ * piece is its own group). Glues tiny noise slivers into starting groups.
  */
 export interface TopologyPuzzle {
     pieces: GeneratedPiece[];
     autoGroups: AutoGroup[];
     /**
      * Populated only when {@link TopologyGeneratorConfig.tabDebug} was
-     * passed in. Each entry on a piece records the half-edge id, edge
-     * position, mate piece, acceptance status, and (for traced tabs)
-     * which template was used.
+     * passed. Each entry records half-edge id, edge position, mate piece,
+     * acceptance, and (traced tabs) the template used.
      */
     tabDebugReport?: TabDebugReport;
     /**
      * Set only when the base cut declared an expected face count and the
-     * pipeline produced a different one. Absent is the normal case, and is
-     * also what every generator without an `expectedPieceCount` hook returns.
+     * pipeline produced a different one; absent otherwise (including when
+     * the generator has no `expectedPieceCount`).
      */
     pieceCountMismatch?: PieceCountMismatch;
 }
@@ -125,18 +103,15 @@ export function generateTopologyPuzzle(
     const baseCutId = config?.baseCutGeneratorId ?? 'sine';
     const tabId = config?.tabGeneratorId ?? 'classic';
 
-    // The sine grid needs cols/rows; other generators that ignore
-    // them aren't harmed by their presence.
+    // The sine grid needs cols/rows; generators that ignore them aren't harmed.
     const baseCutGenerator = getBaseCutGenerator(baseCutId);
-    // Borderless applies only when the resolved generator advertises support
-    // (it must know how to oversize its grid). Otherwise the flag is ignored.
+    // Borderless only applies when the generator advertises support (it must
+    // oversize its grid); otherwise ignored.
     const applyBorderless =
         config?.borderless === true && baseCutGenerator.supportsBorderless === true;
-    // Apply the grid dims AFTER spreading the opaque baseCutConfig so a crafted
-    // `cf.bgc.rows`/`cols` can't override them, and clamp them so no generator is
-    // ever handed an out-of-range grid (see clampGridDim / MAX_GRID_DIM in
-    // grid-dim.ts). A strict no-op for every legitimate puzzle (dims are already
-    // <= the UI/decoder ceiling).
+    // Apply grid dims AFTER spreading the opaque baseCutConfig so a crafted
+    // `cf.bgc.rows`/`cols` can't override them, and clamp against out-of-range
+    // grids (see clampGridDim in grid-dim.ts). A no-op for legitimate puzzles.
     const baseCutCfg = {
         ...config?.baseCutConfig,
         cols: clampGridDim(cols),
@@ -156,14 +131,12 @@ export function generateTopologyPuzzle(
 
     const graph = buildDCEL({ curves });
 
-    // The `none` generator is registered like any other and returns
-    // null on every edge, so we don't special-case it here.
+    // The `none` generator returns null on every edge, so no special-casing here.
     const tabGenerator = getTabGenerator(tabId);
     // Triangular pieces have little interior room, so the traced resolver's
-    // shallow ladder leaves many edges flat. Opt those cuts into the deep
-    // ladder via the opaque tab config; every other cut keeps today's ladder
-    // (and its exact share-link output). Derived here, from baseCutId, so no
-    // config-construction site can forget to set it.
+    // shallow ladder leaves edges flat; opt them into the deep ladder. Other
+    // cuts keep today's ladder (and its exact share-link output). Derived from
+    // baseCutId here so no config site can forget to set it.
     const tabConfig =
         baseCutId === 'triangular'
             ? { ...config?.tabConfig, deepResolve: true }
@@ -173,9 +146,8 @@ export function generateTopologyPuzzle(
         onCandidate: config?.tabDebug?.onCandidate,
     });
 
-    // Tiny faces are not merged here — the auto-group pass below
-    // handles them by gluing them into starting PieceGroups instead
-    // of mutating the DCEL.
+    // Tiny faces aren't merged here — the auto-group pass below glues them
+    // into starting groups instead of mutating the DCEL.
     const computeArea = (face: { outerEdge: HalfEdge }) => {
         let area = 0;
         let current = face.outerEdge;
@@ -193,13 +165,10 @@ export function generateTopologyPuzzle(
 
     diagnostics.log('pieces', `Generated ${pieceDefs.length} piece definitions`);
 
-    // Piece-count invariant (#512). Deliberately placed here: before
-    // composePuzzle and before stripBorderRing, so `expected` (which the
-    // generator computes for its own oversized grid) and `actual` are in the
-    // same coordinate system and no strip arithmetic is needed.
-    //
-    // Warn, never throw — a wrong count is a bad puzzle, not an unusable one,
-    // and throwing here would turn a cosmetic defect into a failed game start.
+    // Piece-count invariant (#512). Placed before composePuzzle and
+    // stripBorderRing so `expected` and `actual` share a coordinate system
+    // (no strip arithmetic). Warn, never throw — a wrong count is a bad
+    // puzzle, not an unusable one.
     let pieceCountMismatch: PieceCountMismatch | undefined;
     const expectedPieces = baseCutGenerator.expectedPieceCount?.(baseCutCfg);
     if (expectedPieces !== undefined && expectedPieces !== pieceDefs.length) {
@@ -208,15 +177,11 @@ export function generateTopologyPuzzle(
             actual: pieceDefs.length,
             baseCutId,
         };
-        // The grid printed here is the REQUESTED one (clamped, so a crafted
-        // `cf.bgc.cols` can't reach the log line), while `expected` counts the
-        // generator's own grid — which for borderless is oversized by one
-        // piece on each side. So a borderless 16x12 legitimately expects
-        // 18x14 = 252, and the message says so rather than leaving
-        // "16x12 ... expected 252" to read as nonsense. The framework does not
-        // recompute the oversizing itself: that rule belongs to the generator
-        // (see `BaseCutGenerator.expectedPieceCount`), and duplicating it here
-        // is exactly the drift the shared `resolveGrid` was extracted to stop.
+        // The printed grid is the REQUESTED (clamped) one; `expected` counts
+        // the generator's own grid, oversized for borderless. So a borderless
+        // 16x12 expects 18x14=252, and the message annotates that rather than
+        // reading as nonsense. The framework doesn't recompute the oversizing —
+        // that rule belongs to the generator (`expectedPieceCount`).
         const grid = baseCutCfg.borderless
             ? `${baseCutCfg.cols}x${baseCutCfg.rows}, borderless — expected counts`
                 + " the generator's oversized grid, pre-strip"
@@ -227,12 +192,10 @@ export function generateTopologyPuzzle(
         );
     }
 
-    // Area/adjacency come from the piece definitions (rather than the
-    // DCEL faces directly) so the auto-group pass operates on the same
-    // identifiers callers will see. Adjacency follows mate relationships
-    // across all loops of each piece — inner-boundary edges count as
-    // neighbours, which is what we want (a tiny piece living inside a
-    // hole should be glued to the surrounding frame, not orphaned).
+    // Area/adjacency come from the piece definitions (not DCEL faces) so
+    // auto-group uses the same identifiers callers see. Adjacency follows
+    // mate relationships across all loops — inner-boundary edges count as
+    // neighbours, so a tiny piece inside a hole glues to the frame.
     const minPieceArea = config?.minPieceArea;
     let autoGroups: AutoGroup[] = [];
     if (minPieceArea !== undefined) {
@@ -256,14 +219,13 @@ export function generateTopologyPuzzle(
         );
     }
 
-    // Tabs (when enabled) are already baked into the edge geometry by
-    // `applyTabs`, so disable the composition layer's own tab logic and
-    // pass no template.
+    // Tabs are already baked into the edge geometry by `applyTabs`, so
+    // disable the composition layer's own tab logic.
     const composed = composePuzzle(pieceDefs, null, random, { disableTabs: true });
 
-    // Borderless: strip the outer ring AFTER composition. composePuzzle draws
-    // no randomness in this path (disableTabs: true), so post-strip placement
-    // can't perturb the seeded stream.
+    // Strip the outer ring AFTER composition. composePuzzle draws no
+    // randomness here (disableTabs: true), so stripping can't perturb the
+    // seeded stream.
     const { pieces, autoGroups: finalAutoGroups } = applyBorderless
         ? stripBorderRing(composed, autoGroups)
         : { pieces: composed, autoGroups };
@@ -282,19 +244,14 @@ export function generateTopologyPuzzle(
 }
 
 /**
- * The outer loop is the prefix of `edges` before the first
- * chain break (where the previous edge's `end` no longer matches the
- * current edge's `start`).
+ * Area of the outer loop (the prefix of `edges` before the first chain
+ * break, where the previous `end` no longer matches the current `start`).
  *
- * Curve-bounded faces (Venn crescents, the lens) have outer loops made
- * of a handful of arcs whose endpoints are the circle intersection
- * points. Running shoelace on endpoints alone collapses such faces to
- * ~0 area, which then trips the auto-group threshold and incorrectly
- * glues legitimate pieces (e.g. a crescent) onto their largest
- * neighbour (the frame). To avoid that, we sample each edge's
- * `curvePoints` polyline when present so the shoelace input
- * approximates the true curved boundary; straight edges (no
- * `curvePoints`) continue to contribute just their endpoint.
+ * Curve-bounded faces (Venn crescents) have arc boundaries whose endpoints
+ * are circle intersections; shoelace on endpoints alone collapses them to
+ * ~0 area, tripping the auto-group threshold. So we feed each edge's
+ * `curvePoints` polyline when present; straight edges contribute just their
+ * endpoint.
  */
 function computeOuterLoopArea(edges: EdgeDefinition[]): number {
     if (edges.length === 0) return 0;
@@ -303,9 +260,8 @@ function computeOuterLoopArea(edges: EdgeDefinition[]): number {
         const cur = edges[i];
         if (i > 0) {
             const prev = edges[i - 1];
-            // Chain break = end of outer loop. Inner-boundary loops
-            // don't contribute to "is this piece tiny" — they're holes,
-            // and their area would only confuse the threshold.
+            // Chain break = end of outer loop. Inner-boundary loops are holes;
+            // their area would only confuse the "is this piece tiny" threshold.
             if (Math.abs(prev.end.x - cur.start.x) > 0.5
                 || Math.abs(prev.end.y - cur.start.y) > 0.5) {
                 break;

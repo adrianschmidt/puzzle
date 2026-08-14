@@ -1,31 +1,11 @@
 /**
- * A `#p=` link that fails to decode may just be newer than this cached
- * build: the share format has historically grown without bumping its
- * version field. `attemptRescue` (`pwaUpdates.attemptShareLinkRescue`) runs
- * one forced service-worker update check and, if a newer build is waiting,
- * applies it and reloads with the hash intact — the reloaded page re-parses
- * the same link under the updated code. A sessionStorage guard
- * (`wasRescueAttempted` / `recordRescueAttempt` / `clearRescueAttempt`)
- * ensures at most one rescue attempt per link body, so a link the update
- * still can't decode falls through to the ordinary invalid-link toast
- * instead of reload-looping.
- *
- * Two things make the guard-and-await interplay subtle enough to warrant
- * comments at each site rather than just in this header:
- *
- *  - `hashBody` is captured once at the top of {@link ShareLinkLoader.tryLoad},
- *    before any `await`. The post-rescue change-detection check deliberately
- *    re-slices the *current* `window.location.hash` instead of reusing that
- *    capture, so it can tell a hashchange landed during the rescue's await
- *    apart from "still the same link" — reusing the capture there would
- *    silently collapse that distinction.
- *  - `wasRescueAttempted(hashBody)` is called twice with opposite readings.
- *    Before the rescue's `await`, it answers "is this load itself the
- *    post-reload re-check for this link". After the `await`, via the
- *    `rescueStillOwnsGuard` alias, it answers "does our guard entry
- *    still name this exact link" — i.e. did no concurrent hashchange
- *    supersede us while we waited. Keeping the two readings behind distinct
- *    names stops the flipped intent from reading as a copy-paste.
+ * A `#p=` link that fails to decode may just be newer than this cached build:
+ * the share format has grown without bumping `v`. `attemptRescue` runs one
+ * forced service-worker update check and, if a newer build is waiting, applies
+ * it and reloads with the hash intact so the updated code re-parses the link.
+ * A sessionStorage guard allows at most one rescue per link body, so a link the
+ * update still can't decode falls through to the invalid-link toast instead of
+ * reload-looping.
  */
 
 import { parseLocationHash, type SharePayload } from '../sharing/index.js';
@@ -55,56 +35,47 @@ export interface ShareLinkLoaderDeps {
     loadShared: (payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>;
     /** `pwaUpdates.attemptShareLinkRescue`. */
     attemptRescue: () => Promise<RescueOutcome>;
-    /** Injected for testing; defaults to `window.confirm`. */
+    /** Injected for testing. */
     confirm?: (message: string) => boolean;
 }
 
 /**
- * On load: shared-link (hash) > saved game > fresh start — this handles
- * only the first part. The boot flow calls
- * {@link ShareLinkLoader.tryLoad} once and, in its `finally`, checks
- * {@link ShareLinkLoader.isRescueReloadPending} before tearing down the
- * loading overlay; the hashchange listener calls `tryLoad` again for a
- * link pasted into an already-open tab.
+ * Load precedence: shared-link (hash) > saved game > fresh start — this handles
+ * the first only. The boot flow calls {@link ShareLinkLoader.tryLoad} once and
+ * checks {@link ShareLinkLoader.isRescueReloadPending} before tearing down the
+ * loading overlay; the hashchange listener calls `tryLoad` again for a link
+ * pasted into an already-open tab.
  */
 export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoader {
     const confirmDiscard = deps.confirm ?? ((message: string) => window.confirm(message));
 
     // Set when a rescue update was applied and the page is about to reload:
-    // the boot flow's blanket overlay teardown must not run, or the page
-    // flashes blank for the up-to-3s gap before the reload lands.
+    // the boot flow's overlay teardown must not run, or the page flashes blank
+    // until the reload lands.
     let rescueReloadPending = false;
 
     /**
      * After the awaited rescue, does our guard entry still name this exact
-     * link? True means no concurrent hashchange superseded us mid-rescue —
-     * a newer link's attempt would have overwritten the guard. This is the
-     * same predicate as {@link wasRescueAttempted}, named for its post-await
-     * meaning: before the await the identical call instead answers "is this
-     * load the post-reload re-check". Keeping the two readings behind
-     * distinct names stops the flipped intent from reading as a
-     * copy-paste.
+     * link? True means no concurrent hashchange superseded us. Same predicate
+     * as {@link wasRescueAttempted}, aliased for its post-await meaning (before
+     * the await the same call answers "is this the post-reload re-check") so the
+     * flipped intent doesn't read as a copy-paste.
      */
     function rescueStillOwnsGuard(hashBody: string): boolean {
         return wasRescueAttempted(hashBody);
     }
 
     /**
-     * A `#p=` link that fails to decode may just be newer than this cached
-     * build (the share format grows without bumping `v`). Run one
-     * update-check-and-reload rescue per link: on success the page reloads
-     * with the hash intact and the updated build re-parses it. Returns true
-     * when that reload is imminent (the caller must halt the boot flow); on
-     * every other outcome the caller falls through to the invalid-link toast.
+     * One update-check-and-reload rescue per link. Returns true when a reload
+     * is imminent (caller halts the boot flow); every other outcome falls
+     * through to the invalid-link toast.
      */
     async function rescueUndecodableLink(hashBody: string): Promise<boolean> {
         if (wasRescueAttempted(hashBody)) {
-            // This load IS the rescue reload for this exact link, and it
-            // still doesn't decode: the latest build doesn't understand it
-            // either. A same-document hash round-trip back to this link
-            // during an in-flight rescue would also land here; that's
-            // accepted as a contrived edge case (a real re-paste navigates
-            // and gets a fresh page).
+            // This load IS the rescue reload for this link, and it still doesn't
+            // decode: the latest build doesn't understand it either. (A
+            // same-document hash round-trip mid-rescue also lands here —
+            // accepted as a contrived edge case.)
             clearRescueAttempt();
             track('share-link-rescue-result', { decoded: false });
             return false;
@@ -116,15 +87,14 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
         const outcome = await deps.attemptRescue();
         track('share-link-rescue-attempted', { outcome });
         if (outcome === 'updated') {
-            // The new worker is activating; the update-controller reloads
-            // the page (with a hard-reload fallback). Keep the overlay and
-            // hash up.
+            // The update-controller reloads the page (with a hard-reload
+            // fallback); keep the overlay and hash up.
             rescueReloadPending = true;
             return true;
         }
-        // A guard mismatch means a hashchange during our rescue started a
-        // newer link's attempt: its guard entry must survive, and the
-        // overlay now belongs to that in-flight rescue — leave both alone.
+        // A mismatch here means a hashchange during our rescue started a newer
+        // link's attempt, whose guard entry and overlay must survive — so only
+        // tidy up when we still own the guard.
         if (rescueStillOwnsGuard(hashBody)) {
             clearRescueAttempt();
             // The boot path's finally would hide it, but the hashchange path
@@ -135,23 +105,22 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
     }
 
     async function tryLoad(): Promise<boolean> {
-        // Captured once at entry, before any await. `slice(3)` drops the
-        // `#p=` prefix and is only meaningful on a `#p=` hash — every use
-        // below is gated on that. The post-rescue change-detection check
-        // deliberately re-slices the *current* hash instead of reusing
-        // this, to spot a hashchange that landed during the await.
+        // Captured once at entry, before any await. `slice(3)` drops the `#p=`
+        // prefix (every use is gated on a `#p=` hash). The post-rescue check
+        // re-slices the *current* hash instead of reusing this, to spot a
+        // hashchange during the await.
         const hashBody = window.location.hash.slice(3);
         const payload = parseLocationHash(window.location.hash);
         if (!payload) {
             if (window.location.hash.startsWith('#p=')) {
                 if (await rescueUndecodableLink(hashBody)) {
-                    // Rescue reload imminent — report "handled" so the boot
-                    // flow doesn't start a saved/fresh game underneath it.
+                    // Rescue reload imminent — report handled so the boot flow
+                    // doesn't start a game underneath it.
                     return true;
                 }
-                // A hashchange during the rescue means this invocation's
-                // link is no longer the one in the address bar; the newer
-                // invocation owns the toast/strip decision now.
+                // A hashchange during the rescue means this invocation's link is
+                // no longer in the address bar; the newer invocation owns the
+                // toast/strip decision.
                 if (window.location.hash.slice(3) !== hashBody) return false;
                 showToast('Invalid share link');
                 history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -159,21 +128,18 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
             return false;
         }
 
-        // The link decoded. If this load is the back half of a rescue
-        // reload, close the analytics funnel: the update fixed the link.
-        // Clearing unconditionally also drops any stale guard from an
-        // abandoned rescue.
+        // The link decoded. If this load is the back half of a rescue reload,
+        // close the analytics funnel (the update fixed the link). Clearing
+        // unconditionally also drops any stale guard from an abandoned rescue.
         if (wasRescueAttempted(hashBody)) {
             track('share-link-rescue-result', { decoded: true });
         }
         clearRescueAttempt();
 
-        // An unreadable save reads as no progress here, so its recovery
-        // blobs are not offered for download on this path — corrupt-save
-        // recovery is deliberately startup-only. The user is explicitly
-        // navigating to a new puzzle, and a successful load's
-        // `persistNewPuzzle` (called inside `deps.loadShared`, once
-        // generation succeeds) overwrites the blobs anyway.
+        // An unreadable save reads as no progress here, so its recovery blobs
+        // aren't offered — corrupt-save recovery is deliberately startup-only. A
+        // successful load's `persistNewPuzzle` (inside `deps.loadShared`)
+        // overwrites the blobs anyway.
         const hasExistingProgress = !!loadState();
         if (hasExistingProgress) {
             const ok = confirmDiscard('Load shared puzzle? Your current progress will be lost.');
@@ -184,23 +150,18 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
         }
 
         history.replaceState(null, '', window.location.pathname + window.location.search);
-        // The previous save is deliberately left alone here — `deps.loadShared`
-        // (`loadSharedPuzzle`) persists the new puzzle only once generation
-        // fully succeeds, so a cancel (the loading overlay's Cancel
-        // affordance, #489) or a throw leaves the previous save intact,
-        // matching the in-memory puzzle the player actually returns to.
-        // Clearing unconditionally up front used to destroy that save on
-        // every cancel — the one path whose entire point is "return to your
-        // current puzzle". Also: a shared puzzle whose geometry exceeds the
-        // storage quota writes nothing at all (#399), so the previous puzzle
-        // stays on disk under the shared one on screen and a reload resumes
-        // it.
+        // The previous save is deliberately left alone: `deps.loadShared`
+        // persists the new puzzle only once generation fully succeeds, so a
+        // cancel (#489) or a throw leaves the previous save intact, matching the
+        // in-memory puzzle the player returns to. Clearing up front used to
+        // destroy that save on every cancel. A shared puzzle whose geometry
+        // exceeds the quota also writes nothing (#399), so the previous puzzle
+        // stays on disk and a reload resumes it.
         //
-        // Surface-shape validation (`isValidComposableCf` etc.) catches most
-        // malformed payloads at decode time, but a link can still satisfy
-        // the schema and then trip the topology pipeline — e.g. a config
-        // combination the current build doesn't support. Report it and
-        // toast rather than letting it surface as an unhandled rejection.
+        // Surface-shape validation catches most malformed payloads at decode
+        // time, but a link can satisfy the schema and still trip the topology
+        // pipeline (an unsupported config combination). Report and toast rather
+        // than let it surface as an unhandled rejection.
         return runWithErrorReport({
             run: async () => {
                 await deps.loadShared(payload, hasExistingProgress);

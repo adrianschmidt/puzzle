@@ -1,6 +1,6 @@
 /**
- * Persisted under its own localStorage key (rather than nested inside any
- * per-style config) because rotation is orthogonal to cut style.
+ * Own localStorage key rather than nested in per-style config: rotation is
+ * orthogonal to cut style.
  */
 
 import { createBooleanPreference } from './preference-store.js';

@@ -1,20 +1,15 @@
 /**
- * A pure topological utility: it knows nothing about geometry, the PRNG,
- * or `Piece`/`Edge` types — just piece ids, areas, and adjacency.
+ * Pure topological utility — piece ids, areas, adjacency only (no
+ * geometry/PRNG/`Piece` types).
  *
- * **Determinism is load-bearing.** Share-link reproducibility depends
- * on the topology generator producing the same output for the same
- * inputs. This function does not consume the PRNG, but its iteration
- * order and tie-breaking must be stable:
+ * **Determinism is load-bearing** (share-link reproducibility): this
+ * doesn't consume the PRNG, but its order and tie-breaking must stay stable:
+ *   - pieces processed in (area asc, id asc) order
+ *   - largest neighbour group wins; ties -> lowest root id
+ *   - piece ids within a group sorted ascending
  *
- *   - pieces are processed in (area asc, id asc) order
- *   - among candidate neighbours, the largest group wins; on ties the
- *     lowest root id wins
- *   - within each group, piece ids are sorted ascending
- *
- * Auto-grouping leaves the topology untouched and lets the gameplay
- * layer present the small pieces as a glued unit, rather than mutating
- * the DCEL to fold small faces into their neighbours.
+ * Leaves the topology untouched; the gameplay layer presents the small
+ * pieces as a glued unit rather than folding faces into the DCEL.
  */
 
 export interface AutoGroupContext {
@@ -27,13 +22,9 @@ export interface AutoGroupContext {
 }
 
 /**
- * The group `id` is the smallest piece id in the group (the
- * union-find root, by construction). `pieceIds` is sorted ascending
- * so test output and downstream layout are stable.
- *
- * This intermediate type is intentionally narrower than
- * `PieceGroup` from `model/types`: positioning (offsets, world
- * position, rotation) is the caller's concern.
+ * `id` is the group's smallest piece id (the union-find root); `pieceIds`
+ * is sorted ascending for stable output/layout. Narrower than `PieceGroup`
+ * (model/types) — positioning is the caller's concern.
  */
 export interface AutoGroup {
     id: number;
@@ -66,9 +57,8 @@ export function autoGroupSmallPieces(
         groupArea.set(winner, groupArea.get(winner)! + groupArea.get(loser)!);
     }
 
-    // Process pieces smallest-first so cascades resolve in a single
-    // pass: a tiny piece next to another tiny piece will see the
-    // already-merged group of its neighbour by the time we get to it.
+    // Smallest-first so cascades resolve in one pass: a tiny piece sees
+    // its neighbour's already-merged group by the time we reach it.
     const sorted = [...ctx.pieceIds].sort((a, b) => {
         const da = ctx.areas.get(a)! - ctx.areas.get(b)!;
         return da !== 0 ? da : a - b;

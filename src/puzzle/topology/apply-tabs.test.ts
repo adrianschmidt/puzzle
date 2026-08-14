@@ -27,18 +27,15 @@ describe('applyTabs', () => {
         };
         applyTabs(graph, generator, makeSeededRandom(1));
 
-        // 2x2 grid: 4 cells, internal edges = 4 (2 horiz + 2 vert,
-        // each as a single shared edge after dedup). The outer-facing
-        // border edges should not be visited.
-        // Each internal shared edge is visited ONCE (not once per
-        // half-edge), so calls = 4.
+        // 2x2 grid = 4 internal shared edges, each visited once (not per
+        // half-edge); border edges skipped. So calls = 4.
         expect(calls).toBe(4);
     });
 
     it('rejects a tab candidate that crosses another edge', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
-        // A "bad" generator: a 1000px bump that crosses adjacent edges.
+        // 1000px bump crosses adjacent edges -> rejected.
         const badGenerator: TabGenerator = {
             id: 'bad',
             generate: (edge) => makePerpBump(edge, 1000),
@@ -61,8 +58,7 @@ describe('applyTabs', () => {
             id: 'count',
             generate: () => { calls++; return null; },
         };
-        // Edges in a 3×3 grid of 100-unit cells are 100 units long.
-        // A policy that requires length > 200 should skip every edge.
+        // 3×3 grid edges are 100 units long; policy length > 200 skips all.
         applyTabs(graph, generator, makeSeededRandom(1), {
             policy: (e) => e.length > 200,
         });
@@ -76,14 +72,13 @@ describe('applyTabs', () => {
         applyTabs(graph, generator2, makeSeededRandom(1), {
             policy: () => true,
         });
-        expect(calls2).toBe(12); // 3×3 grid: (3-1)*3 horizontals + 3*(3-1) verticals = 6 + 6 = 12 internal edges
+        expect(calls2).toBe(12); // 3×3: 2*3 + 3*2 = 12 internal edges
     });
 
     it('accepts a tab candidate that does not cross any other edge', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
-        // A "good" generator: a tiny 1px perpendicular bump that stays
-        // well inside its own edge's neighborhood and crosses nothing.
+        // Tiny 1px bump stays local and crosses nothing -> accepted.
         const goodGenerator: TabGenerator = {
             id: 'good',
             generate: (edge) => makePerpBump(edge, 1),
@@ -100,13 +95,9 @@ describe('applyTabs', () => {
     });
 
     it('accepts a bump that crosses the parent line inside the removed splice range', () => {
-        // The bump is an S-curve that crosses the parent line at its
-        // midpoint. That crossing sits within the removed middle
-        // section of the parent — the section that gets replaced by the
-        // bump — so the final piece boundary does NOT self-intersect.
-        // The fold-back check must ignore crossings inside the removed
-        // range (only crossings into the kept `before`/`after` regions
-        // count).
+        // S-curve crosses the parent at its midpoint — inside the removed
+        // middle section, so the final boundary doesn't self-intersect.
+        // The fold-back check must ignore crossings in the removed range.
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
         const sideways: TabGenerator = {
@@ -124,11 +115,7 @@ describe('applyTabs', () => {
                     y: start.y + ty * along + ny * perp,
                 });
 
-                // 3-segment candidate:
-                //   1. before: linear from 0 -> 0.2L  (overlaps parent)
-                //   2. bump:   S-curve 0.2L -> 0.8L with control points
-                //              above then below — crosses parent at mid
-                //   3. after:  linear 0.8L -> 1.0L   (overlaps parent)
+                // before(0->0.2L) | S-curve bump crossing parent at mid | after(0.8L->1L)
                 return Curve.fromBezierPath([
                     at(0, 0),
                     at(0.05 * len, 0), at(0.15 * len, 0), at(0.2 * len, 0),
@@ -149,10 +136,8 @@ describe('applyTabs', () => {
     });
 
     it('rejects a bump that folds back into the kept `before` region', () => {
-        // Construct a candidate whose bump pulls back into x < 0.2L —
-        // crossing the `before` overlap region that stays in the final
-        // boundary. This is the real fold-back case: the resulting
-        // piece boundary self-intersects.
+        // Bump pulls back into x < 0.2L, crossing the kept `before`
+        // region — a real fold-back that self-intersects the boundary.
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
         const realFoldback: TabGenerator = {
@@ -169,13 +154,9 @@ describe('applyTabs', () => {
                     x: start.x + tx * along + nx * perp,
                     y: start.y + ty * along + ny * perp,
                 });
-                // Bump's left control point sits at (-0.3L, -30) — way
-                // back and above; right at (0.4L, +30) — slightly
-                // forward and below. The cubic enters the `before`
-                // x-range with y < 0 (above parent), sweeps through
-                // y = 0 inside that range (around t ≈ 0.5, x ≈ 0.16L),
-                // and exits with y > 0 — a transverse crossing of the
-                // before segment.
+                // Control points (-0.3L,-30) and (0.4L,+30) make the cubic
+                // sweep through y=0 inside the `before` x-range — a
+                // transverse crossing of the kept before segment.
                 return Curve.fromBezierPath([
                     at(0, 0),
                     at(0.05 * len, 0), at(0.15 * len, 0), at(0.2 * len, 0),
@@ -196,9 +177,8 @@ describe('applyTabs', () => {
     });
 
     it('accepts a small bump even when distant edges exist (cull does not drop real outcomes)', () => {
-        // 3x3 grid: plenty of edges far from any given small bump. The
-        // bump stays 1px off its own edge, so it crosses nothing and must
-        // be accepted regardless of the bbox cull.
+        // 3x3 grid has edges far from the bump; a 1px bump crosses nothing
+        // and must be accepted regardless of the bbox cull.
         const graph = buildDCEL({ curves: simpleGridCurves(3, 3) });
         const good: TabGenerator = {
             id: 'good',
@@ -213,8 +193,7 @@ describe('applyTabs', () => {
 
     it('commits the first acceptable variant from generateVariants', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
-        // First variant pokes 1000px (crosses neighbors -> rejected);
-        // second is a 1px bump (accepted).
+        // Variant 0 pokes 1000px (rejected); variant 1 is a 1px bump (accepted).
         const ladder: TabGenerator = {
             id: 'ladder',
             generate: (edge) => makePerpBump(edge, 1000),
@@ -228,8 +207,7 @@ describe('applyTabs', () => {
         const before = internal.curve;
         applyTabs(graph, ladder, makeSeededRandom(1));
         expect(internal.curve).not.toBe(before);
-        // The committed curve must be the small (1px) variant, not the
-        // rejected 1000px one: its short bbox dimension stays tiny.
+        // Committed variant must be the 1px one — its short bbox side stays tiny.
         const box = internal.curve.boundingBox();
         const shortSide = Math.min(box.maxX - box.minX, box.maxY - box.minY);
         expect(shortSide).toBeLessThan(10);
@@ -266,8 +244,8 @@ describe('applyTabs', () => {
 
     it('reports the committed variant ordinal to onCandidate', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
-        // Rung 0 (1000px) crosses neighbors -> rejected; rung 1 (1px) is
-        // accepted, so every committed edge reports index 1.
+        // Rung 0 (1000px) rejected, rung 1 (1px) accepted, so every
+        // committed edge reports index 1.
         const ladder: TabGenerator = {
             id: 'ladder-idx',
             generate: (edge) => makePerpBump(edge, 1000),
@@ -288,9 +266,8 @@ describe('applyTabs', () => {
 
     it('counts a yielded null as a slot in the committed ordinal', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
-        // Slot 0 yields null (a failed splice); slot 1 is acceptable. The
-        // committed ordinal must be 1 — the null still occupies slot 0, so
-        // a skipped rung can't shift later rungs' indices.
+        // Slot 0 yields null (failed splice), slot 1 is acceptable. The
+        // null still occupies slot 0, so the committed ordinal is 1.
         const gen: TabGenerator = {
             id: 'null-then-good',
             generate: (edge) => makePerpBump(edge, 1),
@@ -312,9 +289,8 @@ describe('applyTabs', () => {
     it('accepts a normal one-sided tab bump (sanity check)', () => {
         const graph = buildDCEL({ curves: simpleGridCurves(2, 2) });
 
-        // A normal tab shape: linear before/after overlap with a bump
-        // that stays on one side of the parent. This must NOT be
-        // rejected by the fold-back check.
+        // Normal tab: before/after overlap plus a one-sided bump. Must
+        // NOT be rejected by the fold-back check.
         const tabGenerator: TabGenerator = {
             id: 'normal-tab',
             generate: (edge) => {
@@ -368,11 +344,8 @@ function simpleGridCurves(cols: number, rows: number): Curve[] {
 }
 
 /**
- * A simple tab candidate: a wedge whose apex sits `perp` px perpendicular
- * to the edge at its midpoint. Small `perp` stays local (crosses nothing);
- * large `perp` pokes across neighboring edges (rejected by the crossing
- * check). Shape matches what the real splicer emits: a kept `before`/
- * `after` overlap plus a single bump.
+ * Tab candidate: a wedge with apex `perp` px off the edge midpoint.
+ * Small `perp` crosses nothing; large pokes across neighbors (rejected).
  */
 function makePerpBump(edge: Curve, perp: number): Curve {
     const mid = edge.pointAt(0.5);

@@ -35,9 +35,9 @@ describe('IMAGE_CATEGORY_OPTIONS', () => {
     });
 
     it('all non-any queries are a single word', () => {
-        // Each query is the bare Unsplash tag term the option's label names.
-        // Multi-word queries AND-narrow the search, which is how `abstract`
-        // once ended up repeating `colorful` alongside the vibrant toggle.
+        // Each query is a bare Unsplash tag; multi-word queries AND-narrow the
+        // search (how `abstract` once repeated `colorful` alongside the vibrant
+        // toggle).
         for (const opt of IMAGE_CATEGORY_OPTIONS.slice(1)) {
             expect(opt.query).toMatch(/^\S+$/);
         }

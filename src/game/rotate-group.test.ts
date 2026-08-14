@@ -169,9 +169,8 @@ describe('rotateGroup', () => {
     });
 
     it('holds a non-center pivotLocal fixed in world space', () => {
-        // Piece 0's center (50, 50), not the bbox center (100, 50): the
-        // parameter selects the anchor, so this must fail if it were ignored
-        // in favor of the computed-bounds default.
+        // Pivot = piece 0's center (50,50), not the bbox center (100,50): the
+        // test fails if the param is ignored for the computed-bounds default.
         const p0 = makeSquarePiece(0);
         const p1 = makeSquarePiece(1);
         const group: PieceGroup = {

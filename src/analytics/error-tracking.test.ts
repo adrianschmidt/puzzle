@@ -14,13 +14,12 @@ describe('initErrorTracking', () => {
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = {
             track: umamiTrack,
         };
-        // Keep dev diagnostics from spamming the test console.
         vi.spyOn(console, 'warn').mockImplementation(() => {});
         dispose = initErrorTracking();
     });
 
     afterEach(() => {
-        // Remove the listeners so they don't accumulate across cases.
+        // Remove listeners so they don't accumulate across cases.
         dispose();
         delete (window as unknown as { umami?: unknown }).umami;
         vi.restoreAllMocks();
@@ -115,10 +114,9 @@ describe('initErrorTracking', () => {
     });
 
     it('does not report resource-load errors (listener is not in the capture phase)', () => {
-        // Resource-load errors fire on the element and do not bubble; they
-        // only reach window in the capture phase. A bubble-phase window
-        // listener must never see them — pin that so a stray `, true`
-        // doesn't silently start reporting every 404.
+        // Resource-load errors only reach window in the capture phase, so the
+        // bubble-phase listener must never see them — a stray `, true` would
+        // start reporting every 404.
         const img = document.createElement('img');
         document.body.appendChild(img);
         img.dispatchEvent(new Event('error'));
@@ -128,9 +126,8 @@ describe('initErrorTracking', () => {
     });
 
     function violate(directive: string, blockedURI: string): void {
-        // jsdom has no SecurityPolicyViolationEvent constructor, so build the
-        // shape the listener reads. The real event carries far more; these two
-        // fields are all `csp-violation` reports.
+        // jsdom has no SecurityPolicyViolationEvent constructor; build the two
+        // fields the listener reads (the real event carries far more).
         const event = new Event('securitypolicyviolation') as Event & {
             effectiveDirective?: string;
             blockedURI?: string;
@@ -150,9 +147,8 @@ describe('initErrorTracking', () => {
     });
 
     it('rate-limits CSP violations by directive, not by blocked URI', () => {
-        // A wrong img-src blocks one image per piece — hundreds per puzzle.
-        // Keying the limiter on the URI would let a single bad policy drain
-        // the whole session budget that uncaught exceptions also draw on.
+        // A wrong img-src blocks hundreds of images per puzzle; keying the
+        // limiter on the URI (not directive) would drain the shared session budget.
         for (let i = 0; i < 20; i++) {
             violate('img-src', `https://evil-${i}.example`);
         }

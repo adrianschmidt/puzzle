@@ -55,9 +55,8 @@ describe('composable: two-circle Venn', () => {
             1, 1, { width: 600, height: 400 }, 42, CONFIG,
         );
         const frame = pieces.find(p => countLoops(p.edges) > 1)!;
-        // "At least one" because the frame's outer boundary is unmated
-        // border edges, and the lens shares no edges with the frame —
-        // only the crescents mate with the inner boundary.
+        // "At least one": the frame's outer boundary is unmated border, the lens
+        // shares no edges with the frame — only crescents mate the inner boundary.
         const matedFrameEdges = frame.edges.filter(
             e => e.matePieceId !== -1 && e.mateEdgeId !== -1,
         );
@@ -65,11 +64,10 @@ describe('composable: two-circle Venn', () => {
     });
 
     it('does not auto-group pieces — all four pieces are independent starting groups', () => {
-        // Regression: with endpoints-only shoelace, curve-bounded faces
-        // (crescents, lens) computed as ~0 area and tripped the default
-        // minPieceArea threshold, incorrectly auto-grouping a crescent
-        // with the frame at puzzle start. Sampling `curvePoints` fixes
-        // this. See generator.ts:computeOuterLoopArea.
+        // Regression: endpoints-only shoelace computed curve-bounded faces
+        // (crescents, lens) as ~0 area, tripping minPieceArea and auto-grouping a
+        // crescent with the frame at start. Sampling `curvePoints` fixes it. See
+        // generator.ts:computeOuterLoopArea.
         const { pieces, autoGroups } = generateComposablePuzzle(
             1, 1, { width: 600, height: 400 }, 42, CONFIG,
         );

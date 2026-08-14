@@ -1,7 +1,6 @@
 /**
- * Puzzle generation runs in a worker when available and can still take a
- * second or two on older devices; shared-link recipients in particular see
- * a dead page without feedback.
+ * Puzzle generation can take a second or two on older devices; without this,
+ * shared-link recipients in particular see a dead page with no feedback.
  */
 
 const OVERLAY_CLASS = 'loading-overlay';
@@ -24,8 +23,7 @@ let focusBeforeOverlay: HTMLElement | null = null;
 
 /**
  * `document.body` is where focus already sits on the dominant path (the
- * new-game dialog dismisses before it starts the game), and it is not a
- * place to put focus back.
+ * new-game dialog dismisses first) and is not a place to restore focus.
  */
 function restorableFocusTarget(active: Element | null): HTMLElement | null {
     return active instanceof HTMLElement && active !== document.body ? active : null;
@@ -40,11 +38,9 @@ function onCancelClick(): void {
 }
 
 /**
- * The overlay is modal to the pointer (it covers the page and takes every
- * event) but has no focus trap, so Shift+Tab off Cancel would otherwise
- * reach the toolbar behind it, where Enter starts a second flow against
- * the same singleton `cancelHandler`. `inert` makes the keyboard agree
- * with the pointer.
+ * The overlay is modal to the pointer but has no focus trap, so Shift+Tab off
+ * Cancel would otherwise reach the toolbar behind it and start a second flow.
+ * `inert` makes the keyboard agree with the pointer.
  */
 function setAppInert(inert: boolean): void {
     const app = document.querySelector<HTMLElement>(APP_ROOT_SELECTOR);
@@ -67,10 +63,9 @@ export function showLoadingOverlay(
         spinner.className = SPINNER_CLASS;
         overlay.appendChild(spinner);
 
-        // The live region is the text, not the overlay: the Cancel button
-        // is a sibling inside the overlay, and a `role="status"` wrapper
-        // would make an interactive control part of a status announcement.
-        // `index.html`'s pre-rendered overlay marks it up the same way.
+        // The live region is the text, not the overlay: a role="status" wrapper
+        // would make the Cancel button (a sibling) part of a status announcement.
+        // index.html's pre-rendered overlay marks it up the same way.
         const label = document.createElement('div');
         label.className = TEXT_CLASS;
         label.setAttribute('role', 'status');
@@ -84,11 +79,9 @@ export function showLoadingOverlay(
         if (label) label.textContent = text;
     }
 
-    // Both of the next two statements destroy focus — `inert` blurs
-    // anything focused inside the app root, and Cancel takes it — so the
-    // save belongs with neither. A re-show skips it: focus is by then the
-    // overlay's own Cancel button, which `hideLoadingOverlay` removes, and
-    // re-capturing would lose the original target.
+    // Both next statements destroy focus (`inert` blurs the app root, Cancel
+    // takes it), so the save precedes both. A re-show skips it: focus is by then
+    // the overlay's own Cancel button, and re-capturing would lose the original.
     if (!overlayWasUp) focusBeforeOverlay = restorableFocusTarget(document.activeElement);
     setAppInert(true);
     syncCancelButton(overlay, options.onCancel);
@@ -113,21 +106,14 @@ function syncCancelButton(
         button.className = CANCEL_CLASS;
         button.textContent = 'Cancel';
         overlay.appendChild(button);
-        // Creation only, deliberately. The overlay covers the page and takes
-        // every pointer event, so nothing else is actionable — without this the
-        // only way to discover Cancel without sight is to guess that Escape
-        // works, and focusing also makes Enter/Space cancel. It cannot be
-        // hoisted next to the listener below: `does not steal focus again when
-        // the overlay is re-shown` pins that a re-show leaves focus where the
-        // user put it.
+        // Focus on creation only: without it, discovering Cancel without sight
+        // means guessing Escape works (focus also enables Enter/Space). Not
+        // hoisted to the listener below — a re-show must leave focus put.
         button.focus();
     }
-    // Both listeners register unconditionally: the callbacks are stable
-    // module-level references reading module-level state, so a duplicate
-    // addEventListener with the same type/callback/capture is a spec no-op.
-    // Registering the click handler inside the creation branch instead would
-    // leave the button inert if `index.html` ever pre-renders it the way it
-    // already pre-renders the overlay around it.
+    // Both listeners register unconditionally: stable module-level callbacks make
+    // a duplicate addEventListener a spec no-op. Wiring click in the creation
+    // branch would leave the button inert if index.html ever pre-renders it.
     button.addEventListener('click', onCancelClick);
     document.addEventListener('keydown', onOverlayKeydown);
 }
@@ -143,8 +129,8 @@ export function hideLoadingOverlay(): void {
 }
 
 /**
- * Use this after `showLoadingOverlay` and before a synchronous heavy
- * work burst so the overlay actually appears on screen.
+ * Call after `showLoadingOverlay` and before a synchronous heavy-work burst so
+ * the overlay actually paints.
  */
 export function yieldForPaint(): Promise<void> {
     return new Promise((resolve) => {

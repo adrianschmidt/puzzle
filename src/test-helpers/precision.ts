@@ -1,23 +1,16 @@
 /**
- * Shared precision probes for the geometry-quantization invariant (#487).
- *
- * `quantizePieceGeometry` promises that no generated coordinate carries more
- * decimals than `GEOMETRY_PRECISION_DECIMALS`. Two test files assert that —
- * one on the helper, one at the `createNewGame` seam — and both need the same
- * answer to "how many decimals does this number serialize with". These
- * helpers encode the *definition* of the invariant, so a private copy that
- * drifts would let a real regression pass in one file while failing in the
+ * Shared precision probes for the geometry-quantization invariant (#487). Two
+ * test files assert it — one on the helper, one at the `createNewGame` seam —
+ * and both need the same "how many decimals does this number serialize with".
+ * A private copy that drifted would let a regression pass in one, fail in the
  * other.
  */
 
 /**
- * Decimals in `v`'s shortest round-trip representation — the same digits
- * `JSON.stringify` writes, since both go through `Number.prototype.toString`.
- *
- * Exponential notation is expanded rather than ignored: `String(1e-7)` is
- * `"1e-7"`, which contains no `.` at all, so splitting on `.` alone would
- * report 0 decimals for exactly the near-zero float residue this check exists
- * to catch.
+ * Decimals in `v`'s shortest round-trip representation — the digits
+ * `JSON.stringify` writes. Exponential notation is expanded, not ignored:
+ * `String(1e-7)` is `"1e-7"` with no `.`, so splitting on `.` alone would
+ * report 0 decimals for exactly the near-zero residue this catches.
  */
 export function decimals(v: number): number {
     const [mantissa, exponent = '0'] = String(v).split('e');
@@ -33,23 +26,14 @@ export interface PrecisionSample {
 }
 
 /**
- * Deliberately generic rather than a hand-written coordinate list. The
- * invariant is "nothing on this object is finer than N decimals", so a
- * coordinate field added to `Edge` or `Piece` later has to be caught without
- * anyone remembering to extend a helper — a list-driven probe can only ever
- * check the fields the implementation is already known to handle.
- *
- * Strings are skipped: `piece.shape` and `edge.path` are formatted by `fmt`
- * and deliberately not quantized.
- *
- * `Map` and `Set` throw rather than being walked. `Object.entries` reports no
- * entries for either, so walking one silently checks nothing — and the obvious
- * next thing to probe is `state.groups`, whose `PieceGroup.pieces` is a `Map`.
- * Pass `[...map.values()]` when that is what you mean.
- *
- * `path` is reported so a failure names the offending coordinate instead of
- * only its decimal count. Returns a placeholder zero sample when no number
- * carries a fraction, so its `value` need not appear in `root` at all.
+ * Deliberately generic, not a hand-written coordinate list: a field added to
+ * Edge/Piece later is caught without anyone remembering to extend a helper.
+ * Strings are skipped (`piece.shape`, `edge.path` are formatted, not
+ * quantized). Map and Set throw rather than walk — Object.entries reports no
+ * entries, so walking one checks nothing (the next probe target, state.groups,
+ * holds a Map); pass `[...map.values()]`. `path` names the offending
+ * coordinate on failure; a zero sample is returned when nothing carries a
+ * fraction.
  */
 export function worstPrecision(root: unknown): PrecisionSample {
     let worst: PrecisionSample = { path: '', value: 0, decimals: 0 };

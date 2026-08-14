@@ -36,7 +36,6 @@ export function createDeselectButton(
 
     function handleClick(): void {
         selectionManager.clearAll();
-        // updateVisibility will be called via the onChange listener
     }
 
     button.addEventListener('click', handleClick);

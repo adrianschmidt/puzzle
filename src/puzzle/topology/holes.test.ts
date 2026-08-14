@@ -15,9 +15,8 @@ function frameWithCircle() {
 }
 
 function signedArea(start: HalfEdge): number {
-    // Sample each half-edge's curve so curved boundaries with few
-    // vertices (e.g. a circle has only 2 vertices after splitting)
-    // produce a non-zero signed area.
+    // Sample each half-edge's curve so curved boundaries with few vertices
+    // (a circle has only 2 after splitting) get a non-zero signed area.
     const points: { x: number; y: number }[] = [];
     let current = start;
     do {
@@ -49,9 +48,8 @@ describe('assignHoles (run via buildDCEL)', () => {
         )!;
         const outerSign = Math.sign(signedArea(frame.outerEdge));
         const innerSign = Math.sign(signedArea(frame.innerBoundaries[0]));
-        // Hole boundary must wind opposite to the outer boundary so
-        // SVG fill-rule:evenodd produces a hole and downstream
-        // winding-aware consumers (point-in-polygon, etc.) work.
+        // Hole boundary must wind opposite the outer so SVG fill-rule:evenodd
+        // renders a hole and winding-aware consumers (point-in-polygon) work.
         expect(innerSign).not.toBe(0);
         expect(outerSign).not.toBe(0);
         expect(innerSign).toBe(-outerSign);

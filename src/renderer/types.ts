@@ -1,21 +1,15 @@
 /**
- * The port is not the {@link Renderer} interface alone:
- * {@link VIEWPORT_TRANSITION_MS} is a runtime value implementations are
- * bound by.
+ * The port includes {@link VIEWPORT_TRANSITION_MS} — a runtime value
+ * implementations are bound by — not just the {@link Renderer} interface.
  */
 
 import type { GameState, Point } from '../model/types.js';
 
 /**
- * How long the animated viewport transition runs, in milliseconds.
- *
- * Part of the port rather than of one implementation: the caller that turns
- * the transition back off cannot see the animation, so the port has to say
- * how long to wait — `app/viewport-fit.ts` arms a fallback timer against
- * exactly this number, and the completed-group spin there runs in lockstep
- * with the viewport zoom. Two literals — one in the CSS, one in the timer —
- * would let the timer silently start cutting the animation short the moment
- * either side changed.
+ * Animated viewport transition duration, in ms. Part of the port because the
+ * caller that disables the transition can't observe the animation:
+ * `app/viewport-fit.ts` arms a fallback timer against this number. A second
+ * literal (in CSS) would let the timer silently cut the animation short.
  */
 export const VIEWPORT_TRANSITION_MS = 800;
 

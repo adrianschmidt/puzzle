@@ -1,6 +1,4 @@
-/**
- * See issue #171 for design discussion.
- */
+/** See issue #171 for design discussion. */
 
 import type { Point } from '../../model/types.js';
 import type { PieceDefinition, EdgeDefinition } from '../composable/types.js';
@@ -29,9 +27,8 @@ export function facesToPieceDefinitions(
                 halfEdgeToEdgeId.set(he.twin.id, nextEdgeId++);
             }
         }
-        // Without edge IDs for the inner-boundary loops, the
-        // halfEdgeToEdgeDef call below would throw when converting
-        // inner-boundary edges.
+        // Assign edge IDs for inner-boundary loops too, or the
+        // halfEdgeToEdgeDef call below throws on them.
         for (const innerStart of face.innerBoundaries) {
             const innerEdges = walkLoop(innerStart);
             for (const he of innerEdges) {
@@ -49,14 +46,13 @@ export function facesToPieceDefinitions(
         const pieceId = faceIdToPieceId.get(face.id)!;
         const outerHE = getFaceEdges(face);
 
-        // Based on the OUTER boundary only — inner-boundary edges are
-        // inside the outer boundary by definition, so don't extend the bbox.
+        // Outer boundary only — inner edges are inside it, so they don't
+        // extend the bbox.
         const bbox = computeFaceBBox(outerHE);
 
-        // Loop boundaries in the flat edge list are implicit — detected
-        // by the renderer when consecutive edges' end/start points don't
-        // match. All loops share the same piece-local coordinate frame
-        // (the same bbox).
+        // Loop boundaries are implicit in the flat edge list — the renderer
+        // detects them where consecutive edges' end/start don't match. All
+        // loops share the same piece-local frame (bbox).
         const allHE: HalfEdge[] = [...outerHE];
         for (const innerStart of face.innerBoundaries) {
             allHE.push(...walkLoop(innerStart));
@@ -165,10 +161,7 @@ function halfEdgeToEdgeDef(
     };
 }
 
-/**
- * In piece-local coordinates. Returns undefined for straight edges
- * (to save space).
- */
+/** Piece-local coordinates; undefined for straight edges (saves space). */
 function extractCurvePoints(he: HalfEdge, bbox: BBox): Point[] | undefined {
     const pts = he.curve.sample(8);
     if (isEssentiallyStraight(pts)) {

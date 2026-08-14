@@ -34,11 +34,7 @@ export interface InteractionSetupOptions {
     panViewport?: (screenDelta: Point) => void;
     selectionManager?: SelectionManager;
     rotationFocus?: RotationFocus;
-    /**
-     * Active snap tolerances for snap proximity rotation (progressive
-     * rotation toward a mate while dragging in free-rotation mode).
-     * When omitted, the feature is disabled.
-     */
+    /** Active snap tolerances; omit to disable snap proximity rotation. */
     getSnapTolerances?: () => SnapTolerances;
 }
 
@@ -142,7 +138,6 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         onStateChanged();
     }
 
-    // Defined once rather than per pointerdown.
     const probeHitTest = (p: Point): number | null => renderer.pieceIdAtPoint(p);
 
     const classifyTarget: ClassifyTarget = (target, point) => {
@@ -153,9 +148,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
             (target instanceof HTMLElement && target.dataset.puzzleTable === 'true');
         if (!isBackground) return { kind: 'ignore' };
 
-        // Direct hit was background — widen the grab to a nearby piece so
-        // small/slim pieces stay grabbable when zoomed out (screen-constant
-        // tolerance; see hit-probe.ts). Only on events that carry a point.
+        // Background hit — widen to a nearby piece so small pieces stay grabbable when zoomed out (see hit-probe.ts). Point-carrying events only.
         if (point) {
             const nearby = probeNearbyPieceId(point, probeHitTest);
             if (nearby !== null) return { kind: 'piece', pieceId: nearby };
@@ -186,8 +179,7 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
                 applyOffsetDragIfSingleGroup(drag.groupId);
                 autoPan?.start(drag.groupId);
                 autoPan?.updatePointer({ x: evt.clientX, y: evt.clientY });
-                // Snap proximity rotation only tracks single-group drags: rotating one
-                // group of a multi-selection would disturb the arrangement being moved.
+                // Single-group drags only: rotating one group of a multi-selection would disturb the arrangement.
                 if (expandToSelection(drag.groupId).length === 1) {
                     snapRotation?.start(drag.groupId);
                 }
@@ -220,21 +212,18 @@ export function setupInteraction(options: InteractionSetupOptions): () => void {
         onBackgroundPan: {
             start: (evt) => {
                 rotationFocus?.clearFocus();
-                // `start` fires from the move that crosses the drag threshold,
-                // so `evt.shiftKey` reflects Shift state at that moment — a
-                // press-then-hold-Shift still arms the marquee, which is fine.
-                // This is the authoritative Shift read; the marquee button's
-                // cosmetic `shiftHint` observes the key separately and may
-                // briefly disagree without affecting the gesture.
+                // start fires from the move that crosses the drag threshold, so evt.shiftKey
+                // is the authoritative Shift read for arming the marquee (press-then-hold-Shift
+                // still arms it). The button's cosmetic shiftHint reads the key separately and
+                // may briefly disagree without affecting the gesture.
                 const wantMarquee =
                     !!marquee && !!selectionManager &&
                     (selectionManager.marqueeActive || evt.shiftKey);
                 if (wantMarquee) {
                     backgroundMode = 'marquee';
-                    // A marquee builds a multi-select selection, so the tool
-                    // must be on. `marqueeActive` already implies it; the Shift
-                    // shortcut may not, so enable it here (Shift+drag leaves
-                    // multi-select on afterward, but does not arm the marquee).
+                    // A marquee needs the tool on. marqueeActive already implies it; the Shift
+                    // shortcut may not, so enable it here (Shift+drag leaves multi-select on but
+                    // doesn't arm the marquee).
                     if (!selectionManager.toolActive) {
                         selectionManager.toolActive = true;
                     }

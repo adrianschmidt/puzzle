@@ -1,6 +1,6 @@
 /**
- * The modal is composed of per-section builder functions; each owns its
- * DOM and event wiring so adding/removing a setting is a localised change.
+ * Composed of per-section builder functions; each owns its DOM and wiring so
+ * adding/removing a setting is a localized change.
  */
 
 import type { GameState } from '../model/types.js';
@@ -264,8 +264,7 @@ function buildPieceOutlineSetting(): HTMLElement {
 
     setting.appendChild(container);
 
-    // Outline-color picker — only meaningful for the "Outline" style, so
-    // it's revealed/hidden as the active edge style changes.
+    // Outline-color picker — only meaningful for the "Outline" style, so toggled with it.
     const colorRow = document.createElement('div');
     colorRow.className = 'outline-color-row';
     colorRow.dataset.testid = 'piece-outline-color-row';
@@ -275,13 +274,9 @@ function buildPieceOutlineSetting(): HTMLElement {
     colorLabel.textContent = 'Outline colour';
     colorRow.appendChild(colorLabel);
 
-    // The picker's cleanup function is intentionally discarded: the modal
-    // tears down its whole subtree on dismiss (overlay.remove()), which
-    // takes the button and swatch panel with it. The popover's only
-    // out-of-subtree resource is its document-level dismiss listeners, and
-    // every modal-close path (✕, backdrop, Escape) also trips the popover's
-    // own outside-pointerdown / Escape handler, which removes them. Mirrors
-    // the background-color picker, which likewise discards its cleanup.
+    // The picker's cleanup is intentionally discarded: the modal removes its
+    // whole subtree on dismiss, and the popover's only out-of-subtree resource
+    // (its document-level dismiss listeners) is torn down by every close path.
     createPieceOutlineColorPicker({
         container: colorRow,
         selectedId: loadPieceOutlineColorPreference(),
@@ -648,9 +643,8 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     const content = document.createElement('div');
     content.className = 'info-modal-content';
 
-    // Share section first so it's the most prominent thing in the modal.
-    // Strip the hash so attachShareSection receives the bare page URL rather
-    // than silently relying on buildShareUrl to drop any stale `#p=...`.
+    // Share section first so it's most prominent. Strip the hash so
+    // attachShareSection gets the bare page URL, not a stale `#p=...`.
     if (options.state) {
         const baseUrl = window.location.href.split('#')[0];
         attachShareSection(content, options.state, baseUrl);
@@ -672,8 +666,8 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     modal.appendChild(content);
     overlay.appendChild(modal);
 
-    // Backdrop / Escape are handled by the overlay helper; both fire
-    // onDismiss already, so we only wire up the close button here.
+    // Backdrop / Escape are handled by the overlay helper (both fire onDismiss);
+    // only the close button needs wiring here.
     closeButton.addEventListener('click', dismiss);
 
     return dismiss;

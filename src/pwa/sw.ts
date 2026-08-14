@@ -1,11 +1,10 @@
 /**
- * Custom service worker (Workbox `injectManifest` strategy). The worker was
- * previously built via `generateSW` (no source file); instrumenting the
- * worker's own scope (#430) needs real `self.addEventListener` handlers, so
- * this file IS the worker and the build only injects the precache manifest at
+ * Custom service worker (Workbox `injectManifest`). Instrumenting the worker's
+ * own scope (#430) needs real `self.addEventListener` handlers, so this file
+ * IS the worker and the build only injects the precache manifest at
  * `self.__WB_MANIFEST`. It must reproduce what `generateSW` gave for free:
  * precache + cleanup, the SPA navigation fallback with the cross-deployment
- * denylist, and the `prompt`-mode skip-waiting handshake. Keep it thin: the
+ * denylist, and the `prompt`-mode skip-waiting handshake. Keep it thin — the
  * testable error logic lives in `sw-error-reporter.ts`.
  */
 
@@ -18,9 +17,8 @@ import {
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { createSwErrorReporter } from './sw-error-reporter.js';
 
-// `__WB_MANIFEST` is the literal injection point Workbox replaces with the
-// precache manifest at build time (`injectionPoint: 'self.__WB_MANIFEST'`);
-// the string must appear verbatim, so don't rename `self` here.
+// Workbox replaces `self.__WB_MANIFEST` at build time (its configured
+// injectionPoint), so the string must appear verbatim — don't rename `self`.
 declare const self: ServiceWorkerGlobalScope & {
     __WB_MANIFEST: Array<PrecacheEntry | string>;
 };
@@ -29,10 +27,10 @@ declare const self: ServiceWorkerGlobalScope & {
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
-// SPA navigation fallback → the precached index.html. The denylist mirrors
-// `navigateFallbackDenylist` from vite.config.ts: don't serve this
-// deployment's index.html for navigations into a sibling deployment under the
-// same origin (e.g. /puzzle/dev/ when we're the /puzzle/ production build).
+// SPA navigation fallback → precached index.html. The denylist mirrors
+// vite.config.ts's `navigateFallbackDenylist`: don't serve this deployment's
+// index.html for navigations into a sibling deployment on the same origin
+// (e.g. /puzzle/dev/ when we're /puzzle/).
 const base = import.meta.env.BASE_URL;
 const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 registerRoute(
@@ -42,32 +40,25 @@ registerRoute(
 );
 
 // `registerType: 'prompt'`: never activate a waiting worker on our own.
-// `virtual:pwa-register`'s `updateSW(true)` posts `{type: 'SKIP_WAITING'}`
-// once the page commits to reloading (see pwa/update-controller.ts); only
-// then do we take over.
+// `updateSW(true)` posts `{type: 'SKIP_WAITING'}` once the page commits to
+// reloading (pwa/update-controller.ts); only then do we take over.
 self.addEventListener('message', (event) => {
     if ((event.data as { type?: unknown } | null)?.type === 'SKIP_WAITING') {
         void self.skipWaiting();
     }
 });
 
-// #430: report failures thrown inside the worker's own scope, which the
-// page's `window` listeners can't see; the page bridge relays each report
-// to analytics.
+// #430: report failures in the worker's own scope, which the page's window
+// listeners can't see; the page bridge relays each to analytics.
 //
-// Coverage is deliberately limited to what the worker's global `error` and
-// `unhandledrejection` events surface: synchronous throws and unhandled
-// promise rejections. It does NOT capture failures that the platform routes
-// elsewhere — a `FetchEvent.respondWith` rejection, a precache install
-// failure, or an `ExtendableEvent.waitUntil` rejection surface as the event's
-// own failure (a network error / failed install / failed activation), not as
-// a global error. Don't read the absence of `sw-error`/`sw-rejection` events
-// as proof those paths are healthy.
+// Only the global `error`/`unhandledrejection` events are covered — synchronous
+// throws and unhandled rejections. Failures the platform routes elsewhere (a
+// `respondWith` rejection, a precache install failure, a `waitUntil` rejection)
+// surface as the event's own failure, not here — don't read absent
+// sw-error/sw-rejection events as proof those paths are healthy.
 //
-// Delivery is best-effort: when no window client is open (e.g. the worker
-// woke for a background event with every tab closed), `matchAll` returns an
-// empty list and the report is silently dropped — there is nowhere to relay
-// it, since only the page can call `track()`.
+// Best-effort: with no window client open, `matchAll` returns empty and the
+// report is dropped, since only the page can call `track()`.
 const reporter = createSwErrorReporter({
     post: (report) => {
         void self.clients

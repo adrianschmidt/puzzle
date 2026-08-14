@@ -5,8 +5,7 @@ import { setTracedTabChoiceRecorder } from '../composable/traced-tab-recorder.js
 import { preloadTracedTabGenerator } from './traced-tab-loader.js';
 
 describe('TabDebugSession', () => {
-    // Traced tabs are registered as a stub that throws unless this
-    // preload has run; await it once for the whole suite.
+    // Traced tabs are a stub that throws unless this preload has run.
     beforeAll(async () => {
         await preloadTracedTabGenerator();
     });

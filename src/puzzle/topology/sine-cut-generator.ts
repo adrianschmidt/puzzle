@@ -8,10 +8,8 @@ import { Curve } from './curve.js';
 import type { BaseCutGenerator } from './plugin-types.js';
 
 /**
- * Field names match the share-link's compact convention (`ha` for
- * horizontalAmplitude, etc.). This keeps the share-link's bgc shape
- * and the generator's expected config shape identical, so no field-
- * name translation is needed at the share-link boundary.
+ * Field names match the share-link's compact `bgc` convention (`ha` =
+ * horizontalAmplitude, etc.), so no translation is needed at that boundary.
  */
 export interface SineCutConfig {
     cols: number;
@@ -25,24 +23,20 @@ export interface SineCutConfig {
     /** Vertical cut frequency in waves over the puzzle height. */
     vf: number;
     /**
-     * Borderless mode flag. NOT part of the share-link `bgc` shape — it
-     * rides on the share link as `cf.bl` and is injected into the base-cut
-     * config by the topology generator (see generator.ts). It lives here so
-     * the generator's config type records the field it actually reads; when
-     * true, the grid is oversized by one piece on each side for the strip
-     * pass. Optional/defaults to false so a plain `bgc` config is unaffected.
+     * NOT part of the share-link `bgc` shape — it rides as `cf.bl` and is
+     * injected into the base-cut config by the topology generator (generator.ts).
+     * When true, the grid is oversized by one piece per side for the strip pass.
+     * Defaults to false so a plain `bgc` config is unaffected.
      */
     borderless?: boolean;
 }
 
 /**
- * The grid `expectedPieceCount` and `generate` must agree on: same `cols`/
- * `rows` fallbacks, same borderless oversizing. Extracted so the two can't
- * independently drift — before this existed, changing one's defaults without
- * the other's left the whole test suite green (#512's false-negative hole).
- * Pure config reading: no PRNG draw, no geometry, so factoring it out here
- * touches neither the share-link contract nor `dcel-broad-phase-
- * equivalence.test.ts`'s pinned geometry.
+ * The grid `expectedPieceCount` and `generate` must agree on (same cols/rows
+ * fallbacks, same borderless oversizing), extracted so the two can't drift —
+ * before this, changing one's defaults left the whole suite green (#512's
+ * false-negative hole). Pure config reading (no PRNG, no geometry), so it
+ * touches neither the share-link contract nor the pinned-geometry test.
  */
 function resolveGrid(config: unknown): { cols: number; rows: number } {
     const cfg = (config ?? {}) as Partial<SineCutConfig>;
@@ -60,15 +54,12 @@ export const sineCutGenerator: BaseCutGenerator = {
     },
 
     generate(frame: Size, random: () => number, config: unknown): Curve[] {
-        // Fall back to sensible defaults when sub-fields are missing so that
-        // `baseCutConfig: {}` (or no config) still produces the canonical
-        // sine grid rather than collapsing to flat cuts via NaN comparisons.
+        // Defaults for missing sub-fields so `baseCutConfig: {}` still produces
+        // the canonical sine grid rather than collapsing to flat cuts via NaN.
         const cfg = (config ?? {}) as Partial<SineCutConfig>;
-        // Borderless: oversize the grid by one piece on each side (+2 cols,
-        // +2 rows) across the SAME frame. The framework then strips the outer
-        // ring (strip-border-ring.ts), leaving the requested cols×rows pieces
-        // with a tab on every side. Only applies when borderless is true, so
-        // the bordered PRNG/cut sequence is unchanged.
+        // Borderless: oversize by one piece per side across the SAME frame; the
+        // framework then strips the outer ring (strip-border-ring.ts). Only when
+        // borderless, so the bordered PRNG/cut sequence is unchanged.
         const { cols, rows } = resolveGrid(config);
         const ha = cfg.ha ?? 0.15;
         const hf = cfg.hf ?? 1.5;

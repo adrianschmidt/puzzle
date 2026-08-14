@@ -17,15 +17,15 @@ describe('sineCutGenerator', () => {
                 va: 0.1, vf: 1,
             },
         );
-        // 4 borders + (rows-1) horizontals + (cols-1) verticals = 4 + 1 + 2 = 7
+        // 4 borders + (rows-1) horizontals + (cols-1) verticals = 7
         expect(curves).toHaveLength(7);
         // Borders are straight lines (1 segment each)
         expect(curves[0].segments).toHaveLength(1);
         expect(curves[1].segments).toHaveLength(1);
         expect(curves[2].segments).toHaveLength(1);
         expect(curves[3].segments).toHaveLength(1);
-        // Internal cuts at frequency=1 produce >=4 segments (the curve
-        // builder rounds up to multiples of 4)
+        // Internal cuts at frequency=1 produce >=4 segments (curve builder
+        // rounds up to multiples of 4)
         expect(curves[4].segments.length).toBeGreaterThanOrEqual(4);
     });
 
@@ -40,7 +40,7 @@ describe('sineCutGenerator', () => {
                 va: 1, vf: 0,
             },
         );
-        // Border + horizontal + vertical = 4 + 1 + 1 = 6
+        // 4 borders + horizontal + vertical
         expect(curves[4].segments).toHaveLength(1);
         expect(curves[5].segments).toHaveLength(1);
     });
@@ -73,8 +73,8 @@ describe('sineCutGenerator borderless oversize', () => {
     });
 
     it('borderless draws the oversized number of per-cut phase offsets', () => {
-        // Phase loops draw (rows+1) + (cols+1) values; borderless uses the
-        // oversized rows/cols, so the PRNG draw count must match the +2 grid.
+        // Phase loops draw (rows+1)+(cols+1) values; borderless uses oversized
+        // rows/cols, so the draw count must match the +2 grid.
         const bordered = countingRandom();
         sineCutGenerator.generate(frame, bordered.fn, { cols: 2, rows: 2, ha: 0.2, hf: 1, va: 0.2, vf: 1 });
         const borderless = countingRandom();
@@ -96,28 +96,23 @@ describe('sineCutGenerator.expectedPieceCount', () => {
     });
 
     it('oversizes by one piece on each side when borderless', () => {
-        // The generator adds +2 cols and +2 rows internally, and the check
-        // runs BEFORE stripBorderRing, so the expectation is the oversized grid.
+        // Generator adds +2 cols/rows internally, checked BEFORE stripBorderRing,
+        // so expect the oversized grid.
         expect(
             sineCutGenerator.expectedPieceCount?.({ cols: 16, rows: 12, borderless: true }),
         ).toBe(18 * 14);
     });
 
     it('mirrors generate()`s fallbacks for a config with no dims', () => {
-        // generate() falls back to `cfg.cols ?? 1` / `cfg.rows ?? 1`, so the
-        // expectation must use the same defaults or it would report a false
-        // mismatch for `baseCutConfig: {}`.
+        // generate() falls back to cols/rows ?? 1, so this must use the same
+        // defaults or `baseCutConfig: {}` would report a false mismatch.
         expect(sineCutGenerator.expectedPieceCount?.({})).toBe(1);
         expect(sineCutGenerator.expectedPieceCount?.(undefined)).toBe(1);
 
-        // The other half of the mirror: generate() itself must actually
-        // derive a 1x1 grid for `{}` — 4 border curves, 0 internal (both
-        // `cols-1` and `rows-1` are 0). Before both sides shared
-        // `resolveGrid`, this side of the mirror went untested: changing
-        // generate()'s defaults to `cfg.cols ?? 8` / `cfg.rows ?? 6` while
-        // leaving expectedPieceCount alone kept the entire suite green,
-        // because nothing exercised generate()'s own fallback. This
-        // assertion is what closes that hole.
+        // Other half of the mirror: generate() itself must derive a 1x1 grid for
+        // `{}` (4 borders, 0 internal). Before both sides shared `resolveGrid`,
+        // changing generate()'s defaults while leaving expectedPieceCount alone
+        // kept the suite green; this assertion closes that hole.
         const curves = sineCutGenerator.generate({ width: 100, height: 100 }, () => 0.5, {});
         expect(curves).toHaveLength(4);
     });

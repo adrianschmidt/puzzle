@@ -367,13 +367,9 @@ describe('deserializeState', () => {
     });
 
     it('migrates v1 state by deriving imageSize from pieces', () => {
-        // Simulate a v1 saved state: no imageSize field, and — like every
-        // real legacy blob — no `bounds` on the pieces either (that field
-        // didn't exist before v12). Stripping it here pins the
-        // migrate-before-derive ordering: `deriveImageSize` reads
-        // `piece.bounds`, so if it ever ran on un-migrated pieces instead of
-        // the ones `restorePieces` returns, this would throw instead of
-        // computing a size.
+        // v1 blob: no imageSize, and no `bounds` (pre-v12). Stripping bounds
+        // pins the migrate-before-derive order — deriveImageSize reads
+        // piece.bounds, so running on un-migrated pieces would throw.
         const pieces = [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1 }), makeRectPiece({ id: 2 })]
             .map(({ bounds: _bounds, ...rest }) => rest);
         const v1Serialized: SerializedGameState = {
@@ -481,11 +477,8 @@ describe('deserializeState', () => {
             cutStyle: 'composable',
             rotationMode: 'none',
             completed: false,
-            // Cast: v9 composableConfig used the legacy long-name shape, but
-            // SerializedGameState already advertises the new (v10) opaque
-            // shape via GameState['composableConfig']. The migration path
-            // accepts the legacy keys at runtime regardless of the static
-            // type.
+            // Cast: v9 used the legacy long-name shape, but the type advertises
+            // the v10 opaque shape; the migration accepts legacy keys at runtime.
             composableConfig: {
                 horizontalAmplitude: 0.13,
                 horizontalFrequency: 7.1,
@@ -889,9 +882,8 @@ describe('readSelection', () => {
     });
 
     it('drops entries that do not survive JSON as finite numbers', () => {
-        // The real load path always comes through JSON.parse, where
-        // JSON.stringify has already turned NaN/Infinity into `null`. Exercise
-        // that round-tripped shape rather than the impossible literal one.
+        // The load path always comes through JSON.parse, where JSON.stringify
+        // already turned NaN/Infinity into `null`. Exercise that shape.
         const onDisk = JSON.stringify({
             ...makeSerialized(),
             selection: [1, NaN, 2, Infinity, 3],
@@ -990,11 +982,8 @@ describe('v12 geometry dedup', () => {
         };
     }
 
-    // Same edges, but a shape string the edges do NOT concatenate to. No
-    // production generator emits this today — every style's shapes are
-    // reproducible except for a handful of pieces whose `M` anchor formats
-    // differently after quantization (see `game/init-geometry-precision.test.ts`)
-    // — so the divergence is exaggerated here to exercise the fallback.
+    // Same edges, but a shape the edges do NOT concatenate to. No production
+    // generator emits this; exaggerated here to exercise the fallback.
     function bespokeShapePiece(): Piece {
         return { ...rebuildablePiece(), shape: 'M 0 0 L 10 0 L 10 10 L 0 0 Z  ' };
     }
@@ -1038,20 +1027,16 @@ describe('v12 geometry dedup', () => {
     it('rejects a v12 piece with non-finite bounds', () => {
         const state = makeStateWith([rebuildablePiece()]);
         const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
-        // Not run through JSON here — Infinity would collapse to `null`
-        // through JSON.stringify, which is really the "missing" case above.
-        // A hand-edited or corrupted save could carry a literal non-finite
-        // number in memory before ever hitting storage, so exercise that
-        // shape directly.
+        // Not JSON'd here — Infinity would collapse to `null` (the "missing"
+        // case above); a corrupt in-memory save can carry a literal non-finite.
         blob.pieces[0].bounds = { minX: 0, minY: 0, maxX: Infinity, maxY: 10 };
         const progress = JSON.parse(JSON.stringify(serializeProgress(state)));
         expect(() => recombine(blob, progress)).toThrow(/bounds/);
     });
 
     it('rejects a v12 piece with bounds: null', () => {
-        // Distinct from "missing" — `JSON.parse('{"bounds":null}')` yields a
-        // `bounds` key present with value `null`, not an absent key. A loose
-        // `== null` check is needed to catch this without dereferencing it.
+        // Distinct from "missing": `{"bounds":null}` yields a present key with
+        // value null, which the `== null` check catches without dereferencing.
         const state = makeStateWith([rebuildablePiece()]);
         const blob = JSON.parse(JSON.stringify(serializeStatic(state)));
         blob.pieces[0].bounds = null;
@@ -1101,16 +1086,10 @@ describe('v12 geometry dedup', () => {
     });
 
     /**
-     * The one assertion here that would fail if `buildShape`'s emitted bytes
-     * changed.
-     *
-     * Every other shape check in this file compares generated output against
-     * generated output, so both sides move together when `buildShape` changes.
-     * This blob is hand-written v12 with `shape` omitted, which is exactly the
-     * position a save on a user's disk is in: the expected string below is the
-     * on-disk contract. If a `buildShape` edit makes this fail, the fix is a
-     * `STATE_VERSION` bump — every stored v12 puzzle just re-rendered — not a
-     * new expectation here.
+     * The one assertion that fails if `buildShape`'s emitted bytes change: a
+     * hand-written v12 blob with `shape` omitted, so the expected string is the
+     * on-disk contract. On failure the fix is a STATE_VERSION bump (every stored
+     * v12 puzzle just re-rendered), not a new expectation here.
      */
     it('rebuilds an omitted shape to a pinned byte string', () => {
         const e = (
@@ -1130,16 +1109,14 @@ describe('v12 geometry dedup', () => {
                 imageOffset: { x: 0, y: 0 },
                 bounds: { minX: 0, minY: 0, maxX: 12, maxY: 10 },
                 edges: [
-                    // Outer loop: chained end→start, so one M..Z subpath. The
-                    // last edge starts 0.2 px off the previous end — inside
-                    // `CHAIN_EPSILON`, so it must still chain, which pins the
-                    // tolerance from the tight side as the hole does from the
-                    // loose one.
+                    // Outer loop: chained end→start (one M..Z subpath). Last
+                    // edge starts 0.2px off the previous end — inside
+                    // CHAIN_EPSILON, so it must still chain (pins the tolerance).
                     e(0, 'L 10 0', { x: 0, y: 0 }, { x: 10, y: 0 }),
                     e(1, 'C 12 3 12 7 10 10', { x: 10, y: 0 }, { x: 10, y: 10 }),
                     e(2, 'L 0 0', { x: 10.2, y: 10.1 }, { x: 0, y: 0 }),
-                    // Hole: the chain breaks, so a second subpath opens — with
-                    // a non-integer anchor, which pins `fmt`'s formatting too.
+                    // Hole: chain breaks → second subpath, with a non-integer
+                    // anchor that pins `fmt`'s formatting.
                     e(3, 'L 4 2.25', { x: 2.5, y: 2.25 }, { x: 4, y: 2.25 }),
                     e(4, 'L 2.5 2.25', { x: 4, y: 2.25 }, { x: 2.5, y: 2.25 }),
                 ],

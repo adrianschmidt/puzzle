@@ -54,11 +54,9 @@ describe('pickManualRotationPivot', () => {
     });
 
     it('returns null when the picked piece center is poisoned by a non-finite path coordinate', () => {
-        // Equal group rotations take measureEdgeAlignment's fast path, which
-        // never samples path bounds — the one route where a corrupt path
-        // coordinate survives the distance gate and reaches pieceCenterLocal.
-        // Unguarded, the Infinity flows through rotateGroup into a NaN
-        // position that onCommit persists into the save.
+        // Equal rotations take measureEdgeAlignment's fast path, which never
+        // samples path bounds — the one route a corrupt coordinate survives the
+        // distance gate to pieceCenterLocal; unguarded, Infinity → NaN position.
         const { state, movedGroup } = makeWideRowScenario(0);
         getPiece(state, 1).edges[0].path = 'M 1e999 0 L 0 0';
 

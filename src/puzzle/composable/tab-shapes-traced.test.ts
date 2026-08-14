@@ -32,8 +32,7 @@ describe('tracedTabTemplate', () => {
     it('produces different paths for different outer seeds', () => {
         const a = tracedTabTemplate.generate(createSeededRandom(1));
         const b = tracedTabTemplate.generate(createSeededRandom(2));
-        // At least one point should differ — if the outer call has no
-        // effect on output, the sub-PRNG isn't being seeded from it.
+        // If the outer call had no effect, the sub-PRNG isn't seeded from it.
         const allEqual = a.length === b.length && a.every((p, i) =>
             Math.abs(p.x - b[i].x) < 1e-9 && Math.abs(p.y - b[i].y) < 1e-9,
         );
@@ -49,7 +48,6 @@ describe('tracedTabTemplate', () => {
     });
 
     it('preserves chord endpoints x≈mid±half-width after transforms', () => {
-        // y=0 after transforms is already covered above.
         const path = tracedTabTemplate.generate(createSeededRandom(7));
         expect(path[path.length - 1].x).toBeGreaterThan(path[0].x);
     });
@@ -64,8 +62,7 @@ describe('createTracedTabTemplate', () => {
     });
 
     it('selects only from the provided template list', () => {
-        // Single-element lists force idx 0, so the only difference between
-        // the two outputs is the source template geometry.
+        // Single-element lists force idx 0, so the outputs differ only by source geometry.
         const onlyFirst = createTracedTabTemplate([TRACED_TEMPLATES[0]]);
         const onlySecond = createTracedTabTemplate([TRACED_TEMPLATES[1]]);
         const a = onlyFirst.generate(createSeededRandom(123));

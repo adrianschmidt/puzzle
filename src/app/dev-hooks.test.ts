@@ -11,9 +11,8 @@ import type { GameSession } from './game-session.js';
 import type { StartNewGameOptions } from './start-new-game.js';
 import type { SharePayload, ReproParams } from '../sharing/index.js';
 
-// The leaf, not the barrel `runWithErrorReport` imports it through — see
-// `src/ui/index.ts`. A one-export factory is enough here and still
-// intercepts through the re-export.
+// The leaf, not the barrel `runWithErrorReport` imports through — mocking it
+// still intercepts via the re-export.
 vi.mock('../ui/toast.js', () => ({ showToast: vi.fn() }));
 
 import { showToast } from '../ui/toast.js';
@@ -44,8 +43,8 @@ function validReproParams(): ReproParams {
     return {
         seed: 42,
         cutStyle: 'classic',
-        // The wire sentinel, not a `GameState` value: `ReproParams` is what
-        // a developer hand-types into `__reproPuzzle`.
+        // Wire sentinel, not a `GameState` value: `ReproParams` is what a
+        // developer hand-types.
         imageUrl: 'blank',
         imageSize: { width: 100, height: 100 },
         gridSize: { cols: 2, rows: 2 },
@@ -127,9 +126,8 @@ describe('installDevHooks', () => {
     });
 
     it('exposes the injected solve as __solvePuzzle, not a second binding', () => {
-        // The console hook and the info modal's Solve button have to stay the
-        // same action; the composition root binds it once and passes that one
-        // reference here, so there is nothing left to desynchronize.
+        // The console hook and the Solve button must stay one action: bound
+        // once and passed here, nothing left to desync.
         installDevHooks(deps());
         expect(hooks().__solvePuzzle).toBe(solve);
 
@@ -139,13 +137,12 @@ describe('installDevHooks', () => {
 
     it('__reproPuzzle resolves false for params the share codec rejects', async () => {
         installDevHooks(deps());
-        // Missing `cutStyle` — `reproParamsToPayload` throws before the
-        // codec round-trip even starts.
+        // Missing `cutStyle`: `reproParamsToPayload` throws before the codec
+        // round-trip starts.
         const result = await hooks().__reproPuzzle({ seed: 42 } as ReproParams);
         expect(result).toBe(false);
         expect(loadShared).not.toHaveBeenCalled();
-        // The brief requires logging the error object itself, not its
-        // message, so the console keeps the stack.
+        // Log the error object, not its message, so the console keeps the stack.
         expect(consoleErrorSpy).toHaveBeenCalledWith('[__reproPuzzle]', expect.any(Error));
     });
 
@@ -157,14 +154,12 @@ describe('installDevHooks', () => {
     });
 
     it('__reproPuzzle reports a generation failure as source=repro, loudly, and toasts', async () => {
-        // `source` is arithmetic-load-bearing: `umami.ts` documents the
+        // `source` is arithmetic-load-bearing: operators compute the
         // share-format signal as total `shared-load-failed` minus
-        // `source = 'repro'`, so a replay counted as a real share link
-        // inflates the figure operators act on. The console line is
-        // `logInProduction`, deliberately not DEV-gated — a generator
-        // failure on a deployed build is what this helper exists to
-        // investigate — and the toast is how the console caller learns the
-        // replay went nowhere rather than silently resolving false.
+        // `source='repro'`, so a mislabeled replay inflates it. The console
+        // line is not DEV-gated (a deployed generator failure is what this
+        // investigates), and the toast tells the caller the replay went
+        // nowhere.
         loadShared.mockRejectedValue(new Error('topology boom'));
         installDevHooks(deps());
 
@@ -184,10 +179,9 @@ describe('installDevHooks', () => {
         saveNewPuzzle(makeSavedGameState());
         expect(loadState()).not.toBeUndefined();
         history.replaceState(null, '', '/#p=something');
-        // Production's `loadShared` is `loadSharedPuzzle`, which persists the
-        // new puzzle itself (via `persistNewPuzzle`) once generation
-        // succeeds — `dev-hooks.ts` no longer clears storage on its own, so
-        // the stub has to model that side effect to exercise "replaced".
+        // Production's `loadShared` (`loadSharedPuzzle`) persists the new
+        // puzzle itself once generation succeeds; the stub models that side
+        // effect to exercise "replaced".
         loadShared.mockImplementation(async () => {
             saveNewPuzzle({ ...makeSavedGameState(), imageUrl: 'repro-puzzle.jpg' });
         });
@@ -197,19 +191,16 @@ describe('installDevHooks', () => {
 
         // A `#p=` link must stay reloadable after a replay.
         expect(window.location.hash).toBe('#p=something');
-        // The previous save is gone, replaced by the repro's own — not
-        // merely cleared: `loadShared`'s own persist is what did it.
+        // Previous save replaced by the repro's own — not merely cleared.
         expect(loadState()?.imageUrl).toBe('repro-puzzle.jpg');
         // `recipientHadSavedState` reflects the pre-replace read.
         expect(loadShared).toHaveBeenCalledWith(expect.anything(), true);
     });
 
     it('__reproPuzzle leaves the previous save intact when the replay is canceled', async () => {
-        // The loading overlay's Cancel affordance (#489) makes `loadShared`
-        // (real `loadSharedPuzzle`) resolve normally without ever calling
-        // `persistNewPuzzle` — canceling means "return to your current
-        // puzzle", so its save must still be there afterwards. The default
-        // `loadShared` stub (a no-op `async () => {}`) models exactly that.
+        // Cancel (#489) resolves `loadShared` normally without calling
+        // `persistNewPuzzle`, so the previous save must survive. The default
+        // no-op stub models that.
         saveNewPuzzle(makeSavedGameState());
 
         installDevHooks(deps());

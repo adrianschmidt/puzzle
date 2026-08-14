@@ -20,11 +20,10 @@ function faceArea(face: Face): number {
 }
 
 describe('curveBroadPhasePairs', () => {
-    // The one property that must never break: completeness. The broad-phase
-    // may only PRUNE pairs that provably can't intersect; it must never drop a
-    // pair whose boxes are within `margin`, or a real intersection vanishes and
-    // the puzzle topology corrupts. We check the output is a superset of the
-    // brute-force within-margin set over a large random box population.
+    // Completeness: the broad-phase may only PRUNE pairs that provably can't
+    // intersect, never drop one whose boxes are within `margin` (that would
+    // vanish a real intersection and corrupt the topology). Assert the output
+    // is a superset of the brute-force within-margin set.
     function withinMargin(a: BoundingBox, b: BoundingBox, m: number): boolean {
         return (
             a.minX - m <= b.maxX && a.maxX + m >= b.minX &&
@@ -45,7 +44,7 @@ describe('curveBroadPhasePairs', () => {
     it('never drops a pair whose boxes are within the margin (completeness)', () => {
         const rng = seeded(12345);
         const margin = 6;
-        // Mix small lattice-scale boxes with a few full-span boxes, the two
+        // Mix small lattice-scale boxes with a few full-span ones — the two
         // regimes the heuristic must handle.
         const boxes: BoundingBox[] = [];
         for (let i = 0; i < 200; i++) {
@@ -87,8 +86,8 @@ describe('curveBroadPhasePairs', () => {
     });
 
     it('prunes far-apart pairs (returns far fewer than n²/2)', () => {
-        // A 20×20 grid of small, well-separated boxes: almost no pair is
-        // within margin, so the broad-phase must reject the vast majority.
+        // 20×20 grid of well-separated boxes: almost no pair within margin,
+        // so the broad-phase rejects the vast majority.
         const boxes: BoundingBox[] = [];
         for (let r = 0; r < 20; r++) {
             for (let c = 0; c < 20; c++) {
@@ -108,31 +107,25 @@ describe('curveBroadPhasePairs', () => {
 });
 
 describe('VertexPool merge equivalence', () => {
-    // Locks the share-link-critical merge rule independently of the geometry
-    // snapshot: when a query point lies within VERTEX_MERGE_TOLERANCE of
-    // several existing vertices that the grid bucketing has spread across
-    // different cells, getOrCreate must return the LOWEST-id one — exactly what
-    // the old O(V²) linear scan returned (first-inserted wins, and ids are
-    // assigned in insertion order). The 9-cell scan must not change which
-    // vertex survives, or a merge diverges from the pre-#439 output and breaks
-    // every share link that depended on it.
+    // Locks the share-link-critical merge rule: a query within
+    // VERTEX_MERGE_TOLERANCE of several vertices spread across grid cells must
+    // return the LOWEST-id one, matching the old O(V²) scan (first-inserted
+    // wins). Diverging here breaks every share link that relied on it.
     it('merges a cross-cell query to the lowest-id candidate', () => {
         const pool = new VertexPool();
 
-        // Two distinct vertices straddling the cell boundary at x=0 (cell size
-        // == VERTEX_MERGE_TOLERANCE == 3). They are 5.8px apart, so they do NOT
-        // merge with each other, and they land in different grid cells
-        // (floor(2.9/3) = 0 vs floor(-2.9/3) = -1).
+        // Two vertices straddling the cell boundary at x=0 (cell size = 3).
+        // 5.8px apart so they don't merge, and they land in different cells
+        // (floor(2.9/3)=0 vs floor(-2.9/3)=-1).
         const v0 = pool.getOrCreate({ x: 2.9, y: 0 });   // id 0, cell (0, 0)
         const v1 = pool.getOrCreate({ x: -2.9, y: 0 });  // id 1, cell (-1, 0)
         expect(v0.id).toBe(0);
         expect(v1.id).toBe(1);
         expect(v0).not.toBe(v1);
 
-        // Query the midpoint: within 2.9px of BOTH existing vertices. The
-        // 9-cell scan visits cell (-1, *) — holding the higher-id v1 — before
-        // cell (0, *), so without the explicit lowest-id tie-break it would
-        // return v1. It must return v0 to match the linear scan.
+        // Midpoint is within 2.9px of BOTH. The 9-cell scan visits cell
+        // (-1,*) (higher-id v1) before (0,*), so without the lowest-id
+        // tie-break it would return v1; it must return v0.
         const merged = pool.getOrCreate({ x: 0, y: 0 });
         expect(merged).toBe(v0);
 
@@ -149,10 +142,8 @@ describe('VertexPool merge equivalence', () => {
 });
 
 describe('DCEL: 2 crossing lines', () => {
-    // 2 crossing lines in the plane create 4 unbounded regions, not 4
-    // enclosed faces — a bounding box is needed to get enclosed faces.
-    // For puzzle cuts, we always have border curves forming a bounding
-    // rectangle.
+    // 2 crossing lines alone make 4 unbounded regions, not enclosed faces;
+    // a border rectangle (always present for puzzle cuts) encloses them.
 
     it('rectangle + cross creates 4 inner faces', () => {
         const border = [
@@ -171,7 +162,7 @@ describe('DCEL: 2 crossing lines', () => {
         const inner = innerFaces(result);
         expect(inner).toHaveLength(4);
 
-        // Each quadrant should have roughly equal area (25×50 = 2500)
+        // Each quadrant ≈ 2500 area (50×50)
         for (const face of inner) {
             const area = faceArea(face);
             expect(area).toBeGreaterThan(2000);

@@ -7,7 +7,6 @@ export function shouldConfirmNewGame(
         return false;
     }
 
-    // If every piece is still in its own group, no progress to lose
     return groupCount < pieceCount;
 }
 

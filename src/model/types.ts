@@ -1,7 +1,6 @@
 /**
- * Graph-based and shape-agnostic — no grid assumptions.
- * The engine handles merging and interaction generically;
- * puzzle generators produce pieces conforming to these types.
+ * Graph-based, shape-agnostic model types — no grid assumptions. Generators
+ * produce pieces conforming to these.
  */
 
 export interface Point {
@@ -14,11 +13,7 @@ export interface Size {
     height: number;
 }
 
-/**
- * Connectivity is expressed through mate relationships:
- * an edge knows which piece and edge it connects to.
- * Border edges use -1 for both mate fields.
- */
+/** Connectivity via mate relationships; border edges use -1 for both mate fields. */
 export interface Edge {
     /** Globally unique across all pieces. */
     id: number;
@@ -35,12 +30,10 @@ export interface Edge {
 }
 
 /**
- * Piece-local axis-aligned bounding box, frozen when the piece is sealed
- * (see `model/seal-geometry.ts`) from edge endpoints and the generator's
- * dense curve samples, which are not retained after sealing. Computed at
- * generation time; on load it comes back verbatim from a v12+ blob, and is
- * recomputed only when migrating an older save whose edges still carry the
- * samples.
+ * Piece-local axis-aligned bounding box, frozen at sealing
+ * (`model/seal-geometry.ts`) from endpoints and curve samples that aren't
+ * retained afterward. On load it returns verbatim from a v12+ blob; recomputed
+ * only when migrating an older save whose edges still carry the samples.
  */
 export interface PieceBounds {
     minX: number;
@@ -50,21 +43,18 @@ export interface PieceBounds {
 }
 
 /**
- * An edge as emitted by the generators, before sealing: may still carry
- * the dense samples of its underlying cut curve (piece-local coords; present
- * for non-straight cut edges, absent for straight ones; tab protrusions
- * live only in `path`). `sealPieceGeometry` folds the samples into the
- * piece's `bounds` and drops them — sealed model edges never have them, and
- * the persisted blob stores them only in v≤11 legacy saves.
+ * A generator edge, before sealing: may carry the cut curve's dense samples
+ * (present for curved edges, absent for straight; tab protrusions live only in
+ * `path`). `sealPieceGeometry` folds them into `bounds` and drops them — sealed
+ * edges never have them; only v≤11 saves still persist them.
  */
 export interface GeneratedEdge extends Edge {
     curvePoints?: Point[];
 }
 
 /**
- * A piece as emitted by `strategy.generatePieces`, before sealing: edges may
- * carry `curvePoints`, and `bounds` does not exist yet. `sealPieceGeometry`
- * (via `createNewGame`) turns this into a `Piece`.
+ * A piece before sealing: edges may carry `curvePoints`, no `bounds` yet.
+ * `sealPieceGeometry` turns this into a `Piece`.
  */
 export interface GeneratedPiece {
     id: number;
@@ -80,25 +70,17 @@ export interface GeneratedPiece {
 export interface Piece {
     id: number;
     /**
-     * All edges of this piece, defining its shape boundary and
-     * connectivity. Edges are stored as a flat list of one or more
-     * loops chained end-to-start internally; loop boundaries are
-     * detected by the chain breaking (an edge's `start` no longer
-     * matches the previous edge's `end`). Pieces without holes are a
-     * single loop; pieces with holes have additional loops following
-     * the outer boundary. Use `shape` for rendering — it already
-     * encodes loop structure as multi-`M..Z` SVG subpaths.
+     * Flat list of edges forming one or more loops chained end-to-start; a loop
+     * boundary is where the chain breaks (an edge's `start` no longer matches
+     * the previous `end`). Holes add loops after the outer boundary. Render via
+     * `shape`, which already encodes the loops as multi-`M..Z` subpaths.
      */
     edges: Edge[];
     /** Full SVG clip-path `d` attribute built from all edges. */
     shape: string;
     /** Offset to position the source image behind the clip-path (piece-local coords). */
     imageOffset: Point;
-    /**
-     * Piece-local bounding box. Stored rather than derived because the
-     * dense curve samples it was computed from are dropped after
-     * generation.
-     */
+    /** Piece-local bbox. Stored, not derived: the curve samples it came from are dropped after generation. */
     bounds: PieceBounds;
 }
 
@@ -113,16 +95,11 @@ export interface PieceGroup {
     /** The group's position in world (table) coordinates. */
     position: Point;
     /**
-     * Rotation in float degrees, normalized to `[0, 360)`.
-     *
-     * Quarter-turn-mode puzzles store one of `{0, 90, 180, 270}`; free-mode
-     * puzzles store any float in the range. Applied to the group's local
-     * geometry at render time and during world-position lookups. Piece
-     * offsets and edge endpoints stay in un-rotated local coordinates.
-     *
-     * Surfaces in the UI for puzzle styles that enable rotation (currently
-     * any cut style with `rotationMode !== 'none'`); puzzles with
-     * `rotationMode === 'none'` always have 0.
+     * Rotation in float degrees, normalized to `[0, 360)`. Quarter-turn mode
+     * stores `{0, 90, 180, 270}`; free mode any float. Piece offsets and edge
+     * endpoints stay in un-rotated local coords; the rotation is applied at
+     * render time and in world-position lookups. `rotationMode === 'none'`
+     * puzzles always have 0.
      */
     rotation: number;
 }
@@ -139,20 +116,14 @@ export interface GridSize {
     rows: number;
 }
 
-/**
- * Lives here (not in `app/orientation.ts`) so the `images` layer can
- * reference it without importing from `app`, which would create a
- * type-only images→app cycle.
- */
+/** Lives here, not `app/orientation.ts`, so `images` can use it without an images→app cycle. */
 export type Orientation = 'landscape' | 'portrait';
 
 /**
- * The `*ById` and `pieceToGroup` Maps are derived indexes that mirror
- * `pieces` and `groups` for O(1) lookup on hot paths (drag, merge
- * detection, pile detection). They are NOT serialized — `deserializeState`
- * rebuilds them. Mutations to `groups` must go through the helpers in
- * `model/helpers.ts` (`addGroup`, `removeGroup`, `mergeGroups`) so the
- * indexes stay consistent.
+ * The `*ById` and `pieceToGroup` Maps are derived indexes for O(1) lookup on
+ * hot paths; they are NOT serialized (`deserializeState` rebuilds them).
+ * Mutate `groups` only via the helpers in `model/helpers.ts` so they stay
+ * consistent.
  */
 export interface GameState {
     /** All pieces in the puzzle (immutable after generation). */
@@ -165,10 +136,7 @@ export interface GameState {
     groupsById: Map<number, PieceGroup>;
     /** pieceId → the group containing that piece. Kept in sync with `groups`. */
     pieceToGroup: Map<number, PieceGroup>;
-    /**
-     * URL of the puzzle image, or `null` for a blank puzzle — one with no
-     * photo, whose pieces the renderer paints flat white.
-     */
+    /** Puzzle image URL, or `null` for a blank puzzle (pieces painted flat white). */
     imageUrl: string | null;
     /** Pixel dimensions of the puzzle image. */
     imageSize: Size;
@@ -178,26 +146,17 @@ export interface GameState {
     attribution?: ImageAttribution;
     /** PRNG seed used for procedural cut generation. Reproduces the same cuts. */
     seed?: number;
-    /** Defaults to 'classic' when absent. */
     cutStyle?: string;
     /**
-     * How (or whether) groups in this puzzle can be rotated by the player.
-     *
-     * - `'none'`: rotation is disabled; all groups stay at rotation 0.
-     * - `'quarter-turn'`: 90°-snapped rotation via toolbar buttons.
-     * - `'free'`: continuous rotation via a drag handle. Merge alignment
-     *   tolerates ±10° angular misalignment.
-     *
-     * Defaults to `'none'` when absent.
+     * How groups can be rotated: `'none'` disables it (all groups at 0);
+     * `'quarter-turn'` snaps to 90° via toolbar; `'free'` is continuous via a
+     * drag handle, with merge alignment tolerating ±10° misalignment.
      */
     rotationMode?: 'none' | 'quarter-turn' | 'free';
     /**
-     * Composable-cut config (only set when cutStyle === 'composable').
-     *
-     * Needed to reproduce the puzzle from its seed and surfaced in the
-     * Debug panel for bug reports. Mirrors the {@link ComposableConfig}
-     * shape from the composable generator, inlined here so this module
-     * stays free of cross-package imports from the puzzle layer.
+     * Composable-cut config (set only when `cutStyle === 'composable'`). Needed
+     * to reproduce the puzzle from its seed; inlined (mirrors `ComposableConfig`)
+     * to keep this module free of puzzle-layer imports.
      */
     composableConfig?: {
         baseCutGenerator?: string;
@@ -208,59 +167,41 @@ export interface GameState {
         /** Borderless mode (strip the outer ring of pieces). */
         borderless?: boolean;
     };
-    /**
-     * Fractal-cut config (only set when cutStyle === 'fractal').
-     *
-     * Needed to reproduce the puzzle from its seed and surfaced in the
-     * Debug panel for bug reports.
-     */
+    /** Fractal-cut config (set only when `cutStyle === 'fractal'`); needed to reproduce from seed. */
     fractalConfig?: {
         borderless?: boolean;
     };
-    /**
-     * Wavy-cut config (only set when cutStyle === 'wavy').
-     *
-     * Needed to reproduce the puzzle from its seed and surfaced in the
-     * Debug panel. Mirrors {@link GameState.fractalConfig}.
-     */
+    /** Wavy-cut config (set only when `cutStyle === 'wavy'`); needed to reproduce from seed. */
     wavyConfig?: {
         borderless?: boolean;
         /**
-         * Trace-set version for the hand-traced tab shapes. Present on puzzles
-         * generated with traced tabs (every new Wavy game); absent on legacy
-         * Wavy puzzles, which reproduce with classic tabs. See
+         * Trace-set version for hand-traced tabs. Present on new Wavy games;
+         * absent on legacy Wavy puzzles, which reproduce with classic tabs. See
          * project_share_link_prng_contract.
          */
         traceSetVersion?: number;
     };
     /**
-     * Triangles-cut config (only set when cutStyle === 'triangles').
-     *
-     * Needed to reproduce the puzzle from its seed and surfaced in the
-     * Debug panel. The cut parameters themselves (jitter, smoothing,
-     * traced tabs) are fixed by the preset; only the trace-set version
-     * varies. Mirrors {@link GameState.wavyConfig}.
+     * Triangles-cut config (set only when `cutStyle === 'triangles'`); needed to
+     * reproduce from seed. Only the trace-set version varies (other params fixed
+     * by the preset).
      */
     trianglesConfig?: {
         /**
-         * Trace-set version for the hand-traced tab shapes. Stamped with
-         * the current version on every new Triangles game; pins the tab
-         * library snapshot so future trace-set releases don't change
-         * existing puzzles. See project_share_link_prng_contract.
+         * Trace-set version for hand-traced tabs; pins the tab-library snapshot
+         * so future releases don't change existing puzzles. See
+         * project_share_link_prng_contract.
          */
         traceSetVersion?: number;
     };
     /**
-     * Classic-cut config (only set when cutStyle === 'classic' AND the
-     * puzzle was generated with the sine-based Classic generator).
-     *
-     * Its presence is the generator discriminator: a Classic puzzle WITH a
-     * traceSetVersion reproduces via the composable sine pipeline; a Classic
-     * puzzle WITHOUT one (every pre-upgrade share link/save) reproduces via
-     * the legacy generateProceduralPuzzle. See project_share_link_prng_contract.
+     * Classic-cut config (set only for a Classic puzzle from the sine-based
+     * generator). Its presence is the generator discriminator: WITH a
+     * traceSetVersion reproduces via the composable sine pipeline, WITHOUT one
+     * (every pre-upgrade link/save) via the legacy generateProceduralPuzzle. See
+     * project_share_link_prng_contract.
      */
     classicConfig?: {
-        /** Trace-set version for the hand-traced tab shapes. */
         traceSetVersion?: number;
     };
 }

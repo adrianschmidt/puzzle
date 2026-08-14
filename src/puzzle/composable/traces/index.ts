@@ -1,7 +1,6 @@
 /**
- * Each JSON file is produced by tools/trace-tab/ from a real photograph.
- * One file per trace gives readable diffs when traces are added or
- * replaced.
+ * Each JSON is produced by tools/trace-tab/ from a real photograph; one file
+ * per trace keeps diffs readable when traces are added or replaced.
  */
 
 import type { Point } from '../../../model/types.js';
@@ -28,7 +27,7 @@ import tab20 from './20-tab-s.json';
 import tab21 from './21-tab-t.json';
 
 export interface TracedLandmarks {
-    /** Y of the highest point of the tab, normalized to chord length. */
+    /** Y of the tab's highest point, normalized to chord length. */
     apex_y: number;
     /** Widest point of the head. */
     head: { y: number; width: number; center_x: number };
@@ -53,11 +52,10 @@ export interface TracedTemplate {
 }
 
 /**
- * Validates each checked-in trace at module import — any structural
- * problem (missing fields, NaN landmarks, wrong-length `path`) throws
- * immediately at startup instead of propagating NaNs through the
- * pinch / scale math later. The same helper backs the schema tests in
- * `index.test.ts`, so production and tests share one narrowing.
+ * Validates each checked-in trace at import — structural problems (missing
+ * fields, NaN landmarks, wrong-length `path`) throw at startup instead of
+ * propagating NaNs through the pinch/scale math. Also backs the schema tests
+ * in `index.test.ts`, so production and tests share one narrowing.
  */
 export function assertTracedTemplate(raw: unknown, label: string): TracedTemplate {
     const fail = (msg: string): never => {
@@ -129,10 +127,10 @@ export const TRACED_TEMPLATES: readonly TracedTemplate[] = [
 ] as const;
 
 /**
- * Version 1 trace set: the original ordered library. FROZEN — never edit this
- * list (no reorders or removals). A new trace set ships as a new entry in
- * TRACE_SETS plus a CURRENT_TRACE_SET_VERSION bump, leaving every older
- * snapshot byte-for-byte intact so old share-links still reproduce.
+ * Version 1 trace set: the original ordered library. FROZEN — never reorder or
+ * remove. A new set ships as a new TRACE_SETS entry plus a
+ * CURRENT_TRACE_SET_VERSION bump, leaving older snapshots byte-for-byte intact
+ * so old share-links still reproduce.
  */
 const TRACE_SET_V1: readonly TracedTemplate[] = TRACED_TEMPLATES;
 
@@ -141,16 +139,15 @@ const TRACE_SETS: Readonly<Record<number, readonly TracedTemplate[]>> = {
 };
 
 /**
- * Unknown versions fall back to v1 — a defensive net only; the share-link
- * decoder clamps `wf.tv` to [1, CURRENT_TRACE_SET_VERSION] before
- * generation, so a known client never asks for a version it lacks.
+ * Unknown versions fall back to v1 — defensive only; the share-link decoder
+ * clamps `wf.tv` to [1, CURRENT_TRACE_SET_VERSION], so a known client never
+ * asks for a version it lacks.
  */
 export function getTracedTemplates(version: number): readonly TracedTemplate[] {
     const set = TRACE_SETS[version];
     if (set) return set;
-    // Unreachable on a correct client (the share-link decoder clamps to a
-    // known version, and the new-game path stamps CURRENT_TRACE_SET_VERSION).
-    // Leave a breadcrumb so a regressed upstream clamp doesn't fail silently.
+    // Unreachable on a correct client; breadcrumb so a regressed upstream clamp
+    // doesn't fail silently.
     diagnostics.warn(`getTracedTemplates: unknown trace-set version ${version}, falling back to v1`);
     return TRACE_SET_V1;
 }

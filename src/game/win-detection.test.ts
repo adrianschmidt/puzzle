@@ -30,8 +30,8 @@ describe('checkWin', () => {
     });
 
     it('returns false when one group exists but not all pieces are in it', () => {
-        // Edge case: single group but piece count mismatch (shouldn't happen
-        // in practice, but the function should be defensive)
+        // Single group but piece-count mismatch — shouldn't happen, but the
+        // function must be defensive.
         const pieces = [makePiece({ id: 0 }), makePiece({ id: 1 }), makePiece({ id: 2 })];
         const groups = [makeGroup(0, [0, 1])];
         const state = makeGameState({ pieces, groups });

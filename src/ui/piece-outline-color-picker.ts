@@ -13,8 +13,8 @@ export function createPieceOutlineColorPicker(
     const picker = createSwatchPicker({
         container: options.container,
         button: {
-            // No glyph — the button's background previews the current color
-            // via CSS (`.outline-color-button` = `var(--piece-outline-color)`).
+            // No glyph — the button's background previews the current color via
+            // CSS (`.outline-color-button` = `var(--piece-outline-color)`).
             icon: '',
             title: 'Outline colour',
             className: 'outline-color-button',

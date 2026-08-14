@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Intercept the analytics `track` call made inside update-controller. A plain
-// vi.spyOn would not catch a call made through the module's own import binding
-// under Vite, so mock the module and keep the rest of its real exports.
-// `vi.hoisted` is needed because the `vi.mock` factory is hoisted above the
-// normal top-level statements.
+// A plain vi.spyOn won't catch `track` called through update-controller's own
+// import binding under Vite, so mock the module and keep the rest real.
+// `vi.hoisted` because the `vi.mock` factory is hoisted above top-level code.
 const { track } = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('../analytics/index.js', async (importActual) => {
     const actual = await importActual<typeof import('../analytics/index.js')>();

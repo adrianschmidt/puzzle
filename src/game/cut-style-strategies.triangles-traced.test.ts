@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
-// Passthrough mock so we can inspect the config the triangles strategy builds
-// while still running real generation. See reference_vitest_spy_internal_module_call.
+// Passthrough mock: inspect the config the triangles strategy builds while still
+// running real generation. See reference_vitest_spy_internal_module_call.
 vi.mock('../puzzle/composable-generator.js', async (importActual) => {
     const actual = await importActual<typeof import('../puzzle/composable-generator.js')>();
     return { ...actual, generateComposablePuzzle: vi.fn(actual.generateComposablePuzzle) };
@@ -21,9 +21,8 @@ beforeAll(() => {
 
 const size = { width: 1080, height: 720 };
 
-// Every test here runs real traced generation with the deep tab ladder,
-// ~2-3s per puzzle on CI runners — more than vitest's 5s default allows for
-// the multi-generation tests (same idiom as tab-rejection-measurement.test.ts).
+// Real traced generation with the deep tab ladder runs ~2-3s per puzzle on CI,
+// past vitest's 5s default for the multi-generation tests — hence the timeout.
 describe('triangles strategy generation', { timeout: 30_000 }, () => {
     it('builds the fixed production config (jitter 0.5, smooth, traced, no minPieceArea)', () => {
         vi.mocked(generateComposablePuzzle).mockClear();

@@ -27,8 +27,8 @@ describe('clampGridDim', () => {
     });
 
     it('keeps the ceiling generously above the UI grid cap (16×12)', () => {
-        // Guards against anyone lowering MAX_GRID_DIM into the range of a real
-        // puzzle, which would silently re-clamp legitimate geometry.
+        // Guards against lowering MAX_GRID_DIM into the range of a real puzzle,
+        // which would silently re-clamp legitimate geometry.
         expect(MAX_GRID_DIM).toBeGreaterThanOrEqual(16);
     });
 });

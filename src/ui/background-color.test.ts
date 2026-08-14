@@ -60,9 +60,8 @@ describe('loadColorPreference', () => {
     });
 
     it('migrates each old string id to its specific nearest swatch', () => {
-        // Asserts the exact target for all 12 old presets, so a typo in any
-        // one is caught (not just "resolves to some real swatch", which the
-        // default fallback would also satisfy).
+        // Assert the exact target for each old preset: a typo would otherwise
+        // be masked by the default fallback resolving to a real swatch anyway.
         const expected: Record<string, string> = {
             midnight: 'indigo-darker',
             charcoal: 'gray-darker',
@@ -113,8 +112,7 @@ describe('loadColorPreference', () => {
         // A returning user with a preference saved before the key rename.
         localStorage.setItem('puzzle-background-colour', 'green-dark');
         expect(loadColorPreference()).toBe('green-dark');
-        // The value is rewritten under the new key and the old one dropped,
-        // so the migration is one-time.
+        // Migration is one-time: rewritten under the new key, old one dropped.
         expect(localStorage.getItem(COLOR_PREFERENCE_KEY)).toBe('green-dark');
         expect(localStorage.getItem('puzzle-background-colour')).toBeNull();
     });
@@ -164,8 +162,8 @@ describe('applyBackgroundColor', () => {
     afterEach(() => vi.restoreAllMocks());
 
     it('sets the custom property to the variable reference', () => {
-        // Stub a resolvable color so the chrome path doesn't spuriously
-        // warn (jsdom can't resolve var() on its own).
+        // Stub a resolvable color so the chrome path doesn't warn (jsdom can't
+        // resolve var() on its own).
         vi.spyOn(window, 'getComputedStyle').mockReturnValue({
             backgroundColor: 'rgb(33, 150, 243)',
         } as CSSStyleDeclaration);
@@ -179,7 +177,7 @@ describe('applyBackgroundColor', () => {
 
     it('warns and defaults to dark chrome when the color cannot be resolved', () => {
         // Mirrors a missing/unloaded palette.css: getComputedStyle returns
-        // an empty (unparseable) background-color.
+        // an empty, unparseable background-color.
         vi.spyOn(window, 'getComputedStyle').mockReturnValue({
             backgroundColor: '',
         } as CSSStyleDeclaration);
@@ -206,13 +204,9 @@ describe('applyBackgroundColor', () => {
     });
 
     it('derives the chrome from the color written to document.body', () => {
-        // Regression guard: applyBackgroundColor writes document.body's
-        // backgroundColor *so it can read it back* via getComputedStyle to
-        // pick the ui-scheme. It looks redundant next to the --puzzle-bg-color
-        // custom property, but dropping it leaves body transparent → chrome
-        // silently stuck on 'dark'. Unlike the tests above, this mock resolves
-        // the var() off body's actual inline style, so it fails if that
-        // assignment is ever removed.
+        // Regression guard: applyBackgroundColor writes body's backgroundColor
+        // so it can read it back to pick the ui-scheme. This mock resolves the
+        // var() off body's inline style, so it fails if that write is removed.
         vi.spyOn(window, 'getComputedStyle').mockImplementation(
             (el: Element) =>
                 ({
@@ -248,8 +242,8 @@ describe('adoptSharedBackgroundColor', () => {
     afterEach(() => vi.restoreAllMocks());
 
     it('adopts and persists when no preference exists', () => {
-        // Stub a resolvable color so applyBackgroundColor's chrome path
-        // doesn't spuriously warn (jsdom can't resolve var() on its own).
+        // Stub a resolvable color so applyBackgroundColor's chrome path doesn't
+        // warn (jsdom can't resolve var() on its own).
         vi.spyOn(window, 'getComputedStyle').mockReturnValue({
             backgroundColor: 'rgb(27, 94, 32)',
         } as CSSStyleDeclaration);
@@ -282,10 +276,9 @@ describe('adoptSharedBackgroundColor', () => {
     });
 
     it('keeps its own color when persisting the write throws', () => {
-        // Safari private-mode-style quota failure: reads succeed (no
-        // existing preference), but the write throws. The helper should
-        // land in the same 'kept-own' path as unreadable storage rather
-        // than letting the exception escape.
+        // Safari private-mode-style quota failure: reads succeed but the write
+        // throws; the helper should land in 'kept-own' rather than letting the
+        // exception escape.
         vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
             throw new Error('quota');
         });

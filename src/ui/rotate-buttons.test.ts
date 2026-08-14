@@ -109,10 +109,7 @@ describe('createRotateButtons', () => {
             rotationFocus.setFocus(7);
 
             const { ccw, cw } = getPair();
-            // bounds = {left:200, right:300}; gap=8, button=44.
-            // CCW: left = 200 - 8 - 44 = 148
-            // CW: left = 300 + 8 = 308
-            // both top: midY 250 - 22 = 228
+            // CCW 200-8-44=148, CW 300+8=308, top midY 250-22=228
             expect(ccw!.style.left).toBe('148px');
             expect(cw!.style.left).toBe('308px');
             expect(ccw!.style.top).toBe('228px');

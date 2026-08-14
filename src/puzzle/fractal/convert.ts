@@ -30,8 +30,8 @@ export function convertToStandardPieces(
     const allPieceArcs = buildMainContourArcs(fractalPieces, rad, frameOffset);
     const gapFills = computeGapFills(allPieceArcs, fractalPieces, rad, frameOffset);
 
-    // mainArcCount must be captured BEFORE appending diamond/disc arcs so
-    // those extras render as their own closed sub-paths (M…Z) below.
+    // Capture BEFORE appending diamond/disc arcs so those extras render as their
+    // own closed sub-paths below.
     const mainArcCount = allPieceArcs.map(arcs => arcs.length);
 
     appendDiamondFillerArcs(allPieceArcs, gapFills, rad, frameOffset);
@@ -40,13 +40,11 @@ export function convertToStandardPieces(
     const { arcIndex, arcKeys } = buildArcIndex(allPieceArcs);
     const isMateless = markMatelessArcs(arcIndex, arcKeys);
 
-    // Non-borderless: fit the TRIMMED rectangle (shrunk by `rad` on each
-    // side, aligned with outer-row tile centers) to the image; mateless
-    // arcs live in the outer `rad`-wide strip and get replaced below
-    // with straight lines along the new border, giving pieces the "flat
-    // edge, no bumps" look. Borderless: fit the FULL puzzle bounds
-    // (`gridCols * 2 * rad`) to the image so the outer-row arcs sit at
-    // the image edges — pieces on the border keep their organic curves.
+    // Non-borderless: fit the TRIMMED rectangle (shrunk by `rad` per side,
+    // aligned with outer-row tile centers); mateless arcs in the outer strip
+    // get replaced below with straight border lines ("flat edge, no bumps").
+    // Borderless: fit the FULL puzzle bounds so outer-row arcs sit at the image
+    // edges and border pieces keep their organic curves.
     const shift = borderless ? 0 : rad;
     const puzzleWidth = borderless
         ? gridCols * 2 * rad
@@ -88,8 +86,7 @@ export function convertToStandardPieces(
 }
 
 /**
- * `addArcs` probes for sibling connections by key, so pre-build a Set
- * per piece for O(1) membership instead of O(n) Array.find.
+ * Pre-build a Set per piece so addArcs's sibling-key probes are O(1), not O(n).
  */
 function buildMainContourArcs(
     fractalPieces: DiagonalConnection[][],
@@ -108,9 +105,9 @@ function buildMainContourArcs(
 }
 
 /**
- * Find cells `addArcs` missed (gaps added by fillEmptyCells) and assign
- * each gap to the neighbouring piece whose concave arc borders it. Falls
- * back to the connection's own piece if no concave arc claims the border.
+ * Find cells addArcs missed (gaps from fillEmptyCells) and assign each to the
+ * neighbouring piece whose concave arc borders it; fall back to the connection's
+ * own piece when no concave arc claims the border.
  */
 function computeGapFills(
     allPieceArcs: ArcData[][],
@@ -118,9 +115,8 @@ function computeGapFills(
     rad: number,
     frameOffset: number,
 ): Map<number, Array<{ cellX: number; cellY: number }>> {
-    // A convex arc (sign=1) at tile (tx,ty) quadrant q covers the adjacent cell:
-    //   q=0 → (tx, ty-1), q=1 → (tx-1, ty-1),
-    //   q=2 → (tx-1, ty), q=3 → (tx, ty)
+    // A convex arc (sign=1) at tile (tx,ty) quad q covers the adjacent cell
+    // (offsets in the switch below).
     const coveredCells = new Set<string>();
     for (const arcs of allPieceArcs) {
         for (const a of arcs) {
@@ -141,7 +137,7 @@ function computeGapFills(
 
     // Cell (cx,cy) is bordered by concave arcs at:
     //   tile(cx,cy) q=3, tile(cx+1,cy) q=2, tile(cx,cy+1) q=0, tile(cx+1,cy+1) q=1
-    const concaveArcOwner = new Map<string, number>(); // "tx,ty,q" → pieceIdx
+    const concaveArcOwner = new Map<string, number>(); // key "tx,ty,q" → pieceIdx
     for (let pi = 0; pi < allPieceArcs.length; pi++) {
         for (const a of allPieceArcs[pi]) {
             if (a.sign !== 0) continue;
@@ -160,10 +156,10 @@ function computeGapFills(
             const cx = con.cell.x;
             const cy = con.cell.y;
             const borderArcs = [
-                `${cx},${cy},3`,         // tile(cx,cy) q=3
-                `${cx + 1},${cy},2`,     // tile(cx+1,cy) q=2
-                `${cx},${cy + 1},0`,     // tile(cx,cy+1) q=0
-                `${cx + 1},${cy + 1},1`, // tile(cx+1,cy+1) q=1
+                `${cx},${cy},3`,
+                `${cx + 1},${cy},2`,
+                `${cx},${cy + 1},0`,
+                `${cx + 1},${cy + 1},1`,
             ];
 
             let owner = pi;
@@ -177,20 +173,18 @@ function computeGapFills(
 
             if (!gapFills.has(owner)) gapFills.set(owner, []);
             gapFills.get(owner)!.push({ cellX: cx, cellY: cy });
-            coveredCells.add(key); // only fill once
+            coveredCells.add(key);
         }
     }
     return gapFills;
 }
 
 /**
- * Append four convex arcs per gap cell to the owner piece. Each diamond
- * side is generated with sign=1 so it traverses the same geometric arc
- * as the neighbouring concave arc but in the opposite direction (and
- * with the opposite sweep flag) — matching the start↔end invariant the
- * merge-detection code expects of a mate pair. Sides are ordered so
- * their endpoints chain into a closed loop:
- *   right → top → left → bottom → right.
+ * Append four convex arcs per gap cell to the owner piece. Each side uses sign=1
+ * so it traverses the same geometric arc as the neighbouring concave arc but in
+ * the opposite direction — matching the start↔end invariant merge-detection
+ * expects of a mate pair. Sides are ordered right→top→left→bottom to chain into
+ * a closed loop.
  */
 function appendDiamondFillerArcs(
     allPieceArcs: ArcData[][],
@@ -201,10 +195,10 @@ function appendDiamondFillerArcs(
     for (const [owner, gaps] of gapFills) {
         for (const { cellX, cellY } of gaps) {
             const sides: Array<{ tile: Tile; quad: number }> = [
-                { tile: makeTile(cellX + 1, cellY), quad: 2 },     // right → top
-                { tile: makeTile(cellX, cellY), quad: 3 },         // top → left
-                { tile: makeTile(cellX, cellY + 1), quad: 0 },     // left → bottom
-                { tile: makeTile(cellX + 1, cellY + 1), quad: 1 }, // bottom → right
+                { tile: makeTile(cellX + 1, cellY), quad: 2 },
+                { tile: makeTile(cellX, cellY), quad: 3 },
+                { tile: makeTile(cellX, cellY + 1), quad: 0 },
+                { tile: makeTile(cellX + 1, cellY + 1), quad: 1 },
             ];
             for (const { tile, quad } of sides) {
                 allPieceArcs[owner].push(
@@ -216,14 +210,12 @@ function appendDiamondFillerArcs(
 }
 
 /**
- * Append four concave arcs per orphan disc to its owner piece. The
- * orphan tile has no diagonal to or from it, so addArcs never visits
- * it; instead the owner piece (a neighbour whose diagonal occupies an
- * adjacent cell) gets the disc as an extra closed sub-path. Ordering
- * q=0,1,2,3 with sign=0 chains the four arcs right→top→left→bottom
- * into a closed loop. Mates resolve through the arc index — 1 or 2
- * arcs mate with convex arcs on the owner piece itself (intra-piece
- * self-mates), and the rest sit on the puzzle outer border.
+ * Append four concave arcs per orphan disc to its owner piece. The orphan tile
+ * has no diagonal, so addArcs never visits it; the owner (a neighbour whose
+ * diagonal occupies an adjacent cell) gets the disc as an extra closed sub-path.
+ * Ordering q=0..3 with sign=0 chains right→top→left→bottom into a loop. Mates
+ * resolve through the arc index — 1–2 self-mate with the owner's convex arcs,
+ * the rest sit on the outer border.
  */
 function appendOrphanDiscArcs(
     allPieceArcs: ArcData[][],
@@ -241,10 +233,9 @@ function appendOrphanDiscArcs(
 }
 
 /**
- * Index arcs by (cx, cy, quad) for mate lookup. Built BEFORE scaling so
- * keys are derived from abstract coordinates. Returns the index plus a
- * parallel `arcKeys[pi][ai]` table used by both the mateless check and
- * later mate resolution in `buildPiece`.
+ * Index arcs by (cx,cy,quad) for mate lookup. Built BEFORE scaling so keys use
+ * abstract coordinates. Returns the index plus a parallel `arcKeys[pi][ai]`
+ * table used by the mateless check and later mate resolution in `buildPiece`.
  */
 function buildArcIndex(allPieceArcs: ArcData[][]): {
     arcIndex: ArcIndex;
@@ -271,9 +262,8 @@ function buildArcIndex(allPieceArcs: ArcData[][]): {
 }
 
 /**
- * A mateless arc is one whose (cx,cy,quad) key has no other arc at the
- * same geometric location — i.e., it sits on the puzzle outer border.
- * In non-borderless mode these are the arcs replaced with straight
+ * A mateless arc's (cx,cy,quad) key has no other arc at the same location — it
+ * sits on the outer border. Non-borderless mode replaces these with straight
  * lines along the trimmed rectangle.
  */
 function markMatelessArcs(
@@ -286,9 +276,8 @@ function markMatelessArcs(
 }
 
 /**
- * Scale and translate arcs so the puzzle fills the requested image.
- * Mutates each arc's sx/sy/ex/ey/cx/cy in place. Arc radii stay in
- * abstract coordinates and are scaled per-axis at draw time.
+ * Scale/translate arcs so the puzzle fills the image, mutating sx/sy/ex/ey/cx/cy
+ * in place. Radii stay in abstract coordinates and are scaled per-axis at draw time.
  */
 function scaleArcsToImage(
     allPieceArcs: ArcData[][],
@@ -309,13 +298,11 @@ function scaleArcsToImage(
 }
 
 /**
- * Emit drawable ops per sub-path. Sub-paths are: one main contour (if
- * any), then each 4-arc extra (diamond filler or orphan disc) as its
- * own closed sub-path. In non-borderless mode, runs of mateless arcs
- * collapse into straight lines along the trimmed rectangle border —
- * for sub-paths that wrap the seam, the loop rotates so the first arc
- * is non-mateless before walking; for sub-paths fully outside the
- * trimmed rectangle, the sub-path is dropped.
+ * Emit drawable ops per sub-path: one main contour (if any), then each 4-arc
+ * extra (diamond filler or orphan disc) as its own closed sub-path. Non-borderless
+ * mode collapses runs of mateless arcs into straight border lines; sub-paths that
+ * wrap the seam are rotated so the first arc is non-mateless, and sub-paths fully
+ * outside the trimmed rectangle are dropped.
  */
 function buildSubPaths(
     allPieceArcs: ArcData[][],
@@ -340,9 +327,8 @@ function buildSubPaths(
             const n = spEnd - spStart;
 
             if (borderless) {
-                // Keep every arc — outer-border arcs stay curved, so
-                // pieces on the border are indistinguishable from
-                // interior pieces by shape alone.
+                // Keep every arc — border arcs stay curved, so border pieces look
+                // like interior ones.
                 const subOps: Op[] = [];
                 for (let i = 0; i < n; i++) {
                     subOps.push({ type: 'arc', pieceIdx: pi, arcIdx: spStart + i });
@@ -351,10 +337,9 @@ function buildSubPaths(
                 continue;
             }
 
-            // Rotate so the first arc in the sub-path is non-mateless.
-            // Without this, a run that wraps around the sub-path's seam
-            // would be split in two — and the leading line segment
-            // would start outside the trimmed rectangle.
+            // Rotate so the first arc is non-mateless; otherwise a run wrapping
+            // the seam splits in two and its leading line starts outside the
+            // trimmed rectangle.
             let rot = 0;
             while (rot < n && isMateless[pi][spStart + rot]) rot++;
             if (rot === n) continue; // fully outside trimmed rectangle
@@ -390,10 +375,9 @@ function buildSubPaths(
 }
 
 /**
- * Allocate edge IDs in sub-path order per piece, and record an
- * arc → edge-id map so arc-to-arc mate relationships carry over to the
- * final Edge[] when the same (pieceIdx, arcIdx) gets looked up by its
- * mate during piece assembly.
+ * Allocate edge IDs in sub-path order per piece, recording an arc → edge-id map
+ * so arc-to-arc mate relationships carry into the final Edge[] when a mate looks
+ * up the same (pieceIdx, arcIdx) during assembly.
  */
 function allocateEdgeIds(pieceSubPaths: Op[][][]): {
     subPathEdgeIds: number[][][];
@@ -414,16 +398,14 @@ function allocateEdgeIds(pieceSubPaths: Op[][][]): {
 }
 
 /**
- * The `shape` string is built inline here rather than by the shared
- * `model/build-shape.ts` (one `M …/Z` per sub-path, emitted alongside the
- * edges). The two agree on every piece this converter emits today, and the
- * save path depends on it — `serializePiece` omits `shape` from the v12 blob
- * only for pieces where the shared builder reproduces this string byte for
- * byte, and `game/init-geometry-precision.test.ts` pins how many pieces per
- * style still have to store one.
+ * The `shape` string is built inline here rather than by shared
+ * `model/build-shape.ts`. The save path depends on the two agreeing:
+ * `serializePiece` omits `shape` from the v12 blob only for pieces where the
+ * shared builder reproduces this string byte-for-byte, and
+ * `game/init-geometry-precision.test.ts` pins how many pieces per style must
+ * still store one.
  *
- * Returns null when the piece has no sub-paths (fully trimmed away in
- * non-borderless mode).
+ * Returns null when the piece has no sub-paths (fully trimmed in non-borderless).
  */
 function buildPiece(
     pieceIdx: number,
@@ -518,10 +500,9 @@ function buildPiece(
 }
 
 /**
- * Walk the rectangle boundary from (px,py) to (qx,qy). Both points must
- * already lie on the boundary. Returns one line segment when they share
- * a side, or two (through the shared corner) when they don't. Used to
- * replace runs of mateless arcs in a trimmed sub-path.
+ * Walk the rectangle boundary from (px,py) to (qx,qy); both must already lie on
+ * the boundary. Returns one segment when they share a side, or two (through the
+ * shared corner) otherwise. Replaces runs of mateless arcs in a trimmed sub-path.
  */
 function borderPathBetween(
     px: number, py: number, qx: number, qy: number,
@@ -533,10 +514,8 @@ function borderPathBetween(
     const onLeft = (x: number, _y: number) => Math.abs(x - rect.xMin) < eps;
     const onRight = (x: number, _y: number) => Math.abs(x - rect.xMax) < eps;
 
-    // Determine which border side each endpoint lies on. When a point
-    // sits exactly on a corner it's on two sides — pick the one that
-    // matches the other point's side, falling through to the corner-
-    // bridging branch when neither does.
+    // Which border side each endpoint lies on. A corner point is on two sides —
+    // pick the one matching the other point, else fall through to corner-bridging.
     const pSides = [
         ...(onTop(px, py) ? ['top'] : []),
         ...(onBottom(px, py) ? ['bottom'] : []),
@@ -573,8 +552,7 @@ function borderPathBetween(
         }
     }
 
-    // Fallback: endpoints are on opposite sides or not on the boundary.
-    // This shouldn't happen for well-formed trimmed sub-paths, but draw
-    // a direct line rather than failing outright.
+    // Fallback: endpoints on opposite sides or off the boundary — shouldn't happen
+    // for well-formed sub-paths; draw a direct line rather than fail.
     return [{ sx: px, sy: py, ex: qx, ey: qy }];
 }

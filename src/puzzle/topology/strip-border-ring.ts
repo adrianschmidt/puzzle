@@ -1,13 +1,10 @@
 /**
- * On an oversized grid (the sine generator's borderless mode adds one piece
- * on each side), every piece that has a border edge (`matePieceId === -1`)
- * is exactly the 1-deep outer ring. The survivors' baked `shape` and each
- * edge's `path` are left untouched, so an exposed edge keeps the inward tab
- * it used to share with a removed ring piece — that is the whole point of
- * borderless mode.
- *
- * Consumes no randomness, so it can run after the generator without
- * perturbing the seeded PRNG stream.
+ * On the sine generator's oversized borderless grid, every piece with a border
+ * edge (`matePieceId === -1`) is exactly the 1-deep outer ring. Survivors' baked
+ * `shape` and edge `path` are left untouched, so an exposed edge keeps the
+ * inward tab it shared with a removed ring piece — the whole point of borderless.
+ * Consumes no randomness, so it runs after the generator without perturbing the
+ * seeded PRNG stream.
  */
 
 import type { GeneratedPiece } from '../../model/types.js';

@@ -232,7 +232,7 @@ describe('rotatePoint (degrees)', () => {
     it('handles non-quarter-turn angles', () => {
         const p = { x: 1, y: 0 };
         const r = rotatePoint(p, 47);
-        // 47° clockwise rotation of (1, 0) around origin in screen-y-down coords.
+        // 47° CW rotation, screen-y-down coords.
         expect(r.x).toBeCloseTo(0.6820, 3);
         expect(r.y).toBeCloseTo(0.7314, 3);
     });
@@ -259,7 +259,6 @@ describe('localToWorld', () => {
     });
 
     it('rotates around the group origin before translating', () => {
-        // Local (10, 0) rotated 90° CW → (0, 10); + position (100, 200)
         const g: PieceGroup = {
             id: 1,
             pieces: new Map(),
@@ -270,7 +269,6 @@ describe('localToWorld', () => {
     });
 
     it('handles 180° rotation', () => {
-        // Local (10, 5) rotated 180° → (-10, -5); + position (50, 50)
         const g: PieceGroup = {
             id: 1,
             pieces: new Map(),
@@ -313,7 +311,6 @@ describe('getWorldPosition', () => {
     });
 
     it('applies rotation to the local point before translating', () => {
-        // Group at world (100, 200), rotated 90° CW, single piece at local (0,0)
         const g: PieceGroup = {
             id: 1,
             pieces: new Map([[5, { x: 0, y: 0 }]]),
@@ -321,12 +318,10 @@ describe('getWorldPosition', () => {
             rotation: 90,
         };
 
-        // Local point (10, 0) rotated 90° CW → (0, 10); then + position
         expect(getWorldPosition({ x: 10, y: 0 }, 5, g)).toEqual({ x: 100, y: 210 });
     });
 
     it('applies rotation with a non-zero piece offset', () => {
-        // Offset + point = local (10, 0); rotated 180° → (-10, 0)
         const g: PieceGroup = {
             id: 1,
             pieces: new Map([[5, { x: 10, y: 0 }]]),
@@ -384,19 +379,16 @@ describe('signedAngularDelta', () => {
         expect(signedAngularDelta(-90, 0)).toBe(-90);
     });
 
-    // The completion spin (zoomToFitCompletedPuzzle) lands the puzzle upright
-    // by animating to `start + signedAngularDelta(0, start)`. The no-jump
-    // reconciliation that follows assumes that target is an upright-equivalent
-    // angle (≡ 0 mod 360) reached by a turn of at most 180°. Pin both, so a
-    // future change to the delta convention fails here rather than producing a
-    // visible jump on completion.
+    // The completion spin lands upright via `start + signedAngularDelta(0, start)`;
+    // the no-jump reconciliation assumes that target is upright-equivalent (≡ 0
+    // mod 360) reached by a ≤180° turn. Pin both so a delta-convention change
+    // fails here rather than producing a visible jump on completion.
     it('yields an upright-equivalent target within 180° for any start angle', () => {
         for (let start = 0; start < 360; start += 7.5) {
             const turn = signedAngularDelta(0, start);
             const target = start + turn;
             expect(Math.abs(turn)).toBeLessThanOrEqual(180);
-            // target is a multiple of 360 (upright), measured directly so a
-            // value just under 360 still counts as upright rather than wrapping.
+            // Measured directly so a value just under 360 still counts as upright.
             expect(target - Math.round(target / 360) * 360).toBeCloseTo(0);
         }
     });

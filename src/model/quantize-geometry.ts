@@ -1,69 +1,36 @@
 /**
- * Runs once on the finished `GeneratedPiece[]`, immediately after generation.
- * Every coordinate the puzzle carries — edge endpoints, sampled curve points,
- * the image offset — is rounded to {@link GEOMETRY_PRECISION_DECIMALS}
- * decimals, so a *generated* puzzle's geometry is one set of numbers whether
- * it is held in memory, written to `localStorage`, or regenerated from a
- * share link.
+ * Rounds every generated coordinate — edge endpoints, curve samples, image
+ * offset — to {@link GEOMETRY_PRECISION_DECIMALS} decimals, so a generated
+ * puzzle's geometry is identical in memory, in `localStorage`, and regenerated
+ * from a share link. Only generated geometry: pre-existing saves are not
+ * re-rounded on load.
  *
- * The scope is generated geometry. Saves written before this pass existed are
- * deliberately not re-rounded on load, so a `Piece[]` restored from one still
- * carries full-precision coordinates.
- *
- * The point is size: each full-precision double costs ~17 significant digits
- * in JSON, and what the blob keeps — two coordinates per edge, one per piece
- * (`imageOffset`) — all comes through here. Historically the pass earned its
- * keep on `edge.curvePoints`, ~61% of the blob while they were still
- * persisted, taking the largest supported puzzle from ~5.7 MB to ~3.8 MB
- * (#487). v12 stopped persisting them altogether, so the endpoints and offsets
- * are what is left to round directly.
- *
- * Rounding the samples still pays, indirectly: sealing
- * (`model/seal-geometry.ts`) runs immediately after this pass and folds them
- * into each piece's `bounds`, the one derived field the blob does store. Those
- * bounds are therefore a min/max over already-rounded coordinates and inherit
- * the same precision. Running the two passes in the other order would put
- * full-precision numbers back into the blob.
- *
- * Path strings (`piece.shape`, `edge.path`) are deliberately untouched: they
- * are built earlier in the pipeline by `fmt`, which already emits `toFixed(2)`.
- * Running this pass *after* composition — rather than rounding `curvePoints`
- * where they are produced — is what keeps those strings byte-identical, so
- * existing share links reproduce the same rendered geometry as before.
+ * Runs before sealing (`model/seal-geometry.ts`), so the `bounds` sealing
+ * derives from curve samples inherit this precision; the other order would put
+ * full-precision numbers back into the blob. Path strings (`piece.shape`,
+ * `edge.path`) are left byte-identical — already `toFixed(2)` from `fmt` —
+ * which keeps existing share links reproducing the same rendered geometry.
  */
 
 import type { GeneratedEdge, GeneratedPiece, Point } from './types.js';
 
 /**
- * Two independent limits agree on 2:
- *
- * - `fmt` (`model/build-shape.ts`) already truncates every rendered
- *   path to `toFixed(2)`, so precision finer than this cannot reach the screen.
- * - The strictest merge tolerance is `0.133` of the reference piece width
- *   (`ui/merge-tolerance.ts`) — 8.98 px at 16 columns on a 1080 px image. The
- *   ≤0.005 px error introduced here is ~1/1800 of that.
+ * Two independent limits agree on 2: `fmt` (`model/build-shape.ts`) already
+ * truncates rendered paths to `toFixed(2)`, so finer precision can't reach the
+ * screen; and the ≤0.005 px rounding error here is far below the strictest
+ * merge tolerance (`ui/merge-tolerance.ts`).
  */
 export const GEOMETRY_PRECISION_DECIMALS = 2;
 
 const FACTOR = 10 ** GEOMETRY_PRECISION_DECIMALS;
 
 /**
- * Coordinates are bounded by the image dimensions, far below the magnitude at
- * which `x / FACTOR` stops having a 2-decimal shortest round-trip form — so
- * `JSON.stringify` emits at most two decimals, which is where the size saving
- * comes from.
- *
- * `-0` is folded to `0`: `JSON.stringify` writes it as `"0"`, so leaving it
- * would make in-memory geometry differ from the same geometry read back.
- *
- * A non-finite result is discarded in favour of the input. `value * FACTOR`
- * overflows to `Infinity` above ~1.798e306, which would turn a finite
- * coordinate into one `JSON.stringify` writes as `null` — a value nothing on
- * the load path re-validates. Generated geometry never comes near that
- * magnitude, but the guard keeps the pass from being the step that makes a
- * coordinate unrepresentable. `NaN`/`±Infinity` *inputs* are passed through
- * unchanged for the same reason: this pass rounds coordinates, it is not the
- * place that decides whether a generator may emit a broken one.
+ * `-0` is folded to `0`: `JSON.stringify` writes it `"0"`, so leaving it would
+ * make in-memory geometry differ from what's read back. A non-finite result is
+ * discarded for the input — `value * FACTOR` overflows to Infinity above
+ * ~1.798e306, which `JSON.stringify` writes as `null`; and `NaN`/`±Infinity`
+ * inputs pass through unchanged, since this pass rounds coordinates, it does not
+ * police them.
  */
 function quantize(value: number): number {
     const rounded = Math.round(value * FACTOR) / FACTOR;
@@ -87,10 +54,7 @@ function quantizeEdge(edge: GeneratedEdge): GeneratedEdge {
     return quantized;
 }
 
-/**
- * Pure: the input pieces, edges, and points are left untouched, matching the
- * treat-pieces-as-immutable convention the rest of the model follows.
- */
+/** Pure: inputs are left untouched (pieces are treated as immutable). */
 export function quantizePieceGeometry(pieces: GeneratedPiece[]): GeneratedPiece[] {
     return pieces.map((piece) => ({
         ...piece,

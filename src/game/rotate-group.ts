@@ -1,9 +1,7 @@
 /**
- * Pivot-preserving group rotation by an arbitrary degrees delta.
- *
- * Rotation is stored on `PieceGroup.rotation` as float degrees, normalized
- * to `[0, 360)`. Piece offsets stay in un-rotated local space; rotation is
- * applied at render time and via `getWorldPosition`.
+ * Pivot-preserving group rotation by a degrees delta. Rotation is stored on
+ * `PieceGroup.rotation` as float degrees in `[0, 360)`; piece offsets stay in
+ * un-rotated local space and rotation is applied at render / `getWorldPosition`.
  */
 
 import type { Piece, PieceGroup, Point } from '../model/types.js';
@@ -11,15 +9,10 @@ import { normalizeDegrees, rotatePoint } from '../model/helpers.js';
 import { getGroupLocalBounds } from './group-bounds.js';
 
 /**
- * Rotate a group by `deltaDegrees` clockwise (negative for counter-clockwise),
- * keeping `pivotLocal` fixed in world space.
- *
- * `pivotLocal` must be in un-rotated group-local space. Callers pass one to
- * choose which point stays anchored — e.g. the mated piece's center for a
- * merge snap. Omitted, it defaults to the group's bbox center computed from
- * `piecesById`.
- *
- * Mutates `group.rotation` and `group.position`. Returns the same group.
+ * Rotate a group by `deltaDegrees` clockwise (negative = CCW), keeping
+ * `pivotLocal` (in un-rotated group-local space) fixed in world space. Omitted,
+ * it defaults to the group's bbox center. Mutates `group.rotation` and
+ * `group.position`; returns the same group.
  */
 export function rotateGroup(
     group: PieceGroup,

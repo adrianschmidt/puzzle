@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-// `createNewGame` (in `init.ts`) calls `getCutStyleStrategy` from this
-// module. A plain `vi.spyOn` on the export can't intercept that call under
-// Vite's ESM — see `src/app/start-new-game.test.ts`'s `vi.mock('../game/index.js', ...)`
-// for the same pattern. Wrapping the real implementation with `vi.fn(...)`
-// keeps every existing test's real generation working; only the one test
-// that installs a `mockImplementationOnce` below sees a fake strategy.
+// `createNewGame` calls `getCutStyleStrategy` from this module; a plain
+// `vi.spyOn` can't intercept that under Vite's ESM. Wrapping the real impl in
+// `vi.fn` keeps real generation working; only the test with a
+// `mockImplementationOnce` below sees a fake strategy.
 vi.mock('./cut-style-strategies.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('./cut-style-strategies.js')>();
     return { ...actual, getCutStyleStrategy: vi.fn(actual.getCutStyleStrategy) };
@@ -27,12 +25,9 @@ import type { PieceCountMismatch } from '../puzzle/topology/generator.js';
 import { computePieceBounds } from '../model/derive.js';
 
 /**
- * The real strategy lookup the mock above wraps, captured once so the
- * mismatch test's `afterEach` can restore it explicitly. `vi.clearAllMocks()`
- * (not used here, but repo-wide there is no `restoreMocks` in
- * `vite.config.ts`) only clears call records, not a `mockImplementationOnce`
- * override — without an explicit restore, a fake strategy installed by one
- * test could leak into a test declared after it.
+ * The real strategy lookup the mock wraps, captured so `afterEach` can restore
+ * it explicitly: `vite.config.ts` has no `restoreMocks`, and `clearAllMocks`
+ * doesn't clear a `mockImplementationOnce`, so a fake could leak into a later test.
  */
 const realGetCutStyleStrategy = vi.mocked(getCutStyleStrategy).getMockImplementation()!;
 
@@ -103,10 +98,8 @@ describe('createNewGame', () => {
     });
 
     it('inscribes the fractal puzzle inside the image so arcs stay circular', () => {
-        // 16:9 image (1.778) cannot be matched exactly by a small integer
-        // tile grid. The stored puzzle imageSize must fit inside the
-        // original image bounds (so the image covers the puzzle with some
-        // crop) rather than extend beyond them (which would show blank).
+        // 16:9 can't be matched exactly by a small integer grid; the stored
+        // imageSize must fit inside the image (crop) not extend beyond (blank).
         const imageSize: Size = { width: 1920, height: 1080 };
         const state = createNewGame('test.jpg', imageSize, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
@@ -115,16 +108,14 @@ describe('createNewGame', () => {
         });
         expect(state.imageSize.width).toBeLessThanOrEqual(imageSize.width + 1e-9);
         expect(state.imageSize.height).toBeLessThanOrEqual(imageSize.height + 1e-9);
-        // And at least one axis must match the image exactly (the puzzle
-        // is inscribed, touching the image on one pair of edges).
+        // At least one axis matches exactly — inscribed, touching one edge pair.
         const matchesWidth = Math.abs(state.imageSize.width - imageSize.width) < 1e-6;
         const matchesHeight = Math.abs(state.imageSize.height - imageSize.height) < 1e-6;
         expect(matchesWidth || matchesHeight).toBe(true);
     });
 
     it('leaves imageSize unchanged when grid aspect matches image aspect', () => {
-        // Classic puzzle with 8×6 grid on 4:3 image — grid aspect and image
-        // aspect are 1.333 → no inscribing needed.
+        // 8×6 grid on 4:3 image: aspects match (1.333) → no inscribing.
         const imageSize: Size = { width: 800, height: 600 };
         const state = createNewGame('test.jpg', imageSize, VIEWPORT, DEFAULT_GRID, {
             random: seededRandom([0.5]),
@@ -200,20 +191,14 @@ describe('createInitialGroups', () => {
     });
 
     describe('AutoGroup offset math', () => {
-        // Build a minimal Piece with the only fields the auto-group offset
-        // computation actually reads (id + imageOffset). The shape/edges
-        // fields are unused by createInitialGroups, so we leave them empty.
+        // Minimal Piece: createInitialGroups reads only id + imageOffset.
         function makePiece(id: number, imageOffset: { x: number; y: number }): Piece {
             return { id, edges: [], shape: '', imageOffset, bounds: computePieceBounds({ edges: [] }) };
         }
 
         it('computes within-group offsets as anchor.imageOffset - piece.imageOffset', () => {
-            // Two pieces in the same auto-group with distinct image offsets.
-            // anchor (id 0): imageOffset (0, 0)
-            // other  (id 1): imageOffset (-100, -50)
-            // Expected within-group offsets:
-            //   anchor → (0, 0)
-            //   other  → (0,0) - (-100,-50) = (100, 50)
+            // other's within-group offset = anchor.imageOffset - other.imageOffset
+            //   = (0,0) - (-100,-50) = (100, 50)
             const pieces: Piece[] = [
                 makePiece(0, { x: 0, y: 0 }),
                 makePiece(1, { x: -100, y: -50 }),
@@ -230,7 +215,6 @@ describe('createInitialGroups', () => {
                 autoGroups,
             );
 
-            // One group containing both pieces, anchored at the lowest piece id.
             expect(groups).toHaveLength(1);
             const group = groups[0];
             expect(group.id).toBe(0);
@@ -238,8 +222,7 @@ describe('createInitialGroups', () => {
             expect(group.pieces.get(0)).toEqual({ x: 0, y: 0 });
             expect(group.pieces.get(1)).toEqual({ x: 100, y: 50 });
 
-            // One shared position and rotation for the whole group, derived
-            // from the (mocked) RNG — not per-piece.
+            // One shared position and rotation for the group, not per-piece.
             const pieceWidth = IMAGE_SIZE.width / DEFAULT_COLS;
             const pieceHeight = IMAGE_SIZE.height / DEFAULT_ROWS;
             const expectedX =
@@ -419,7 +402,7 @@ describe('randomizePositions', () => {
             seededRandom([0.5]),
         );
 
-        // All positions should be at the margin (no room to spread)
+        // No room to spread → all positions clamp to the margin.
         for (const pos of positions) {
             expect(pos.x).toBe(VIEWPORT_MARGIN);
             expect(pos.y).toBe(VIEWPORT_MARGIN);
@@ -452,17 +435,14 @@ describe('randomizePositions', () => {
 
 describe('createNewGame piece-count mismatch reporting', () => {
     afterEach(() => {
-        // Guard against the fake strategy installed below leaking into a
-        // later test — see the module-level comment on `realGetCutStyleStrategy`.
+        // Leak guard: restore the real strategy (see `realGetCutStyleStrategy`).
         vi.mocked(getCutStyleStrategy).mockImplementation(realGetCutStyleStrategy);
     });
 
     it('does not call the callback for a healthy composable puzzle', () => {
-        // Real generation through the topology pipeline (not the legacy
-        // classic path, which structurally can never carry a
-        // `pieceCountMismatch` — see the mocked test below for that case).
-        // This pins that the sine base-cut's real `expectedPieceCount` hook
-        // does not false-positive against its own generator's real output.
+        // Real topology pipeline (not legacy classic, which can't carry a
+        // mismatch): pins that the sine base-cut's `expectedPieceCount` hook
+        // doesn't false-positive against its own output.
         const onPieceCountMismatch = vi.fn();
         createNewGame('img.jpg', { width: 400, height: 400 },
             { width: 800, height: 600 }, { cols: 2, rows: 2 },
@@ -471,13 +451,10 @@ describe('createNewGame piece-count mismatch reporting', () => {
     });
 
     it('is optional — a reported mismatch with no callback still generates', () => {
-        // The `?.` on `options.onPieceCountMismatch?.(…)` is the "a diagnostic
-        // must never block a game start" invariant. Exercising it needs a run
-        // that actually REPORTS a mismatch while omitting the callback: on
-        // legacy Classic the guarded line never executes, so dropping the `?.`
-        // would leave the suite green — which is why this installs the same
-        // fake strategy the test below uses instead of running a real
-        // generator.
+        // The `?.` on `onPieceCountMismatch?.(…)` means a diagnostic never
+        // blocks game start. Exercising it needs a run that REPORTS a mismatch
+        // with no callback — legacy Classic never reports one, so this installs
+        // the fake strategy to make dropping the `?.` fail.
         const fakeStrategy: CutStyleStrategy = {
             scaleGrid: (grid) => grid,
             inscribePuzzleSize: (imageSize) => imageSize,
@@ -496,12 +473,9 @@ describe('createNewGame piece-count mismatch reporting', () => {
     });
 
     it('invokes the callback with the mismatch a strategy reports', () => {
-        // Forces the mismatch path without depending on a real generator
-        // actually miscounting: stub the strategy lookup so
-        // `generatePieces` returns a `pieceCountMismatch` directly, and
-        // assert `createNewGame` forwards that exact value to the
-        // callback. This is the regression check for the destructure/invoke
-        // wiring in `init.ts` — deleting that wiring should fail this test.
+        // Stub the strategy so `generatePieces` returns a mismatch directly,
+        // and assert `createNewGame` forwards that exact value — regression
+        // check for the destructure/invoke wiring in `init.ts`.
         const mismatch: PieceCountMismatch = { expected: 4, actual: 3, baseCutId: 'fake' };
         const fakeStrategy: CutStyleStrategy = {
             scaleGrid: (grid) => grid,
@@ -521,12 +495,10 @@ describe('createNewGame piece-count mismatch reporting', () => {
 });
 
 describe('createNewGameAsync', () => {
-    // jsdom has no Worker, so this exercises the sync-fallback path with
-    // real generation — worker-path mechanics are generate-async.test.ts's job.
+    // jsdom has no Worker, so this hits the sync-fallback path (worker mechanics
+    // live in generate-async.test.ts).
     afterEach(() => {
-        // Same leak guard as the `createNewGame piece-count mismatch
-        // reporting` describe above: a `mockImplementationOnce` left
-        // unconsumed (e.g. a test failing before the call) must not leak
+        // Leak guard: an unconsumed `mockImplementationOnce` must not leak
         // into a later test.
         vi.mocked(getCutStyleStrategy).mockImplementation(realGetCutStyleStrategy);
     });
@@ -556,12 +528,10 @@ describe('createNewGameAsync', () => {
     });
 
     it('fires onPieceCountMismatch (before resolving) for a mismatch a strategy reports', async () => {
-        // Reuses the fake-strategy fixture from the `createNewGame`
-        // mismatch tests above to pin that `createNewGameAsync` forwards a
-        // reported mismatch the same way the sync path does, and that the
-        // callback has already run by the time the returned promise
-        // resolves (`onPieceCountMismatch` fires inside `assembleGameState`,
-        // which runs after the `await`).
+        // Pins that `createNewGameAsync` forwards a reported mismatch like the
+        // sync path, and that the callback has already fired when the promise
+        // resolves (`onPieceCountMismatch` runs in `assembleGameState`, after
+        // the `await`).
         const mismatch: PieceCountMismatch = { expected: 4, actual: 3, baseCutId: 'fake' };
         const fakeStrategy: CutStyleStrategy = {
             scaleGrid: (grid) => grid,
