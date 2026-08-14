@@ -2,6 +2,15 @@
 
 ## Comment policy: intent and not-in-the-code information only
 
+**Audience — write for an AI agent, not a presumed human reader.** This repo's
+source is read and written only by AI agents, which parse the code fluently;
+no human skims it. A comment's only job is to carry what an agent cannot
+recover from the code itself. So never orient, teach, or narrate: no
+walkthroughs, no skim-summaries, no changelog voice ("now also handles…",
+"previously this…"). This is *why* categories 1–4 below are forbidden — a
+fluent reader needs no restatement or summary — and all that survives is
+intent and the contracts the code can't express (5–6).
+
 **Every comment carries significant intrinsic cost — weigh it before writing
 or touching one.** Agent review loops in this repo have burned entire rounds
 discussing and "fixing" comments without changing a line of code, at real
