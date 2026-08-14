@@ -1,19 +1,14 @@
 /**
- * Stale-client share-link rescue — when a `#p=` link fails to decode, this
- * client may simply be an old cached build that predates the link's format
- * (the share payload has historically grown without bumping `v`). This
- * module holds the two halves of the recovery flow:
+ * Stale-client share-link rescue: when a `#p=` link fails to decode, this
+ * client may be an old cached build predating the link's format. Two halves:
+ * a sessionStorage loop guard (exactly one rescue per link — the attempt
+ * reloads, so the guard stops a still-invalid link reload-looping), and the
+ * attempt itself (force a SW update check; if a newer build is waiting, apply
+ * it and reload with the hash intact).
  *
- * - a sessionStorage loop guard ensuring exactly one rescue attempt per
- *   link (the attempt reloads the page, so the guard is what stops a
- *   still-invalid link from reload-looping);
- * - the rescue attempt itself: force a service-worker update check and, if
- *   a newer build is waiting, apply it and reload with the hash intact.
- *
- * sessionStorage (not localStorage) so a stale guard can't outlive the tab
- * and suppress a legitimate future rescue after the app has genuinely
- * updated. All service-worker specifics are injected; `register.ts`
- * supplies the real ones.
+ * sessionStorage, not localStorage, so a stale guard can't outlive the tab and
+ * suppress a legitimate future rescue. All SW specifics are injected by
+ * `register.ts`.
  */
 
 import type { ShareLinkRescueAttemptedData } from '../analytics/index.js';
@@ -52,14 +47,13 @@ export function clearRescueAttempt(storage?: Storage): void {
     try {
         (storage ?? sessionStorage).removeItem(GUARD_KEY);
     } catch {
-        // Nothing to clean up if storage is unavailable.
+        // Storage unavailable.
     }
 }
 
 /**
- * The `installing` / `waiting` fields are null-checked to tell "already
- * latest" from "an install is under way" — only ever null-checked, hence
- * `unknown`.
+ * `installing` / `waiting` are only ever null-checked (to tell "already latest"
+ * from "install under way"), hence `unknown`.
  */
 export interface RescueRegistration extends UpdatableRegistration {
     readonly installing: unknown;
@@ -83,10 +77,9 @@ export interface ShareLinkRescueDeps {
     /** Injectable timer for tests; returns a cancel function. */
     schedule?: (handler: () => void, ms: number) => () => void;
     /**
-     * Breadcrumb for the reject paths (a `getRegistration()` or `update()`
-     * rejection collapses into `unavailable`, discarding the error).
-     * Injected — not imported — so `diagnostics` (and its DOM/console reach)
-     * stays out of this module's unit-test graph.
+     * Breadcrumb for the reject paths (a rejection collapses into `unavailable`,
+     * discarding the error). Injected, not imported, so `diagnostics` stays out
+     * of this module's unit-test graph.
      */
     warn?: (message: string, err: unknown) => void;
 }
@@ -151,14 +144,11 @@ export function attemptShareLinkRescue(deps: ShareLinkRescueDeps): Promise<Rescu
                 return;
             }
             if (settled) return;
-            // The check resolved without starting an install and nothing is
-            // waiting: this client is already the latest build. If a worker
-            // IS installing/waiting, the onUpdateReady subscription (or the
-            // deadline, if installation hangs) settles the attempt. Narrow
-            // multi-tab corner case: a stale page whose new worker was
-            // already activated by another tab (so this tab's own
-            // onNeedRefresh never fired) also lands here and reports
-            // no-update; it self-heals on the next manual reload.
+            // No install started and nothing waiting: already the latest build.
+            // If a worker IS installing/waiting, onUpdateReady (or the deadline)
+            // settles it. Multi-tab corner: a stale page whose new worker was
+            // already activated elsewhere also lands here as no-update and
+            // self-heals on the next manual reload.
             if (!registration.installing && !registration.waiting) {
                 settle('no-update');
             }

@@ -1,15 +1,13 @@
 /**
- * The pure generate phase of creating a new game: strategy dispatch,
- * piece generation, quantization, sealing. Extracted from `init.ts` so
- * the generation worker and the synchronous main-thread fallback run
- * byte-identical code — the seeded-PRNG call-order contract (share
- * links/saves replay puzzles from the seed alone) has exactly one
- * implementation regardless of which thread executes it.
+ * The pure generate phase of a new game: strategy dispatch, piece generation,
+ * quantize, seal. Extracted from `init.ts` so the worker and the synchronous
+ * main-thread fallback run byte-identical code — the seeded-PRNG call-order
+ * contract (share links/saves replay from the seed alone) has one implementation
+ * regardless of thread.
  *
- * Request and result are plain structured-cloneable data; the result
- * crosses a `postMessage` boundary on the worker path. Quantize + seal
- * run here — inside the worker — deliberately: sealing drops the dense
- * curve samples before the clone, which is most of the payload.
+ * Request and result are structured-cloneable; the result crosses `postMessage`
+ * on the worker path. Quantize + seal run here, inside the worker, deliberately:
+ * sealing drops the dense curve samples before the clone — most of the payload.
  */
 
 import type { GridSize, Piece, Size } from '../model/types.js';
@@ -32,24 +30,21 @@ export interface GenerationRequest {
     seed: number;
     fractalConfig?: FractalConfig;
     /**
-     * `ComposableConfig` minus `tabDebug`: a live `TabDebugSession` is a
-     * class instance carrying a function property, so it can't cross
-     * `structuredClone`/`postMessage`. The request's own `tabDebug: boolean`
-     * carries that intent across the wire instead, and `runGeneration`
-     * builds the real session locally. Same reasoning as
-     * `GameState.composableConfig` (`model/types.ts`), which inlines an
-     * equivalent tabDebug-free shape.
+     * `ComposableConfig` minus `tabDebug`: a live `TabDebugSession` is a class
+     * with a function property, so it can't cross `structuredClone`/`postMessage`.
+     * The request's `tabDebug: boolean` carries the intent instead, and
+     * `runGeneration` builds the session locally. Same as
+     * `GameState.composableConfig` (`model/types.ts`).
      */
     composableConfig?: Omit<ComposableConfig, 'tabDebug'>;
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
     trianglesConfig?: { traceSetVersion?: number };
     classicConfig?: { traceSetVersion?: number };
     /**
-     * Whether to run a tab-debug session. A boolean, not a session:
-     * the flag is read from the URL on the main thread (workers have no
-     * `window.location`) and the live session object cannot cross the
-     * worker boundary — so the session is constructed here and only its
-     * plain-data report travels back.
+     * Whether to run a tab-debug session. A boolean, not a session: the flag is
+     * read from the URL on the main thread (workers have no `window.location`)
+     * and the session can't cross the worker boundary — it's built in
+     * `runGeneration`, and only its plain-data report travels back.
      */
     tabDebug: boolean;
 }
@@ -86,13 +81,10 @@ export function runGeneration(request: GenerationRequest): GenerationResult {
 }
 
 /**
- * Whether generating this request will hit the traced-tab generator, and
- * so needs the lazy traced chunk loaded first. The worker entry awaits
- * the chunk based on this; keep it in step with which strategies pass
- * `tabGenerator: 'traced'` in `cut-style-strategies.ts` (its test
- * enumerates them). Mirrors `needsTracedTabChunk`
- * (`app/share-payload-to-init.ts`), which answers the same question for
- * a share payload rather than a request.
+ * Whether generating this request hits the traced-tab generator, so needs the
+ * lazy chunk loaded first. Keep in step with which strategies pass
+ * `tabGenerator: 'traced'` in `cut-style-strategies.ts`. Mirrors
+ * `needsTracedTabChunk` (`app/share-payload-to-init.ts`) for share payloads.
  */
 export function requestNeedsTracedTabs(request: GenerationRequest): boolean {
     switch (request.cutStyle) {

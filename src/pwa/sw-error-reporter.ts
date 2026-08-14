@@ -1,11 +1,9 @@
 /**
  * Service-worker-side backstop for failures in the worker's own scope, which
- * the page-realm listeners in `analytics/error-tracking.ts` cannot see.
- * Mirrors that backstop's shape (sanitized `reason`, low-cardinality `name`,
- * per-session rate limiting), but cannot call `track()` directly: the Umami
- * script only exists in the page. It holds no service-worker references of
- * its own — `post` is injected — which keeps the sanitize + rate-limit logic
- * unit-testable without a worker environment.
+ * the page-realm listeners in `analytics/error-tracking.ts` can't see. Mirrors
+ * that backstop (sanitized `reason`, low-cardinality `name`, per-session rate
+ * limiting) but can't call `track()` (Umami only exists in the page). `post`
+ * is injected, keeping the sanitize + rate-limit logic unit-testable.
  */
 
 import { sanitizeErrorReason } from '../analytics/sanitize-error-reason.js';
@@ -28,15 +26,11 @@ export interface SwErrorReport {
 }
 
 /**
- * Max reports per distinct `reason` per worker session. Mirrors the page
- * backstop; the budgets are intentionally independent (a worker flood
- * shouldn't eat the page's budget, or vice versa).
- *
- * Per-reason truncation is silent by design: unlike the global cap (which
- * posts a one-time `RateLimited` notice), hitting this limit emits nothing —
- * treat the reported count of any one `reason` as a floor, not the real
- * volume. A per-reason notice would multiply notice cardinality under a
- * multi-reason flood and diverge from the page backstop's behavior.
+ * Caps per distinct `reason` and in total per worker session; budgets are
+ * intentionally independent of the page backstop's. Per-reason truncation is
+ * silent (unlike the global cap's one-time `RateLimited` notice), so treat any
+ * one `reason`'s reported count as a floor — a per-reason notice would bloat
+ * notice cardinality under a multi-reason flood.
  */
 const MAX_PER_REASON = 5;
 const MAX_TOTAL = 50;

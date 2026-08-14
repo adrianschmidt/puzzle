@@ -13,10 +13,9 @@ export function createAttributionElement(
     const container = document.createElement('div');
     container.className = ATTRIBUTION_CLASS;
 
-    // Defense-in-depth: the decode path already rejects share links whose
-    // attribution URLs aren't http(s), but this sink is reused, so guard the
-    // href here too. A non-http(s) URL is dropped (the anchor renders as
-    // plain text) rather than smuggling a `javascript:` scheme into the DOM.
+    // Defense-in-depth: this href sink is reused beyond the decode path, so a
+    // non-http(s) URL is dropped here too rather than smuggling a `javascript:`
+    // scheme into the DOM (the anchor renders as plain text).
     const photographerLink = document.createElement('a');
     if (isSafeHttpUrl(attribution.photographerUrl)) {
         photographerLink.href = attribution.photographerUrl;
@@ -49,10 +48,6 @@ export function removeAttribution(container: HTMLElement): void {
     }
 }
 
-/**
- * Kept pure for easy testing; DOM creation with proper link attributes
- * happens in `createAttributionElement`.
- */
 export function formatAttributionText(attribution: ImageAttribution): string {
     return `Photo by ${attribution.photographerName} on Unsplash`;
 }

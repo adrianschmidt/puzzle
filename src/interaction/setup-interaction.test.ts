@@ -73,8 +73,7 @@ function createFakeRenderer(): Renderer {
         setGroupSelected: vi.fn(),
         pieceIdFromTarget: vi.fn((t: EventTarget | null) =>
             (t as { _pieceId?: number } | null)?._pieceId ?? null),
-        // Defaults to "no piece nearby"; tests of the near-miss probe
-        // override this to report a piece for probed points.
+        // Defaults to "no piece nearby"; probe tests override it.
         pieceIdAtPoint: vi.fn(() => null),
         destroy: vi.fn(),
     };
@@ -192,10 +191,9 @@ describe('setupInteraction', () => {
         const container = createFakeContainer();
         const renderer = createFakeRenderer();
         const onDrop = vi.fn();
-        // Group 7 / piece 3 is just off the press point; the direct target is
-        // background, but the probe finds piece 3 at points near the press.
-        // Coordinate-sensitive so the test would fail if the wiring probed
-        // the wrong location (or dropped the point).
+        // Piece 3 is just off the press point: the direct target is background but the
+        // probe finds it nearby. Coordinate-sensitive — fails if the wiring probes the
+        // wrong point or drops it.
         renderer.pieceIdAtPoint = vi.fn((p: { x: number; y: number }) =>
             Math.hypot(p.x - 100, p.y - 100) <= 8 ? 3 : null);
         const state = makeState([makeGroup(7, [3])]);
@@ -373,8 +371,7 @@ describe('setupInteraction', () => {
                 rotationFocus,
             });
 
-            // Cast the FakeContainer to EventTarget so the production
-            // classifyTarget's `target === container` reference check matches.
+            // Cast to EventTarget so classifyTarget's target === container check matches.
             const bgTarget = container as unknown as EventTarget;
             container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
             container.fire('pointerup', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 101, clientY: 100 }));
@@ -401,8 +398,7 @@ describe('setupInteraction', () => {
                 rotationFocus,
             });
 
-            // Cast the FakeContainer to EventTarget so the production
-            // classifyTarget's `target === container` reference check matches.
+            // Cast to EventTarget so classifyTarget's target === container check matches.
             const bgTarget = container as unknown as EventTarget;
             container.fire('pointerdown', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 100, clientY: 100 }));
             container.fire('pointermove', fakePointerEvent({ target: bgTarget, pointerId: 1, clientX: 130, clientY: 100 })); // promote pan
@@ -476,9 +472,7 @@ describe('setupInteraction', () => {
             const selectionManager = new SelectionManager();
             selectionManager.toolActive = true;
 
-            // Two single-piece groups, both selected. Dragging group 7 also
-            // moves group 8, so more than one group moves and the offset
-            // must not be applied.
+            // Both selected: dragging 7 also moves 8, so >1 group moves and the offset must not apply.
             const group7 = makeGroup(7, [3], { x: 0, y: 0 });
             const group8 = makeGroup(8, [4], { x: 0, y: 0 });
             selectionManager.select(7);
@@ -510,9 +504,7 @@ describe('setupInteraction', () => {
             const selectionManager = new SelectionManager();
             selectionManager.toolActive = true;
 
-            // The dragged group has two pieces, but the multi-selection still
-            // moves two groups, so the offset must not be applied: the
-            // exclusion depends on the group count, not the piece count.
+            // Dragged group has 2 pieces, but 2 groups move: exclusion depends on group count, not piece count.
             const group7 = makeGroup(7, [3, 4], { x: 0, y: 0 });
             const group8 = makeGroup(8, [5], { x: 0, y: 0 });
             selectionManager.select(7);
@@ -572,8 +564,7 @@ describe('setupInteraction', () => {
             const container = createFakeContainer();
             const renderer = createFakeRenderer();
 
-            // One group with two pieces, no multi-select involved. Exactly
-            // one group moves, so the offset applies despite the piece count.
+            // One group (2 pieces), no multi-select: exactly one group moves, so the offset applies.
             const group7 = makeGroup(7, [3, 4], { x: 0, y: 0 });
             const state = makeState([group7]);
 
@@ -598,10 +589,8 @@ describe('setupInteraction', () => {
 });
 
 describe('snap proximity rotation', () => {
-    // The 'offset drag' tests above set loadOffsetDragPreference to true and
-    // never reset it, so it leaks into later tests in this file. Reset it
-    // here so a piece-drag start doesn't apply a stray offset that would
-    // throw off the snap-distance measurements below.
+    // The 'offset drag' tests set loadOffsetDragPreference(true) and never reset it;
+    // reset here so a stray offset doesn't skew the snap-distance measurements below.
     beforeEach(() => {
         vi.mocked(loadOffsetDragPreference).mockReturnValue(false);
     });
@@ -710,8 +699,7 @@ describe('setupInteraction — marquee routing', () => {
         container: ReturnType<typeof createFakeContainer>,
         opts: { shiftKey?: boolean } = {},
     ): void {
-        // Background pointerdown, then a move past the 8px tap threshold to
-        // promote the background-candidate into a drag (pan or marquee), then up.
+        // Background pointerdown, a move past the 8px threshold to promote to a drag, then up.
         const target = container as unknown as EventTarget;
         container.fire('pointerdown', fakePointerEvent({
             pointerId: 1, clientX: 0, clientY: 0, target, ...opts,

@@ -369,12 +369,10 @@ describe('intersect', () => {
         expect(ix).toHaveLength(1);
     });
 
-    // #498. bezier-js's `reduce()` drops a sub-curve when the window just
-    // past an extremum is too short to pass its `simple()` check, so the
-    // dropped range becomes unreachable to `intersects()`. These two
-    // segments are the real cuts from seed 1534700170 @ 12×16 @ 1080×1440:
-    // the vertical cut has an x-extremum at t=0.9758 and crosses the
-    // horizontal cut at t=0.9890 — inside the dropped tail.
+    // #498. bezier-js's `reduce()` drops a sub-curve past a near-endpoint
+    // extremum, making the dropped range unreachable to `intersects()`.
+    // Real cuts from seed 1534700170 @ 12×16 @ 1080×1440: the vertical
+    // cut's x-extremum at t=0.9758 hides a crossing at t=0.9890.
     describe('a crossing past a near-endpoint extremum (#498)', () => {
         /** Ground truth from dense polyline sampling. */
         const CROSSING = { x: 89.513, y: 719.285 };
@@ -409,11 +407,9 @@ describe('intersect', () => {
         });
     });
 
-    // The curve-curve branch reduces `this` segment `i` against `other`
-    // segment `j`, each cached under its own index. Every other
-    // curve-curve case here is single-segment, where `i` and `j` are
-    // both 0 and a mixed-up index would go unnoticed; this one crosses
-    // at `i = 1`, `j = 0`.
+    // Guards the per-segment reduced-cache indices: every other curve-curve
+    // case here is single-segment (i = j = 0), where a mixed-up index would
+    // go unnoticed. This one crosses at i = 1, j = 0.
     it('finds a crossing between the later segments of two multi-segment curves', () => {
         const wavyH = Curve.fromBezierPath([
             { x: 0, y: 0 },
@@ -441,7 +437,6 @@ describe('Curve.circle', () => {
     it('produces a closed curve through the four cardinal points', () => {
         const c = Curve.circle({ x: 100, y: 100 }, 50);
         expect(c.segments).toHaveLength(4);
-        // start should be on the rightmost cardinal point
         expect(c.start.x).toBeCloseTo(150);
         expect(c.start.y).toBeCloseTo(100);
         expect(c.end.x).toBeCloseTo(c.start.x, 6);

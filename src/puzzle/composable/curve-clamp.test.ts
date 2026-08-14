@@ -76,7 +76,6 @@ describe('clampTabToCurve', () => {
         const curve = straightLine(0, 0, 100, 0, 40);
         const tab = classicTabTemplate.generate(seededRandom(42));
         const result = clampTabToCurve(curve, tab, 0.5, 0.3);
-        // The curve before the tab is emitted as L commands
         expect(result.svgPath).toMatch(/^L/);
         expect(result.svgPath).toContain('C');
     });

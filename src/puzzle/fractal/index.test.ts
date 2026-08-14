@@ -10,7 +10,7 @@ describe('generateFractalPuzzle', () => {
         const rows = 3;
         const pieces = generateFractalPuzzle(cols, rows, imageSize, defaultSeed);
 
-        // Exact count may vary due to the organic growth, so only bound it.
+        // Exact count varies with organic growth, so only bound it.
         expect(pieces.length).toBeGreaterThan(0);
         expect(pieces.length).toBeLessThan(cols * rows * 2);
 
@@ -66,8 +66,7 @@ describe('generateFractalPuzzle', () => {
     });
 
     test('handles small grid (2x2)', () => {
-        // Fractal algorithm needs at least 2 tiles for diagonal connections.
-        // A 2x2 grid is the minimum viable size.
+        // 2×2 is the minimum viable grid (diagonal connections need ≥2 tiles).
         const pieces = generateFractalPuzzle(2, 2, { width: 100, height: 100 }, 42);
 
         expect(pieces.length).toBeGreaterThanOrEqual(1);
@@ -133,13 +132,8 @@ describe('generateFractalPuzzle', () => {
     });
 
     test('every drawable sub-path op has a matching Edge object (issues #214, #211)', () => {
-        // Gap-filler diamonds used to be raw SVG sub-paths with no Edge
-        // objects, so every concave arc bordering a gap cell stayed at
-        // mateEdgeId === -1 (#214). Orphan-disc fillers joined them in
-        // #237, and the #211 border trim inserted L-segments along the
-        // outer rectangle. In every case, each drawable op in the shape
-        // string (A or L) must correspond to exactly one Edge — otherwise
-        // part of the boundary has no mate lookup and can't merge.
+        // Each drawable op in the shape string (A or L) must correspond to exactly
+        // one Edge — otherwise part of the boundary has no mate lookup and can't merge.
         const cases: Array<[number, number, number]> = [
             [4, 4, 1], [4, 4, 2], [4, 4, 3],
             [6, 4, 42], [8, 6, 7], [6, 6, 99],
@@ -165,16 +159,14 @@ describe('generateFractalPuzzle', () => {
             }
         }
 
-        // Make sure at least one case actually produced an extra sub-path,
-        // so this test is not silently passing on all-main-contour puzzles.
+        // Ensure at least one case produced an extra sub-path, so the test isn't
+        // vacuously passing on all-main-contour puzzles.
         expect(totalExtras).toBeGreaterThan(0);
     });
 
     test('borderless mode keeps curved outer edges (no straight L segments for mateless edges)', () => {
-        // In borderless mode, PR #227's straight-line collapse is disabled
-        // so mateless outer-border edges remain curved arcs. This removes
-        // the visual "border pieces look different" cue and increases
-        // puzzle difficulty.
+        // Borderless disables the straight-line collapse, so mateless outer-border
+        // edges stay curved arcs — removing the "border pieces look different" cue.
         const cases: Array<[number, number, number]> = [
             [4, 4, 1], [4, 4, 7], [6, 4, 42], [6, 6, 99],
         ];
@@ -203,15 +195,11 @@ describe('generateFractalPuzzle', () => {
     });
 
     test('a non-boolean borderless generates the bordered puzzle, not the borderless one', () => {
-        // This layer coerces its own input rather than trusting the caller
-        // (#512 tightening): `borderless` is typed `boolean | undefined`, but
-        // a crafted `__reproPuzzle` param or a config restored from a
-        // pre-tightening save can carry a string here, and truthiness would
-        // generate a BORDERLESS puzzle that `applyStyleConfigs` then re-shares
-        // as `ff: { bl: false }`. `game/cut-style-strategies.test.ts` pins the
-        // same read through the strategy; this keeps the geometry layer
-        // guarding its own invariant, since it is meant to stay usable
-        // without the game layer above it (#489).
+        // This layer coerces its own input rather than trusting the caller: a crafted
+        // `__reproPuzzle` param or a pre-tightening save can carry a string, and
+        // truthiness would generate a BORDERLESS puzzle that `applyStyleConfigs`
+        // re-shares as `ff: { bl: false }`. The geometry layer must guard its own
+        // invariant since it stays usable without the game layer.
         const cols = 4, rows = 4, seed = 7;
         const bordered = generateFractalPuzzle(cols, rows, imageSize, seed);
         const borderless = generateFractalPuzzle(
@@ -220,8 +208,8 @@ describe('generateFractalPuzzle', () => {
         const shapes = (pieces: ReturnType<typeof generateFractalPuzzle>) =>
             pieces.map((p) => p.shape);
 
-        // The control: the flag is not inert for this case, so the equality
-        // below is a coercion rather than a puzzle that ignores it.
+        // Control: the flag isn't inert here, so the equality below is a coercion,
+        // not a puzzle that ignores it.
         expect(shapes(borderless)).not.toEqual(shapes(bordered));
 
         for (const crafted of ['yes', 'true', 1, {}]) {
@@ -235,10 +223,9 @@ describe('generateFractalPuzzle', () => {
     });
 
     test('borderless mode omits orphan-disc sub-paths for known orphan seed', () => {
-        // Seed (cols=4, rows=4, seed=1) produces orphan tiles that default
-        // mode attaches as disc sub-paths (per PR #225/#226). In borderless
-        // mode that attachment is skipped — the orphan tile simply isn't
-        // covered by any piece. Verify by counting shape sub-paths.
+        // Seed (4,4,1) produces orphan tiles that default mode attaches as disc
+        // sub-paths; borderless skips that attachment, so the orphan isn't covered.
+        // Verify by counting shape sub-paths.
         const cols = 4, rows = 4, seed = 1;
 
         const defaultPieces = generateFractalPuzzle(cols, rows, imageSize, seed);
@@ -258,13 +245,10 @@ describe('generateFractalPuzzle', () => {
     });
 
     test('every mateless edge is a straight line on the puzzle outer border (issue #211)', () => {
-        // After #211, the outer border is made flat by trimming the puzzle
-        // by `rad` on each side and replacing runs of mateless arcs with
-        // straight line segments along the new rectangle edge. So every
-        // mateless edge must be a line (path starts with "L") with BOTH
-        // endpoints on the puzzle outer rectangle — a weaker single-endpoint
-        // check (the pre-#211 invariant from #224) would still pass for
-        // interior arcs that happen to touch the border at a vertex.
+        // The outer border is flattened by trimming `rad` per side and replacing
+        // runs of mateless arcs with straight segments. So every mateless edge must
+        // be a line ("L") with BOTH endpoints on the outer rectangle — a single-
+        // endpoint check would still pass for interior arcs touching the border at a vertex.
         const cases: Array<[number, number, number]> = [
             [4, 4, 1], [4, 4, 7], [4, 4, 11],
             [6, 4, 42], [6, 6, 99],
@@ -309,7 +293,7 @@ describe('generateFractalPuzzle', () => {
 });
 
 describe('scaleFractalGrid', () => {
-    const LANDSCAPE_ASPECT = 4 / 3; // 800×600
+    const LANDSCAPE_ASPECT = 4 / 3;
 
     test('returns cols and rows ≥ 3', () => {
         for (const target of [24, 48, 96, 192]) {
@@ -331,12 +315,12 @@ describe('scaleFractalGrid', () => {
     });
 
     test('respects image aspect ratio (landscape has more cols than rows)', () => {
-        const { cols, rows } = scaleFractalGrid(96, 2.0); // very wide image
+        const { cols, rows } = scaleFractalGrid(96, 2.0);
         expect(cols).toBeGreaterThan(rows);
     });
 
     test('respects image aspect ratio (portrait has more rows than cols)', () => {
-        const { cols, rows } = scaleFractalGrid(96, 0.5); // tall image
+        const { cols, rows } = scaleFractalGrid(96, 0.5);
         expect(rows).toBeGreaterThan(cols);
     });
 
@@ -346,8 +330,8 @@ describe('scaleFractalGrid', () => {
     });
 
     test('framed grid effective aspect (cols-1)/(rows-1) matches image aspect closely', () => {
-        // The framed generator scales the trimmed rectangle (cols-1)×(rows-1)
-        // to the image, so that aspect ratio drives the disc circularity.
+        // The framed generator scales the trimmed (cols-1)×(rows-1) rectangle, so
+        // that aspect drives disc circularity.
         for (const target of [24, 48, 96, 192]) {
             for (const imageAspect of [1.0, 4 / 3, 3 / 2, 16 / 9, 2 / 3]) {
                 const { cols, rows } = scaleFractalGrid(target, imageAspect, false);

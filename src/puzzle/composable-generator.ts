@@ -1,10 +1,6 @@
 /**
- * Thin wrapper that creates a seeded PRNG and forwards an opaque
- * `ComposableConfig` to the topology pipeline. The topology layer
- * (see `topology/generator.ts`) does the real work.
- *
- * See issue #127 for the composable design,
- * and #166 for the topology-driven approach.
+ * Creates a seeded PRNG and forwards the opaque `ComposableConfig` to the
+ * topology pipeline (`topology/generator.ts`), which does the real work.
  */
 
 import type { Size } from '../model/types.js';
@@ -14,48 +10,44 @@ import type { TopologyPuzzle } from './topology/generator.js';
 import type { TabDebugSession } from './topology/tab-debug.js';
 
 /**
- * The two `*Config` records are passed straight through to the registered
- * generator, which is solely responsible for validating its own keys.
+ * Both `*Config` records pass straight through to the registered generator,
+ * which validates its own keys.
  */
 export interface ComposableConfig {
-    /** BaseCutGenerator id (e.g. 'sine'). Default: 'sine'. */
+    /** BaseCutGenerator id. Default: 'sine'. */
     baseCutGenerator?: string;
-    /** Generator-specific config, opaque to this module. */
     baseCutConfig?: Record<string, unknown>;
-    /** TabGenerator id (e.g. 'classic'). Default: 'classic'. Use 'none' to skip tabs. */
+    /** TabGenerator id. Default: 'classic'. Use 'none' to skip tabs. */
     tabGenerator?: string;
-    /** Generator-specific tab config. */
     tabConfig?: Record<string, unknown>;
     /**
-     * Minimum area (px²) for a piece to stand alone; smaller pieces are
-     * auto-grouped with a neighbour. Defaults to {@link DEFAULT_MIN_PIECE_AREA},
-     * an empirical value that absorbs bezier-js sub-pixel-area numerical
-     * noise without consuming legitimate small pieces.
+     * Minimum area (px²) for a piece to stand alone; smaller pieces auto-group
+     * with a neighbour. Empirical default ({@link DEFAULT_MIN_PIECE_AREA})
+     * absorbs bezier-js sub-pixel-area noise without eating real small pieces.
      */
     minPieceArea?: number;
     /**
-     * Borderless mode — see {@link TopologyGeneratorConfig.borderless}.
+     * Borderless mode (see {@link TopologyGeneratorConfig.borderless}).
      * Honoured only by base cut generators that support it (sine).
      */
     borderless?: boolean;
     /**
-     * Optional dev-time tab-debug session. Plumbed straight through
-     * to {@link TopologyGeneratorConfig.tabDebug}; see that doc for
-     * details. Production callers leave this undefined.
+     * Dev-time tab-debug session, plumbed through to
+     * {@link TopologyGeneratorConfig.tabDebug}. Undefined in production.
      */
     tabDebug?: TabDebugSession;
 }
 
 /**
- * Default {@link ComposableConfig.minPieceArea}. A 2×2 px square: small
- * enough to leave any user-visible piece intact, large enough to clean
- * up sub-pixel sliver faces produced by curve-intersection rounding.
+ * Default {@link ComposableConfig.minPieceArea}: a 2×2 px square — big enough
+ * to clear sub-pixel sliver faces from curve-intersection rounding, small
+ * enough to keep any visible piece.
  */
 export const DEFAULT_MIN_PIECE_AREA = 4;
 
 /**
- * Returns `{ pieces, autoGroups }` so the gameplay layer can present
- * tiny residual faces as starting groups.
+ * Returns `{ pieces, autoGroups }`; autoGroups lets gameplay present tiny
+ * residual faces as starting groups.
  */
 export function generateComposablePuzzle(
     cols: number,

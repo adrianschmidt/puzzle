@@ -1,12 +1,9 @@
 /**
  * Calls go through our own proxy Worker (`src/worker/image-proxy.ts`) rather
- * than `api.unsplash.com` directly: this is a static site, so a build-time
- * API key would be inlined into the bundle and readable by every visitor
- * (#534). The Worker holds the key and adds it server-side.
- *
- * `VITE_IMAGE_PROXY_URL` names the Worker. It is a plain URL, not a secret,
- * so inlining it is fine — and its absence still means "no photo source",
- * the same gate the access key used to provide.
+ * than `api.unsplash.com` directly: this is a static site, so a build-time API
+ * key would be inlined into the bundle and readable by every visitor (#534).
+ * The Worker holds the key. `VITE_IMAGE_PROXY_URL` names it — a plain URL, not
+ * a secret; its absence means "no photo source", the gate the key used to be.
  *
  * @see https://unsplash.com/documentation#get-a-random-photo
  */
@@ -41,7 +38,7 @@ export interface UnsplashPhoto {
         html: string;
         download_location: string;
     };
-    /** Accessibility description; null when the photographer set none. */
+    /** Alt text; null when the photographer set none. */
     alt_description?: string | null;
 }
 
@@ -53,17 +50,15 @@ export interface UnsplashImageResult {
     photographerUrl: string;
     photoUrl: string;
     thumbUrl: string;
-    /** Unsplash download-reporting endpoint for this photo. */
+    /** Unsplash download-reporting endpoint (not the image URL). */
     downloadLocation: string;
-    /** Alt text for the photo, when Unsplash provides one. */
     description?: string;
 }
 
 /**
- * Carries no credential of any kind: the Worker authenticates with an
- * `Authorization` header it adds itself, and strips any `client_id` a caller
- * supplies. A key in this URL would mean the key is back in the bundle, which
- * is the whole point of routing through it.
+ * Carries no credential: the Worker adds its own `Authorization` header and
+ * strips any `client_id`. A key in this URL would put the key back in the
+ * bundle.
  */
 export function buildRandomPhotoUrl(
     proxyBaseUrl: string,
@@ -89,7 +84,7 @@ export function parseUnsplashResponse(data: unknown): UnsplashImageResult {
         throw new Error('Invalid Unsplash API response');
     }
 
-    // Use the "regular" URL (1080px wide) — good balance of quality and load time
+    // "regular" (1080px) balances quality and load time.
     const imageUrl = data.urls.regular;
 
     return {
@@ -144,11 +139,9 @@ function isUnsplashPhoto(data: unknown): data is UnsplashPhoto {
 }
 
 /**
- * Returns `undefined` if no proxy is configured, which callers treat as "no
- * photo source available" — the same gate the access key used to provide, so
- * an unconfigured build still degrades to no picker rather than a broken one.
- *
- * A trailing slash is stripped so callers can append a rooted path.
+ * Returns `undefined` when no proxy is configured — callers treat that as "no
+ * photo source", so an unconfigured build degrades to no picker rather than a
+ * broken one. Strips a trailing slash so callers can append a rooted path.
  */
 export function getImageProxyBaseUrl(): string | undefined {
     const url = import.meta.env.VITE_IMAGE_PROXY_URL as string | undefined;
@@ -225,20 +218,17 @@ export async function fetchRandomImages(
 }
 
 /**
- * Report a photo as used, per the Unsplash API guidelines: apps must hit
- * the photo's `download_location` when the photo is actually used (here:
- * when a puzzle starts with it), not when it is merely displayed.
- *
- * Fire-and-forget semantics — failures are logged, never thrown, and the
- * response body is irrelevant.
+ * Reports a photo as used per Unsplash guidelines: hit `download_location`
+ * when the photo is actually used (here: a puzzle starts with it), not when
+ * merely displayed. Fire-and-forget — failures are logged, never thrown.
  */
 export async function triggerPhotoDownload(
     downloadLocation: string,
     proxyBaseUrl: string,
     fetchFn: typeof fetch = fetch,
 ): Promise<void> {
-    // The Worker validates that this really is an Unsplash download location
-    // before attaching the key, so it cannot be turned into an open relay.
+    // The Worker validates this is an Unsplash download location before
+    // attaching the key, so it can't be turned into an open relay.
     const url = `${proxyBaseUrl}${PROXY_DOWNLOAD_PATH}`
         + `?url=${encodeURIComponent(downloadLocation)}`;
 

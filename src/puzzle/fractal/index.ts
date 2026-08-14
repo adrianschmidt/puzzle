@@ -18,25 +18,20 @@ import {
 import { convertToStandardPieces } from './convert.js';
 
 /**
- * Average number of tiles consumed per piece in the fractal generator.
- * Empirically measured across many seeds with default piece-size params.
- * Orphan tiles (issue #224) are absorbed as disc sub-paths on an adjacent
- * piece, so they do not add to the piece count.
+ * Average tiles consumed per piece — empirically measured across many seeds with
+ * default piece-size params. Orphan tiles are absorbed as disc sub-paths on an
+ * adjacent piece, so they don't add to the count.
  */
 const TILES_PER_PIECE = 4.9;
 
 /**
- * The grid aspect must match the image aspect closely, otherwise the
- * generator's per-axis scaling turns the circular tile arcs into ellipses
- * (visibly "squashed" discs). The effective aspect is:
- *   - `cols / rows` for borderless puzzles
- *   - `(cols-1) / (rows-1)` for framed puzzles (the trimmed rectangle)
+ * The grid aspect must closely match the image aspect, else the generator's
+ * per-axis scaling turns circular tile arcs into ellipses (squashed discs).
+ * Effective aspect is `cols/rows` (borderless) or `(cols-1)/(rows-1)` (framed).
+ * The search minimizes aspect error + piece-count error, aspect weighted 10×
+ * since small ovalness is perceptible but ±20% piece-count drift is not.
  *
- * The search minimizes a weighted sum of aspect error and piece-count
- * error; aspect is weighted 10× since even small ovalness is perceptible
- * while piece-count drift of ±20% is not.
- *
- * @param imageAspect  - Image width / height (e.g. 4/3 ≈ 1.333)
+ * @param imageAspect - Image width / height (e.g. 4/3 ≈ 1.333)
  */
 export function scaleFractalGrid(
     targetPieces: number,
@@ -87,9 +82,8 @@ export interface FractalConfig {
     /** Maximum number of tiles per piece (default: 8). */
     maxPieceSize?: number;
     /**
-     * Borderless mode: keep curved outer edges and do not attach orphan-tile
-     * discs to neighbour pieces. Makes the puzzle harder because no piece is
-     * clearly identifiable as a border piece. Default: false.
+     * Borderless mode: keep curved outer edges and don't attach orphan-tile discs
+     * to neighbours. Harder, since no piece is identifiable as a border piece.
      */
     borderless?: boolean;
 }
@@ -109,17 +103,12 @@ export function generateFractalPuzzle(
     const random = createSeededRandom(seed);
     const minPieceSize = config?.minPieceSize ?? 2;
     const maxPieceSize = config?.maxPieceSize ?? 8;
-    // `=== true`, not `?? false`: identical for every `boolean | undefined`
-    // the type admits, but it keeps a crafted non-boolean from generating a
-    // borderless puzzle that the share encoder re-emits as bordered. See the
-    // note on `fractalStrategy` in `game/cut-style-strategies.ts` for the
-    // full rationale; pinned here by `index.test.ts`'s non-boolean case, and
-    // together with the strategy's own two reads by
-    // `game/cut-style-strategies.test.ts`.
+    // `=== true`, not `?? false`: keeps a crafted non-boolean from generating a
+    // borderless puzzle the share encoder re-emits as bordered. Full rationale on
+    // `fractalStrategy` in `game/cut-style-strategies.ts`; pinned by `index.test.ts`.
     const borderless = config?.borderless === true;
 
-    // Tile radius in abstract units. The actual pixel size is
-    // determined by scaling in convertToStandardPieces.
+    // Tile radius in abstract units; pixel size comes from scaling in convertToStandardPieces.
     const rad = 6.0;
     const frameOffset = 0;
 
@@ -150,12 +139,10 @@ export function generateFractalPuzzle(
 
     fillEmptyCells(grid, pieces, cols, rows);
 
-    // Any tile still not attached to a piece — because all of its
-    // diagonal cells are already occupied and no adoption path exists —
-    // becomes a disc sub-path on an adjacent piece. Without this, the
-    // tile's circular region is left uncovered in the puzzle (a literal
-    // hole). The owner is the piece holding a diagonal in any adjacent
-    // cell; empirically (>4000 discs sampled) every orphan's surrounding
+    // A tile still unattached (all its diagonal cells occupied, no adoption path)
+    // becomes a disc sub-path on an adjacent piece; without this its circular
+    // region is left uncovered (a literal hole). The owner holds a diagonal in an
+    // adjacent cell — empirically (>4000 discs sampled) every orphan's surrounding
     // diagonals belong to exactly one piece.
     const attached = new Set<string>();
     for (const p of pieces) {
@@ -189,8 +176,8 @@ export function generateFractalPuzzle(
 }
 
 /**
- * Returns -1 if no adjacent cell contains a diagonal (shouldn't happen
- * for a true orphan — every orphan tile is boxed in by occupied cells).
+ * Returns -1 if no adjacent cell has a diagonal — shouldn't happen for a true
+ * orphan (boxed in by occupied cells).
  */
 function findDiagonalOwner(
     pieces: DiagonalConnection[][],

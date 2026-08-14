@@ -1,7 +1,7 @@
 /**
- * Persistent "update ready" indicator. Unlike `showToast`, this does not
- * auto-dismiss — it stays until the user taps it (which reloads into the new
- * version) or the page reloads on its own (e.g. on focus regain).
+ * Persistent "update ready" indicator — unlike `showToast` it does not
+ * auto-dismiss; it stays until the user taps it (reloads into the new version)
+ * or the page reloads on its own.
  */
 
 export interface UpdateAvailableIndicatorOptions {

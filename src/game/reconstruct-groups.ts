@@ -1,8 +1,6 @@
 /**
- * Offsets are relative to the group anchor (piece 0 in the list). The
- * mate-edge math mirrors the live merge flow: mated edges run in
- * opposite directions, so `edge.start` on this piece meets
- * `mateEdge.end` on the neighbour.
+ * Offsets are relative to the group anchor (piece 0). Mated edges run in
+ * opposite directions, so `edge.start` meets the neighbor's `mateEdge.end`.
  */
 
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';
@@ -39,8 +37,7 @@ export function computeMergedOffsets(
             if (!want.has(mateId)) continue;
             if (offsets.has(mateId)) continue;
 
-            // mateId is in `want`, and every id in `want` was validated
-            // against `byId` at function entry, so this lookup can't miss.
+            // Safe: every `want` id was validated against `byId` at entry.
             const mate = byId.get(mateId)!;
             const mateEdge = mate.edges.find((e) => e.id === edge.mateEdgeId);
             if (!mateEdge) return null;
@@ -80,19 +77,12 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
 
     let idCursor = Math.max(0, ...state.groups.map((g) => g.id)) + 1;
 
-    // Remove any starting group whose pieces are about to be replaced by a
-    // reconstructed merged group. Pre-Plan-3 only solo groups could be
-    // absorbed; post-Plan-3, multi-piece auto-groups can be absorbed too —
-    // `extractProgress` emits every group with size>=2 into `pr.m`, so the
-    // receiver sees auto-groups in `m` and would otherwise end up with both
-    // the starting auto-group and the reconstructed merge containing the
-    // same pieces (last-write-wins on `pieceToGroup` then corrupts state).
-    //
-    // Partial absorption is unreachable here: starting groups partition all
-    // pieces, and any user merge that touches an auto-grouped piece on the
-    // sender already contains the entire auto-group, so its `m` entry lists
-    // every piece in the absorbed starting group. `computeMergedOffsets`
-    // also rejects disconnected piece sets, providing a second safety net.
+    // Remove any starting group whose pieces are absorbed by a reconstructed
+    // merge; otherwise both the starting auto-group and the merge would hold
+    // the same pieces and last-write-wins on `pieceToGroup` corrupts state.
+    // Partial absorption is unreachable: a merge touching an auto-grouped piece
+    // already lists the whole auto-group, and `computeMergedOffsets` rejects
+    // disconnected sets.
     state.groups = state.groups.filter((g) => {
         for (const pid of g.pieces.keys()) {
             if (absorbedIds.has(pid)) return false;
@@ -100,17 +90,14 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
         return true;
     });
 
-    // When rotationMode is 'free', mr/sr carry integer degrees 0..359 directly.
-    // When rotationMode is 'quarter-turn', they carry 0..3 quarter-turn counts
-    // that must be multiplied by 90 to get degrees (existing wire format).
+    // Wire format: 'free' carries degrees 0..359 directly; 'quarter-turn'
+    // carries 0..3 counts that ×90 give degrees.
     const isFree = state.rotationMode === 'free';
 
     reconstructed.forEach((offsets, idx) => {
         const wireValue = progress.mr?.[idx] ?? 0;
-        // Wire format is quarter-turn integer (v: 1); convert to degrees.
-        // For free mode the wire value is already in degrees — normalize
-        // into [0, 360) to mirror the encoder side and clamp any
-        // out-of-range values from a hand-crafted link.
+        // Free values are normalized to [0, 360) to mirror the encoder and
+        // clamp out-of-range values from a hand-crafted link.
         const rotation = isFree ? normalizeDegrees(wireValue) : wireValue * 90;
         const group: PieceGroup = {
             id: idCursor++,
@@ -121,7 +108,6 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
         state.groups.push(group);
     });
 
-    // Rebuild indexes wholesale — easiest after a filter+push reshuffle.
     const indexes = buildGroupIndexes(state.groups);
     state.groupsById = indexes.groupsById;
     state.pieceToGroup = indexes.pieceToGroup;
@@ -130,9 +116,7 @@ export function applyProgress(state: GameState, progress: ProgressInput): boolea
         for (let i = 0; i + 1 < progress.sr.length; i += 2) {
             const pid = progress.sr[i];
             const wireValue = progress.sr[i + 1] ?? 0;
-            // Wire format is quarter-turn integer (v: 1); convert to degrees.
-            // Free-mode wire values get normalized to [0, 360) to mirror
-            // the encoder.
+            // Free values normalized to [0, 360) to mirror the encoder.
             const rot = isFree ? normalizeDegrees(wireValue) : wireValue * 90;
             const g = state.pieceToGroup.get(pid);
             if (g && g.pieces.size === 1) g.rotation = rot;

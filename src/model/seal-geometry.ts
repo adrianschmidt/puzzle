@@ -1,35 +1,19 @@
 /**
  * Computes `bounds` from edge endpoints plus the generator's dense curve
- * samples, then drops the samples — post-composition their only consumer
- * was this very bounding box (`getPieceBounds`), while they dominated the
- * persisted geometry blob (~61% of it before #493).
+ * samples, then drops the samples — post-composition their only consumer was
+ * this bounding box.
  *
- * Every `Piece` in the app comes through here, from two callers:
+ * Two callers: generation (`game/init.ts`), after `quantizePieceGeometry` so
+ * bounds inherit its precision; and loading (`persistence/serialization.ts`).
+ * A v12+ blob arrives WITH its stored `bounds`, and `piece.bounds ??
+ * computePieceBounds(piece)` is what preserves them — by then the edges carry
+ * no curve samples, so an unconditional `computePieceBounds` would silently
+ * shrink every restored curved piece's box to its endpoints. v≤11 pieces arrive
+ * without `bounds`, recomputed from the samples those saves still carry.
  *
- *  - Generation (`game/init.ts`), after `quantizePieceGeometry` so bounds
- *    inherit the 2-decimal precision, and before `createInitialGroups` so
- *    the groups describe the geometry the state keeps. Generated pieces
- *    carry no `bounds`, so the box is computed here.
- *  - Loading a save (`persistence/serialization.ts`, *both* `restorePieces`
- *    branches). A v12+ blob's pieces arrive **with** the `bounds` it stored,
- *    and `piece.bounds ?? computePieceBounds(piece)` below is the mechanism
- *    that preserves them — not defensive idempotence. By then the edges
- *    carry no curve samples, so simplifying the `??` to an unconditional
- *    `computePieceBounds` would silently shrink every restored curved
- *    piece's box to its endpoints (`persistence/serialization.test.ts` and
- *    `game/init-geometry-precision.test.ts` both fail if it goes). v≤11
- *    pieces deliberately arrive without `bounds`, so theirs is recomputed
- *    from the samples those saves still carry.
- *
- * The corollary of trusting an incoming `bounds`: a generator must never
- * emit one. It would bypass both the curve-sample walk here and
- * `quantizePieceGeometry` (which rounds edges and `imageOffset`, not
- * `bounds`) — the parameter type's optional `bounds` is the load path's
- * contract, not an extension point for generators.
- *
- * Pure: returns new piece objects, never mutates input, consumes no
- * randomness, and never touches `shape` / `edge.path` — rendered geometry
- * and the share-link contract are unaffected.
+ * Corollary: a generator must never emit `bounds` — it would bypass this walk
+ * and `quantizePieceGeometry`. Pure: new objects, no mutation, no randomness,
+ * never touches `shape` / `edge.path`.
  */
 
 import type { Edge, GeneratedEdge, GeneratedPiece, Piece, PieceBounds } from './types.js';

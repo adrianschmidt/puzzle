@@ -142,9 +142,8 @@ describe('share-link codec — tf/clf block shape (#491)', () => {
         r: 'none',
     };
 
-    // A falsy non-object is the case the decode-time clamp cannot reach: its
-    // guards are plain truthiness, so before validation existed these survived
-    // decode and contradicted SharePayload's declared type.
+    // A falsy non-object is the case the clamp can't reach (its guards are plain
+    // truthiness), so before validation these survived decode type-lying.
     it.each([
         ['tf', 'triangles', null],
         ['tf', 'triangles', 0],
@@ -173,10 +172,9 @@ describe('share-link codec — tf/clf block shape (#491)', () => {
         ['no tv', {}],
         ['an array', []],
     ])('normalizes a foreign block with %s rather than leaving it type-lying', (_label, tf) => {
-        // The shape check is ungated but the clamp used to be gated on `c`, so
-        // a triangles block on a classic link passed validation and then
-        // skipped normalization — decoding to a `tf` that contradicts its
-        // declared { tv: number }. Both clamps now run ungated.
+        // The shape check is ungated but the clamp used to be gated on `c`, so a
+        // triangles block on a classic link skipped normalization, decoding to a
+        // type-lying `tf`. Both clamps now run ungated.
         const decoded = decodePayload(encodeRaw({ ...base, c: 'classic', tf }));
         expect(decoded).not.toBeNull();
         expect(decoded?.tf).toBeUndefined();
@@ -275,12 +273,10 @@ describe('share-link codec — image-size clamp (crafted-link DoS guard)', () =>
     });
 
     it('rejects a payload whose image dim is non-finite', () => {
-        // A non-finite number can't survive the share link's JSON round-trip:
-        // JSON.stringify(Infinity/NaN) emits `null`, which `isTuple2Number`
-        // rejects, so `decodePayload` returns null before the clamp runs. This
-        // pins that contract — generation never sees a non-finite `is`, and the
-        // clamp's own `!Number.isFinite` guard is defense-in-depth for callers
-        // that bypass the codec, not a reachable share-link path.
+        // A non-finite can't survive JSON: stringify emits `null`, which
+        // `isTuple2Number` rejects, so decodePayload returns null before the
+        // clamp. Generation never sees a non-finite `is`; the clamp's own guard
+        // is defense-in-depth for callers that bypass the codec.
         const bad = {
             v: 1, i: 'blank', is: [Infinity, 100], g: [4, 3],
             c: 'classic', s: 1, r: 'none',
@@ -397,9 +393,8 @@ describe('share-link codec — sine-frequency/amplitude clamp (crafted-link DoS 
 
     it('does not raise a non-finite crafted hf/ha into a huge number', () => {
         // JSON.stringify turns Infinity/NaN into null, so a crafted non-finite
-        // hf/ha decodes to null (typeof !== 'number'); the clamp skips it and the
-        // generator falls back to its own default. The DoS-relevant property is
-        // simply that no billion-scale value survives.
+        // hf/ha decodes to null; the clamp skips it → generator default. The
+        // DoS property is just that no billion-scale value survives.
         const decoded = decodePayload(encodeRaw({
             v: 1, i: 'blank', is: [600, 400], g: [4, 3],
             c: 'composable', s: 1, r: 'none',
@@ -728,11 +723,9 @@ describe('share-link codec — rejection paths', () => {
     });
 
     it('rejects a non-string cut style that stringifies to a known one', () => {
-        // `isCutStyle` is an own-key lookup and `hasOwnProperty` coerces its
-        // key, so `['classic']` would pass membership without the predicate's
-        // internal `typeof` check — and then read as an unknown style
-        // everywhere downstream, where the comparisons are against string
-        // literals.
+        // `hasOwnProperty` coerces its key, so `['classic']` would pass
+        // membership without the predicate's `typeof` check, then read as an
+        // unknown style downstream.
         const bad = { v: 1, i: 'x', is: [1, 1], g: [2, 2], c: ['classic'], s: 0, r: 'none' };
         expect(decodePayload(encodeRaw(bad))).toBeNull();
     });
@@ -756,10 +749,9 @@ describe('share-link codec — rejection paths', () => {
         expect(() => encodePayload(bad)).toThrow(/finite/i);
     });
 
-    // Without these guards a crafted link that satisfies the surface schema
-    // but feeds non-numeric or out-of-range data through `applyProgress`
-    // would crash with a `TypeError` (or quietly write garbage into
-    // `group.rotation`). These cases pin the rejection contract.
+    // Without these guards a crafted link that passes the surface schema but
+    // feeds bad data through `applyProgress` would throw (or write garbage into
+    // `group.rotation`). These pin the rejection contract.
     const baseValid = {
         v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 0, r: 'none',
     };
@@ -1416,17 +1408,12 @@ describe('share-link: wavy and fractal borderless (wf/ff)', () => {
         ['null', null],
         ['missing', undefined],
     ])('rejects wf.bl that is %s', (_label, bl) => {
-        // `bl` is typed boolean but flowed to GameState unchecked, so a
-        // crafted link could park arbitrary text in `wavyConfig.borderless`
-        // — where the generator's `=== true` read ignores it (the puzzle
-        // looks entirely normal) while the info modal's repro block, a
-        // re-share and the `piece-count-mismatch` event's `styleConfig` all
-        // carry it verbatim. `cf.bl` has always been checked; this is the
-        // same hole for the other two styles.
-        //
-        // The `missing` row is the deliberate half: unlike `cf.bl`, `bl` is
-        // REQUIRED here, so "always emit `bl`" is part of the wire contract.
-        // See `isValidBorderlessBlock` before relaxing this row.
+        // `bl` is typed boolean but flowed to GameState unchecked, so a crafted
+        // link could park text in `wavyConfig.borderless` — ignored by the
+        // generator's `=== true` read but carried verbatim into the repro block,
+        // a re-share, and the piece-count-mismatch event. `cf.bl` has always
+        // been checked; this closes the same hole. The `missing` row is
+        // deliberate: `bl` is REQUIRED here (see `isValidBorderlessBlock`).
         const bad = {
             v: 1, i: 'x', is: [100, 100], g: [4, 3], c: 'wavy', s: 7, r: 'none',
             wf: { bl },
@@ -1458,16 +1445,11 @@ describe('share-link: wavy and fractal borderless (wf/ff)', () => {
     ] as const)(
         'encodes a non-boolean %s borderless as false rather than emitting an undecodable link',
         (cutStyle, configKey, block) => {
-            // The encoder/decoder must agree. A state restored from a save
-            // written by a pre-tightening build can still carry a crafted
-            // `bl: 'yes'` in its config block (`share-payload-to-init.ts`
-            // copies it verbatim, `serialization.ts` round-trips it), and a
-            // `?? false` encoder would hand that string straight back to the
-            // wire — where this build's own `isValidBorderlessBlock` rejects
-            // the whole payload and the sharer sees a link nobody can open.
-            // `=== true` is also the faithful reading: every generator treats
-            // a non-`true` borderless as off, so `false` is what this state
-            // actually generated.
+            // The encoder/decoder must agree. A state restored from a pre-tightening
+            // build can carry a crafted `bl: 'yes'`, and a `?? false` encoder would
+            // hand it back to the wire for `isValidBorderlessBlock` to reject — a
+            // link nobody can open. `=== true` is also faithful: every generator
+            // treats non-`true` as off, so `false` is what this state generated.
             const state = makeGameState({
                 cutStyle,
                 seed: 7,
@@ -1482,11 +1464,10 @@ describe('share-link: wavy and fractal borderless (wf/ff)', () => {
     );
 
     it('encodes a non-boolean composable borderless as false rather than emitting an undecodable link', () => {
-        // The third arm of the same tightening. Not a row in the `it.each`
-        // above only because `cf` carries four more required fields, so the
-        // `toEqual({ bl: false })` shape doesn't transfer — the failure mode is
-        // identical: `isValidComposableCf` has always required a boolean `bl`,
-        // so a `?? false` encoder would emit an undecodable `cf`.
+        // The third arm of the same tightening (separate from the it.each only
+        // because `cf` has four more required fields). `isValidComposableCf` has
+        // always required a boolean `bl`, so a `?? false` encoder would emit an
+        // undecodable `cf`.
         const state = makeGameState({
             cutStyle: 'composable',
             seed: 7,

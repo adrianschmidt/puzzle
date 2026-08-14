@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
-// Passthrough mock so we can inspect the config the classic strategy builds
-// while still running real generation (needed to prove traced generation
-// actually runs for Classic). See reference_vitest_spy_internal_module_call.
+// Passthrough mock: inspect the config the classic strategy builds while still
+// running real generation. See reference_vitest_spy_internal_module_call.
 vi.mock('../puzzle/composable-generator.js', async (importActual) => {
     const actual = await importActual<typeof import('../puzzle/composable-generator.js')>();
     return { ...actual, generateComposablePuzzle: vi.fn(actual.generateComposablePuzzle) };
@@ -72,11 +71,10 @@ describe('classicStrategy', () => {
         expect(shapes(tracedA)).not.toEqual(legacy.map((x) => x.shape)); // traced actually ran
     });
 
-    // Guards the init.ts plumbing that actually activates the feature: the
-    // `classicConfig` entry in the strategy context (without it every new
-    // Classic game silently generates legacy geometry) and the `configKey`
-    // write-back (without it the config never reaches the save or the share
-    // link, so the puzzle can't be reproduced).
+    // Guards the init.ts plumbing: the `classicConfig` context entry (missing →
+    // new Classic games silently generate legacy geometry) and the `configKey`
+    // write-back (missing → config never reaches the save/share link, so the
+    // puzzle can't be reproduced).
     it('createNewGame threads classicConfig into generation and onto the state', () => {
         const viewport = { width: 800, height: 600 };
         const state = createNewGame('img', size, viewport, grid, {

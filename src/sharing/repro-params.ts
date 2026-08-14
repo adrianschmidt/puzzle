@@ -1,11 +1,9 @@
 /**
- * The info modal's "Reproduction parameters" block and the
- * `__reproPuzzle` console helper share this contract: the modal prints
- * a `ReproParams` as JSON, and the helper accepts that exact object.
- *
- * `imageSize` is part of the reproduction contract, not decoration:
- * generators inscribe the puzzle into the image rectangle, so the same
- * seed/grid/style cuts differently at different image dimensions.
+ * The info modal's "Reproduction parameters" block and the `__reproPuzzle`
+ * console helper share this contract: the modal prints a `ReproParams` as JSON,
+ * the helper accepts that object. `imageSize` is part of the contract, not
+ * decoration — generators inscribe the puzzle into the image rect, so the same
+ * seed/grid/style cuts differently at different dimensions.
  */
 
 import type { GameState, GridSize, Size } from '../model/types.js';
@@ -17,11 +15,10 @@ import {
 } from './share-link.js';
 
 /**
- * Declared in the order `buildReproParams` writes them, which is the order
- * the block prints. `cutStyle`/`rotationMode` are plain strings rather than
- * the wire unions: this object is also hand-typed into a console from a
- * screenshot, so the literal types would be a fiction. `reproParamsToPayload`
- * validates both at runtime instead.
+ * Declared in the order buildReproParams writes / the block prints.
+ * `cutStyle`/`rotationMode` are plain strings, not the wire unions: this object
+ * is hand-typed from a screenshot, so literal types would be a fiction —
+ * reproParamsToPayload validates both at runtime.
  */
 export interface ReproParams extends StyleConfigSource {
     seed?: number;
@@ -45,34 +42,22 @@ export function buildReproParams(state: GameState): ReproParams {
     if (state.fractalConfig) params.fractalConfig = state.fractalConfig;
     if (state.wavyConfig) params.wavyConfig = state.wavyConfig;
     if (state.trianglesConfig) params.trianglesConfig = state.trianglesConfig;
-    // Load-bearing for Classic: its presence is what selects the sine
-    // generator over the legacy one, so omitting it would make the block
-    // describe a different puzzle than the one on screen.
+    // Load-bearing for Classic: its presence selects the sine generator over
+    // the legacy one — omitting it would describe a different puzzle.
     if (state.classicConfig) params.classicConfig = state.classicConfig;
     return params;
 }
 
 /**
- * Throws (naming the field) when a required field is missing or, for
- * `cutStyle`/`rotationMode`, unrecognized — e.g. a params object copied
- * from a screenshot that predates `imageSize` being included, or
- * hand-typed with a typo. Naming the field matters because the
- * alternative is the decoder returning a bare `null`, which cannot say
- * what was wrong.
- * Style-config absence semantics are preserved exactly: no
- * `classicConfig` means no `clf`, which selects the legacy Classic
- * generator, matching the puzzle the block described.
+ * Throws naming the field when a required field is missing or `cutStyle`/
+ * `rotationMode` is unrecognized (a screenshot predating `imageSize`, a typo);
+ * naming beats the decoder's bare `null`. Absent style config is preserved: no
+ * `classicConfig` → no `clf` → the legacy Classic generator.
  *
- * Two things the wire format cannot carry, so a replay is faithful in
- * geometry but not in every detail:
- *
- * - `imageSize` is floored to whole pixels by the decoder's `clampDim`.
- *   Fractional dimensions are normal for the inscribed rectangles
- *   fractal/wavy produce, so a replay can differ from the on-screen
- *   puzzle by a sub-pixel image rectangle.
- * - No attribution (`a`) or background color (`bgc`) is emitted, so a
- *   replayed Unsplash puzzle loses its photographer credit and the
- *   sharer's background color.
+ * The wire format can't carry two things, so a replay matches geometry but not
+ * every detail: `imageSize` is floored to whole pixels (sub-pixel difference on
+ * inscribed fractal/wavy rects), and no attribution or background color is
+ * emitted (a replayed Unsplash puzzle loses its credit and the sharer's color).
  */
 export function reproParamsToPayload(params: ReproParams): SharePayload {
     // `== null` so an explicit `imageSize: null` is named here too, rather

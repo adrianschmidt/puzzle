@@ -78,11 +78,9 @@ describe('isSafeImageUrl', () => {
         '\\\\evil.example/pixel.png',
         '\\/evil.example/pixel.png',
     ])('rejects the protocol-relative form %s', (url) => {
-        // These have no scheme, so `new URL(url)` throws exactly as
-        // `first-puzzle.jpg` does — but a relative reference inherits the
-        // base's scheme, not its origin, so each of these resolves to
-        // https://evil.example/. Inferring "relative" from a failed parse
-        // accepted all five.
+        // No scheme, so `new URL` throws as `first-puzzle.jpg` does — but a
+        // relative ref inherits the base's scheme, not origin, so each resolves
+        // to https://evil.example/. Inferring "relative" from the throw accepted all five.
         expect(isSafeImageUrl(url)).toBe(false);
     });
 

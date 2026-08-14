@@ -18,11 +18,10 @@ import {
 import { activeSnapTolerances } from './snap-tolerances.js';
 import { createGameSession, type GameSession } from './game-session.js';
 
-// Plain `vi.spyOn` can't intercept the call `game-session.ts` makes to a
-// function imported from another module under Vite; wrap the real
-// implementation via `vi.mock` passthrough so the tests below can inspect
-// the options object `install` built, while every other test still gets
-// real interaction wiring (which the teardown test depends on).
+// Plain `vi.spyOn` can't intercept a cross-module call under Vite; wrap the
+// real `setupInteraction` via `vi.mock` passthrough so tests can inspect the
+// options `install` built while still getting real wiring (the teardown test
+// needs it).
 vi.mock('../interaction/index.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../interaction/index.js')>();
     return {
@@ -38,12 +37,9 @@ function lastInteractionOptions(): InteractionSetupOptions {
 }
 
 /**
- * A state with two real, well-formed groups (rather than the default empty
- * `groups: []`), so selection restore has ids to match and the interaction
- * wiring has something to reach for.
- *
- * The group ids are 7 and 8 — deliberately neither 0 nor the array indexes —
- * so a test asserting on a specific id cannot pass by coincidence.
+ * Two real groups (not the default empty `groups: []`) so selection restore
+ * has ids to match. Ids are 7 and 8 — neither 0 nor the array indexes — so an
+ * id assertion can't pass by coincidence.
  */
 function makeState(): GameState {
     const pieces = [
@@ -63,9 +59,8 @@ describe('createGameSession', () => {
     let viewportTransform: ViewportTransform;
     let selectionManager: SelectionManager;
     let rotationFocus: RotationFocus;
-    // `Mock<(state: GameState) => void>` rather than bare
-    // `ReturnType<typeof vi.fn>`: the latter widens to vi.fn's full generic
-    // constraint and stops being assignable to the dep's signature.
+    // `Mock<(state) => void>`, not `ReturnType<typeof vi.fn>`: the latter
+    // widens and stops being assignable to the dep's signature.
     let onInstalled: Mock<(state: GameState) => void>;
     let save: Mock<(state: GameState) => void>;
     let applyMerge: Mock<
@@ -126,14 +121,10 @@ describe('createGameSession', () => {
     });
 
     it('keeps hasGame false until interaction is wired', () => {
-        // #488: the boot fallback reads hasGame as "a puzzle is rendered AND
-        // interactive". A throw between the state assignment and interaction
-        // setup must still report no game, or the fallback is skipped and the
-        // player is left with a dead canvas and no message.
-        //
-        // `onInstalled` runs inside exactly that window, so it is the probe.
-        // The session reference reaches it through a holder because the
-        // callback has to interrogate the very session it is being passed to.
+        // #488: a throw between the state assignment and interaction setup must
+        // still report no game, or the fallback is skipped and the player gets
+        // a dead canvas. `onInstalled` runs inside that window, so it's the
+        // probe; a holder passes it the session it's being handed.
         const holder: { session?: GameSession } = {};
         let hasGameDuringInstall: boolean | undefined;
         let stateDuringInstall: GameState | undefined;
@@ -149,8 +140,7 @@ describe('createGameSession', () => {
 
         // Not `toBeFalsy()`: `undefined` (onInstalled never ran) must fail.
         expect(hasGameDuringInstall).toBe(false);
-        // The state is already installed at this point — proving the probe
-        // really did run inside the window, rather than before it.
+        // State already installed here — proves the probe ran inside the window.
         expect(stateDuringInstall).toBe(state);
         expect(holder.session.hasGame()).toBe(true);
     });
@@ -166,8 +156,7 @@ describe('createGameSession', () => {
     });
 
     it('still reports no game when onInstalled throws mid-install', () => {
-        // The other half of the #488 window: a throw after the render but
-        // before the wiring must not look like a live game either.
+        // Other half of the #488 window: a throw after render but before wiring.
         const session = make({
             onInstalled: () => {
                 throw new Error('presenter boom');
@@ -179,10 +168,8 @@ describe('createGameSession', () => {
     });
 
     it('wires interaction for an already-completed state too', () => {
-        // The wiring must be unconditional. A restored save of a solved
-        // puzzle is the state most likely to tempt a "nothing to drag here"
-        // shortcut, and it is still draggable — the player can pull the
-        // finished picture apart.
+        // Wiring is unconditional: a restored solved puzzle is still draggable
+        // — the player can pull the finished picture apart.
         const session = make();
         session.install(makeGameState({ ...makeState(), completed: true }));
         expect(session.hasGame()).toBe(true);
@@ -223,17 +210,16 @@ describe('createGameSession', () => {
 
         session.install(makeState());
 
-        // Same handler identities, same order: the first install's listeners
-        // specifically were removed, not some arbitrary set.
+        // Same handler identities and order: the first install's listeners
+        // specifically were removed.
         const unwired = remove.mock.calls.map(([type, listener]) => [type, listener]);
         expect(unwired).toEqual(wiredByFirst);
     });
 
     it('pans via applyTransform, which must not persist anything', () => {
-        // `panViewport` is the auto-pan hook: it fires on every frame of an
-        // edge drag. Routing it through `onViewportChanged` — which saves —
-        // would restart the debounced save on each tick, so the two hooks
-        // are deliberately different deps and must stay that way.
+        // `panViewport` fires every frame of an edge drag; routing it through
+        // `onViewportChanged` (which saves) would restart the debounced save
+        // each tick, so the two hooks stay separate deps.
         const session = make();
         session.install(makeState());
 
@@ -247,8 +233,8 @@ describe('createGameSession', () => {
     });
 
     it('routes zoom/pan settle through onViewportChanged, which does persist', () => {
-        // The other side of the same split: collapsing the two hooks in
-        // either direction has to fail a test.
+        // The other side of the same split: collapsing the two hooks in either
+        // direction has to fail a test.
         const session = make();
         session.install(makeState());
 
@@ -260,21 +246,12 @@ describe('createGameSession', () => {
 
     describe('the callbacks install wires into the interaction layer', () => {
         /**
-         * Two mated pieces near — but deliberately not at — their aligned
-         * offset, so the real `processDrop` merges for the real reason:
-         * real geometry, and a snap distance only the *active* tolerance
-         * admits.
-         *
-         * The 25px overshoot is what makes the tolerance wiring visible.
-         * `activeSnapTolerances` reads the player's preset against this
-         * state (the default `normal` preset's 0.333 × the reference piece
-         * width of 800/8 = 100, so 33.3px); `processDrop`'s own default is
-         * `MERGE_TOLERANCE_PX` = 18. At exact alignment both admit the
-         * merge and dropping the arguments at the call site changes
-         * nothing; at 25px only the wired-through value does.
-         *
-         * Group ids 10/11 are neither the array indexes nor `makeState`'s
-         * 7/8.
+         * Two mated pieces 25px past their aligned offset, so `processDrop`
+         * merges only via the *active* tolerance: 33.3px (default `normal`
+         * preset, 0.333 × the 100px reference width) admits it, `processDrop`'s
+         * own 18px default does not — at exact alignment both admit and the
+         * test proves nothing. Group ids 10/11 are neither the indexes nor
+         * `makeState`'s 7/8.
          */
         const SNAP_OVERSHOOT_PX = 25;
 
@@ -301,16 +278,13 @@ describe('createGameSession', () => {
             expect(mergedState).toBe(state);
             expect(result.mergeCount).toBe(1);
             // The actual dropped ids, not `[]`: `applyMergeResult` drives
-            // z-order and post-merge visuals off them, and an empty array
-            // reaches every one of those call sites without throwing.
+            // z-order and post-merge visuals off them, and `[]` passes silently.
             expect(droppedIds).toEqual([11]);
-            // Merging is the one drop outcome that changes the puzzle, and
-            // this is the only save on the path — dropping it loses the merge
-            // until some unrelated edit happens to persist the state.
+            // Merging is the only drop outcome that changes the puzzle, and
+            // this is the only save on the path — dropping it loses the merge.
             expect(save).toHaveBeenCalledWith(state);
-            // …and it saves the merged state, not the pre-merge one:
-            // `applyMerge` mutates `state` in place, so swapping the two
-            // statements persists a snapshot taken one step too early.
+            // Saves the merged state, not the pre-merge one: `applyMerge`
+            // mutates in place, so swapping the statements saves too early.
             expect(save.mock.invocationCallOrder[0])
                 .toBeGreaterThan(applyMerge.mock.invocationCallOrder[0]);
             // The merge branch and the reorder branch are exclusive.
@@ -318,10 +292,9 @@ describe('createGameSession', () => {
         });
 
         it('merges on the player\'s active tolerance, not processDrop\'s default', () => {
-            // The fixture sits 25px past its aligned offset: inside the
-            // active tolerance (33.3px for this state and the default
-            // preset), outside `processDrop`'s own 18px fallback. So a drop
-            // that stopped passing `tolerancePx` through would stop merging.
+            // 25px past alignment: inside the active tolerance (33.3px),
+            // outside `processDrop`'s 18px fallback — so dropping `tolerancePx`
+            // would stop the merge.
             const session = make();
             const state = makeMergeableState();
             session.install(state);
@@ -335,23 +308,16 @@ describe('createGameSession', () => {
         });
 
         it('merges on the player\'s active rotation tolerance too', () => {
-            // The other half of `activeSnapTolerances`. The dropped group is
-            // 15° off its mate: inside the active rotation tolerance (20° for
-            // the default preset), outside `processDrop`'s own 10° fallback.
+            // The other half of `activeSnapTolerances`: the dropped group is
+            // 15° off its mate — inside the active rotation tolerance (20°),
+            // outside `processDrop`'s 10° fallback.
             //
-            // Rotation is the *only* thing off, so the position tolerance
-            // cannot also decide this case: both groups are placed by bbox
-            // center, 100px apart, which is exactly where the mated pair
-            // aligns. `measureEdgeAlignment` measures after simulating the
-            // rotation snap, and that snap pivots about the piece center —
-            // the same point for these single-piece groups — so the residual
-            // distance here is ~0 under any tolerance, and
-            // only `rotationToleranceDeg` can gate the merge.
-            //
-            // Placing group 11 by raw `position` instead would not isolate
-            // it: at `{100, 0}` the pre-snap center is off by
-            // 2·|(50,50)|·sin(7.5°) = 18.46px, which clears the 18px default
-            // and makes the case fail on `tolerancePx` too.
+            // Rotation is the only variable: both groups are bbox-center 100px
+            // apart, exactly where the mated pair aligns, and the rotation snap
+            // pivots about the shared center, so residual distance is ~0 and
+            // only `rotationToleranceDeg` gates the merge. Placing group 11 by
+            // raw `position` would leave an 18.46px offset that clears the 18px
+            // default and makes the case fail on `tolerancePx` too.
             const { piece0, piece1 } = makeMatedPiecePair();
             const state = makeGameState({
                 pieces: [piece0, piece1],
@@ -372,8 +338,7 @@ describe('createGameSession', () => {
         });
 
         it('expands a merging drop to the whole selection', () => {
-            // Multi-select drags the selection as a unit, so every selected
-            // group was dropped — not just the one under the pointer.
+            // Multi-select drags as a unit, so every selected group was dropped.
             const session = make();
             const state = makeMergeableState();
             session.install(state);
@@ -389,9 +354,8 @@ describe('createGameSession', () => {
         });
 
         it('z-reorders the dropped groups when nothing merges', () => {
-            // Group 7 is two pieces spanning world (0,0)–(200,100); group 8 is
-            // a single 20×20 piece entirely inside it. Dropping the big one
-            // has to raise the small one, or it is lost underneath.
+            // Group 7 spans (0,0)–(200,100); group 8 is a 20×20 piece inside
+            // it. Dropping the big one must raise the small one or it's lost.
             const pieces = [
                 makeRectPiece({ id: 0, width: 100, height: 100, col: 0 }),
                 makeRectPiece({ id: 1, width: 100, height: 100, col: 1 }),
@@ -423,12 +387,10 @@ describe('createGameSession', () => {
         });
 
         it('z-reorders the whole selection when a multi-select drop does not merge', () => {
-            // The mirror of the merge case above: multi-select drags the
-            // selection as a unit, so the reorder has to consider every
-            // group that moved, not just the one under the pointer. Group 9
-            // is dragged and covers nothing; group 7 rides along in the
-            // selection and is the only group covering the small group 8.
-            // Narrowing the reorder to the dragged group alone loses that.
+            // Mirror of the merge case: multi-select moves as a unit, so the
+            // reorder must consider every moved group. Group 9 (dragged) covers
+            // nothing; group 7 rides along and is the only one over group 8, so
+            // narrowing to the dragged group alone loses it.
             const pieces = [
                 makeRectPiece({ id: 0, width: 100, height: 100, col: 0 }),
                 makeRectPiece({ id: 1, width: 100, height: 100, col: 1 }),
@@ -448,8 +410,7 @@ describe('createGameSession', () => {
                     position: { x: 50, y: 40 },
                     rotation: 0,
                 },
-                // Off on its own, and a single piece — so it covers nothing,
-                // and `reorderGroupsAfterDrop` raises nothing for it alone.
+                // Off on its own, single piece — covers nothing, raises nothing alone.
                 {
                     id: 9,
                     pieces: new Map([[3, { x: 0, y: 0 }]]),
@@ -471,12 +432,10 @@ describe('createGameSession', () => {
         });
 
         it('reports the live state\'s snap tolerances to the interaction layer', () => {
-            // `getSnapTolerances` feeds the snap-proximity controllers, which
-            // have to agree with the drop-time merge check or a piece glows
-            // as if it will snap and then doesn't. Derived from the installed
-            // state, not from a constant: the reference piece width is the
-            // image width over the column count, so a wider image widens the
-            // window.
+            // `getSnapTolerances` feeds the snap-proximity glow, which must
+            // agree with the drop-time merge check. Derived from the installed
+            // state: reference width is image width / columns, so a wider image
+            // widens the window.
             const session = make();
             const state = makeGameState({
                 ...makeState(),
@@ -487,8 +446,8 @@ describe('createGameSession', () => {
 
             expect(lastInteractionOptions().getSnapTolerances?.())
                 .toEqual(activeSnapTolerances(state));
-            // Not the same numbers a narrower image would give — otherwise
-            // an implementation ignoring the state would also pass.
+            // Not the numbers a narrower image gives — else ignoring the state
+            // would also pass.
             expect(lastInteractionOptions().getSnapTolerances?.().tolerancePx)
                 .toBeGreaterThan(activeSnapTolerances(makeState()).tolerancePx);
         });
@@ -506,12 +465,11 @@ describe('createGameSession', () => {
             lastInteractionOptions().onStateChanged();
 
             expect(renderer.renderState).toHaveBeenCalledWith(state);
-            // `renderState` may recreate the elements, so the highlight has to
-            // be re-applied for *every* selected group, after the render.
+            // `renderState` may recreate elements, so re-apply the highlight for
+            // every selected group after the render.
             expect(renderer.setGroupSelected.mock.calls).toEqual([[7, true], [8, true]]);
-            // "After" literally: both are no-op spies here, so only the
-            // invocation order distinguishes re-applying the highlight from
-            // painting it onto elements the render is about to replace.
+            // "After" literally: both are no-op spies, so only invocation order
+            // distinguishes re-applying from painting onto soon-replaced elements.
             expect(renderer.setGroupSelected.mock.invocationCallOrder[0])
                 .toBeGreaterThan(renderer.renderState.mock.invocationCallOrder[0]);
             expect(save).toHaveBeenCalledWith(state);
@@ -550,8 +508,8 @@ describe('createGameSession', () => {
     });
 
     it('drops saved ids with no matching group and warns', () => {
-        // Group ids are stable across a reload, so a mismatch points at real
-        // inconsistency rather than something to swallow.
+        // Group ids are stable across a reload, so a mismatch is real
+        // inconsistency, not something to swallow.
         const session = make();
         session.install(makeState());
 

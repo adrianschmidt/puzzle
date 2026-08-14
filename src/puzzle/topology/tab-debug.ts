@@ -1,26 +1,15 @@
 /**
- * Wires together the two extension points that let us identify which
- * traced template ended up on which piece's tab:
+ * Identifies which traced template ended up on which piece's tab by zipping two
+ * streams that fire 1:1 in lockstep per edge: {@link setTracedTabChoiceRecorder}
+ * (template selection inside `tracedTabTemplate.generate()`) and
+ * {@link ApplyTabsOptions.onCandidate} (per eligible edge, with survival of the
+ * collision/fold-back checks). Records are keyed by half-edge, then re-keyed by
+ * piece once the graph becomes piece definitions.
  *
- *   - {@link setTracedTabChoiceRecorder} captures the per-call template
- *     selection inside `tracedTabTemplate.generate()`.
- *   - {@link ApplyTabsOptions.onCandidate} fires once per eligible edge,
- *     with the half-edge it was generated for and whether a candidate
- *     survived the collision / fold-back checks.
- *
- * A session zips those two streams (calls are 1:1 and in lockstep)
- * into per-tab records keyed by half-edge, then turns them into a
- * piece-keyed map after the topology graph has been turned into
- * piece definitions.
- *
- * Lockstep note: the 1:1 pairing holds on COUNT — `onCandidate` and the
- * recorder each fire once per edge. The recorded {@link TracedTabChoice}
- * geometry describes the traced generator's BASE rung; with the retry
- * ladder a different rung may be the committed curve, so the recorded
- * scale/flip/mid can differ from what's on screen. See TracedTabChoice.
- *
- * Production paths don't touch any of this — the recorder defaults to
- * a no-op and `onCandidate` is undefined unless a session is active.
+ * Lockstep holds on COUNT only: the recorded {@link TracedTabChoice} describes
+ * the BASE rung, but the retry ladder may commit a different rung, so recorded
+ * scale/flip/mid can differ from what's on screen. Production defaults the
+ * recorder to a no-op and leaves `onCandidate` undefined.
  */
 
 import type { HalfEdge, TopologyGraph } from './dcel.js';
@@ -29,14 +18,9 @@ import {
     type TracedTabChoice,
 } from '../composable/traced-tab-recorder.js';
 
-/**
- * `edgeIndex` is the position of this edge in the piece's
- * `PieceDefinition.edges[]` array — i.e. the same ordering the
- * renderer and the debug piece view use, so you can correlate this
- * with what you see on screen.
- */
+/** `edgeIndex` matches PieceDefinition.edges ordering (as renderer/debug view show it), so entries correlate with on-screen edges. */
 export interface TabDebugEntry {
-    /** Half-edge id from the DCEL — stable, useful as a join key. */
+    /** Half-edge id from the DCEL; stable join key. */
     halfEdgeId: number;
     /** Position of this edge in PieceDefinition.edges (outer loop first). */
     edgeIndex: number;
@@ -58,15 +42,11 @@ interface RawEntry {
 }
 
 /**
- * Call {@link onCandidate} as the `onCandidate` option of `applyTabs`,
- * then call {@link finish} once you have the piece definitions (or
- * face → piece mapping) ready.
- *
- * The session installs a traced-tab recorder for its lifetime; calling
- * `finish` (or `dispose`) un-installs it. Only one session can be
- * active at a time — starting a second one before finishing the first
- * silently overwrites the recorder, which is fine for a dev tool but
- * not something to do in tests that run in parallel.
+ * Usage: pass {@link onCandidate} to `applyTabs`, then call {@link finish} once
+ * the piece definitions are ready. The session installs a traced-tab recorder
+ * for its lifetime; `finish`/`dispose` un-installs it. Only one session may be
+ * active — a second silently overwrites the recorder, so don't use these in
+ * parallel tests.
  */
 export class TabDebugSession {
     private entries: RawEntry[] = [];
@@ -80,10 +60,8 @@ export class TabDebugSession {
     }
 
     /**
-     * Pass this to `applyTabs({ onCandidate })`. The callback consumes
-     * the most recent recorded traced-tab choice — if the active
-     * generator wasn't 'traced', the slot is empty and `traced` ends
-     * up null on the resulting entry.
+     * Pass to `applyTabs({ onCandidate })`. Consumes the most recent recorded
+     * traced choice; null when the active generator wasn't 'traced'.
      */
     readonly onCandidate = (he: HalfEdge, accepted: boolean): void => {
         const traced = this.lastChoice;
@@ -92,24 +70,19 @@ export class TabDebugSession {
     };
 
     /**
-     * Build the piece-keyed report. Pass the same DCEL graph that was
-     * handed to `applyTabs` — we derive the face → piece-id mapping
-     * the same way `facesToPieceDefinitions` does (inner faces in DCEL
-     * order, indexed from 0). After this call the session is disposed.
+     * Build the piece-keyed report. Pass the SAME graph handed to `applyTabs`;
+     * the face→piece-id mapping mirrors `facesToPieceDefinitions` (inner faces
+     * in DCEL order, indexed from 0). Disposes the session.
      */
     finish(graph: TopologyGraph): TabDebugReport {
         this.dispose();
         const faceIdToPieceId = new Map<number, number>();
         graph.faces.filter(f => !f.isOuter)
             .forEach((face, index) => faceIdToPieceId.set(face.id, index));
-        // Per-piece edge ordering matches PieceDefinition.edges: walk
-        // each face's outer loop (then inner-boundary loops) and assign
-        // ascending edgeIndex. We don't have the PieceDefinitions in
-        // hand here, so we reconstruct edge index by replaying the
-        // walk from each entry's half-edge face.
-        // Each shared edge belongs to two pieces (one half-edge in each
-        // face's loop); we emit an entry under both piece ids so a
-        // caller can look up by either piece.
+        // Reconstruct edgeIndex by replaying the face walk (outer loop then
+        // inner boundaries), matching PieceDefinition.edges ordering; the
+        // PieceDefinitions aren't in hand here. Each shared edge is emitted
+        // under both pieces so a caller can look up by either.
         const report: TabDebugReport = {};
         for (const entry of this.entries) {
             const { halfEdge: he, accepted, traced } = entry;
@@ -130,8 +103,7 @@ export class TabDebugSession {
                 });
             }
         }
-        // Sort each piece's entries by edgeIndex so the screen order is
-        // obvious in a JSON dump.
+        // Sort by edgeIndex so a JSON dump follows on-screen order.
         for (const pid of Object.keys(report)) {
             report[Number(pid)].sort((a, b) => a.edgeIndex - b.edgeIndex);
         }
@@ -155,10 +127,8 @@ function matePieceFor(
 }
 
 /**
- * The walk mirrors `facesToPieceDefinitions`'s ordering: outer-loop
- * edges come first (index 0..N-1), then each inner loop (continuing
- * the index). This way the returned `edgeIndex` lines up with the
- * piece's `edges[]` array as the renderer presents it.
+ * Mirrors `facesToPieceDefinitions` ordering: outer-loop edges first, then each
+ * inner loop, so `edgeIndex` lines up with the piece's `edges[]` array.
  */
 function indexInFaceWalk(target: HalfEdge): number {
     const face = target.face;

@@ -1,6 +1,6 @@
 /**
- * Enabling the marquee also enables multi-select, since a marquee builds a
- * multi-select selection (see SelectionManager.toggleMarquee).
+ * Enabling the marquee also enables multi-select (a marquee builds a
+ * multi-select selection; see SelectionManager.toggleMarquee).
  */
 
 import type { SelectionManager } from '../interaction/selection-manager.js';
@@ -25,18 +25,15 @@ export function createMarqueeToolButton(
       <rect x="3" y="3" width="18" height="18" rx="1.5"/>
     </svg>`;
 
-    // Purely cosmetic observation of the Shift key, deliberately independent
-    // of the authoritative gesture read (`evt.shiftKey` in setupInteraction's
-    // onBackgroundPan.start). The two can momentarily disagree — e.g. a
-    // `blur` clears this hint while a captured drag still sees `evt.shiftKey`
-    // — which is harmless: the gesture decides, this only lights the button.
+    // Purely cosmetic Shift observation, deliberately independent of the
+    // authoritative gesture read (evt.shiftKey in setupInteraction). The two can
+    // momentarily disagree (harmless: the gesture decides, this only lights it).
     let shiftHint = false;
 
     function updateVisuals(): void {
         const active = selectionManager.marqueeActive;
         button.classList.toggle('marquee-tool-button--active', active || shiftHint);
-        // aria-pressed reflects the real persistent toggle, not the
-        // transient Shift hint.
+        // aria-pressed reflects the real persistent toggle, not the transient Shift hint.
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
 

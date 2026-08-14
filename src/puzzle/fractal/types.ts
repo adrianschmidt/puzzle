@@ -1,7 +1,7 @@
 /**
- * - **DiagonalConnection:** a diagonal link between two tiles, occupying
- *   the cell (square) between them.
- * - **ArcData:** a quarter-circle arc segment forming a piece boundary.
+ * DiagonalConnection: a diagonal link between two tiles, occupying the cell
+ * (square) between them. ArcData: a quarter-circle arc segment forming a
+ * piece boundary.
  */
 
 export interface Tile {

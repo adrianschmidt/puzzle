@@ -68,8 +68,7 @@ describe('createSwErrorReporter', () => {
             ([report]) => report.reason === 'looping boom',
         );
         expect(reported).toHaveLength(5);
-        // Per-reason dedup must NOT emit a cap notice — that's reserved for
-        // the global cap — so 5 reports is the only thing posted.
+        // Per-reason dedup emits no cap notice (that's the global cap's job).
         expect(post).toHaveBeenCalledTimes(5);
     });
 

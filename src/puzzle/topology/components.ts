@@ -1,7 +1,6 @@
 /**
- * Two half-edges are in the same component if you can walk from one
- * to the other via .twin / .next / .prev (any combination). A free-
- * floating closed curve is its own component, separate from the frame.
+ * Half-edges share a component if reachable via .twin/.next/.prev. A
+ * free-floating closed curve is its own component, separate from the frame.
  */
 
 import type { TopologyGraph, HalfEdge } from './dcel.js';

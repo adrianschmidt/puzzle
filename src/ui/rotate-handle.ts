@@ -15,16 +15,13 @@ export interface RotateHandleOptions {
     onRotate: (groupId: number, deltaDegrees: number) => void;
     /** Emitted on drag end, after the final `onRotate`; the host runs merge-detection here. */
     onCommit: (groupId: number) => void;
-    /** Emitted at the start of a rotation drag (pointerdown), before the
-     * first onRotate. Returns the world-space rotation pivot for this drag,
-     * or null to decline it — no drag starts and no onRotateEnd follows.
-     * Fires exactly once per drag by construction, so hosts may latch
-     * per-gesture state here. */
+    /** Emitted at drag start (pointerdown), before the first onRotate. Returns the
+     * world-space pivot, or null to decline — no drag starts and no onRotateEnd
+     * follows. Fires exactly once per drag, so hosts may latch per-gesture state. */
     onRotateStart: (groupId: number) => { x: number; y: number } | null;
-    /** Emitted when a drag ends — on commit AND on cancel — after any final
-     * onRotate/onCommit. Required because onRotateStart invites per-gesture
-     * latching: acquire without a guaranteed release would leak the latch
-     * into the next drag. */
+    /** Emitted when a drag ends — on commit AND cancel — after any final
+     * onRotate/onCommit. Guarantees release of the latch onRotateStart acquires,
+     * so it can't leak into the next drag. */
     onRotateEnd: (groupId: number) => void;
     getFocusedGroupScreenBounds: (groupId: number) =>
         | { left: number; right: number; top: number; bottom: number }
@@ -133,10 +130,9 @@ export function createRotateHandle(
             }
             window.removeEventListener('pointerdown', drag.extraPointerListener, true);
             drag = null;
-            // The spawn closure's groupId, not `active?.groupId`: a focus
-            // change nulls `active` before cancelling the drag, and skipping
-            // onRotateEnd there would leak the host's per-gesture pivot
-            // latch into the next drag.
+            // Use the spawn closure's groupId, not active?.groupId: a focus change
+            // nulls `active` before cancelling the drag, and skipping onRotateEnd
+            // would leak the host's per-gesture pivot latch into the next drag.
             if (commit) {
                 options.onCommit(groupId);
             }
@@ -152,8 +148,8 @@ export function createRotateHandle(
             if (drag !== null) return;
             const initialRotation = options.getGroupRotation(groupId);
             if (initialRotation === null) return;
-            // The rotation guard runs first so a declined drag never leaves
-            // the host with an opened gesture it must unwind.
+            // Guard rotation first so a declined drag never leaves the host an
+            // opened gesture to unwind.
             const pivot = options.onRotateStart(groupId);
             if (!pivot) return;
 
@@ -251,8 +247,8 @@ export function createRotateHandle(
 
     function startSlowFadeOut(): void {
         if (!active) return;
-        // Unreachable today (idle timer is cleared during drag); the guard
-        // protects future callers that might re-arm the timer mid-drag.
+        // Unreachable today (idle timer cleared during drag); guards future
+        // callers that might re-arm the timer mid-drag.
         if (active.isDragging()) return;
         clearIdleTimer();
         active.state = 'fade-out-slow';

@@ -1,6 +1,6 @@
 /**
- * Geometry and layout metadata that can be computed from a `GameState`
- * (or a single `Piece`) without any DOM, SVG, or rendering involvement.
+ * Geometry/layout metadata derived from a `GameState` or `Piece` — no DOM or
+ * rendering.
  */
 
 import type { GameState, GeneratedEdge, Piece, PieceBounds } from './types.js';
@@ -35,10 +35,9 @@ export function getImageDimensions(
 }
 
 /**
- * Compute the piece-local bounding box by scanning edge endpoints and
- * `curvePoints` (when present). Used at generation time (sealing) and
- * when migrating v≤11 saves whose edges still carry curve samples —
- * after sealing, read `piece.bounds` (via `getPieceBounds`) instead.
+ * Piece-local bbox from edge endpoints and `curvePoints`. Used at generation
+ * (sealing) and v≤11 save migration; after sealing read `piece.bounds` via
+ * `getPieceBounds` — the curve samples are gone by then.
  */
 export function computePieceBounds(piece: { edges: GeneratedEdge[] }): PieceBounds {
     let minX = Infinity;
@@ -65,10 +64,8 @@ export function computePieceBounds(piece: { edges: GeneratedEdge[] }): PieceBoun
 }
 
 /**
- * Reads the piece-local bounds stored on the piece; every `Piece` carries them, set by
- * `model/seal-geometry.ts` — at generation time, or on load (restored as
- * stored for a v12+ save, recomputed from curve samples when migrating an
- * older one).
+ * Reads the stored piece-local bounds (set by `model/seal-geometry.ts`) and
+ * derives width/height. After sealing, use this rather than re-walking edges.
  */
 export function getPieceBounds(piece: Piece): {
     minX: number;

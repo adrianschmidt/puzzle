@@ -7,17 +7,15 @@ import type { GridSize } from '../model/types.js';
 import type { StartNewGameOptions } from './start-new-game.js';
 
 vi.mock('../ui/toast.js', () => ({ showToast: vi.fn() }));
-// Only `createNewGameDialog` is stubbed — everything else (including
-// `loadRotationEnabledPreference` / `saveRotationEnabledPreference`, which
-// this suite exercises for real against localStorage) passes through.
+// Only `createNewGameDialog` is stubbed; everything else passes through,
+// including the rotation-preference load/save this suite exercises for real.
 vi.mock('../ui/index.js', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../ui/index.js')>()),
     createNewGameDialog: vi.fn(),
 }));
-// `generator-registry.ts` (pulled in transitively via `getBaseCutGenerator`)
-// registers `tracedTabGeneratorStub` from this module at import time —
-// replacing the whole module rather than passing through the rest would
-// leave that registration undefined and throw before any test runs.
+// `generator-registry.ts` registers `tracedTabGeneratorStub` from this module
+// at import time, so pass the rest through or that registration is undefined
+// and throws before any test runs.
 vi.mock('../puzzle/topology/traced-tab-loader.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../puzzle/topology/traced-tab-loader.js')>();
     return { ...actual, preloadTracedTabGenerator: vi.fn() };
@@ -49,10 +47,8 @@ describe('openNewGameDialog', () => {
     beforeEach(() => {
         localStorage.clear();
         vi.mocked(createNewGameDialog).mockClear();
-        // `preloadTracedTabGenerator` gets a fresh resolved-by-default stub
-        // each test via `mockReset` (not `vi.clearAllMocks()`, which only
-        // clears call records and would leave a `mockRejectedValue` from an
-        // earlier test bleeding into this one).
+        // `mockReset` (not `vi.clearAllMocks()`, which clears only call
+        // records) so an earlier test's `mockRejectedValue` doesn't bleed in.
         vi.mocked(preloadTracedTabGenerator).mockReset().mockResolvedValue(undefined);
         vi.mocked(showToast).mockClear();
 
@@ -75,9 +71,8 @@ describe('openNewGameDialog', () => {
     }
 
     /**
-     * `wavyConfig`/`fractalConfig`/`composableConfig` are omitted by
-     * default, mirroring the real dialog: it only fills the one matching
-     * the currently-selected cut style.
+     * The per-style configs are omitted by default, mirroring the real dialog:
+     * it fills only the one matching the selected cut style.
      */
     function selectWith(overrides: Partial<NewGameSelection> = {}) {
         const opts = open();
@@ -150,9 +145,9 @@ describe('openNewGameDialog', () => {
     });
 
     it('persists the image source as blank when a blank puzzle is chosen', () => {
-        // No UI reads this preference anymore, but first-run detection
-        // depends on the key existing, and analytics still classifies by
-        // it — pinned against the real loader, not just key presence.
+        // No UI reads this preference, but first-run detection depends on the
+        // key existing and analytics classifies by it — pinned against the
+        // real loader, not just key presence.
         selectWith({ imageChoice: { kind: 'blank' } });
         expect(loadImageSourcePreference()).toBe('blank');
     });
@@ -173,13 +168,10 @@ describe('openNewGameDialog', () => {
     });
 
     it('leaves the previous save intact when the start is canceled (or throws)', () => {
-        // `start` (the real `startNewGame`) only replaces the save once
-        // generation has fully succeeded — a cancel (the loading overlay's
-        // Cancel affordance, #489, gated on a puzzle already being
-        // installed — true for essentially every dialog-started game) or a
-        // throw resolves/rejects without ever reaching its own
-        // `persistNewPuzzle`. The default `start` stub (a no-op
-        // `async () => {}`) models exactly that: it never touches storage.
+        // The real `startNewGame` replaces the save only once generation fully
+        // succeeds; a cancel (#489) or throw never reaches its
+        // `persistNewPuzzle`. The default no-op `start` stub models that — it
+        // never touches storage.
         saveNewPuzzle(makeSavedGameState());
 
         selectWith();
@@ -188,11 +180,9 @@ describe('openNewGameDialog', () => {
     });
 
     it('replaces the previous save once the start actually succeeds', () => {
-        // Production's `start` is `startNewGame`, which persists the new
-        // puzzle itself (via `persistNewPuzzle`) once generation succeeds —
-        // `new-game-flow.ts` no longer clears storage on its own, so the
-        // stub has to model that side effect to exercise "replaced" rather
-        // than merely "cleared".
+        // `startNewGame` persists the new puzzle itself once generation
+        // succeeds; `new-game-flow.ts` no longer clears storage, so the stub
+        // must model that to exercise "replaced" rather than "cleared".
         saveNewPuzzle(makeSavedGameState());
         start.mockImplementation(async () => {
             saveNewPuzzle({ ...makeSavedGameState(), imageUrl: 'new-puzzle.jpg' });
@@ -258,11 +248,9 @@ describe('openNewGameDialog', () => {
         vi.mocked(preloadTracedTabGenerator).mockReset().mockRejectedValue(new Error('chunk boom'));
         const opts = open();
 
-        // Must not throw synchronously, and must not become an unhandled
-        // rejection — the latter fires after this test function returns, so
-        // it wouldn't fail this test specifically, but it would fail the run:
-        // vitest's process-level handler catches it, and this repo sets no
-        // `dangerouslyIgnoreUnhandledErrors` in vite.config.ts.
+        // Must not throw synchronously nor become an unhandled rejection —
+        // vitest's process-level handler would fail the run, and this repo
+        // sets no `dangerouslyIgnoreUnhandledErrors`.
         expect(() => opts.onPreloadTracedTabs?.()).not.toThrow();
         expect(preloadTracedTabGenerator).toHaveBeenCalledTimes(1);
         // Let the swallowed rejection's microtask settle before the test ends.

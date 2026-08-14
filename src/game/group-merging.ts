@@ -26,13 +26,13 @@ export interface MergeResult {
 }
 
 /**
- * The target group is the "anchor" — its position stays fixed while the
- * moved group's pieces are absorbed into it. The moved group itself is
- * left intact — `processDrop` removes it via `removeGroup` afterwards.
+ * The target group is the anchor — its position stays fixed while the moved
+ * group's pieces are absorbed. The moved group is left intact; `processDrop`
+ * removes it afterwards.
  *
- * Takes the candidate rather than loose fields: `snapDelta` was measured
- * under `movedPiece`'s pivot, and a mismatched pair would compile but land
- * the group elsewhere.
+ * Takes the candidate, not loose fields: `snapDelta` was measured under
+ * `movedPiece`'s pivot, and a mismatched pair would compile but land the group
+ * elsewhere.
  */
 export function mergeGroups(
     state: GameState,
@@ -42,12 +42,10 @@ export function mergeGroups(
     >,
 ): PieceGroup {
     const { movedGroup, targetGroup, movedPiece, snapDelta } = candidate;
-    // Snap the moved group's rotation to the target's first, pivoting on
-    // the mated piece's center — the same pivot measureEdgeAlignment
-    // simulated, so the snapDelta below lands the group exactly.
-    //
-    // For quarter-turn merges the delta is always 0, so this is a no-op
-    // and behavior is unchanged for classic/composable rotation modes.
+    // Snap the moved group's rotation to the target's first, pivoting on the
+    // mated piece's center — the same pivot measureEdgeAlignment simulated, so
+    // the snapDelta below lands the group exactly. Quarter-turn merges have
+    // delta 0, so this is a no-op there.
     const rotDelta = signedAngularDelta(targetGroup.rotation, movedGroup.rotation);
     if (Math.abs(rotDelta) > SNAP_EPSILON_DEG) {
         rotateGroup(
@@ -56,12 +54,12 @@ export function mergeGroups(
         );
     }
 
-    // Then snap position into perfect alignment. Both groups now share the
-    // same rotation, so the local-frame piece-offset rebasing below is correct.
+    // Then snap position. Both groups now share a rotation, so the local-frame
+    // piece-offset rebasing below is correct.
     moveGroup(movedGroup, snapDelta);
 
-    // The raw position diff is in world space; inverse-rotate it so the
-    // offsets we add to each piece are in the target group's un-rotated local space.
+    // The raw position diff is world-space; inverse-rotate it so the per-piece
+    // offsets are in the target group's un-rotated local space.
     const rawDiff: Point = {
         x: movedGroup.position.x - targetGroup.position.x,
         y: movedGroup.position.y - targetGroup.position.y,
@@ -80,10 +78,7 @@ export function mergeGroups(
     return targetGroup;
 }
 
-/**
- * The candidate with the smallest snap delta (closest alignment) wins —
- * it gives the most natural "snap" feel.
- */
+/** The candidate with the smallest snap delta wins — the most natural snap feel. */
 export function selectBestCandidate(candidates: MergeCandidate[]): MergeCandidate {
     if (candidates.length === 0) {
         throw new Error('No candidates to select from');

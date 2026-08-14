@@ -94,8 +94,8 @@ describe('runWithErrorReport', () => {
     });
 
     it('logs through console.error when the caller opts into production logging', async () => {
-        // `diagnostics.warn` is a no-op on a deployed build, which would hide
-        // the one failure `__reproPuzzle` exists to investigate.
+        // `diagnostics.warn` is a no-op on a deployed build, hiding the one
+        // failure `__reproPuzzle` exists to investigate.
         const error = new Error('topology unsupported');
         await runWithErrorReport({
             run: async () => { throw error; },
@@ -128,9 +128,9 @@ describe('runWithErrorReport', () => {
             fallback: undefined,
         });
 
-        // Strict, not `toHaveBeenCalledWith`: that matcher treats an
-        // explicit `phase: undefined` as equal to an absent `phase`, so it
-        // would pass even if the implementation always assigned the key.
+        // Strict, not `toHaveBeenCalledWith`: that matcher treats `phase:
+        // undefined` as equal to an absent `phase`, so it would pass even if
+        // the key were always assigned.
         expect(umamiTrack.mock.calls[0]).toStrictEqual([
             'new-game-failed',
             { reason: 'chunk load failed', cutStyle: 'wavy' },

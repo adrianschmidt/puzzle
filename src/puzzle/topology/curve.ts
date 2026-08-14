@@ -1,9 +1,6 @@
 /**
- * All curves are represented as chains of cubic Bézier segments,
- * backed by bezier-js for precise intersection, projection, and
- * arc-length computation.
- *
- * See issue #167 for the design discussion.
+ * Curves are chains of cubic Bézier segments backed by bezier-js. See
+ * issue #167 for the design discussion.
  */
 
 import type { Point } from '../../model/types.js';
@@ -11,19 +8,14 @@ import { Bezier } from 'bezier-js';
 import { completeReduction } from './complete-reduction.js';
 
 export interface CurveIntersection {
-    /** The intersection point. */
     point: Point;
     /** Parameter on the first curve (0–1 over the full curve). */
     tSelf: number;
     /** Parameter on the second curve (0–1 over the full curve). */
     tOther: number;
-    /** Segment index on the first curve. */
     segSelf: number;
-    /** Local t within segSelf. */
     tLocalSelf: number;
-    /** Segment index on the second curve. */
     segOther: number;
-    /** Local t within segOther. */
     tLocalOther: number;
 }
 
@@ -34,7 +26,7 @@ export interface BezierSegment {
     p3: Point;
 }
 
-/** Axis-aligned bounding box in screen coordinates. */
+/** Axis-aligned box in screen coordinates. */
 export interface BoundingBox {
     minX: number;
     minY: number;
@@ -71,11 +63,9 @@ export class Curve {
     }
 
     /**
-     * `intersect` is called O(n) times per curve by the DCEL builder's
-     * pair loop; recomputing the segment boxes on every call rebuilds
-     * each curve's boxes ~n times (millions of tiny allocations on
-     * curve-heavy generators). Caching makes it once per curve. Safe
-     * because segments are immutable (`readonly`).
+     * Cache the segment boxes: `intersect` is called O(n) times per curve
+     * by the DCEL builder, so recomputing would rebuild them ~n times.
+     * Safe because segments are immutable (`readonly`).
      */
     private get segmentBoxes(): BBox[] {
         if (!this._segmentBoxes) {
@@ -85,28 +75,20 @@ export class Curve {
     }
 
     /**
-     * Segment `index` reduced to sub-curves covering its whole length,
-     * for `Bezier.curveintersects`. See {@link completeReduction} for why
-     * bezier-js's own `reduce()` is not enough.
+     * Segment `index` reduced to sub-curves covering its whole length, for
+     * `Bezier.curveintersects`. See {@link completeReduction} for why
+     * bezier-js's `reduce()` isn't enough.
      *
-     * Cached per segment rather than for the curve as a whole: the
-     * bounding-box pre-filter rejects most segment pairs, so a curve
-     * typically needs only a few of its segments reduced. What is
-     * computed is reused across the DCEL builder's repeated `intersect`
-     * calls — where `intersects()` would re-reduce both segments on
-     * every pair.
-     *
-     * Like `beziers` and `segmentBoxes`, this rests on segments never
-     * being mutated after construction — the third cache to do so. The
-     * `readonly` array only makes that a convention (the constructor
-     * stores the caller's array, and `BezierSegment`'s points are
-     * mutable), so a caller that edits segments in place would silently
-     * stale all three together.
+     * Cached per segment (the bbox pre-filter means only a few segments per
+     * curve get reduced), reused across the DCEL builder's repeated
+     * `intersect` calls. Like `beziers`/`segmentBoxes`, rests on segments
+     * never being mutated after construction — `readonly` is only a
+     * convention (points stay mutable), so editing segments in place would
+     * silently stale all three caches.
      */
     private reducedSegment(index: number): Bezier[] {
-        // Not pre-sized: this cache is only ever indexed, never measured, so
-        // its length is immaterial and `[]` is both simpler and cheaper than
-        // the `new Array(n)` that `unicorn/no-new-array` forbids.
+        // `[]` not `new Array(n)` (banned by `unicorn/no-new-array`): only
+        // ever indexed, never measured, so length is immaterial.
         this._reducedSegments ??= [];
         return (this._reducedSegments[index] ??= completeReduction(this.beziers[index]));
     }
@@ -120,10 +102,7 @@ export class Curve {
         }]);
     }
 
-    /**
-     * Format: [p0, cp1, cp2, p1, cp1, cp2, p2, ...]
-     * (Same format as BezierPath from tab-shapes.ts)
-     */
+    /** Format: [p0, cp1, cp2, p1, cp1, cp2, p2, ...] (same as BezierPath in tab-shapes.ts). */
     static fromBezierPath(points: Point[]): Curve {
         if (points.length < 4 || (points.length - 1) % 3 !== 0) {
             throw new Error(
@@ -143,10 +122,8 @@ export class Curve {
     }
 
     /**
-     * Construct a circular curve as four cubic Bézier segments using
-     * the standard kappa = 4*(sqrt(2)-1)/3 approximation.
-     *
-     * Starts at the rightmost point (center + (radius, 0)) and goes CCW.
+     * Circle as four cubic Béziers (kappa = 4*(sqrt(2)-1)/3). Starts at the
+     * rightmost point (center + (radius, 0)), goes CCW.
      */
     static circle(center: Point, radius: number): Curve {
         const k = 0.5522847498307933;  // 4*(sqrt(2)-1)/3
@@ -280,8 +257,7 @@ export class Curve {
             if (accumulated + segLen >= targetLen - 1e-6) {
                 const remaining = targetLen - accumulated;
 
-                // Bisect for precise localT (bezier-js arc length
-                // is nonlinear in t)
+                // Bisect for localT — bezier-js arc length is nonlinear in t.
                 let lo = 0, hi = 1;
                 for (let iter = 0; iter < 20; iter++) {
                     const mid = (lo + hi) / 2;
@@ -323,9 +299,8 @@ export class Curve {
         const selfN = this.segments.length;
         const otherN = other.segments.length;
 
-        // Per-segment bounding boxes to skip non-overlapping pairs
-        // (avoids expensive bezier-js calls). Cached on each curve so the
-        // DCEL builder's O(n) repeated intersect calls don't rebuild them.
+        // Per-segment bbox pre-filter to skip non-overlapping pairs;
+        // cached per curve (see `segmentBoxes`).
         const selfBoxes = this.segmentBoxes;
         const otherBoxes = other.segmentBoxes;
 
@@ -363,13 +338,10 @@ export class Curve {
                         return { tA, tB, point: pt };
                     }).filter(p => p.tB >= -0.001 && p.tB <= 1.001);
                 } else {
-                    // Curve-curve: pair off the reduced sub-curves, as
-                    // bezier-js's own `intersects()` does — but from a
-                    // reduction repaired to cover both segments in full,
-                    // so a crossing in a range `reduce()` dropped is still
-                    // reachable (#498). Unlike `intersects()`, which can
-                    // also return bare line-intersection `t`s,
-                    // `curveintersects` only ever yields `"tA/tB"` pairs.
+                    // Curve-curve: pair reduced sub-curves like `intersects()`,
+                    // but from a reduction repaired to cover both segments so a
+                    // crossing in a range `reduce()` dropped stays reachable
+                    // (#498). `curveintersects` only ever yields `"tA/tB"` pairs.
                     const rawPairs = this.beziers[i].curveintersects(
                         this.reducedSegment(i),
                         other.reducedSegment(j),
@@ -417,23 +389,16 @@ export class Curve {
     }
 
     /**
-     * Axis-aligned bounding box from the segments' control points.
-     *
-     * This is a conservative superset of the drawn curve (a cubic is
-     * contained in its control polygon's hull), which is exactly what a
-     * crossing pre-filter wants: boxes that don't overlap guarantee the
-     * curves can't intersect, so the expensive intersect call is safe to
-     * skip. Cheap — O(segments), no bezier-js objects.
-     *
-     * Assumes the curve has >= 1 segment (guaranteed by the constructor,
-     * which rejects empty segment lists); on a hypothetical empty curve it
-     * would return inverted Infinity bounds.
+     * Axis-aligned box from the control points — a conservative superset of
+     * the drawn curve (a cubic lies within its control hull), so
+     * non-overlapping boxes guarantee no intersection: safe to skip the
+     * expensive intersect. On an empty curve (constructor forbids) it would
+     * return inverted Infinity bounds.
      */
     boundingBox(): BoundingBox {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        // One closure per call (not the per-segment array literal a
-        // `for...of [p0,cp1,cp2,p3]` would allocate) keeps this allocation-
-        // free across segments on the generation hot path.
+        // One closure per call (not a per-segment [p0,cp1,cp2,p3] literal)
+        // keeps this allocation-free across segments on the hot path.
         const include = (p: Point): void => {
             if (p.x < minX) minX = p.x;
             if (p.y < minY) minY = p.y;
@@ -446,9 +411,6 @@ export class Curve {
         return { minX, minY, maxX, maxY };
     }
 
-    /**
-     * Return a new curve with reversed direction.
-     */
     reverse(): Curve {
         const reversed: BezierSegment[] = [];
         for (let i = this.segments.length - 1; i >= 0; i--) {

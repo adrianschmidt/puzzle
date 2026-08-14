@@ -1,29 +1,19 @@
 /**
- * Designed for testability: the controller itself doesn't touch the DOM.
- * It receives events and emits position updates via callbacks.
- *
- * Integration model: called from PointerRouter via `handlePointerDown(pieceId, evt)`,
- * `handlePointerMove(evt)`, `handlePointerUp(evt)`, and `cancel()`. Multi-pointer /
- * pinch arbitration is owned entirely by PointerRouter; DragController only
- * sees the single drag pointer.
+ * Multi-pointer / pinch arbitration is owned by PointerRouter; DragController
+ * only ever sees the single drag pointer.
  */
 
 import type { Point, PieceGroup } from '../model/types.js';
 
-/**
- * The pointer position is clamped so it stays
- * at least this far inside the viewport. This means the point
- * where you are holding the group can't leave the visible area,
- * preventing pieces from being dragged out of reach.
- */
+/** Clamp margin keeping the held point inside the viewport, so a group can't be dragged out of reach. */
 const POINTER_MARGIN_PX = 40;
 
 export interface DragState {
     groupId: number;
-    /** Pointer position at drag start (or last move), in client coords. */
+    /** In client coords. */
     lastPointer: Point;
     pointerId: number;
-    /** The group's position at drag start (for cancellation). */
+    /** For cancel(): group position at drag start. */
     startPosition: Point;
 }
 
@@ -33,10 +23,7 @@ export interface DragCallbacks {
     requestRender(): void;
 }
 
-/**
- * Backed by `state.pieceToGroup` and `state.groupsById` in production for
- * O(1) lookup.
- */
+/** Backed by state.pieceToGroup / state.groupsById in production. */
 export interface DragGroupLookups {
     /** Throws if the piece is unknown. */
     getGroupForPiece(pieceId: number): PieceGroup;
@@ -44,10 +31,7 @@ export interface DragGroupLookups {
     getGroupById(groupId: number): PieceGroup | undefined;
 }
 
-/**
- * When a viewport transform is active (zoom/pan), pointer deltas are
- * in screen pixels but group positions are in world coordinates.
- */
+/** Pointer deltas are screen pixels; group positions are world coords. */
 export type ScreenDeltaToWorld = (delta: Point) => Point;
 
 export class DragController {
@@ -98,8 +82,7 @@ export class DragController {
         if (!this.drag) return;
         if (event.pointerId !== this.drag.pointerId) return;
 
-        // Clamp pointer to viewport so the held point can't leave
-        // the visible area — prevents losing pieces behind browser chrome.
+        // Clamp so the held point can't leave the viewport (losing pieces behind browser chrome).
         const vw = this.getViewportSize().width;
         const vh = this.getViewportSize().height;
         const clampedX = Math.max(POINTER_MARGIN_PX, Math.min(vw - POINTER_MARGIN_PX, event.clientX));
@@ -116,10 +99,7 @@ export class DragController {
         this.callbacks.requestRender();
     }
 
-    /**
-     * The caller (PointerRouter hook) is responsible for triggering
-     * drop/merge detection.
-     */
+    /** Caller (PointerRouter hook) triggers drop/merge detection. */
     handlePointerUp(event: PointerEvent): void {
         if (!this.drag) return;
         if (event.pointerId !== this.drag.pointerId) return;
@@ -127,11 +107,7 @@ export class DragController {
         this.drag = null;
     }
 
-    /**
-     * Called by the PointerRouter hook when a tap-to-toggle-selection
-     * gesture needs to undo the speculative drag started at pointerdown,
-     * or when a pinch cancels the drag.
-     */
+    /** Undo the speculative pointerdown drag (tap-to-toggle-selection) or a pinch-canceled drag. */
     cancel(): void {
         if (!this.drag) return;
 

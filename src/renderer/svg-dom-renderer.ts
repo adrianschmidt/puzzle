@@ -1,10 +1,8 @@
 /**
- * Coordinate system:
- * - Pieces define their shapes in piece-local coordinates
- *   (origin at piece's top-left corner, before tabs/blanks extend beyond)
- * - `piece.imageOffset` positions the full puzzle image behind the clip-path
- *   (image pieces only)
- * - Groups position pieces in world space via `group.position + piece.groupOffset`
+ * Coordinate system: pieces define shapes in piece-local coords (origin at the
+ * top-left, before tabs extend beyond); `piece.imageOffset` positions the image
+ * behind the clip-path; groups place pieces in world space via
+ * `group.position + piece.groupOffset`.
  */
 
 import { getPieceBounds } from '../model/derive.js';
@@ -15,24 +13,18 @@ import { VIEWPORT_TRANSITION_MS, type Renderer } from './types.js';
 const PIECE_PADDING = 30;
 
 /**
- * Exported for the one caller outside this module that writes a `transition`
- * itself: `app/viewport-fit.ts` spins the completed group in lockstep with
- * the viewport zoom, through the same direct-DOM route it already uses for
- * `applyGroupTransform`. Sharing the string rather than rebuilding it keeps
- * the easing and the duration identical, which is what "lockstep" means here.
+ * Exported for `app/viewport-fit.ts`, which spins the completed group in
+ * lockstep with the viewport zoom via direct DOM. Sharing this string keeps the
+ * easing and duration identical.
  */
 export const VIEWPORT_TRANSITION = `transform ${VIEWPORT_TRANSITION_MS / 1000}s ease-in-out`;
 
 /**
- * Single source of truth for the `translate(...) rotate(...)` string so
- * callers outside the renderer (e.g. the completion spin animation) stay in
- * sync with how groups are normally rendered.
- *
- * `origin` is the rotation pivot in the group's local coordinate space,
- * written as the CSS `transform-origin`. It defaults to the group origin
- * `(0, 0)` — the renderer's convention, where rotation pivots about that
- * origin and `group.position` places it in world space. Pass a local point
- * (e.g. the puzzle center) to pivot about somewhere else.
+ * Single source of truth for the `translate(...) rotate(...)` string, so
+ * outside callers (e.g. the completion spin) stay in sync with normal
+ * rendering. `origin` is the rotation pivot in group-local space (CSS
+ * `transform-origin`), defaulting to the group origin `(0, 0)`; pass a local
+ * point (e.g. the puzzle center) to pivot elsewhere.
  */
 export function applyGroupTransform(
     el: HTMLElement,
@@ -73,9 +65,8 @@ export class SvgDomRenderer implements Renderer {
     renderState(gameState: GameState): void {
         if (!this.tableEl) return;
 
-        // On a new game, invalidate all cached SVG elements: piece IDs
-        // restart at 0 each game, so stale elements would be reused with
-        // wrong shapes if not cleared.
+        // Piece IDs restart at 0 each game, so a new game must invalidate all
+        // cached SVG elements or stale ones get reused with wrong shapes.
         const pieceCount = gameState.pieces.length;
         const shapeFingerprint = gameState.pieces[0]?.shape ?? '';
         if (gameState.imageUrl !== this.currentImageUrl ||
@@ -176,8 +167,7 @@ export class SvgDomRenderer implements Renderer {
         if (!el) return;
 
         el.classList.remove('merge-pulse');
-        // Force a reflow so removing and re-adding the class restarts the
-        // animation.
+        // Force a reflow so re-adding the class restarts the animation.
         void el.offsetWidth;
         el.classList.add('merge-pulse');
 
@@ -197,9 +187,8 @@ export class SvgDomRenderer implements Renderer {
     }
 
     pieceIdAtPoint(point: Point): number | null {
-        // Guarded for environments without layout-based hit testing (e.g.
-        // jsdom), where point hit-testing isn't available and the near-miss
-        // probe simply finds nothing.
+        // jsdom has no `elementFromPoint`; guard so hit-testing just finds
+        // nothing there.
         if (typeof document.elementFromPoint !== 'function') return null;
         return this.pieceIdFromTarget(document.elementFromPoint(point.x, point.y));
     }
@@ -221,8 +210,7 @@ export class SvgDomRenderer implements Renderer {
 
         this.groupElements.clear();
 
-        // Piece elements live inside group containers, so they are already
-        // removed from the DOM above.
+        // Piece elements live inside the group containers, already removed above.
         this.pieceElements.clear();
     }
 
@@ -301,9 +289,8 @@ export class SvgDomRenderer implements Renderer {
             fill.dataset.pieceBlank = 'true';
             svg.appendChild(fill);
         } else {
-            // Clip path for the image below. Built only on this arm: filling
-            // the shape directly needs no clip, and an unreferenced one would
-            // be another copy of `piece.shape` on every piece.
+            // Clip only needed on the image arm — the blank arm fills the shape
+            // directly, and an unused clip would duplicate `piece.shape` per piece.
             const defs = document.createElementNS(svgNS, 'defs');
             const clipPath = document.createElementNS(svgNS, 'clipPath');
             clipPath.setAttribute('id', `clip-piece-${piece.id}`);
@@ -315,11 +302,9 @@ export class SvgDomRenderer implements Renderer {
             defs.appendChild(clipPath);
             svg.appendChild(defs);
 
-            // Image element clipped to the piece shape. `slice` makes the
-            // raster cover the puzzle rect with excess cropped, so when the
-            // puzzle's aspect ratio doesn't match the image file's aspect
-            // ratio (fractal tile grid), the image is uniformly cropped to
-            // fit rather than stretched — arcs stay circular.
+            // `slice` (preserveAspectRatio below) covers the puzzle rect and
+            // crops excess, so a puzzle whose aspect ratio differs from the
+            // image (fractal tile grid) is cropped uniformly, not stretched.
             const image = document.createElementNS(svgNS, 'image');
             image.setAttributeNS(xlinkNS, 'href', imageUrl);
             image.setAttribute('width', String(this.imageSize.width));
@@ -333,11 +318,10 @@ export class SvgDomRenderer implements Renderer {
             svg.appendChild(image);
         }
 
-        // Transparent hit-area matching the piece shape — ensures pointer
-        // events only fire inside the actual piece outline, not the
-        // rectangular SVG bounding box. Near-misses just outside the outline
-        // are rescued by the screen-space probe in the pointer layer (see
-        // interaction/hit-probe.ts), so no widened hit stroke is needed.
+        // Transparent hit-area shaped to the outline, so pointer events fire
+        // only inside the piece, not its SVG bounding box. Near-misses are
+        // rescued by the screen-space probe (`interaction/hit-probe.ts`), so no
+        // widened hit stroke is needed.
         const hitArea = document.createElementNS(svgNS, 'path');
         hitArea.setAttribute('d', piece.shape);
         hitArea.setAttribute('fill', 'rgba(0,0,0,0)');
@@ -347,8 +331,7 @@ export class SvgDomRenderer implements Renderer {
         hitArea.dataset.hitArea = 'true';
         svg.appendChild(hitArea);
 
-        // Debug overlay: mateless edge strokes (hidden by default,
-        // toggled via .show-mateless-edges on <html>).
+        // Debug overlay: mateless edge strokes, toggled via .show-mateless-edges on <html>.
         for (const edge of piece.edges) {
             if (edge.mateEdgeId !== -1) continue;
             const edgePath = document.createElementNS(svgNS, 'path');
@@ -412,8 +395,7 @@ export class SvgDomRenderer implements Renderer {
         label.dataset.pieceLabel = 'true';
         svg.appendChild(label);
 
-        // Drawn in piece-local space, so group rotation carries it along —
-        // it always points toward what was originally "up".
+        // Piece-local space, so group rotation carries it — always points at original "up".
         const arrowHalf = 5;
         const arrowHeight = 7;
         const arrowTipY = minY + 4;

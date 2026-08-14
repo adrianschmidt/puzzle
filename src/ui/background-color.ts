@@ -1,9 +1,8 @@
 /**
- * Each preset's `color` is a `var(--color-<id>)` reference, so the chosen
- * background and every swatch flip between light/dark shades with the OS
- * theme automatically. Preferences saved before the palette switch (an old
- * preset id or an even-older bare integer index) migrate to their nearest
- * new swatch via `LEGACY_COLOR_MAP`.
+ * Each preset's `color` is a `var(--color-<id>)` reference, so background and
+ * swatches flip light/dark with the OS theme. Preferences saved before the
+ * palette switch (old preset id or bare integer index) migrate via
+ * `LEGACY_COLOR_MAP`.
  */
 
 import { diagnostics } from '../diagnostics.js';
@@ -11,9 +10,6 @@ import { createStringPreference } from './preference-store.js';
 import { PALETTE_SWATCHES, type PaletteSwatch } from './palette.js';
 import type { SwatchEntry } from './swatch-picker.js';
 
-/**
- * Aliased so the public name stays meaningful while there's a single shape.
- */
 export type BackgroundColorPreset = PaletteSwatch;
 
 /** Closest to the old "midnight" default. */
@@ -22,9 +18,8 @@ export const DEFAULT_COLOR_ID = 'indigo-darker';
 export const COLOR_PREFERENCE_KEY = 'puzzle-background-color';
 
 /**
- * Old localStorage key, from before the British→American spelling rename.
- * A returning user may still have their preference stored here, so it's
- * read at load time and migrated to {@link COLOR_PREFERENCE_KEY}.
+ * Pre-rename (British spelling) localStorage key; a returning user may still
+ * have a preference here, read at load and migrated to {@link COLOR_PREFERENCE_KEY}.
  */
 const LEGACY_COLOR_PREFERENCE_KEY = 'puzzle-background-colour';
 
@@ -42,10 +37,7 @@ if (defaultSwatchOrUndef === undefined) {
 }
 const defaultSwatch: PaletteSwatch = defaultSwatchOrUndef;
 
-/**
- * `satisfies` documents that a preset is a valid `SwatchEntry`, so it
- * feeds the swatch picker directly.
- */
+/** `satisfies SwatchEntry[]` so presets feed the swatch picker directly. */
 export const BACKGROUND_COLOR_PRESETS: readonly BackgroundColorPreset[] =
     PALETTE_SWATCHES satisfies readonly SwatchEntry[];
 
@@ -60,10 +52,8 @@ const store = createStringPreference({
 export const saveColorPreference = store.save;
 
 /**
- * Each old preset id maps to its nearest equivalent in the new palette, so
- * a returning user keeps a similar background. Curated for hue character
- * rather than blind nearest: neutral grays map to grays, tinted pastels
- * stay in their hue family.
+ * Each old preset id maps to its nearest new-palette swatch, curated for hue
+ * character (grays→grays, pastels stay in-family) rather than blind nearest.
  */
 const LEGACY_NEAREST: Record<string, string> = {
     midnight: 'indigo-darker',
@@ -96,9 +86,8 @@ const LEGACY_COLOR_MAP: Record<string, string> = {
     ),
 };
 
-// Fail fast in development if any migration target drifts off the palette.
-// Iterate the assembled map (not just LEGACY_NEAREST) so an integer index
-// pointing at a missing target surfaces as `undefined` here too.
+// Fail fast if a migration target drifts off the palette. Iterate the assembled
+// map, not just LEGACY_NEAREST, so a bad integer-index target surfaces too.
 for (const target of Object.values(LEGACY_COLOR_MAP)) {
     if (!swatchById.has(target)) {
         throw new Error(
@@ -144,9 +133,9 @@ export function loadColorPreference(): string {
 export type SharedColorOutcome = 'adopted' | 'kept-own' | 'invalid';
 
 /**
- * Adopt a share link's background color only for a recipient who has
- * never chosen one. Raw key existence is the test:
- * `loadColorPreference()` returns the default either way.
+ * Adopt a share link's background color only for a recipient who never chose
+ * one. Tests raw key existence, since `loadColorPreference()` returns the
+ * default either way.
  */
 export function adoptSharedBackgroundColor(id: string): SharedColorOutcome {
     if (!ALLOWED_IDS.includes(id)) {
@@ -206,19 +195,14 @@ export function applyBackgroundColor(id: string): void {
     // Drives the visible background — style.css applies it on :root.
     document.documentElement.style.setProperty(CSS_CUSTOM_PROPERTY, preset.color);
     // NOT redundant with the line above: this is the read-back target for the
-    // chrome decision below. getComputedStyle(document.body) resolves this
-    // assignment's var() to a concrete rgb(); without it body stays
-    // transparent → rgba(0, 0, 0, 0) → chrome silently stuck on dark for every
-    // color (and rgba(0,0,0,0) parses fine, so the warn below wouldn't even
-    // fire). Don't "simplify" this away.
+    // chrome decision below. Without it body stays transparent → rgba(0,0,0,0),
+    // which parses fine → chrome silently stuck on dark, no warn. Don't
+    // "simplify" this away.
     document.body.style.backgroundColor = preset.color;
 
-    // `preset.color` is a `var(--color-…)` reference, so reading it back
-    // resolves to a concrete rgb() only once `palette.css` has loaded
-    // (hence main.ts imports it before the app boots). If it's empty or
-    // otherwise unparseable, `isLightColor` returns false → the chrome
-    // silently defaults to dark; warn so a load-order or naming regression
-    // is noticed rather than failing invisibly.
+    // Reading back the `var(--color-…)` resolves to rgb() only once palette.css
+    // has loaded (main.ts imports it before boot). If unparseable, chrome
+    // defaults to dark; warn so a load-order or naming regression is noticed.
     const resolved = parseRgb(getComputedStyle(document.body).backgroundColor);
     if (resolved === null) {
         diagnostics.warn(

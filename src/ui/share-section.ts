@@ -1,8 +1,3 @@
-/**
- * DOM-building is done via createElement so we don't hand-build HTML
- * strings here; the parent modal owns its HTML template.
- */
-
 import type { GameState } from '../model/types.js';
 import {
     buildShareUrl,
@@ -60,9 +55,8 @@ export function attachShareSection(
     button.textContent = webShareAvailable ? 'Share\u2026' : 'Copy link';
     section.appendChild(button);
 
-    // An <input readonly> gives Chrome Android a proper long-press "Copy"
-    // toolbar (a plain <div> doesn't reliably do that). Auto-select on focus
-    // so one tap selects the entire URL.
+    // <input readonly> (not a <div>) gives Chrome Android a long-press "Copy"
+    // toolbar; auto-select on focus so one tap selects the whole URL.
     const preview = document.createElement('input');
     preview.type = 'text';
     preview.readOnly = true;

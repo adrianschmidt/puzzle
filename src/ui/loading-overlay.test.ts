@@ -74,13 +74,11 @@ describe('loading-overlay', () => {
     });
 
     it('wires a Cancel button that was already in the markup', () => {
-        // index.html pre-renders the overlay and its spinner/text, and says it
-        // mirrors this module's structure — so it may one day pre-render the
-        // Cancel button too. Registering the click handler only in the
-        // creation branch would leave such a button inert — clicking it would
-        // do nothing. Focus is deliberately NOT hoisted with it: `does not
-        // steal focus again when the overlay is re-shown` pins the opposite
-        // invariant, so a pre-rendered button would be clickable but unfocused.
+        // index.html pre-renders the overlay to mirror this module, so it may one
+        // day pre-render the Cancel button too; wiring the handler only in the
+        // creation branch would leave such a button inert. Focus is deliberately
+        // not hoisted (see `does not steal focus again when the overlay is
+        // re-shown`).
         const overlay = document.createElement('div');
         overlay.className = 'loading-overlay';
         const button = document.createElement('button');
@@ -96,9 +94,8 @@ describe('loading-overlay', () => {
     });
 
     it('re-showing the overlay repoints Cancel at the new handler', () => {
-        // Both directions matter: the second handler fires, and the first does
-        // not. A per-call capture would call `first` here; a per-call
-        // `addEventListener` would call both.
+        // Both directions matter: a per-call capture would fire `first`; a
+        // per-call addEventListener would fire both.
         const first = vi.fn();
         const second = vi.fn();
         showLoadingOverlay(undefined, { onCancel: first });
@@ -113,12 +110,10 @@ describe('loading-overlay', () => {
     });
 
     it('focuses the Cancel button and keeps it out of the live region', () => {
-        // The overlay covers the page and swallows every pointer event, so
-        // nothing else is actionable while it is up. Without focus the only
-        // way to discover the affordance without sight is to guess that
-        // Escape works; and an interactive control inside a `role="status"`
-        // region is announced as part of a status message rather than as a
-        // control.
+        // The overlay swallows every pointer event, so nothing else is
+        // actionable; without focus a non-sighted user can only guess Escape
+        // works. And a control inside a role="status" region is announced as
+        // status text, not as a control.
         showLoadingOverlay(undefined, { onCancel: vi.fn() });
         const button = document.querySelector<HTMLButtonElement>('.loading-overlay__cancel')!;
         expect(document.activeElement).toBe(button);
@@ -131,11 +126,9 @@ describe('loading-overlay', () => {
     });
 
     it('gives focus back to where it was when the overlay hides', () => {
-        // Cancel takes focus, and hiding detaches it — so without an
-        // explicit restore a keyboard user lands on `document.body` and
-        // loses their place. Bites where focus was meaningfully placed
-        // beforehand: a share link arriving via `hashchange` mid-play, or
-        // `__reproPuzzle`.
+        // Cancel takes focus and hiding detaches it, so without an explicit
+        // restore a keyboard user lands on document.body and loses their place
+        // (e.g. a share link arriving via hashchange mid-play, or __reproPuzzle).
         const before = document.createElement('button');
         document.body.appendChild(before);
         before.focus();
@@ -148,12 +141,10 @@ describe('loading-overlay', () => {
     });
 
     it('gives focus back after an overlay that offers no Cancel button', () => {
-        // `inert` blurs whatever was focused inside `#app` whether or not
-        // the overlay offers Cancel, so the save cannot be keyed to the
-        // button being created. Reachable mid-session: a share link arriving
-        // via `hashchange` puts up `share-link-loader`'s non-cancellable
-        // "Checking for app update…" overlay while the player has the
-        // toolbar focused.
+        // `inert` blurs whatever was focused inside `#app` whether or not the
+        // overlay offers Cancel, so the focus save can't be keyed to the button.
+        // Reachable when a hashchange share link raises a non-cancellable
+        // "Checking for app update…" overlay.
         const app = document.createElement('div');
         app.id = 'app';
         const before = document.createElement('button');
@@ -172,9 +163,9 @@ describe('loading-overlay', () => {
     });
 
     it('makes the app inert while the overlay is up and interactive again after', () => {
-        // The overlay is modal to the pointer but has no focus trap, so
-        // without this Shift+Tab off Cancel reaches the toolbar behind it,
-        // where Enter starts a second flow against the same overlay.
+        // The overlay is modal to the pointer but has no focus trap, so without
+        // inert Shift+Tab off Cancel reaches the toolbar behind and can start a
+        // second flow against the same overlay.
         const app = document.createElement('div');
         app.id = 'app';
         document.body.appendChild(app);
@@ -216,10 +207,9 @@ describe('loading-overlay', () => {
         expect(onCancel).not.toHaveBeenCalled();
     });
 
-    // `cancelHandler = null` alone would also make the test above pass, so
-    // it doesn't pin down the document listener actually being detached
-    // (this repo's tests share one jsdom — a listener left attached is a
-    // cross-file leak even though it's inert here). Assert directly.
+    // `cancelHandler = null` alone would pass the previous test without proving
+    // the document listener is detached — and this repo's tests share one jsdom,
+    // so a stray listener is a cross-file leak. Assert the detach directly.
     it('hideLoadingOverlay detaches its Escape keydown listener from document', () => {
         const removeSpy = vi.spyOn(document, 'removeEventListener');
         showLoadingOverlay(undefined, { onCancel: vi.fn() });

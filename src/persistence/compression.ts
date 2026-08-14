@@ -1,16 +1,8 @@
-/**
- * Compression is used only as a fallback when an uncompressed write exceeds
- * the quota (see `writeWithOverflow` in storage.ts), so most saves never
- * pass through here.
- */
+/** Fallback only: used when an uncompressed write exceeds quota (writeWithOverflow in storage.ts). */
 
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 
-/**
- * Begins with the U+0001 control character, which a `JSON.stringify` object
- * payload (always starting with `{`) can never begin with — so a stored blob
- * is classified unambiguously without a format/version flag.
- */
+/** U+0001 leading byte: a JSON.stringify object payload starts with `{`, so a stored blob is classified without a version flag. */
 export const COMPRESSED_MARKER = '\x01LZ';
 
 export function compressForStorage(json: string): string {
@@ -18,10 +10,9 @@ export function compressForStorage(json: string): string {
 }
 
 /**
- * A value without the marker is returned unchanged, so saves written before
- * compression existed (and normal-sized saves today) still load. A corrupt
- * compressed payload yields a string that fails downstream `JSON.parse`,
- * which the caller already treats as "no valid save".
+ * Unmarked values pass through unchanged, so pre-compression and normal-sized
+ * saves still load. A corrupt compressed payload yields a JSON.parse-failing
+ * string, which the caller treats as "no valid save".
  */
 export function decompressFromStorage(raw: string): string {
     if (!raw.startsWith(COMPRESSED_MARKER)) {

@@ -13,10 +13,7 @@ function makeBackgroundColor(): BackgroundColorControl {
     return { adopt: vi.fn(() => 'adopted' as const) };
 }
 
-/**
- * Only `current` — the narrowed dependency is what stops a fake
- * from having to guess at `hasGame`'s stricter meaning.
- */
+/** Only `current`: the narrowed dependency spares a fake from `hasGame`'s stricter meaning. */
 function makeSession(state?: GameState): Pick<GameSession, 'current'> {
     return { current: () => state };
 }
@@ -30,9 +27,8 @@ describe('installToolbar', () => {
     });
 
     afterEach(() => {
-        // `reads zero counts and not-completed when there is no game` spies
-        // on `window.confirm`; restore it so later tests (in this file, or
-        // in whatever order `--sequence.shuffle` picks) don't inherit it.
+        // A test below spies on `window.confirm`; restore it so later tests
+        // (any shuffle order) don't inherit it.
         vi.restoreAllMocks();
     });
 
@@ -66,10 +62,9 @@ describe('installToolbar', () => {
     });
 
     it('keeps the background-color control between deselect and Info in DOM order', () => {
-        // Every one of these controls is absolutely positioned in one
-        // visual top-to-bottom stack (src/style.css), so DOM order alone
-        // sets keyboard tab order — it has to match New Game -> Gather ->
-        // select -> marquee -> deselect -> background-color -> Info.
+        // These controls are absolutely positioned in one stack (src/style.css),
+        // so DOM order alone sets keyboard tab order; it must match the visual
+        // top-to-bottom order asserted below.
         const installBackgroundColorControl = vi.fn(() => {
             const marker = document.createElement('div');
             marker.className = 'background-color-marker';
@@ -91,12 +86,11 @@ describe('installToolbar', () => {
     });
 
     it('hands back the background-color handle it installed', () => {
-        // The composition root needs the handle for the share path but wants
-        // the picker's DOM to land here, between deselect and Info. Returning
-        // it is what lets that root bind it with a plain `const` — an
-        // assigned-by-callback binding would need a definite-assignment
-        // assertion, and would silently be `undefined` if this call ever
-        // stopped invoking the dependency.
+        // The root needs the handle for the share path but wants the picker's
+        // DOM here, between deselect and Info. Returning it lets the root use a
+        // plain `const` — a callback-assigned binding would need a
+        // definite-assignment assertion and be silently `undefined` if this
+        // call stopped invoking the dependency.
         const control = makeBackgroundColor();
         const returned = installToolbar(
             deps({ installBackgroundColorControl: vi.fn(() => control) }),
@@ -106,11 +100,10 @@ describe('installToolbar', () => {
     });
 
     it('reads zero counts and not-completed when there is no game', () => {
-        // Unguarded reads here threw and swallowed the click in exactly the
-        // terminal state boot can leave behind (#488), making the one dialog
-        // that can escape the failure the one thing unreachable. With no
-        // game, `shouldConfirmNewGame(false, 0, 0)` is false, so the click
-        // reaches `onNewGame` directly with no confirm prompt.
+        // Unguarded reads threw and swallowed the click in the terminal state
+        // boot can leave behind (#488) — making the one dialog that can escape
+        // the failure unreachable. With no game, `shouldConfirmNewGame(false,
+        // 0, 0)` is false, so the click reaches `onNewGame` with no confirm.
         const confirmSpy = vi.spyOn(window, 'confirm');
         const onNewGame = vi.fn();
         installToolbar(deps({ session: makeSession(undefined), onNewGame }));
@@ -122,9 +115,8 @@ describe('installToolbar', () => {
     });
 
     it('does nothing when Gather is tapped with no game', () => {
-        // The last sibling of the New Game read above: all three synchronous
-        // session reads threw whenever boot left no game behind. There is
-        // nothing to gather in that state, so a silent no-op is correct.
+        // Like the New Game read above, this session read threw when boot left
+        // no game. Nothing to gather in that state, so a no-op is correct.
         const fitView = vi.fn();
         const save = vi.fn();
         installToolbar(deps({ session: makeSession(undefined), fitView, save }));
@@ -136,8 +128,8 @@ describe('installToolbar', () => {
     });
 
     it('gathers and saves when Gather is tapped with a game installed', () => {
-        // Positive counterpart to the no-op case above: proves the guard
-        // isn't just swallowing every click.
+        // Positive counterpart to the no-op case: the guard isn't swallowing
+        // every click.
         const fitView = vi.fn();
         const save = vi.fn();
         const state = { pieces: [], groups: [] } as unknown as GameState;

@@ -27,10 +27,7 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
     };
 }
 
-/**
- * Create a simple 100×100 piece with four straight edges.
- * Optionally set mate info for specific edges.
- */
+/** 100×100 piece with four straight edges; optionally sets mate info per edge. */
 function makeSquarePiece(
     id: number,
     mates?: {
@@ -317,27 +314,13 @@ describe('shouldSuppressMerge', () => {
     });
 
     it('does not falsely suppress when the moved group is rotated (issue #237)', () => {
-        // Regression for issue #237: getGroupBounds must account for group
-        // rotation. When it doesn't, a rotated moved piece's bounds sit at
-        // the wrong world location, so the overlap check silently walks past
-        // its real mate and instead counts unrelated loose pieces that happen
-        // to lie at the phantom shifted location — tripping the pile filter
-        // and vetoing a perfectly legitimate drop.
-        //
-        // Layout (visual / world space):
-        //   - Moved piece at visual AABB [0..100] × [0..100]  (rotation 90°)
-        //   - Mate piece at visual AABB [-100..0] × [0..100]  (rotation 0,
-        //     touching the moved piece's left edge)
-        //   - Three non-mate pieces far to the right at x ≥ 150 — well
-        //     outside the moved piece's visual bounds + padding.
-        //
-        // Because rotation 90° translates un-rotated local [0..100]² to
-        // rotated-local [-100..0] × [0..100], the moved group's position
-        // must be offset by (+100, 0) to place the visual AABB at [0..100]².
-        // The rotation-ignorant implementation will compute the moved
-        // group's bounds at [100..200]², shift the overlap window east by
-        // 100 pixels, lose the real mate and pick up the three distant
-        // non-mates, then suppress the merge.
+        // Regression for #237: getGroupBounds must account for rotation.
+        // Rotation-ignorant bounds sit at the wrong world location, so the
+        // overlap check misses the real mate and counts distant loose pieces,
+        // wrongly suppressing the drop. Rotation 90° maps local [0..100]² to
+        // [-100..0]×[0..100], so position is offset (+100,0) to put the visual
+        // AABB at [0..100]²; the buggy path would compute [100..200]² and pick
+        // up the three non-mates at x≈150.
         const piece0 = makeSquarePiece(0, {
             left: { pieceId: 1, edgeId: 5 }, // mates with piece 1 to the left
         });
@@ -356,14 +339,12 @@ describe('shouldSuppressMerge', () => {
             rotation: 90,
         };
 
-        // Mate group: un-rotated, positioned so its visual AABB is
-        // [-100..0] × [0..100] — touches the moved group's left edge
-        // visually, well clear of the rotation-ignorant phantom bounds.
+        // Mate group: un-rotated, visual AABB [-100..0]×[0..100], touching the
+        // moved group's left edge, clear of the phantom bounds.
         const mateGroup = makeGroup(1, 1, { x: -100, y: 0 });
 
-        // Three non-mate loose pieces clustered far to the right of the
-        // moved piece's VISUAL bounds, but right on top of its BUGGY
-        // (un-rotated) bounds at x ≈ 150..200.
+        // Three non-mate pieces to the right of the visual bounds but on top of
+        // the buggy un-rotated bounds at x ≈ 150..200.
         const nonMate1 = makeGroup(2, 2, { x: 150, y: 0 });
         const nonMate2 = makeGroup(3, 3, { x: 160, y: 0 });
         const nonMate3 = makeGroup(4, 4, { x: 170, y: 0 });
@@ -374,8 +355,7 @@ describe('shouldSuppressMerge', () => {
     });
 
     it('does not suppress when non-mates equal mates', () => {
-        // When non-mate count equals mate count, it's ambiguous —
-        // we give the benefit of the doubt and allow the merge.
+        // Equal non-mate/mate count is ambiguous → allow the merge.
         const piece0 = makeSquarePiece(0, {
             right: { pieceId: 1, edgeId: 5 },
             bottom: { pieceId: 2, edgeId: 9 },

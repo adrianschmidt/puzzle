@@ -1,32 +1,17 @@
 /**
- * Owns *which* game is currently installed: the reference to its `GameState`
- * and the teardown handle for the interaction wiring bound to it.
+ * Owns *which* game is installed: the reference to its `GameState` and the
+ * teardown handle for the interaction wiring bound to it.
  *
- * The reference, not the state. {@link GameSession.current} hands out the
- * live object and callers mutate it in place — `merge-result.ts` flips
- * `completed`, `viewport-fit.ts` rewrites the completed group's transform,
- * `dev-hooks.ts` swaps the group indexes wholesale. The largest of them is
- * the one this module wires itself: `install` passes `liveState` in as the
- * interaction layer's `getState`, and every frame of a drag or a rotate
- * writes straight through it into that state's groups. That is exactly what
- * the `gameState` module global allowed and is kept deliberately: a session
- * that copied or froze the state would change what every one of those call
- * sites does. What this module does enforce is when the reference changes
- * and what `hasGame()` means while it is changing.
+ * The reference, not the state. `current()` hands out the live object and
+ * callers mutate it in place (merge-result, viewport-fit, dev-hooks, and the
+ * interaction layer writing through `getState` every frame). A session that
+ * copied or froze the state would change what those call sites do. What this
+ * module enforces is when the reference changes and what `hasGame()` means
+ * while it changes:
  *
- * These were two module-level `let`s in `main.ts` that roughly twenty-five
- * closures read directly, which is what blocked every previous attempt to
- * break that file up. Two properties of the pair are load-bearing and are
- * enforced here rather than described in a comment:
- *
- *  - {@link GameSession.current} returns `GameState | undefined`. The app has
- *    a genuine no-game state — boot can fail and install nothing (#488) — and
- *    the old non-optional declaration hid it, so every consumer rediscovered
- *    it by hand. The optional type makes the compiler ask each call site what
- *    it wants to do with nothing installed (#501).
- *  - {@link GameSession.hasGame} is false until interaction is wired. See
- *    {@link createGameSession}'s `install` for why, and
- *    `game-session.test.ts` for the tests that hold it in place.
+ *  - `current()` returns `GameState | undefined`: boot can fail and install
+ *    nothing (#488), and the compiler makes each call site handle that (#501).
+ *  - `hasGame()` is false until interaction is wired — see `install`.
  */
 
 import type { GameState } from '../model/types.js';
@@ -40,21 +25,11 @@ import type { Renderer } from '../renderer/index.js';
 import { diagnostics } from '../diagnostics.js';
 import { activeSnapTolerances } from './snap-tolerances.js';
 
-/**
- * The installed game, and the only way to *replace* it — mutating the state
- * it hands back stays the caller's business, as it was with the module
- * global. Everything that used to read `gameState` goes through `current()`.
- */
+/** The installed game and the only way to replace it; mutation stays the caller's. */
 export interface GameSession {
-    /**
-     * The installed game, or `undefined` when there is none — before the
-     * first install, and after a boot that failed to produce one.
-     */
+    /** The installed game, or `undefined` before the first install / after a failed boot. */
     current(): GameState | undefined;
-    /**
-     * Whether a puzzle is both rendered and interactive. Deliberately
-     * stricter than `current() !== undefined`: see `install`.
-     */
+    /** Whether a puzzle is rendered *and* interactive — stricter than `current() !== undefined`; see `install`. */
     hasGame(): boolean;
     install(state: GameState): void;
     restoreSelection(saved: readonly number[]): void;
@@ -78,9 +53,8 @@ export function createGameSession(deps: {
     /** Push the viewport transform to the renderer and persist it. */
     onViewportChanged: () => void;
     /**
-     * Push the viewport transform to the renderer without persisting it.
-     * Auto-pan calls this on every frame of an edge drag, which must not
-     * restart the debounced save on each tick.
+     * Push the viewport transform without persisting it. Auto-pan calls this
+     * every frame of an edge drag and must not restart the debounced save.
      */
     applyTransform: () => void;
 }): GameSession {
@@ -111,9 +85,8 @@ export function createGameSession(deps: {
 
         install(state: GameState): void {
             // Clears before `installed = state`, so bootstrap's selection
-            // listener autosaves the *outgoing* puzzle — a debounced save the
-            // new puzzle's save slot then correctly refuses, emitting a
-            // spurious `progress-save-skipped`. Pre-existing. Tracked as #514.
+            // listener autosaves the *outgoing* puzzle — a spurious
+            // `progress-save-skipped` the new slot then refuses (#514).
             selectionManager.clearAll();
             rotationFocus.clearFocus();
 
@@ -126,26 +99,16 @@ export function createGameSession(deps: {
             renderer.renderState(state);
             onInstalled(state);
 
-            // Read late, so every callback below sees whatever is installed
-            // when it fires rather than what was installed when it was wired
-            // — the behavior of the module-level global these replaced.
-            //
-            // The `?? state` arm is unreachable: `install` is the only writer
-            // of `installed`, and it tears this wiring down before replacing
-            // the state, so the wiring's lifetime is exactly the lifetime of
-            // `state` being current. It is here to keep the getter total
-            // without a non-null assertion, and it names the only state this
-            // wiring could ever legitimately be asked about.
+            // Read late, so every callback sees whatever is installed when it
+            // fires, not when it was wired. The `?? state` arm is unreachable
+            // (install tears this down before replacing `installed`) — it just
+            // keeps the getter total without a non-null assertion.
             const liveState = (): GameState => installed ?? state;
 
-            // Keep this assignment last, and keep it unconditional: the boot
-            // fallback reads `hasGame()` as "a puzzle is rendered and
-            // interactive". Moving the assignment earlier, wiring interaction
-            // only for some states, or clearing the handle from anywhere but
-            // the teardown above silently restores #488's dead-and-silent
-            // app. This used to be a comment asking a maintainer not to move
-            // a line in a file no test could import; `game-session.test.ts`
-            // now enforces it.
+            // Keep this assignment last and unconditional: the boot fallback
+            // reads `hasGame()` as "rendered and interactive". Moving it
+            // earlier, wiring only some states, or clearing the handle
+            // elsewhere restores #488's dead-and-silent app.
             teardown = setupInteraction({
                 container,
                 renderer,
@@ -154,7 +117,7 @@ export function createGameSession(deps: {
                 onStateChanged: () => {
                     const current = liveState();
                     renderer.renderState(current);
-                    // Re-apply selection visuals after re-render (renderState may recreate elements)
+                    // Re-apply selection visuals: renderState may recreate elements.
                     if (selectionManager.hasSelection) {
                         for (const selectedId of selectionManager.selectedGroupIds) {
                             renderer.setGroupSelected(selectedId, true);
@@ -193,32 +156,24 @@ export function createGameSession(deps: {
         },
 
         /**
-         * Called only on the saved-game restore path, right after `install`
-         * has put the restored state in place (and cleared any in-memory
-         * selection). Group ids are stable across a reload, so the saved ids
-         * map back to the same groups; any id that no longer exists
-         * (defensive — shouldn't happen on a pure reload) is dropped. When a
-         * non-empty selection is restored the multi-select tool is switched
-         * on so the selection is visible and draggable, mirroring the state
-         * the user left.
+         * Saved-game restore path, right after `install`. Group ids are stable
+         * across a reload, so saved ids map back to the same groups; any that
+         * no longer exists is dropped. A non-empty restored selection switches
+         * the multi-select tool on so it's visible and draggable.
          */
         restoreSelection(savedSelection: readonly number[]): void {
             const state = installed;
-            // With nothing installed there is nothing to select against, so
-            // the whole restore is a no-op — the same answer as an empty
-            // saved selection. Not reachable from the boot path, which only
-            // restores a selection for a game it just installed.
+            // Nothing installed: no-op, same as an empty selection. Not reached
+            // from boot, which only restores for a game it just installed.
             if (!state || savedSelection.length === 0) return;
 
             const validIds = new Set(state.groups.map((g) => g.id));
             const toSelect = savedSelection.filter((id) => validIds.has(id));
 
             if (toSelect.length < savedSelection.length) {
-                // The saved selection comes from the same blob as the restored
-                // game, so on a pure reload every id should still exist. A
-                // mismatch points at a genuine inconsistency (id-allocation
-                // drift, a save/restore ordering bug) worth surfacing in dev
-                // rather than dropping silently.
+                // Same blob as the restored game, so every id should exist on a
+                // pure reload; a mismatch is a genuine inconsistency worth a
+                // dev warning rather than a silent drop.
                 const dropped = savedSelection.filter((id) => !validIds.has(id));
                 diagnostics.warn(
                     'restoreSelection: dropped saved selection id(s) with no matching group',

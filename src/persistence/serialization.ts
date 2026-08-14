@@ -1,8 +1,4 @@
-/**
- * GameState contains Maps (PieceGroup.pieces), which don't survive
- * JSON round-tripping. These helpers convert to/from a plain JSON-safe
- * representation.
- */
+/** GameState's Maps (PieceGroup.pieces) don't survive JSON; these helpers convert to/from a JSON-safe shape. */
 
 import type {
     Edge,
@@ -28,37 +24,20 @@ import type { ViewportState } from '../interaction/viewport-transform.js';
 export const STATE_VERSION = 13;
 
 /**
- * - v1: original format (no imageSize or attribution)
- * - v2: adds imageSize and optional attribution
- * - v3: adds gridSize (cols × rows)
- * - v4: adds seed for procedural cut generation
- * - v5: adds cutStyle ('classic' | 'fractal')
- * - v6: adds rotation (0-3 quarter-turns) per group
- * - v7: adds generatorConfig (fractal/composable params) for reproducibility
- * - v8: replaces opaque generatorConfig with typed composableConfig / fractalConfig
- * - v9: rotation is stored as float degrees (0–360); v8 and earlier saves are
- *       migrated by multiplying their integer quarter-turn values by 90
- * - v10: composableConfig switched from legacy `horizontalAmplitude`/… fields
- *        to the opaque `{baseCutGenerator, baseCutConfig, tabGenerator, tabConfig}`
- *        shape that the topology refactor introduced. v9 and earlier saves are
- *        migrated on load (see `migrateLegacyComposableConfig`).
- * - v11: split storage — STATIC blob omits groups/selection/completed (those live in
- *        the separate progress blob); v≤10 full blobs still load via deserializeState.
- * - v12: pieces store `bounds` and no longer store `curvePoints` (bounds are
- *        precomputed at generation); `shape` is omitted per piece when it is
- *        byte-identically rebuildable from the edge paths (`buildShape`).
- *        v≤11 pieces are migrated on load: bounds computed from their stored
- *        curvePoints, which are then dropped.
- *
- *        Omitting `shape` makes `model/build-shape.ts` part of this format:
- *        for those pieces the rendered geometry is whatever the *reading*
- *        build's `buildShape` emits, so changing its output bytes (spacing,
- *        `Z` placement, `CHAIN_EPSILON`, `fmt`) retroactively re-renders every
- *        stored v12 puzzle and requires a new version here — not just an
- *        updated unit test. `serialization.test.ts` pins the rebuilt bytes.
- * - v13: `imageUrl` is optional; absent means a blank puzzle with no image.
- *        v≤12 blobs stored a synthesized white PNG as a `data:` URL and
- *        migrate to absent on load.
+ * Version history (migrations run on load; keep them — users still hold old saves):
+ * - v1: no imageSize/attribution. v2: +imageSize/attribution. v3: +gridSize.
+ * - v4: +seed. v5: +cutStyle. v6: +per-group quarter-turn rotation. v7: +generatorConfig.
+ * - v8: typed composableConfig/fractalConfig replace generatorConfig.
+ * - v9: rotation as float degrees; v≤8 quarter-turns migrated ×90.
+ * - v10: composableConfig → opaque {baseCutGenerator,baseCutConfig,tabGenerator,tabConfig}
+ *        (migrateLegacyComposableConfig).
+ * - v11: split storage — STATIC omits groups/selection/completed; v≤10 full blobs still load.
+ * - v12: pieces store `bounds`, drop `curvePoints`; `shape` omitted when buildShape(edges)
+ *        rebuilds it byte-identically. This makes model/build-shape.ts part of the format:
+ *        changing its output bytes re-renders every stored v12 puzzle and needs a version
+ *        bump, not just a test update (serialization.test.ts pins the bytes).
+ * - v13: `imageUrl` optional (absent = blank); v≤12 stored a synthesized white PNG,
+ *        migrated to absent on load.
  */
 const SUPPORTED_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
@@ -103,10 +82,7 @@ export interface SerializedGameState {
     attribution?: ImageAttribution;
     seed?: number;
     cutStyle?: string;
-    /**
-     * Missing on early v6 saves written before the rotation-mode field was
-     * added — those are migrated on load based on cut style.
-     */
+    /** Missing on early v6 saves (pre-rotation-mode); migrated on load by cut style. */
     rotationMode?: 'none' | 'quarter-turn' | 'free';
     /** v8+; only set when cutStyle === 'composable'. */
     composableConfig?: GameState['composableConfig'];
@@ -119,23 +95,14 @@ export interface SerializedGameState {
     /** Only set when cutStyle === 'classic' with the sine generator. */
     classicConfig?: GameState['classicConfig'];
     /**
-     * v7 legacy field: opaque generator config. Migrated to the typed
-     * `composableConfig` / `fractalConfig` fields based on `cutStyle` on
-     * deserialization. v7 saves are still produced in the wild, so keep
-     * the field around for input validation.
+     * v7 legacy opaque config; migrated to typed composableConfig/fractalConfig
+     * by cutStyle on load. v7 saves still exist, so keep it for input validation.
      */
     generatorConfig?: Record<string, unknown>;
     /**
-     * The user's multi-select selection: the group ids they have tapped to
-     * select for batch movement. Omitted when nothing is selected.
-     *
-     * Deliberately **not** gated behind a `STATE_VERSION` bump: it is a
-     * purely additive, optional field that the selection itself lives
-     * outside `GameState`. Older builds ignore the unknown key and still
-     * load the save as their current version; newer builds restore the
-     * selection when present. Bumping the version would instead make older
-     * builds reject the whole save during a deploy — far worse than a
-     * selection that fails to restore.
+     * Group ids selected for batch movement; omitted when empty. Deliberately
+     * NOT gated behind a STATE_VERSION bump: it's additive/optional, so old
+     * builds ignore the key rather than rejecting the whole save on deploy.
      */
     selection?: number[];
 }
@@ -160,7 +127,6 @@ export interface SerializedStaticState {
     generatorConfig?: Record<string, unknown>;
 }
 
-/** Mutable portion: changes as the player plays. */
 export interface SerializedProgress {
     version: number;
     /** Seed of the puzzle this progress belongs to, for pairing with the static blob. */
@@ -169,11 +135,8 @@ export interface SerializedProgress {
     selection?: number[];
     completed: boolean;
     /**
-     * The player's last viewport (zoom + pan). Like {@link SerializedGameState.selection},
-     * this is deliberately additive and optional — it is NOT gated behind a
-     * STATE_VERSION bump. The state it represents lives outside GameState (in
-     * ViewportTransform). Older builds ignore the unknown key; newer builds
-     * restore it when present. Omitted when the caller passes no viewport.
+     * Last viewport (zoom + pan). Like {@link SerializedGameState.selection},
+     * NOT gated behind a STATE_VERSION bump — old builds ignore the key.
      */
     viewport?: SerializedViewport;
 }
@@ -184,17 +147,11 @@ export interface SerializedViewport {
 }
 
 /**
- * Pin {@link SerializedViewport} to the runtime {@link ViewportState} it
- * mirrors. The save/restore wiring (app/save-coordinator.ts writes it,
- * app/boot-sequence.ts reads it back) assigns one to the other purely by
- * structural compatibility — there is no explicit conversion. These
- * `declare` signatures make that contract load-bearing: if a field is ever
- * added to one interface but not the other, the assignment would silently drop
- * the field at save or restore time, but this fails to compile first. They emit
- * no runtime code.
- *
- * The reference to {@link ViewportState} is a type-only import, so persistence
- * keeps no runtime dependency on the interaction layer.
+ * Compile-time pin between {@link SerializedViewport} and the runtime
+ * {@link ViewportState} it mirrors: save/restore assign one to the other by
+ * structural compatibility with no conversion, so a field added to only one
+ * would silently drop at save/restore — this fails to compile first. Emits no
+ * runtime code; the {@link ViewportState} import is type-only.
  */
 declare function __assertViewportContract(
     toDisk: ViewportState extends SerializedViewport ? true : never,
@@ -202,19 +159,11 @@ declare function __assertViewportContract(
 ): void;
 
 /**
- * Convert a GameState to a JSON-safe object in the full single-blob (v≤10)
- * format.
- *
- * The live save path no longer uses this — it writes the split
- * {@link serializeStatic} + {@link serializeProgress} blobs. `serializeState`
- * is retained as the symmetric counterpart to {@link deserializeState} (which
- * still loads legacy single-key saves) and for tests that exercise the full
- * blob shape.
- *
- * The multi-select `selection` lives outside `GameState` (in the
- * SelectionManager), so it is passed in separately. Any ids are written
- * verbatim; callers are responsible for passing only currently-valid group
- * ids. An empty/omitted selection leaves the field off the output.
+ * Convert a GameState to the full single-blob (v≤10) JSON shape. The live path
+ * writes split serializeStatic + serializeProgress instead; kept as the
+ * counterpart to deserializeState (still loads legacy single-key saves).
+ * `selection` lives outside GameState so it's passed separately; empty/omitted
+ * leaves the field off.
  */
 export function serializeState(
     state: GameState,
@@ -321,20 +270,10 @@ export function serializeProgress(
 }
 
 /**
- * Serialize one piece, omitting `shape` when the loader can rebuild it
- * byte-identically from the edge paths. Verified per piece — never assumed
- * per generator: two generators build `shape` themselves rather than calling
- * the shared builder (`puzzle/procedural-generator.ts` and
- * `puzzle/fractal/convert.ts` — see `model/build-shape.ts`), and whether their
- * bytes match is a per-piece fact, not a per-style one — the same style keeps
- * different pieces at different grids. `game/init-geometry-precision.test.ts`
- * pins the counts and explains the cause: at the grids it measures, the
- * styles keeping a `shape` are classic (sine + traced tabs) and composable,
- * on a small minority of pieces whose `M`-anchor `fmt`s differently once
- * quantized — while wavy, which keeps none there, keeps some at the 16×12
- * production ceiling that file also records.
- * Pieces that keep their shape pass through by reference; no deep copy happens
- * on the save path.
+ * Serialize one piece, omitting `shape` when buildShape(edges) rebuilds it
+ * byte-identically. Verified per piece, never per generator — whether the bytes
+ * match is a per-piece fact (see game/init-geometry-precision.test.ts). Pieces
+ * that keep their shape pass through by reference (no deep copy).
  */
 function serializePiece(piece: Piece): SerializedPiece {
     if (buildShape(piece.edges) !== piece.shape) return piece;
@@ -343,11 +282,9 @@ function serializePiece(piece: Piece): SerializedPiece {
 }
 
 /**
- * Finite on all four sides and not inverted: `getPieceBounds` derives
- * width/height by subtraction, and a `maxX < minX` box would propagate a
- * negative dimension into `deriveImageSize`. Nothing this repo writes can
- * produce one, so a blob carrying it is corrupt — reject it here rather than
- * let it surface as unexplained rendering later.
+ * Finite on all four sides and not inverted: an inverted box propagates a
+ * negative dimension into `deriveImageSize`. No writer here produces one, so a
+ * blob carrying it is corrupt — reject it rather than mis-render later.
  */
 function isUsableBounds(bounds: PieceBounds | undefined): bounds is PieceBounds {
     if (bounds == null) return false;
@@ -357,33 +294,15 @@ function isUsableBounds(bounds: PieceBounds | undefined): bounds is PieceBounds 
 }
 
 /**
- * - v12+: `bounds` must be present and usable (throw otherwise — a piece
- *   without bounds is an invalid blob, not a guessable one); a missing
+ * - v12+: `bounds` must be present and usable (throw otherwise); a missing
  *   `shape` is rebuilt from the edge paths.
- * - v≤11: `shape` is always present; `bounds` is computed from the stored
- *   edge endpoints + curve samples (same walk the app used at runtime when
- *   these saves were written), and the samples are dropped.
+ * - v≤11: `shape` always present; `bounds` computed from stored endpoints +
+ *   curve samples (the walk the app ran before v12), and the samples dropped.
  *
- * Both branches finish through `sealPieceGeometry`, the same pass generation
- * runs, so "every model piece carries bounds and no edge carries curve
- * samples" is enforced in one place for every way a `Piece` can come into
- * existence — including a v12 blob that (from some future writer) still
- * carried samples.
- *
- * Only the v12+ branch runs `isUsableBounds`, and that asymmetry is
- * deliberate: a v12 box is untrusted data read off disk, while the v≤11 box
- * is computed here by the same walk the app ran on demand before v12 —
- * rejecting one would make a save unreadable that every build to date,
- * including this one, loads. `computePieceBounds` only ever assigns on a
- * successful `<`/`>`, so it returns the degenerate `{±Infinity}` box for any
- * piece whose endpoints never clear one: no edges at all (which no generator
- * emits), and equally coordinates whose numeric coercion is `NaN` (a missing
- * coordinate, a non-numeric string). Coordinates that do coerce are assigned
- * unconverted, so a blob storing them as strings can come back inverted:
- * `"10"` then `"9"` on one axis compare lexicographically, leaving
- * `minX: "10", maxX: "9"` — the shape `isUsableBounds` exists to reject.
- * Either box is bit-for-bit what the on-demand walk returned for the same
- * blob, so accepting it here changes nothing.
+ * Both branches finish through `sealPieceGeometry`, so the "bounds present, no
+ * curve samples" invariant is enforced in one place. Only v12+ runs
+ * `isUsableBounds` — a v12 box is untrusted disk data, while the v≤11 box is
+ * computed here and rejecting it would make saves every build loads unreadable.
  */
 function restorePieces(pieces: SerializedPiece[], version: number): Piece[] {
     if (version >= 12) {
@@ -412,9 +331,8 @@ function restorePieces(pieces: SerializedPiece[], version: number): Piece[] {
         if (!Array.isArray(piece.edges)) {
             throw new Error(`Invalid state: piece ${i} has no edges`);
         }
-        // Drop any `bounds` rather than letting sealing keep it: no writer of
-        // a v≤11 blob ever produced the field, so one appearing here is not
-        // trustworthy — these saves' bounds come from their curve samples.
+        // Drop any `bounds`: no v≤11 writer produced it, so one here is
+        // untrustworthy — these saves' bounds come from their curve samples.
         const { bounds: _ignored, ...rest } = piece;
         return { ...rest, shape: piece.shape };
     }));
@@ -434,8 +352,7 @@ export function deserializeState(data: SerializedGameState): GameState {
 
     const groups = data.groups.map(deserializeGroup);
 
-    // v8 and earlier stored rotation as quarter-turn count {0,1,2,3}; v9+
-    // stores it as float degrees. Migrate older saves by multiplying.
+    // v≤8 stored rotation as quarter-turns; v9+ as degrees. Migrate by ×90.
     if (data.version <= 8) {
         for (const group of groups) {
             group.rotation = group.rotation * 90;
@@ -561,18 +478,11 @@ export function recombine(
 }
 
 /**
- * The on-disk shape changed at v10 from the legacy long-named fields
- * (`horizontalAmplitude`, `horizontalFrequency`, …) to the opaque
- * `{baseCutGenerator, baseCutConfig, tabGenerator, tabConfig}` shape that
- * the topology refactor introduced.
- *
- * - v10+ saves store the new shape directly; pass it through.
- * - v8/v9 saves stored the legacy shape under `composableConfig`; migrate.
- * - v7 saves stored an opaque `generatorConfig` with the same legacy
- *   field names; migrate those too.
- *
- * v6 and earlier saves never carry composable config (the cut style did
- * not exist yet, or the field had not been added).
+ * At v10 the on-disk shape changed from legacy long-named fields
+ * (horizontalAmplitude, …) to opaque {baseCutGenerator,baseCutConfig,tabGenerator,tabConfig}.
+ * - v10+: new shape, pass through.
+ * - v7–v9: legacy shape (under composableConfig for v8/v9, generatorConfig for v7); migrate.
+ * - v≤6: no composable config.
  */
 function resolveComposableConfig(
     data: SerializedStaticState,
@@ -650,12 +560,9 @@ function resolveFractalConfig(
 }
 
 /**
- * - If the save explicitly records one, honour it.
- * - Otherwise, infer from the data: any non-zero group rotation implies the
- *   player was using quarter-turn mode, so preserve that. Fractal saves
- *   written before rotationMode existed also get quarter-turn so their
- *   behavior matches what the player saw.
- * - Everything else defaults to 'none'.
+ * Honour an explicitly recorded mode; else infer: any non-zero group rotation
+ * (or a pre-field fractal save) implies quarter-turn, matching what the player
+ * saw; otherwise 'none'.
  */
 function resolveRotationMode(
     data: SerializedStaticState,
@@ -681,12 +588,9 @@ function resolveRotationMode(
 }
 
 /**
- * The other fields are inert padding — `getImageDimensions`
- * only reads `pieces`.
- *
- * Takes restored `Piece[]` only — callers must run blob pieces through
- * `restorePieces` first, since `getImageDimensions` reads `piece.bounds`,
- * which is only guaranteed to exist on restored pieces.
+ * Other fields are inert padding — `getImageDimensions` only reads `pieces`.
+ * Takes restored `Piece[]` (run blob pieces through `restorePieces` first):
+ * `getImageDimensions` reads `piece.bounds`, present only on restored pieces.
  */
 function deriveImageSize(pieces: Piece[]): Size {
     const tempState: GameState = {
@@ -705,10 +609,10 @@ function deriveImageSize(pieces: Piece[]): Size {
 }
 
 /**
- * A `data:` URL is the synthesized white PNG a v≤12 blank puzzle stored.
- * Collapsed at every version, unlike `validateImageUrl`'s v13 gate below:
- * localStorage has no scheme guard upstream, so this is the only thing
- * keeping a hand-edited blob's `data:` URL out of the `<image>` href.
+ * A `data:` URL is the synthesized white PNG a v≤12 blank puzzle stored;
+ * collapsed to null at every version. localStorage has no upstream scheme
+ * guard, so this is the only thing keeping a hand-edited `data:` URL out of the
+ * `<image>` href.
  */
 function readImageUrl(imageUrl: string | undefined): string | null {
     return imageUrl === undefined || isDataUrl(imageUrl)
@@ -724,10 +628,9 @@ function validateImageUrl(imageUrl: unknown, version: number): void {
 }
 
 /**
- * Tolerates missing/garbage data (older saves, hand-edited storage): a
- * non-array or absent `selection` yields `[]`, and non-finite-number
- * entries are dropped. Returned ids are not checked against the live
- * groups — the caller prunes ids that no longer exist.
+ * Tolerates missing/garbage data (old saves, hand-edited storage): absent/non-array
+ * yields `[]`, non-finite entries dropped. Ids aren't checked against live
+ * groups — the caller prunes stale ones.
  */
 export function readSelection(data: SerializedGameState | SerializedProgress): number[] {
     if (!Array.isArray(data.selection)) {
@@ -739,9 +642,8 @@ export function readSelection(data: SerializedGameState | SerializedProgress): n
 }
 
 /**
- * Tolerates missing/garbage data (older saves, hand-edited storage): a missing
- * field, a non-object viewport, a non-finite `scale`, or an `offset` without
- * finite `x`/`y` all yield `undefined`. Never throws.
+ * Tolerates missing/garbage data (old saves, hand-edited storage): missing,
+ * non-object, non-finite `scale`, or a bad `offset` all yield `undefined`. Never throws.
  */
 export function readViewport(data: SerializedProgress): SerializedViewport | undefined {
     const vp = data.viewport as unknown;
@@ -781,11 +683,9 @@ function deserializeGroup(group: SerializedPieceGroup): PieceGroup {
 }
 
 /**
- * v5 and earlier saves have no rotation; coerce missing/invalid values to 0.
- *
- * Returns the raw stored value (either quarter-turns for v ≤ 8 saves or
- * degrees for v ≥ 9 saves). The caller is responsible for converting
- * quarter-turn-era values to degrees by multiplying by 90.
+ * v≤5 saves have no rotation; coerce missing/invalid to 0. Returns the raw
+ * stored value (quarter-turns for v≤8, degrees for v≥9) — the caller converts
+ * quarter-turns by ×90.
  */
 function normalizeStoredRotation(value: unknown): number {
     if (typeof value === 'number' && Number.isFinite(value)) {

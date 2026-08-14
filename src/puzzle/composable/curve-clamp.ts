@@ -1,24 +1,18 @@
-/**
- * Based on the tab-clamping reference document.
- * See docs/composable-reference/tab-clamping-reference.md
- */
-
 import type { Point } from '../../model/types.js';
 import { fmt } from '../../model/build-shape.js';
 import type { BezierPath } from './bezier-path.js';
 import { bezierPathToSvg } from './bezier-path.js';
 
 export interface ClampedTabResult {
-    /** Full SVG path for the edge (curve + tab). */
     svgPath: string;
 }
 
 /**
- * @param curvePoints - Dense sampling of the edge curve (piece-local coords).
- *                      First point = edge start, last = edge end.
- * @param tabPath - Tab shape in normalized space ((0,0)→(1,0), +Y protrusion)
- * @param tCenter - Where on the curve to place the tab (0–1). Default: 0.5
- * @param chordFraction - Tab chord as fraction of total curve length. Default: 0.4
+ * @param curvePoints - Dense sampling of the edge curve (piece-local coords);
+ *                      first = edge start, last = edge end.
+ * @param tabPath - Tab shape in normalized space ((0,0)→(1,0), +Y protrusion).
+ * @param tCenter - Where on the curve to place the tab (0–1).
+ * @param chordFraction - Tab chord as fraction of total curve length.
  */
 export function clampTabToCurve(
     curvePoints: Point[],
@@ -42,7 +36,7 @@ export function clampTabToCurve(
     const span = Math.sqrt(dx * dx + dy * dy) || 1;
     const tx = dx / span;
     const ty = dy / span;
-    // Normal: perpendicular, pointing left of travel direction (tab protrusion)
+    // Normal: perpendicular, left of travel (tab protrusion)
     const nx = ty;
     const ny = -tx;
 
@@ -72,7 +66,7 @@ export function clampTabToCurve(
     for (let i = 1; i <= iLeft; i++) {
         parts.push(`L ${fmt(curvePoints[i].x)} ${fmt(curvePoints[i].y)}`);
     }
-    // Line to exact left anchor (in case it's between sample points)
+    // Exact left anchor (may fall between sample points)
     parts.push(`L ${fmt(pLeft.x)} ${fmt(pLeft.y)}`);
 
     parts.push(bezierPathToSvg(transformedTab));

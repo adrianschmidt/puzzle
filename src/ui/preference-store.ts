@@ -1,8 +1,4 @@
-/**
- * Several modules had near-identical preset+localStorage code, with
- * the same `null`/`NaN`/range/JSON-parse/try-catch handling repeated
- * by hand. These factories centralise that logic.
- */
+/** Factories that centralize preset + localStorage load/save with validation. */
 
 export interface IndexedPreferenceStore<T> {
     getPreset: (index: number) => T;
@@ -135,11 +131,9 @@ export function createStringPreference(opts: {
 }
 
 /**
- * Reads accept either the new id form or a legacy integer index
- * (translated via `legacyOrder`), so existing saved preferences keep
- * working across the migration. Writes always use the id form, so the
- * legacy form gets overwritten the next time the user changes their
- * preference.
+ * Reads accept the id form or a legacy integer index (via `legacyOrder`) so old
+ * saved preferences keep working; writes always use the id form, overwriting the
+ * legacy value on the next change.
  */
 export interface IdPreferenceStore<T extends { id: string }> {
     getPreset: (id: string) => T;

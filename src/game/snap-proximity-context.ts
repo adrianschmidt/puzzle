@@ -1,11 +1,7 @@
 /**
- * Shared per-gesture context for the snap-proximity features.
- *
- * Both directions of the "close enough to merge" assist — rotation driven by
- * translation (`snap-proximity-rotation.ts`) and translation driven by
- * rotation (`snap-proximity-position.ts`) — operate on the same dragged
- * group against the same border-edge candidates and tolerances. This module
- * owns that shared context so neither feature depends on the other.
+ * Shared per-gesture context for the two snap-proximity assists
+ * (`snap-proximity-rotation.ts`, `snap-proximity-position.ts`), owned here so
+ * neither feature depends on the other.
  */
 
 import type { GameState, PieceGroup } from '../model/types.js';
@@ -21,9 +17,8 @@ export function clamp01(value: number): number {
 }
 
 /**
- * The pair of thresholds that define when a drop would merge — shared by
- * merge detection on drop and the snap-proximity assists during a gesture,
- * so they always agree on what "close enough" means.
+ * Thresholds that define when a drop merges — shared by merge detection and
+ * the assists so they agree on "close enough".
  */
 export interface SnapTolerances {
     /** Snap distance (D) in world px. */
@@ -33,9 +28,8 @@ export interface SnapTolerances {
 }
 
 /**
- * Per-gesture precomputed context. Valid only while the dragged group's
- * composition and every mate group stay unchanged — true for the duration
- * of a single-group gesture, because merges happen only on drop/commit.
+ * Per-gesture precomputed context. Valid only while the group's composition and
+ * mates stay unchanged — true within a gesture since merges happen on drop.
  * Build at gesture start, discard on end/cancel.
  */
 export interface ProximityContext {
@@ -47,20 +41,17 @@ export interface ProximityContext {
     /** Active rotation tolerance (T) in degrees. */
     rotationToleranceDeg: number;
     /**
-     * Gesture-scoped memory for the sticky winner: index into `candidates`,
-     * or null when nothing is latched. Written only by `selectStickyWinner`.
-     * Cleared by construction — the context is rebuilt per gesture.
+     * Sticky-winner memory: index into `candidates`, or null when nothing is
+     * latched. Written only by `selectStickyWinner`.
      */
     latchedCandidateIndex: number | null;
 }
 
 /**
- * Sticky-winner selection, shared by both assists so a gesture has one
- * winner protocol: the latched candidate keeps winning while it still
- * qualifies (re-measured fresh each call); only when it stops qualifying
- * does the smallest-distance qualifying candidate win and become the new
- * latch. Keeps the correction target — pivot, orientation, or slide
- * direction — from flipping mid-gesture while the player closes in on it.
+ * Sticky-winner selection shared by both assists: the latched candidate keeps
+ * winning while it still qualifies (re-measured each call); otherwise the
+ * smallest-distance qualifying candidate wins and re-latches. Stops the
+ * correction target from flipping mid-gesture.
  */
 export function selectStickyWinner(
     group: PieceGroup,
@@ -73,8 +64,8 @@ export function selectStickyWinner(
             candidate.piece, candidate.edge, group,
             candidate.matePiece, candidate.mateEdge, candidate.mateGroup,
         );
-        // A NaN distance from corrupt geometry passes both `>` gates below;
-        // it must decline here or it would latch and emit a NaN correction.
+        // A NaN distance passes the `>` gates below, so reject it here or it
+        // would latch and emit a NaN correction.
         if (!Number.isFinite(m.distance)) return null;
         if (Math.abs(m.rotationDelta) > ctx.rotationToleranceDeg) return null;
         if (m.distance > ctx.tolerancePx) return null;
@@ -102,19 +93,14 @@ export function selectStickyWinner(
 }
 
 /**
- * Build the per-gesture context, or `null` when the assist does not apply:
- * not in free-rotation mode, unknown group, no cross-group mates, or a
- * degenerate tolerance. Non-finite tolerances (possible from corrupted
- * saved state upstream) are rejected here so `NaN`/`Infinity` can never
- * flow into the assist math and get persisted onto a group.
+ * Build the per-gesture context, or `null` when the assist doesn't apply: not
+ * free-rotation, unknown group, no cross-group mates, or a degenerate/non-finite
+ * tolerance (rejected so NaN/Infinity can't flow into the math and get persisted).
  *
- * `anchorPieceId` restricts the candidates to that moved-group piece. A
- * manual rotation pivots on the anchored piece's center, which leaves that
- * piece's candidates' measured distances invariant while every other
- * candidate's shifts — so an unrestricted assist could latch a different
- * mate mid-rotate and slide the anchored piece out of merge range. The
- * rotate gesture passes its manual-pivot piece here so "which mate wins
- * this gesture" has exactly one owner.
+ * `anchorPieceId` restricts candidates to that moved-group piece: a manual
+ * rotation leaves that piece's distances invariant but shifts others, so an
+ * unrestricted assist could latch a different mate and slide the anchored piece
+ * out of merge range.
  */
 export function buildProximityContext(
     state: GameState,

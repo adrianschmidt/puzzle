@@ -28,10 +28,8 @@ describe('createSaveCoordinator', () => {
     let onSaveFailed: (state: ReturnType<typeof makeGameState>) => void;
     let onSaveSkipped: (state: ReturnType<typeof makeGameState>) => void;
     // Each `make()` installs real pagehide/visibilitychange listeners on
-    // jsdom's shared window/document (see createSaveCoordinator). Without
-    // removing them, listeners from every prior test in this file would
-    // stay attached and keep firing. Nothing asserts on these spies —
-    // they only exist to give afterEach something to un-register.
+    // jsdom's shared window/document; without removing them, every prior test's
+    // listeners stay attached and keep firing.
     let removeInstalledListeners: () => void;
 
     beforeEach(() => {
@@ -121,8 +119,8 @@ describe('createSaveCoordinator', () => {
     });
 
     it('suppresses a repeat failure toast inside the dedup window but still reports it', () => {
-        // A fast debounced save loop must not spam the user, and a suppressed
-        // repeat must still leave a trail rather than vanishing.
+        // A fast debounced loop must not spam the user; a suppressed repeat
+        // must still leave a trail.
         let clock = 0;
         vi.mocked(saveNewPuzzle).mockReturnValue('failed');
         const coordinator = make(() => clock);
@@ -150,7 +148,7 @@ describe('createSaveCoordinator', () => {
 
     it('attributes a progress failure to the flushed state, not the current one', () => {
         // A save queued for the previous puzzle can flush after a new game
-        // starts; reporting the new puzzle's fields would be a lie.
+        // starts; reporting the new puzzle's fields would be wrong.
         make();
         onSaveFailed(makeGameState({ cutStyle: 'fractal' }));
 

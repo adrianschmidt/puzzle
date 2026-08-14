@@ -1,7 +1,6 @@
 /**
- * These types define the interface between the grid layer and
- * the composition layer, using abstract edges with no grid-specific
- * concepts (no rows, columns, or directions).
+ * Interface between the grid layer and the composition layer: abstract edges
+ * with no grid concepts (no rows, columns, or directions).
  */
 
 import type { Point } from '../../model/types.js';
@@ -9,23 +8,16 @@ import type { Point } from '../../model/types.js';
 export interface PieceDefinition {
     id: number;
     /**
-     * All edges of the piece, flat. The outer boundary comes first
-     * (each edge's `end` matches the next edge's `start`). For pieces
-     * with holes, each inner-boundary loop follows, also chained
-     * end-to-start internally; loop boundaries are detected by the
-     * chain breaking (an edge's `start` no longer matches the previous
-     * edge's `end`). The renderer uses this to emit one SVG `M..Z`
-     * subpath per loop.
+     * All edges of the piece, flat. Outer boundary first (each edge's `end`
+     * matches the next's `start`); hole loops follow, each chained end-to-start
+     * internally. Loop boundaries are detected by the chain breaking, and the
+     * renderer emits one SVG `M..Z` subpath per loop.
      */
     edges: EdgeDefinition[];
     /** Offset to position the source image behind the piece. */
     imageOffset: Point;
 }
 
-/**
- * The grid layer resolves all topology — the composition layer
- * just sees edges with start/end points and mate references.
- */
 export interface EdgeDefinition {
     /** Globally unique edge ID. */
     id: number;
@@ -38,23 +30,19 @@ export interface EdgeDefinition {
     /** Which piece the mate edge belongs to (-1 for border). */
     matePieceId: number;
     /**
-     * Key identifying the shared edge between two pieces.
-     * Both sides of the same shared edge have the same key.
-     * Used by the composition layer to store/retrieve tab paths.
-     * Undefined for border edges.
+     * Shared-edge key; both sides of a shared edge carry the same key, letting
+     * the composition layer store/retrieve tab paths. Undefined for border edges.
      */
     sharedEdgeKey?: string;
     /**
-     * True if this is the "first side" of a shared edge —
-     * the side that generates the tab shape. The second side
+     * First side of a shared edge — generates the tab shape; the second side
      * reverses the stored path. Undefined for border edges.
      */
     isFirstSide?: boolean;
     /**
-     * The actual curve points along this edge, in piece-local coordinates.
-     * When present, the edge follows this polyline instead of a straight
-     * line from start to end. Used for wavy/curved grid cuts.
-     * The first point should match `start` and the last should match `end`.
+     * Curve points along the edge (piece-local). When present, the edge follows
+     * this polyline instead of a straight start→end line (wavy/curved cuts);
+     * first point matches `start`, last matches `end`.
      */
     curvePoints?: Point[];
 }

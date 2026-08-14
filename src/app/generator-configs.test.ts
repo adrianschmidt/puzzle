@@ -32,14 +32,13 @@ describe('generatorConfigsForNewGame', () => {
     });
 
     it('withholds classicConfig when traced tabs failed, selecting the legacy cut', () => {
-        // This omission IS the `legacy-classic` outcome: a Classic game without
+        // `{}` IS the `legacy-classic` outcome: a Classic game without
         // classicConfig falls back to the legacy straight-grid generator.
         expect(generatorConfigsForNewGame({ cutStyle: 'classic', tracedTabsOk: false }))
             .toEqual({});
     });
 
     it('passes fractal borderless through regardless of cut style', () => {
-        // Deliberately not gated on cutStyle — matches the behavior being moved.
         expect(generatorConfigsForNewGame({
             cutStyle: 'classic',
             fractalConfig: { borderless: true },

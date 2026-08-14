@@ -1,17 +1,11 @@
 /**
  * The dev-console `window.__*` hooks: `__solvePuzzle`, `__startVennPuzzle`,
- * `__newComposableGame`, and `__reproPuzzle`. Undocumented in any UI —
- * they're a workflow tool used directly from the browser console, so their
- * names, signatures, return values, and doc comments are load-bearing and
- * must not drift.
+ * `__newComposableGame`, `__reproPuzzle`. Used directly from the browser
+ * console, so their names, signatures, and return values must not drift.
  *
- * `solvePuzzle` is exported separately from `installDevHooks` so the
- * composition root can bind it *once* and hand that one reference to both
- * `window.__solvePuzzle` (this module's `solve` dependency) and the info
- * modal's Solve button (`installToolbar`'s `solve`) — the one sanctioned
- * behavior change in this refactor (see the plan's Global Constraints). One
- * binding rather than two identical-looking ones is what makes them
- * impossible to desynchronize by editing either call site.
+ * `solvePuzzle` is exported separately so the composition root binds it once
+ * and hands that one reference to both `window.__solvePuzzle` and the info
+ * modal's Solve button — one binding they can't desynchronize.
  */
 
 import type { GameState, GridSize, PieceGroup } from '../model/types.js';
@@ -36,21 +30,16 @@ import type { StartNewGameOptions } from './start-new-game.js';
 import type { GameSession } from './game-session.js';
 
 export interface SolvePuzzleDeps {
-    /**
-     * Read-only slice of the {@link GameSession}: this solves whatever is
-     * installed and never replaces it, so it has no business reaching
-     * `install`.
-     */
+    /** Read-only slice: solves whatever is installed, never replaces it. */
     session: Pick<GameSession, 'current'>;
     renderer: Renderer;
     onSolved: (state: GameState, group: PieceGroup) => void;
 }
 
 /**
- * A no-op when there is no installed game — mirrors the #488/#499 guards
- * elsewhere: this runs from a user-triggered click (the info modal's Solve
- * button) or a manually-typed console call, either of which can land in the
- * no-game state a failed boot leaves behind.
+ * No-op when there is no installed game (#488/#499): reached from the Solve
+ * button or a console call, either of which can hit the no-game state a
+ * failed boot leaves behind.
  */
 export function solvePuzzle(deps: SolvePuzzleDeps): void {
     const state = deps.session.current();
@@ -84,33 +73,22 @@ export interface DevHooksDeps {
     start: (gridSize: GridSize, options: StartNewGameOptions) => Promise<void>;
     loadShared: (payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>;
     /**
-     * Injected rather than built here so `window.__solvePuzzle` and the info
-     * modal's Solve button (`installToolbar`'s `solve`) are the same
-     * reference. While each installer built its own `solvePuzzle` call, an
-     * edit to either one's `onSolved` would have silently desynchronized the
-     * two — the exact agreement the sanctioned behavior change establishes.
+     * Injected, not built here, so `window.__solvePuzzle` and the info modal's
+     * Solve button are the same reference — otherwise an edit to either
+     * `onSolved` would silently desync them.
      */
     solve: () => void;
 }
 
 export function installDevHooks(deps: DevHooksDeps): void {
-    // Debug helper: solve the puzzle by placing all pieces in their correct
-    // positions. The same reference the info modal's Solve button calls.
+    // The same reference the info modal's Solve button calls.
     (window as { __solvePuzzle?: unknown }).__solvePuzzle = deps.solve;
 
     /**
-     * Dev-console hook for visual smoke-testing the experimental two-circle
-     * Venn cut style. Not exposed in any UI. Removed before Plan 2 merges
-     * if the cut style isn't promoted to a user-facing option.
-     *
-     * Usage (in browser dev console):
-     *   __startVennPuzzle()
-     *   __startVennPuzzle({ leftRadius: 200, rightCenter: { x: 700, y: 360 } })
-     *   __startVennPuzzle({ tabs: true })   // classic tabs on the shared arcs
-     *
-     * Caveat: share-links and reloads don't yet preserve the venn config —
-     * only the in-memory render is meaningful. After the page reloads, the
-     * autosaved state falls back to sine defaults.
+     * Dev-console hook for smoke-testing the experimental two-circle Venn cut
+     * style. Not in any UI. Caveat: share links and reloads don't preserve the
+     * venn config — only the in-memory render is meaningful; a reload falls
+     * back to sine defaults.
      */
     (window as { __startVennPuzzle?: unknown }).__startVennPuzzle = (overrides?: {
         leftCenter?: { x: number; y: number };
@@ -138,24 +116,9 @@ export function installDevHooks(deps: DevHooksDeps): void {
     };
 
     /**
-     * Dev-console hook for launching a Composable puzzle with arbitrary
-     * generator parameters. Exposed because Composable is hidden from the
-     * production new-game dialog; power users can still reach the full
-     * surface via this helper.
-     *
-     * Usage (browser console):
-     *   __newComposableGame()
-     *   __newComposableGame({ cols: 12, rows: 8 })
-     *   __newComposableGame({
-     *       baseCutConfig: { cols: 8, rows: 6, ha: 0.3, hf: 2, va: 0.3, vf: 1.5 },
-     *       tabGenerator: 'none',
-     *   })
-     *   __newComposableGame({ rotation: 'free' })
-     *   __newComposableGame({ seed: 1086655870 })   // reproduce a specific puzzle
-     *
-     * Defaults: 8×6 grid, sine base-cut generator with composable's stock
-     * defaults, classic tabs, no rotation, current saved image-source
-     * preference. Seed defaults to a fresh random value each call.
+     * Dev-console hook for a Composable puzzle with arbitrary generator
+     * parameters — Composable is hidden from the production new-game dialog,
+     * so this is the only route to the full surface.
      */
     (window as { __newComposableGame?: unknown }).__newComposableGame = (overrides?: {
         cols?: number;
@@ -197,45 +160,19 @@ export function installDevHooks(deps: DevHooksDeps): void {
 
     /**
      * Dev-console hook: regenerate a puzzle from the info modal's
-     * "Reproduction parameters" block. Paste the block's JSON verbatim:
+     * "Reproduction parameters" JSON. The params run through the share codec's
+     * validation and clamps and the share-link load path, so semantics match a
+     * share link exactly. `imageUrl: 'blank'` (or absent) renders blank at the
+     * recorded size — geometry depends on dimensions, not pixels; attribution
+     * and background aren't params, so a replayed Unsplash puzzle loses credit.
+     * Replaces the current game and save without confirmation once the replay
+     * lands, but leaves the address bar alone so a `#p=` link stays reloadable.
      *
-     *   __reproPuzzle({
-     *       seed: 1534700170,
-     *       cutStyle: 'classic',
-     *       imageUrl: 'https://images.unsplash.com/...',
-     *       imageSize: { width: 1080, height: 1440 },
-     *       gridSize: { cols: 12, rows: 16 },
-     *       rotationMode: 'free',
-     *       classicConfig: { traceSetVersion: 1 },
-     *   })
-     *
-     * The params run through the share codec's validation and clamps and
-     * then the share-link load path, so reproduction semantics match a
-     * share link exactly. `imageUrl: 'blank'` — or no `imageUrl` at all —
-     * renders as a blank puzzle at the recorded dimensions; geometry
-     * depends on the image's dimensions, not its pixels. Fractional
-     * `imageSize` values are floored by the codec's clamps, and attribution
-     * and background color are not part of the params, so a replayed
-     * Unsplash puzzle loses its credit. Replaces the current game and save
-     * without confirmation once the replay actually lands, but leaves the
-     * address bar alone: a `#p=` link stays put — as declining its confirm
-     * dialog does — so the original link remains reloadable, and a reload
-     * re-offers it. Decline the prompt and the replay survives.
-     *
-     * Same as the share path: the previous save is left alone until
-     * `deps.loadShared`'s own `persistNewPuzzle` replaces it, so canceling
-     * the loading overlay (shown here too, since a console repro almost
-     * always has a puzzle already installed) or a failing replay leaves the
-     * previous save intact rather than destroyed underneath it.
-     *
-     * Resolves `true` once the puzzle is on screen and `false` on any
-     * failure (matching the share-link loader's `tryLoad`), so
-     * `await __reproPuzzle(...)` reports the outcome instead of resolving
-     * before generation starts. Canceling is neither: a canceled replay
-     * unwinds without throwing, so it also resolves `true` — with nothing
-     * installed and the previous puzzle still on screen. Don't read `true`
-     * as "these params generated"; a cancel emits `generation-canceled`
-     * (`source: 'repro'`) and no `new-game-started`.
+     * The previous save is left intact until `loadShared`'s own
+     * `persistNewPuzzle` replaces it, so a canceled or failing replay keeps it.
+     * Resolves `true` once on screen, `false` on failure. A cancel also
+     * resolves `true` (nothing installed) and emits `generation-canceled`, so
+     * don't read `true` as "these params generated".
      */
     (window as { __reproPuzzle?: unknown }).__reproPuzzle = async (params: ReproParams): Promise<boolean> => {
         let payload: SharePayload;
@@ -244,65 +181,47 @@ export function installDevHooks(deps: DevHooksDeps): void {
             payload = reproParamsToPayload(params);
             decoded = decodePayload(encodePayload(payload));
         } catch (err) {
-            // The error object rather than its message, so the console keeps the
-            // stack and renders it expandable (as `diagnostics.warn` does).
+            // The error object, not its message, so the console keeps the stack.
             // eslint-disable-next-line no-console
             console.error('[__reproPuzzle]', err);
             return false;
         }
         if (!decoded) {
-            // `decodePayload` returns a bare `null` from any of its shape checks,
-            // so which field failed is structurally unavailable here. Echoing the
-            // mapped payload is the only way the caller sees the rejected value.
-            // The two throwing steps above name the field for every hand-typing
-            // mistake they can see (unknown cutStyle/rotationMode; a non-numeric
-            // imageSize/gridSize/seed throws from assertPayloadNumbersFinite), so
-            // what still reaches this branch is a `composableConfig` the decoder
-            // rejects, or an `imageUrl` that is not a string, is empty, or
-            // carries a scheme `isSafeImageUrl` refuses — `file:///…`, `blob:`,
-            // `data:text/…`, or a protocol-relative `//host/x.png`. The scheme
-            // case is the likeliest of these to be hand-typed: an absolute
-            // local path pasted from a file browser lands here, not on a
-            // named error.
+            // `decodePayload` returns a bare `null`, so which field failed is
+            // structurally unavailable — echoing the mapped payload is the only
+            // signal to the caller. The throwing steps above already name most
+            // hand-typing mistakes, so what reaches here is a rejected
+            // `composableConfig` or an unsafe/empty/non-string `imageUrl`.
             //
-            // A non-boolean `wavyConfig.borderless`/`fractalConfig.borderless`
-            // is deliberately NOT in that list: `applyStyleConfigs` coerces it
-            // with `=== true`, so a hand-typed `"borderless": "true"` maps to
-            // `bl: false` and replays with borderless OFF rather than failing
-            // here. That is the same reading generation gives it, so the replay
-            // is faithful — but it is silent, so a repro that comes back
-            // bordered when the screenshot showed curved edges means the flag
-            // was typed as a string.
+            // A non-boolean `borderless` is deliberately NOT rejected:
+            // `applyStyleConfigs` coerces with `=== true`, so `"true"` replays
+            // borderless OFF — faithful to generation but silent, so a repro
+            // that comes back bordered means the flag was typed as a string.
             // eslint-disable-next-line no-console
             console.error('[__reproPuzzle] params did not survive share-codec validation', payload);
             return false;
         }
-        // Narrowing captured in a const: the async closure below would silently
-        // un-narrow if `decoded` ever gained a second assignment.
+        // Const captures the narrowing: the async closure below would un-narrow
+        // if `decoded` gained a second assignment.
         const validated = decoded;
-        // `!!loadState()` rather than a cheaper key probe, for parity with the
-        // share path: `recipientHadSavedState` means "had a *readable* save".
-        // The decompress is affordable for a one-shot manual dev action.
+        // `!!loadState()`, not a cheaper key probe, for parity with the share
+        // path: `recipientHadSavedState` means "had a *readable* save". The
+        // decompress is fine for a one-shot dev action.
         const hadSavedState = !!loadState();
-        // The previous save is deliberately left alone here — not wiped
-        // until `deps.loadShared` (`loadSharedPuzzle`) actually replaces it
-        // via its own `persistNewPuzzle`, once generation succeeds. Same
-        // fix as `share-link-loader.ts`'s `tryLoad`: an eager clear here
-        // used to destroy the previous save on a canceled or failing
-        // replay too, not just a successful one.
+        // Previous save left alone until `loadShared`'s own `persistNewPuzzle`
+        // replaces it on success — same fix as `share-link-loader.ts`; an eager
+        // clear used to destroy it on a canceled or failing replay too.
         return runWithErrorReport({
             run: async () => {
                 await deps.loadShared(validated, hadSavedState);
                 return true;
             },
             warnMessage: 'Failed to load repro puzzle:',
-            // A generation failure is the thing this helper exists to
-            // investigate, so it has to be readable on a deployed build —
-            // `runWithErrorReport`'s default diagnostic is DEV-gated.
+            // Readable on a deployed build: a generation failure is what this
+            // helper investigates, and the default diagnostic is DEV-gated.
             logInProduction: true,
             event: 'shared-load-failed',
-            // Not a user-facing share-link failure: a generator failure is often
-            // the reason this helper was called at all.
+            // Not a user-facing share-link failure: often the reason this was called.
             source: 'repro',
             toastMessage: "Couldn't load repro puzzle",
             fallback: false,

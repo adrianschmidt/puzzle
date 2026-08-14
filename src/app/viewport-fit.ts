@@ -1,12 +1,3 @@
-/**
- * `zoomToFitCompletedPuzzle` reaches into the DOM directly — querying
- * `[data-group-id]` and `[data-puzzle-table]`, and calling
- * `applyGroupTransform` — instead of going through the `Renderer` port.
- * That is a pre-existing leak carried over from `main.ts`, not something
- * this module introduces; routing it through the renderer is out of scope
- * here.
- */
-
 import {
     applyGroupTransform,
     VIEWPORT_TRANSITION,
@@ -24,19 +15,12 @@ import {
 } from '../game/index.js';
 
 /**
- * Headroom the fallback timer gives `transitionend` to fire first, so the
- * net below never pre-empts a transition that is genuinely running.
- *
- * The deadline itself is {@link VIEWPORT_TRANSITION_MS}, imported rather
- * than restated: the `Renderer` port owns how long its animation takes, so
- * a second literal here would let the two drift and start cutting every
- * completion zoom short. The group spin below reuses the renderer's CSS
- * string for the same reason, which is what makes the two animations land
- * together.
- *
- * Exported so `viewport-fit.test.ts` can derive the deadlines it advances
- * timers to instead of hardcoding them — otherwise raising the transition
- * reddens tests that report nothing wrong.
+ * Headroom the fallback timer gives `transitionend` to fire first, so the net
+ * below never pre-empts a transition genuinely running. The deadline itself is
+ * {@link VIEWPORT_TRANSITION_MS}, imported not restated — the `Renderer` port
+ * owns the duration, and a second literal would drift and cut completion zooms
+ * short. Exported so `viewport-fit.test.ts` can derive its deadlines instead of
+ * hardcoding them.
  */
 export const SETTLE_GRACE_MS = 200;
 
@@ -47,9 +31,8 @@ export interface ViewportFitDeps {
     applyTransform: () => void;
     /**
      * Re-render whatever game is current, read late. The completion cleanup
-     * fires up to 1000ms after the call (the transition plus the settle
-     * grace below), by which time a new game may have started — capturing
-     * `state` would paint the finished puzzle over it.
+     * fires up to 1000ms after the call, by which time a new game may have
+     * started — capturing `state` would paint the finished puzzle over it.
      */
     renderCurrent: () => void;
 }
@@ -87,16 +70,18 @@ export function gatherAndZoomToFit(state: GameState, deps: ViewportFitDeps): voi
 }
 
 /**
- * Unlike gatherAndZoomToFit(), this does not re-lay-out the board. Its one
- * model write is the completed group's upright resting state — `position`
- * and `rotation = 0` — and only when the puzzle finished at a non-zero
- * rotation.
+ * Unlike gatherAndZoomToFit(), this does not re-lay-out the board. Its one model
+ * write is the completed group's upright resting state (`position`,
+ * `rotation = 0`), and only when the puzzle finished at a non-zero rotation.
  *
- * @param onComplete - Run exactly once per call, when the zoom settles:
- *   at `transitionend`, or at a deadline if that never arrives — including
- *   when no animation ran at all. Like `deps.renderCurrent` it fires up to
- *   1000ms late, so it must not assume the game that completed is still
- *   installed; there is no handle to cancel it with.
+ * Reaches into the DOM directly (`[data-group-id]` / `[data-puzzle-table]`,
+ * `applyGroupTransform`) rather than via the `Renderer` port — a known,
+ * intentional deviation, not this module's to route.
+ *
+ * @param onComplete - Run exactly once per call when the zoom settles: at
+ *   `transitionend`, or a deadline if that never arrives (including when no
+ *   animation ran). Fires up to 1000ms late, so it must not assume the completed
+ *   game is still installed; there is no handle to cancel it.
  */
 export function zoomToFitCompletedPuzzle(
     state: GameState,
@@ -108,59 +93,48 @@ export function zoomToFitCompletedPuzzle(
     const screenWidth = container.clientWidth || window.innerWidth;
     const screenHeight = container.clientHeight || window.innerHeight;
 
-    // If the puzzle was completed at a non-zero rotation, spin the group
-    // upright in parallel with the viewport zoom. Two things matter for how
-    // this looks:
-    //
-    //   1. It should spin about the puzzle's own center, in place — not orbit.
-    //      CSS interpolates `translate(...)` and `rotate(...)` independently,
-    //      so animating both would swing the center along an arc. Instead we
-    //      pin the rotation's `transform-origin` to the image center and
-    //      animate the angle only, keeping the center fixed throughout.
-    //   2. It should take the shortest path (≤180°): 350° spins +10° to land
-    //      upright, not −350° the long way round.
+    // Spin upright in parallel with the zoom. Pin transform-origin to the image
+    // center and animate the angle only — animating translate+rotate together
+    // swings the center along an arc. Shortest signed turn (≤180°).
     let groupTransitionCleanup: (() => void) | null = null;
     if (completedGroup.rotation !== 0) {
         const startRotation = completedGroup.rotation;
 
         // Pivot about the assembled image center (corner geometry only, so
         // asymmetric tabs don't offset it). `getGroupImageCenter` works in
-        // un-rotated local space — the same frame `transform-origin` uses.
+        // un-rotated local space — the frame `transform-origin` uses.
         const centerLocal = getGroupImageCenter(completedGroup, state.piecesById);
 
-        // Compensate `position` so that, with the origin moved to the center,
-        // the puzzle stays exactly where it was rendered. Same world point as
-        // before; only its local-space pivot changed.
+        // Compensate `position` so that, with the origin at the center, the
+        // puzzle stays where it was rendered — same world point, only the local
+        // pivot changed.
         const rotatedCenter = rotatePoint(centerLocal, startRotation);
         const finalPosition = {
             x: completedGroup.position.x + rotatedCenter.x - centerLocal.x,
             y: completedGroup.position.y + rotatedCenter.y - centerLocal.y,
         };
 
-        // Shortest signed turn that lands on an upright (0°-equivalent) angle.
-        // e.g. 350° → 360°, 10° → 0°, 200° → 360°.
+        // Shortest signed turn to an upright (0°-equivalent) angle.
         const targetRotation = startRotation + signedAngularDelta(0, startRotation);
 
         const groupEl = container.querySelector(
             `[data-group-id="${completedGroup.id}"]`,
         ) as HTMLElement | null;
         if (groupEl) {
-            // Re-anchor to the center origin without moving the puzzle (same
-            // angle, compensated position), then force a reflow so this state
-            // becomes the transition's start frame rather than collapsing into
-            // the spin below.
+            // Re-anchor to the center origin without moving the puzzle, then
+            // force a reflow so this becomes the transition's start frame rather
+            // than collapsing into the spin below.
             groupEl.style.transition = 'none';
             applyGroupTransform(groupEl, finalPosition, startRotation, centerLocal);
             groupEl.getBoundingClientRect();
 
-            // Spin about the center to upright, in lockstep with the
-            // viewport zoom — the renderer's own transition string, so
-            // same duration, same easing, same frame.
+            // Spin to upright in lockstep with the zoom — the renderer's own
+            // transition string, so same duration and easing.
             groupEl.style.transition = VIEWPORT_TRANSITION;
             applyGroupTransform(groupEl, finalPosition, targetRotation, centerLocal);
 
             groupTransitionCleanup = () => {
-                // Settle into the normal representation: origin back at 0,0 and
+                // Settle into the normal representation: origin back at 0,0,
                 // rotation normalized to 0. Visually identical to the spin's
                 // final frame (targetRotation ≡ 0 mod 360), so no jump.
                 groupEl.style.transition = '';
@@ -168,8 +142,8 @@ export function zoomToFitCompletedPuzzle(
             };
         }
 
-        // Commit the upright resting state. Used immediately below to frame the
-        // viewport on the final orientation, and as the model's settled value.
+        // Commit the upright resting state: frames the viewport below and is the
+        // model's settled value.
         completedGroup.position = finalPosition;
         completedGroup.rotation = 0;
     }
@@ -196,7 +170,7 @@ export function zoomToFitCompletedPuzzle(
 
     renderer.enableViewportTransition();
 
-    // Apply the target transform on next frame to ensure transition is set
+    // Next frame, so the transition is applied before the target transform.
     requestAnimationFrame(() => {
         viewportTransform.setState({
             scale: targetScale,
@@ -210,17 +184,12 @@ export function zoomToFitCompletedPuzzle(
         let settled = false;
         let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
 
-        // Wind the zoom up: put the table's transition back the way it was,
-        // let the spun group's element go, and tell the caller.
-        //
-        // Single-shot today by construction rather than by the latch: the
-        // first path through unsubscribes the listener and cancels the
-        // timer, so whichever loses the race can no longer reach here. The
-        // latch is defence in depth for the edit that breaks that — moving
-        // either line below `onComplete`, or dropping one — since a second
-        // `onComplete` shows the completion overlay twice. It is set before
-        // the three effects so a throw in any of them cannot re-open it
-        // either.
+        // Wind the zoom up: restore the table's transition, release the spun
+        // group's element, and tell the caller. Single-shot by construction (the
+        // first path unsubscribes the listener and cancels the timer); the
+        // `settled` latch is defence in depth against an edit that reorders or
+        // drops those, since a second `onComplete` shows the completion overlay
+        // twice. Set before the three effects so a throw in any can't re-open it.
         function settle(): void {
             if (settled) return;
             settled = true;
@@ -237,21 +206,16 @@ export function zoomToFitCompletedPuzzle(
 
         tableEl?.addEventListener('transitionend', handleTransitionEnd);
 
-        // `transitionend` is the accurate signal but it cannot be the only
-        // one: when the target transform equals the current one — two
-        // Solves in a row frame the same completed group from the same
-        // viewport, so `targetScale`/`targetOffset` come out identical —
-        // the browser starts no `transform` transition and the event never
-        // fires. Left unsettled that keeps `transition: transform 0.8s` on
-        // the table, so every later pan and zoom animates; keeps the
-        // listener on an element `renderState` never replaces; and keeps
-        // the completed group's detached element alive for the session.
-        //
-        // With a table present the timer is the net, so it gets a grace
-        // period on top of the transition — the real event has to win the
-        // race on the ordinary path or it would cut the zoom short. With
-        // no table there is nothing to transition and nothing to wait for,
-        // so it fires at the nominal duration, as it always has.
+        // `transitionend` is accurate but can't be the only signal: when the
+        // target transform equals the current one (two Solves framing the same
+        // group from the same viewport), the browser starts no transition and
+        // the event never fires — leaving `transition: transform 0.8s` on the
+        // table so every later pan/zoom animates, the listener on an element
+        // `renderState` never replaces, and the group's detached element alive.
+        // With a table the timer is the net, so it gets a grace period on top —
+        // the real event must win the ordinary race or it cuts the zoom short.
+        // With no table there's nothing to wait for, so it fires at the nominal
+        // duration.
         fallbackTimer = setTimeout(
             settle,
             tableEl ? VIEWPORT_TRANSITION_MS + SETTLE_GRACE_MS : VIEWPORT_TRANSITION_MS,

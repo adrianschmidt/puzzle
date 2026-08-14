@@ -1,15 +1,13 @@
 /**
- * The component is color-source agnostic — callers pass swatches as
- * data — so it can back both the background-color picker and the
- * piece-outline color picker (#392).
+ * Color-source agnostic (swatches passed as data), so it backs both the
+ * background and piece-outline color pickers.
  */
 
 import { attachDismissablePopover } from './dismissable-overlay.js';
 
 /**
- * All fields must be caller-trusted: `color` is written to
- * `style.backgroundColor` and `label` to `aria-label`/`title`, so callers
- * must not pass untrusted/user-supplied strings.
+ * All fields must be caller-trusted: `color` → `style.backgroundColor`, `label` →
+ * `aria-label`/`title`. Never pass untrusted strings.
  */
 export interface SwatchEntry {
     id: string;
@@ -23,17 +21,14 @@ export interface SwatchPickerOptions {
     button: { icon: string; title: string; className: string };
     ariaLabel: string;
     /**
-     * Extra class on the grid panel, added alongside `swatch-grid`. The
-     * base `.swatch-grid` rule carries only generic appearance — each
-     * instance supplies its own positioning via this class, so multiple
-     * pickers (e.g. the background and outline pickers) can anchor
-     * independently instead of stacking at the same coordinates.
+     * Extra class on the grid panel (alongside `swatch-grid`). Base `.swatch-grid`
+     * carries only generic appearance; each instance supplies its own positioning
+     * here so multiple pickers anchor independently instead of stacking.
      */
     panelClassName?: string;
     swatches: readonly SwatchEntry[];
     selectedId: string;
     onSelect: (id: string) => void;
-    /** Default 20. */
     columnCount?: number;
 }
 
@@ -93,10 +88,9 @@ export function createSwatchGrid(
 
 export interface SwatchPickerHandle {
     /**
-     * Update the highlighted swatch when the selection changed outside
-     * the picker (e.g. a share link adopted a background color). Does
-     * not fire `onSelect`. Dismisses an open panel; the grid is rebuilt
-     * from the current id on the next open.
+     * Update the highlighted swatch for an external selection change. Does NOT fire
+     * `onSelect`; dismisses any open panel (the grid rebuilds from the current id
+     * on next open).
      */
     setSelected: (id: string) => void;
     dispose: () => void;

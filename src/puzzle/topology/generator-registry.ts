@@ -43,6 +43,6 @@ registerTabGenerator(classicTabGenerator);
 registerBaseCutGenerator(vennCutGenerator);
 registerBaseCutGenerator(triangularCutGenerator);
 registerTabGenerator(noneTabGenerator);
-// Traced tabs are registered as a stub that throws unless
-// preloadTracedTabGenerator() has been awaited. See traced-tab-loader.ts.
+// Traced tabs register as a stub that throws until
+// preloadTracedTabGenerator() is awaited. See traced-tab-loader.ts.
 registerTabGenerator(tracedTabGeneratorStub);

@@ -1,7 +1,4 @@
-/**
- * Extracted into a module so it can be tested independently and imported by
- * vite.config.ts.
- */
+/** Extracted so it can be unit-tested and imported by vite.config.ts. */
 
 export interface ManifestIcon {
     src: string;

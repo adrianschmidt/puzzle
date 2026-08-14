@@ -1,10 +1,8 @@
 /**
- * The glow is CSS-only: it reads the `--selection-glow` custom property,
- * which is defined light on `:root` and flipped dark in the
- * `[data-ui-scheme="light"]` block so a same-hue light background does not
- * wash it out (see the adaptive-selection-glow spec). There is no JS to
- * unit-test, so these assertions guard the CSS wiring against an accidental
- * revert to the fixed `--ui-accent` — which nothing else would catch.
+ * The glow is CSS-only: it reads `--selection-glow`, defined light on `:root`
+ * and flipped dark in `[data-ui-scheme="light"]` so a same-hue light background
+ * doesn't wash it out. No JS to unit-test, so these assertions guard the CSS
+ * wiring against a revert to the fixed `--ui-accent`.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -20,19 +18,12 @@ function matchingBrace(css: string, open: number): number {
 }
 
 /**
- * Every declaration a **top-level** rule applies to `selector`, concatenated.
- *
- * Matches a whole comma-separated entry, so a rule shared by several
- * selectors is found by any one of them, and collects across rules — a
- * selector legitimately appears in more than one (`[data-piece-blank]` has
- * its own `fill` rule and shares the debug-opacity rule). Returning only the
- * first would make an assertion depend on rule order in the file.
- *
- * At-rule blocks (`@media`, `@supports`) are skipped whole, so a responsive
- * override never satisfies an assertion about the base rule. That is the
- * point: the dialog guards below exist because declarations belong in the
- * base rule, and merging an `@media` duplicate's body in would let exactly
- * the regression they watch for pass.
+ * Every declaration top-level rules apply to `selector`, concatenated. Matches
+ * a whole comma-separated entry and collects across rules (a selector can
+ * appear in several), so an assertion doesn't depend on rule order. At-rule
+ * blocks (`@media`, `@supports`) are skipped whole, so a responsive override
+ * never satisfies an assertion about the base rule — the point of the dialog
+ * guards below.
  */
 function declarationsFor(css: string, selector: string): string {
     const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -56,10 +47,8 @@ function declarationsFor(css: string, selector: string): string {
 }
 
 /**
- * The helper's own guards. Two `style.css` rules used to carry comments
- * telling editors to keep a base rule above its `@media` duplicate, because
- * the previous helper matched the first occurrence. These assertions are
- * what replaced that convention.
+ * The helper's own guards — they replaced comments that told editors to keep a
+ * base rule above its `@media` duplicate (the old helper matched the first).
  */
 describe('declarationsFor', () => {
     const css = `
@@ -71,8 +60,7 @@ describe('declarationsFor', () => {
 `;
 
     it('ignores declarations nested inside an at-rule block', () => {
-        // A responsive override must never satisfy an assertion about the
-        // base rule — that is the regression these dialog guards watch for.
+        // A responsive override must never satisfy a base-rule assertion.
         expect(declarationsFor(css, '.dialog')).not.toMatch(/overflow-y/);
     });
 
@@ -90,10 +78,9 @@ describe('declarationsFor', () => {
 });
 
 /**
- * Guards for the new-game dialog's viewport fit. The dialog once rendered
- * taller than short viewports with no max-height and no scrolling, clipping
- * both ends unreachably (see the 2026-07-22 responsive-modal spec). Nothing
- * but these assertions would catch an accidental revert of the CSS wiring.
+ * Guards the new-game dialog's viewport fit: it once rendered taller than short
+ * viewports with no max-height or scrolling, clipping both ends unreachably.
+ * Only these assertions would catch a revert of the CSS wiring.
  */
 describe('new-game dialog responsive CSS', () => {
     it('caps the dialog height and scrolls inside, not outside', () => {
@@ -118,10 +105,8 @@ describe('new-game dialog responsive CSS', () => {
 
     it('caps the image-picker grid tracks so tiles align with sibling rows', () => {
         // Load-bearing: bare `1fr` (= minmax(auto, 1fr)) lets the tiles'
-        // intrinsic minimum inflate both tracks and push the grid's right
-        // edge out of line with the sibling rows; minmax(0, 1fr) removes the
-        // auto floor. See the .image-picker-grid comment in style.css for the
-        // full mechanism.
+        // intrinsic minimum inflate both tracks and push the grid's right edge
+        // out of line with sibling rows; minmax(0, 1fr) removes the auto floor.
         expect(declarationsFor(styleCss, '.image-picker-grid')).toMatch(
             /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/,
         );
@@ -166,11 +151,10 @@ describe('blank-piece CSS', () => {
     });
 
     it('defines --piece-blank-fill as white, in exactly one place', () => {
-        // Nothing in TS names this color, so this assertion is what stops a
-        // blank puzzle rendering SVG-default black if the declaration is
-        // dropped. The count pins the "one definition" property itself — a
-        // prefers-color-scheme override, which the CSS comment says must
-        // never exist, would land here as a second occurrence.
+        // Nothing in TS names this color, so this stops a blank puzzle
+        // rendering SVG-default black if the declaration is dropped. The count
+        // pins "one definition" — a prefers-color-scheme override (which must
+        // never exist) would land as a second occurrence.
         expect(declarationsFor(styleCss, ':root')).toMatch(
             /--piece-blank-fill:\s*#ffffff/,
         );

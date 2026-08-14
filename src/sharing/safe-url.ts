@@ -1,12 +1,9 @@
 /**
- * URL-scheme guard for values that end up in an anchor `href`.
- *
- * Attribution URLs carried by a share link are attacker-controlled: a
- * crafted `#p=...` link can set them to a `javascript:` (or `data:`)
- * scheme that executes on click. `target="_blank"` /
- * `rel="noopener noreferrer"` do NOT neutralize that. Restricting the
- * href to absolute http(s) URLs closes the vector while accepting every
- * legitimate (Unsplash) link, which is always https.
+ * URL-scheme guard for values that end up in an anchor `href`. Attribution URLs
+ * in a share link are attacker-controlled — a crafted `#p=...` can set a
+ * `javascript:`/`data:` scheme that executes on click (rel/target don't stop
+ * it). Restricting to absolute http(s) closes it while accepting every
+ * legitimate (https Unsplash) link.
  */
 export function isSafeHttpUrl(url: string): boolean {
     let parsed: URL;
@@ -23,38 +20,21 @@ const IMAGE_MIME_PREFIX = 'image/';
 
 /**
  * URL-scheme guard for a share link's image URL (`SharePayload.i`), which
- * reaches `state.imageUrl` and the SVG `<image>` href in
- * `renderer/svg-dom-renderer.ts`.
+ * reaches `state.imageUrl` and the SVG `<image>` href. Wider than
+ * {@link isSafeHttpUrl} (which requires absolute http(s) for anchor hrefs):
+ * accepts the `'blank'` sentinel, `data:image/*` (legacy blank-puzzle PNGs;
+ * `image/` subtypes only), and same-origin relative URLs (the bundled image).
+ * "Relative" is *tested*, not inferred from a failed parse: a protocol-relative
+ * `//evil.example/x.png` also throws in `new URL()` yet resolves cross-origin
+ * (a relative ref inherits the base's scheme, not origin) — hence the sentinel
+ * base in {@link isSameOriginRelative}.
  *
- * Deliberately NOT {@link isSafeHttpUrl}: that one requires an *absolute*
- * http(s) URL because its values end up in an anchor `href`. Image URLs have a
- * wider legitimate set, and reusing the stricter guard would reject links this
- * app itself emits:
- *
- *  - `'blank'` — the wire sentinel (see `SharePayload.i`).
- *  - `data:image/*` — legacy blank-puzzle links carry a painted canvas PNG.
- *    Restricted to `image/` subtypes: `data:text/html` has no business in an
- *    image href even though an `<image>` would not execute it.
- *  - relative — `BUNDLED_IMAGE_URL` is `'first-puzzle.jpg'`, which resolves
- *    against the app origin. Note "relative" has to be *tested*, not inferred
- *    from a failed absolute parse: a protocol-relative `//evil.example/x.png`
- *    (and its `\\`, `/\`, `///` variants) also throws in `new URL()` without a
- *    base, and then resolves cross-origin — a relative reference inherits the
- *    base's SCHEME, not its origin. Hence the sentinel base below.
- *
- * What this rejects is `javascript:`, `vbscript:`, `file:`, `blob:` and every
- * other scheme. `blob:` is deliberate rather than an oversight: the app's only
- * `URL.createObjectURL` is the corrupt-save download anchor
- * (`ui/corrupt-save-dialog.ts`), never an image, and a `blob:` minted in the
- * sharer's session is already a dead reference on the recipient's machine.
- *
- * Note what this does NOT do: http(s) is accepted for *any* host, because
- * legitimate links carry arbitrary `https://images.unsplash.com/...` URLs and
- * no scheme check can tell those from `https://evil.example/pixel.png`. The
- * origin policy — which is what actually stops a crafted link turning into a
- * tracking pixel — lives in the `img-src` CSP in `index.html`, where it also
- * covers resumed saves rather than just share links. This function's job is
- * the scheme, and making `SharePayload.i`'s declared type honest.
+ * Rejects `javascript:`/`vbscript:`/`file:`/`blob:` and every other scheme
+ * (`blob:` deliberately — the only createObjectURL is the save-download anchor,
+ * never an image, and a sharer's blob is dead on the recipient's machine).
+ * Host is NOT checked: http(s) is accepted for any host, because no scheme
+ * check separates Unsplash from `evil.example`. The origin policy that stops a
+ * tracking pixel lives in the `img-src` CSP in index.html.
  */
 export function isSafeImageUrl(url: string): boolean {
     if (url === 'blank') return true;
@@ -67,22 +47,18 @@ export function isSafeImageUrl(url: string): boolean {
         return isSameOriginRelative(url);
     }
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return true;
-    // Read the MIME type off `pathname`, not off a lowercased whole `href`:
-    // copying a long URL to test an 11-character prefix is a real allocation
-    // on the boot path. `protocol` is already lowercased by the parser, which
-    // is what makes slicing safe; `pathname` is not, so `data:IMAGE/png,x`
-    // still needs the case fold.
+    // Read the MIME off `pathname`, not a lowercased whole `href` (allocating a
+    // copy of a long URL on the boot path). `protocol` is already lowercased by
+    // the parser; `pathname` is not, so `data:IMAGE/png,x` still needs the fold.
     return parsed.protocol === 'data:'
         && parsed.pathname.slice(0, IMAGE_MIME_PREFIX.length).toLowerCase() === IMAGE_MIME_PREFIX;
 }
 
 /**
- * Parses rather than comparing a prefix, so it accepts every spelling
- * `new URL` does — uppercase, and leading whitespace or inner tab/CR/LF,
- * all of which the URL parser strips before reading `.protocol`. Both
- * callers decide from this whether a value is the legacy synthesized blank
- * image, and a stricter test than the parser's would let a spelling through
- * that the rest of the app then treats as a real image URL.
+ * Parses rather than prefix-matching, so it accepts every spelling `new URL`
+ * does (uppercase, leading/inner whitespace the parser strips). Callers use it
+ * to detect the legacy synthesized blank image; a stricter test would let a
+ * spelling through that the app then treats as a real image URL.
  */
 export function isDataUrl(url: string): boolean {
     try {
@@ -93,10 +69,9 @@ export function isDataUrl(url: string): boolean {
 }
 
 /**
- * Resolving against a sentinel base and requiring the origin back, rather than
- * treating "`new URL()` threw" as proof of relativeness: the throw only means
- * there was no scheme, and `//evil.example/x.png` clears that bar while
- * resolving to another origin entirely.
+ * Resolve against a sentinel base and require the origin back, rather than
+ * treating a `new URL()` throw as proof of relativeness: the throw only means
+ * no scheme, and `//evil.example/x.png` clears that bar yet resolves cross-origin.
  */
 function isSameOriginRelative(url: string): boolean {
     const base = 'https://relative.invalid';

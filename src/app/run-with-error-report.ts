@@ -8,10 +8,9 @@ import {
 import { showToast } from '../ui/index.js';
 
 /**
- * `shared-load-failed` has two producers (a real `#p=` share link and the
- * `__reproPuzzle` console helper), so it carries a `source` discriminator;
- * `new-game-failed` carries the cut style the failed attempt asked for,
- * and — on the boot path only — which of the two attempts it was.
+ * `shared-load-failed` has two producers (share link, `__reproPuzzle`), so it
+ * carries a `source`; `new-game-failed` carries the cut style, and on the boot
+ * path which of the two attempts it was.
  */
 export type ErrorReportEvent =
     | { event: 'shared-load-failed'; source: SharedLoadFailedData['source'] }
@@ -22,25 +21,18 @@ export type ErrorReportEvent =
     };
 
 /**
- * `track` is overloaded per event name, so it can't be called with a union
- * event variable directly. Switching over the union narrows `event` to a
- * single literal in each case, so the matching `track` overload binds and a
- * future rename of either event name is still type-checked here (unlike a
- * blanket cast) — as is a future per-event field.
+ * `track` is overloaded per event name, so it can't take a union variable
+ * directly. Switching narrows `event` to a literal per case so the matching
+ * overload binds and a rename stays type-checked (unlike a blanket cast).
  */
 function trackReasonEvent(report: ErrorReportEvent, reason: string): void {
     switch (report.event) {
         case 'new-game-failed': {
-            // Build the payload rather than passing `phase` straight
-            // through: a dialog-path failure has to reach Umami with no
-            // `phase` key at all, since its absence is exactly what marks
-            // it. See `NewGameFailedData.phase` — recovering a
-            // dialog-path-only figure is subtraction over rows that carry
-            // no `phase` key. Assembling it conditionally keeps that
-            // independent of how the tracker serializes an explicit
-            // `phase: undefined`, and the unit test pins the key's absence
-            // in the payload handed to the tracker. (`cutStyle` is
-            // unconditional on every path and needs no such care.)
+            // Build the payload rather than passing `phase` through: a
+            // dialog-path failure must reach Umami with no `phase` key at all,
+            // since its absence is what marks it (see `NewGameFailedData.phase`).
+            // Assembling it conditionally keeps that independent of how the
+            // tracker serializes an explicit `phase: undefined`.
             const data: NewGameFailedData = { reason, cutStyle: report.cutStyle };
             if (report.phase) data.phase = report.phase;
             track(report.event, data);
@@ -50,10 +42,9 @@ function trackReasonEvent(report: ErrorReportEvent, reason: string): void {
             track(report.event, { reason, source: report.source });
             return;
         default: {
-            // Exhaustiveness guard: without it a third `ErrorReportEvent`
-            // variant type-checks here and silently emits no Umami event at
-            // all (the function returns `void`, and `noImplicitReturns` is
-            // off), while still showing its toast and diagnostic.
+            // Exhaustiveness guard: without it a third variant type-checks and
+            // silently emits no Umami event (`noImplicitReturns` is off) while
+            // still showing its toast and diagnostic.
             const unhandled: never = report;
             return unhandled;
         }
@@ -64,19 +55,16 @@ export async function runWithErrorReport<T>(opts: ErrorReportEvent & {
     run: () => Promise<T>;
     warnMessage: string;
     /**
-     * Omit to stay silent — only for a caller that shows its own message
-     * once a recovery attempt has settled. `showToast` renders one toast
-     * at a time, so an eager failure toast would be replaced by the
-     * recovery's message anyway, and the intermediate flash reads as a
-     * contradiction.
+     * Omit to stay silent — for a caller that shows its own message after a
+     * recovery settles. `showToast` renders one toast at a time, so an eager
+     * failure toast would flash then be replaced, reading as a contradiction.
      */
     toastMessage?: string;
     fallback: T;
     /**
-     * Log through `console.error` instead of the DEV-gated
-     * `diagnostics.warn`, for a caller whose failure has to be readable on a
-     * deployed build. Opt-in per caller, so the user-facing flows stay
-     * silent in production as `diagnostics` documents.
+     * Log through `console.error` instead of the DEV-gated `diagnostics.warn`,
+     * for a caller whose failure must be readable on a deployed build. Opt-in,
+     * so user-facing flows stay silent in production.
      */
     logInProduction?: boolean;
 }): Promise<T> {

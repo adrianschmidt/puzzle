@@ -3,9 +3,8 @@ import { Bezier } from 'bezier-js';
 import { completeReduction } from './complete-reduction.js';
 
 /**
- * Curves chosen from probing bezier-js 6.1.4 for each shape of
- * `reduce()` result. The comments record what its own `reduce()`
- * returns, which is what makes each case interesting.
+ * Curves probed from bezier-js 6.1.4, one per shape of `reduce()`
+ * result; the per-field docs record what its `reduce()` returns.
  */
 const CURVES = {
     /** Reduces cleanly, covering [0, 1] in 9 parts. */
@@ -28,9 +27,8 @@ const CURVES = {
 };
 
 /**
- * The identity of a part, for comparing against a separate `reduce()`
- * call — which recomputes fresh `Bezier` objects every time, so parts
- * can only be matched structurally, never by reference.
+ * Structural identity of a part: a separate `reduce()` recomputes fresh
+ * `Bezier` objects, so parts match by shape, not reference.
  */
 function shapeOf(part: Bezier): string {
     return JSON.stringify([part._t1, part._t2, part.points]);
@@ -40,8 +38,8 @@ function expectCoversWholeCurve(parts: Bezier[]): void {
     expect(parts.length).toBeGreaterThan(0);
     expect(parts[0]._t1).toBeCloseTo(0, 9);
     for (const part of parts) {
-        // Adjacency alone would accept an inverted part: [0, 0.5],
-        // [0.5, 0.3], [0.3, 1] is "gap-free" end to end.
+        // Adjacency alone accepts an inverted part: [0,0.5],[0.5,0.3],
+        // [0.3,1] is "gap-free" end to end.
         expect(part._t2).toBeGreaterThan(part._t1);
     }
     for (let i = 1; i < parts.length; i++) {
@@ -53,15 +51,11 @@ function expectCoversWholeCurve(parts: Bezier[]): void {
 /**
  * Make `curve.reduce()` return parts covering exactly `ranges`.
  *
- * bezier-js's own `reduce()` always walks `t` forwards, so the
- * out-of-order shapes below are unreachable through it. Stubbing is
- * the only way to pin the cursor's `Math.max` guard, whose job is to
- * stop a part that arrives out of order from rewinding the cursor over
- * `t` an earlier part already covers. Both fills are guarded, so the
- * failure it prevents is not an inverted range but a redundant one:
- * filling a "hole" that is already covered, which duplicates a
- * sub-curve and — in the second case below — turns a legitimate
- * pass-through into a modified array.
+ * Real `reduce()` always walks `t` forwards, so stubbing is the only way
+ * to reach the cursor's `Math.max` guard against an out-of-order part
+ * rewinding over already-covered `t`. The failure it prevents is a
+ * redundant fill (duplicating a sub-curve, or turning a pass-through
+ * into a modified array), not an inverted range.
  */
 function stubReduce(curve: Bezier, ranges: ReadonlyArray<[number, number]>): Bezier[] {
     const parts = ranges.map(([t1, t2]) => {
@@ -80,16 +74,13 @@ describe('completeReduction', () => {
             'returns %s\'s own reduce() output unchanged',
             (name) => {
                 const curve = CURVES[name]();
-                // The premise of this block, asserted rather than assumed:
-                // bezier-js already covers these two end to end, so there is
-                // nothing for `completeReduction` to fill. A bump that opens
-                // a gap in either fails here as "premise broken" instead of
-                // as an opaque array diff below.
+                // Assert the block's premise: bezier-js already covers these
+                // end to end, so a bump that opens a gap fails here as
+                // "premise broken" rather than as an opaque array diff below.
                 expectCoversWholeCurve(curve.reduce());
-                // The sub-curves must be exactly the ones `intersects()`
-                // would have paired off — same count, same t-ranges, same
-                // control points. That is what keeps generated geometry
-                // bit-identical, so existing share links and saves survive.
+                // Same count/t-ranges/control points as `intersects()` would
+                // pair off — keeps generated geometry bit-identical so
+                // existing share links and saves survive.
                 expect(completeReduction(curve).map(shapeOf))
                     .toEqual(curve.reduce().map(shapeOf));
             },
@@ -178,10 +169,9 @@ describe('completeReduction', () => {
         );
 
         it('tags the filled tail with absolute t-bounds', () => {
-            // `pairiteration` reports hits as a position within the
-            // sub-curve's `_t1`/`_t2`, so a filled piece carrying anything
-            // other than its range on the *original* curve would place the
-            // crossing somewhere else entirely.
+            // `pairiteration` maps hits through `_t1`/`_t2`, so a filled
+            // piece tagged with the wrong range would place the crossing
+            // elsewhere entirely.
             const curve = CURVES.droppedTail();
             const tail = completeReduction(curve).at(-1)!;
 

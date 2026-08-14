@@ -1,8 +1,6 @@
 /**
- * sharePuzzle — invoke the OS share sheet if available, otherwise copy
- * the link to the clipboard. Users cancelling a native share sheet
- * (AbortError) do NOT fall through to clipboard — treat cancel as a
- * silent no-op.
+ * OS share sheet if available, else copy to clipboard. A cancelled native share
+ * (AbortError) is a silent no-op — it does NOT fall through to clipboard.
  */
 
 export interface SharePuzzleOptions {
@@ -10,10 +8,9 @@ export interface SharePuzzleOptions {
     title: string;
     text: string;
     /**
-     * Fires only on the clipboard fallback path — when navigator.share
-     * was unavailable (or threw a non-AbortError) and the URL was
-     * successfully written to the clipboard. A successful native share
-     * has no callback; an AbortError is treated as a silent cancel.
+     * Fires only on the successful clipboard-fallback path (share unavailable or
+     * threw non-AbortError, then clipboard write succeeded). Native share success
+     * and AbortError cancel both fire nothing.
      */
     onClipboardFallback: () => void;
     onError: (e: Error) => void;
@@ -36,8 +33,8 @@ export async function sharePuzzle(opts: SharePuzzleOptions): Promise<void> {
             await navigator.share({ url, title, text });
             return;
         } catch (e) {
-            // Older WebKit throws DOMException for AbortError, which didn't
-            // inherit from Error. Match by duck-typed name to cover both.
+            // Older WebKit throws a DOMException for AbortError that doesn't
+            // inherit from Error; match by duck-typed name to cover both.
             if ((e as { name?: string } | null)?.name === 'AbortError') return;
         }
     }

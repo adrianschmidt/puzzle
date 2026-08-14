@@ -1,12 +1,10 @@
 /**
- * The image bundled with the app (`public/first-puzzle.jpg`). It plays
- * two roles: the pre-determined image for a brand-new visitor's first
- * puzzle (chosen to contrast well with the default background), and
- * the fallback when the Unsplash fetch fails.
+ * The image bundled with the app (`public/first-puzzle.jpg`): the first puzzle
+ * for a brand-new visitor (chosen to contrast with the default background),
+ * and the fallback when the Unsplash fetch fails.
  *
- * The previous fallback asset `public/puzzle-image.jpg` must stay in
- * the deploy untouched: old saves and share links reference that URL
- * with 800×600 geometry.
+ * The legacy fallback asset `public/puzzle-image.jpg` must stay deployed
+ * untouched: old saves and share links reference it with 800×600 geometry.
  */
 
 import type { ImageAttribution, Size, Orientation } from '../model/types.js';

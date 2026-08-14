@@ -31,8 +31,7 @@ describe('classicTabGenerator', () => {
 
     it('returns null when the edge is too short for the tab', () => {
         const random = makeSeededRandom(42);
-        // The tab template needs ~12% margin on each side; an extremely
-        // short edge cannot fit it.
+        // Tab template needs ~12% margin each side; a 0.5px edge can't fit it.
         const edge = Curve.line({ x: 0, y: 0 }, { x: 0.5, y: 0 });
         const result = classicTabGenerator.generate(edge, random, {});
         expect(result).toBeNull();

@@ -1,9 +1,7 @@
 /**
- * A dropped preference write is not an error, it is a setting that
- * quietly reverts the next time the player opens the dialog. Keeping the
- * writes as one flat sequence — rather than folding some into a shared
- * helper — is deliberate: each one stays independently greppable against
- * its `load*` counterpart.
+ * The preference writes are kept as one flat sequence, not folded into a
+ * helper, so each stays independently greppable against its `load*`
+ * counterpart. A dropped write just reverts that setting next time.
  */
 
 import type { GridSize } from '../model/types.js';
@@ -89,12 +87,10 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
                 );
         })(),
         onPreloadTracedTabs: () => {
-            // Fire-and-forget — preloadTracedTabGenerator is
-            // idempotent and clears its cached promise on failure,
-            // so the eventual `await` in startNewGame triggers a
-            // fresh attempt that surfaces the real error. Swallow
-            // here only to stop the in-flight rejection from
-            // surfacing as an unhandled-rejection warning.
+            // Fire-and-forget: `preloadTracedTabGenerator` is idempotent and
+            // clears its cached promise on failure, so `startNewGame`'s await
+            // retries and surfaces the real error. Swallow only to avoid an
+            // unhandled-rejection warning.
             preloadTracedTabGenerator().catch(() => {});
         },
         onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, imageChoice, imageCategory, vibrant }) => {
@@ -110,25 +106,21 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
                 saveWavyConfigPreference(wavyConfig);
             }
             saveRotationEnabledPreference(rotationEnabled);
-            // No UI reads this preference anymore, but first-run
-            // detection depends on the key existing, and analytics
-            // still classifies by it.
+            // No UI reads this preference, but first-run detection depends on
+            // the key existing and analytics still classifies by it.
             saveImageSourcePreference(imageChoice.kind === 'blank' ? 'blank' : 'random');
             saveImageCategoryPreference(imageCategory);
             saveVibrantPreference(vibrant);
 
             const option = getSizeOption(sizeId);
             const cutStyle = cutStyleId as CutStyle;
-            // The current save is deliberately left alone here — `deps.start`
-            // (`startNewGame`) persists the new puzzle only once generation
-            // fully succeeds, so a cancel (the loading overlay's Cancel
-            // affordance, #489) or a throw leaves the previous save intact,
-            // matching the in-memory puzzle the player is left with. An eager
-            // clear here used to destroy that save on every one of those
-            // paths — the same defect as `share-link-loader.ts`'s. Also: a
-            // new puzzle whose geometry exceeds the storage quota writes
-            // nothing at all (#399), so the PREVIOUS puzzle stays on disk
-            // under a different puzzle on screen and a reload resumes it.
+            // The current save is left alone: `deps.start` persists the new
+            // puzzle only once generation fully succeeds, so a cancel (#489) or
+            // throw leaves the previous save intact, matching the in-memory
+            // puzzle the player keeps. An eager clear used to destroy it on
+            // those paths. Also, a puzzle exceeding the storage quota writes
+            // nothing (#399), so the previous puzzle stays on disk and a reload
+            // resumes it.
             const newGame = deps.start(toGridSize(option), {
                 cutStyle,
                 composableConfig: composableConfig
@@ -144,10 +136,9 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
                 pickedImage: imageChoice.kind === 'photo' ? imageChoice.photo : undefined,
             });
             void runWithErrorReport({
-                // The chunk-load path (traced tabs lazy import) is the most
-                // likely source of a rejection here — a network blip or
-                // stale deploy hash. The user gets a toast so the click
-                // doesn't silently do nothing; `new-game-failed` records it.
+                // The traced-tab chunk load is the likeliest rejection here (a
+                // network blip or stale deploy hash). The toast keeps the click
+                // from silently doing nothing; `new-game-failed` records it.
                 run: () => newGame,
                 warnMessage: 'Failed to start new game:',
                 event: 'new-game-failed',

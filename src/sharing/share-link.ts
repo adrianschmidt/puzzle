@@ -28,9 +28,8 @@ export interface SharePayload {
     /** Rotation mode. */
     r: 'none' | 'quarter-turn' | 'free';
     /**
-     * Sharer's background color (palette swatch id). Optional and
-     * additive — old links lack it, old clients ignore it. The receiver
-     * adopts it only when it has no color preference of its own.
+     * Sharer's background color (palette swatch id). Additive — old links lack
+     * it, old clients ignore it; the receiver adopts it only with no preference of its own.
      */
     bgc?: string;
     /** Composable cut config. */
@@ -53,19 +52,16 @@ export interface SharePayload {
     /** Wavy-cut config. `tv` = trace-set version (present ⇒ traced tabs; absent ⇒ classic). */
     wf?: { bl: boolean; tv?: number };
     /**
-     * Triangles-cut config. `tv` pins the traced tab-library snapshot.
-     * Unlike wavy's `wf.tv`, absence does NOT mean classic tabs — every
-     * triangles puzzle uses traced tabs; a missing/invalid block just
-     * falls back to the current trace set on the receiver.
+     * Triangles-cut config. `tv` pins the traced tab-library snapshot. Unlike
+     * wavy's `wf.tv`, absence does NOT mean classic tabs — every triangles
+     * puzzle is traced; a missing/invalid block falls back to the current trace set.
      */
     tf?: { tv: number };
     /**
      * Classic-cut config. `tv` = trace-set version. Its PRESENCE selects the
-     * sine-based Classic generator; ABSENCE (every pre-upgrade link) selects
-     * the legacy generateProceduralPuzzle. On decode an invalid `tv` drops the
-     * block (as it does for triangles' `tf`), but here that fallback lands on
-     * the legacy generator, whereas a dropped `tf` still reproduces via the
-     * composable pipeline at the current trace set.
+     * sine Classic generator; ABSENCE (pre-upgrade links) selects the legacy
+     * generateProceduralPuzzle. An invalid `tv` drops the block → legacy
+     * generator (contrast `tf`, which stays on the composable pipeline).
      */
     clf?: { tv: number };
     /** Progress snapshot. */
@@ -77,14 +73,10 @@ export interface SharePayload {
 }
 
 /**
- * The cut styles and rotation modes the wire format accepts, as own-key
- * sets. Declared as total `Record`s over the `SharePayload` unions, so a
- * sixth cut style (or a fourth rotation mode) fails to compile here instead
- * of being silently rejected at decode.
- *
- * Membership is tested with `hasOwnProperty` rather than `in` or a bare
- * lookup: `'toString'` is a truthy *inherited* member of any object literal,
- * so the cheaper checks would accept it as a cut style.
+ * Cut styles and rotation modes the wire format accepts. Total `Record`s over
+ * the SharePayload unions, so a new style/mode fails to compile here rather
+ * than being silently rejected at decode. Membership uses `hasOwnProperty`, not
+ * `in` — `'toString'` is a truthy inherited member that the cheaper checks accept.
  */
 const CUT_STYLES: Record<SharePayload['c'], true> = {
     classic: true,
@@ -101,13 +93,11 @@ const ROTATION_MODES: Record<SharePayload['r'], true> = {
 };
 
 /**
- * Both predicates take `unknown`, not `string`: every caller passes a value
- * that is only *typed* as a string — a `JSON.parse`d payload field, or a
- * console object hand-typed from a screenshot — so the runtime type check
- * belongs inside, once, rather than at each call site. It is load-bearing:
- * `hasOwnProperty` coerces its key, so `['classic']` or a `{ toString() }`
- * object would otherwise pass membership and then read as an unknown style
- * everywhere downstream, where every comparison is against a string literal.
+ * Both predicates take `unknown`, not `string`: callers pass values only
+ * *typed* as strings (a JSON.parsed field, a hand-typed console object), so the
+ * runtime check lives here once. `hasOwnProperty` coerces its key, so
+ * `['classic']` or `{ toString() }` would otherwise pass membership and read as
+ * an unknown style downstream.
  */
 export function isCutStyle(value: unknown): value is SharePayload['c'] {
     return typeof value === 'string'
@@ -155,48 +145,29 @@ function assertPayloadNumbersFinite(payload: SharePayload): void {
 }
 
 /**
- * Upper bound on a decoded image dimension (pixels). The app delivers
- * images at 1080px wide (height scaled by aspect ratio), so this cap sits
- * several times above any real image. It bounds what a crafted
- * `is:[1e9, 1e9]` link can drive: generators inscribe the puzzle into the
- * image rect, and the renderer derives every piece's SVG width/height from
- * it — so an unbounded `is` means multi-gigapixel geometry and per-piece
- * elements sized to match, which hangs the tab.
+ * Upper bound on a decoded image dimension (px); several times above the app's
+ * 1080px delivery. Bounds a crafted `is:[1e9,1e9]`: generators inscribe into
+ * the image rect and the renderer sizes every piece from it, so an unbounded
+ * `is` means gigapixel geometry that hangs the tab.
  */
 const MAX_IMAGE_DIM = 8192;
 
 /**
- * Upper bound on a decoded sine base-cut frequency (`hf`/`vf`). The
- * new-game dialog caps frequency at 10, so this sits an order of
- * magnitude above any UI-reachable value (mirroring how
- * {@link clampGridDim}'s ceiling keeps headroom over the UI grid cap) and
- * alters no real or dev-console puzzle.
- *
- * It bounds `generateSineCurve`'s segment allocation against a crafted
- * `cf.bgc.hf = 1e9` link. Per-curve segments grow linearly with
- * frequency (sine-cut-generator.ts: `ceil(frequency * segmentsPerWave)`,
- * `segmentsPerWave = 4`), and those segments feed an O(segments²)
- * curve-intersection path, so the worst case is quadratic in this cap.
- * If `segmentsPerWave` ever grows, re-evaluate the bound.
+ * Upper bound on a decoded sine base-cut frequency (`hf`/`vf`); an order of
+ * magnitude above the new-game dialog's cap of 10, so it alters no real puzzle.
+ * Bounds `generateSineCurve`'s segment allocation against a crafted `hf = 1e9`:
+ * segments grow linearly with frequency and feed an O(segments²) intersection
+ * path. Re-evaluate if `segmentsPerWave` (currently 4) grows.
  */
 const MAX_SINE_FREQUENCY = 100;
 
 /**
- * Upper bound on a decoded sine base-cut amplitude (`ha`/`va`). The
- * new-game dialog caps amplitude at 0.5 (and the wavy cut style uses
- * exactly 0.5), so this clamps to the documented UI ceiling and alters no
- * real puzzle.
- *
- * Amplitude doesn't change the segment *count*, but it scales each
- * segment's perpendicular displacement, and thus its bounding box. The
- * O(segments²) intersection path (curve.ts: `Curve.intersect`) prunes
- * non-overlapping segment pairs via a bbox pre-filter (`bboxOverlap`); a
- * crafted huge amplitude inflates every segment's bbox enough to defeat
- * that pruning, re-inflating the intersection cost that the frequency cap
- * otherwise contains. Clamping amplitude to its legitimate range closes
- * that residual vector. Negative/zero amplitudes are safe (the generator
- * gates on `> 0` and falls back to a flat line), so only the upper bound
- * needs enforcing.
+ * Upper bound on a decoded sine base-cut amplitude (`ha`/`va`); the UI ceiling
+ * of 0.5 (wavy uses exactly 0.5), so it alters no real puzzle. Amplitude scales
+ * each segment's bbox, and a crafted huge value defeats the `Curve.intersect`
+ * bbox pre-filter, re-inflating the O(segments²) cost the frequency cap
+ * contains. Negative/zero are safe (generator gates on `> 0`), so only the
+ * upper bound is enforced.
  */
 const MAX_SINE_AMPLITUDE = 0.5;
 
@@ -206,14 +177,11 @@ function clampDim(n: number, max: number): number {
 }
 
 /**
- * Cap the sine base-cut frequencies (`hf`/`vf`) and amplitudes (`ha`/`va`)
- * on a decoded composable `bgc` to {@link MAX_SINE_FREQUENCY} /
- * {@link MAX_SINE_AMPLITUDE}. Only the `sine` generator reads these as
- * segment-driving / bbox-inflating knobs, so the clamp is gated on
- * `bg === 'sine'` and leaves every other generator's opaque config
- * untouched. A non-numeric value (e.g. a non-finite field that the JSON
- * round-trip turned into `null`) is skipped; the generator then falls back
- * to its own default. Mutates `bgc` in place.
+ * Cap sine base-cut `hf`/`vf` and `ha`/`va` on a decoded composable `bgc` to
+ * {@link MAX_SINE_FREQUENCY}/{@link MAX_SINE_AMPLITUDE}. Gated on `bg === 'sine'`
+ * (only sine reads these as segment/bbox knobs), leaving other generators'
+ * opaque config untouched. Non-numeric values (a JSON-nulled non-finite) are
+ * skipped → generator default. Mutates `bgc` in place.
  */
 function clampSineConfig(cf: NonNullable<SharePayload['cf']>): void {
     if (cf.bg !== 'sine') return;
@@ -227,10 +195,9 @@ function clampSineConfig(cf: NonNullable<SharePayload['cf']>): void {
 }
 
 /**
- * Bound a decoded wavy trace-set version. A non-number or sub-1 value is
- * dropped (undefined ⇒ the puzzle reproduces with classic tabs, matching
- * pre-versioning links); a version newer than this client knows is clamped
- * down to the newest it can reproduce, so a forward-link still plays.
+ * Bound a decoded trace-set version. Non-number/sub-1 → undefined (classic
+ * tabs, matching pre-versioning links); a version newer than this client knows
+ * clamps down to the newest it can reproduce, so a forward-link still plays.
  */
 function clampTraceSetVersion(tv: unknown): number | undefined {
     const v = normalizeTraceSetVersion(tv);
@@ -246,14 +213,12 @@ export function decodePayload(encoded: string): SharePayload | null {
         // Bound the grid before it reaches the generators (O(E²) crossing
         // check). Normal grids (<= the shared grid cap) pass through unchanged.
         translated.g = [clampGridDim(translated.g[0]), clampGridDim(translated.g[1])];
-        // A *fractional* `is` is not adversarial: fractal/wavy links inscribe
-        // the image to the grid aspect (cut-style-strategies.ts), so 607.5 is
-        // a normal product of that path and the floor only snaps it sub-pixel.
+        // A fractional `is` is not adversarial: fractal/wavy inscribe the image
+        // to the grid aspect, so 607.5 is normal and the floor only snaps sub-pixel.
         translated.is = [clampDim(translated.is[0], MAX_IMAGE_DIM), clampDim(translated.is[1], MAX_IMAGE_DIM)];
-        // Bound the sine base-cut frequency and amplitude before they reach
-        // generateSineCurve; see MAX_SINE_FREQUENCY / MAX_SINE_AMPLITUDE for the
-        // DoS rationale. Legacy payloads were already rewritten to bg: 'sine'
-        // above, so this covers them too.
+        // Bound sine frequency/amplitude before generateSineCurve (see
+        // MAX_SINE_FREQUENCY/MAX_SINE_AMPLITUDE). Legacy payloads were rewritten
+        // to bg: 'sine' above, so this covers them too.
         if (translated.c === 'composable' && translated.cf) {
             clampSineConfig(translated.cf);
         }
@@ -265,17 +230,11 @@ export function decodePayload(encoded: string): SharePayload | null {
                 translated.wf.tv = clamped;
             }
         }
-        // Both blocks are normalized whatever `c` says, matching the ungated
-        // shape check in `isValidTraceSetBlock`. Gating these on the cut style
-        // (as the `wf` branch above still does, and as these two did) leaves a
-        // foreign block un-normalized: `{ c: 'classic', tf: { tv: 'x' } }`
-        // passes the shape check, skips a triangles-gated clamp, and decodes to
-        // a `SharePayload` whose `tf` contradicts its declared `{ tv: number }`
-        // — the type-honesty gap #491 exists to close, moved rather than shut.
-        // Nothing downstream reads a foreign block (`assembleGameState` drops
-        // blocks that don't match the selected style), so this costs nothing
-        // today; it means a future `payload.tf.tv` reader gets a number or
-        // nothing, for all five cut styles.
+        // Both blocks normalized whatever `c` says, matching the ungated shape
+        // check in `isValidTraceSetBlock`. Gating on cut style would leave a
+        // foreign block un-normalized (e.g. `{ c: 'classic', tf: { tv: 'x' } }`)
+        // decoding to a `tf` that contradicts its declared `{ tv: number }` (#491).
+        // Nothing reads a foreign block today; this keeps a future reader safe.
         if (translated.tf) {
             const clamped = clampTraceSetVersion(translated.tf.tv);
             // No legacy-classic fallback here (contrast wf.tv): an invalid tv
@@ -374,53 +333,20 @@ function isValidPayload(x: unknown): x is SharePayload {
 }
 
 /**
- * Validate the fractal (`ff`) and wavy (`wf`) config blocks, whose only
- * shared field is the borderless flag.
+ * Validate the fractal (`ff`) and wavy (`wf`) blocks, whose only shared field
+ * is the borderless flag. `bl` is typed `boolean` but reached `GameState`
+ * unchecked and is re-emitted on re-share and in the `piece-count-mismatch`
+ * event, so a crafted non-boolean has to be stopped before it enters state
+ * (`isValidComposableCf` has always checked composable's `cf.bl`; this closes
+ * the same hole). Rejecting the whole payload matches the codec's handling of
+ * every other malformed block and rejects nothing this app emits.
  *
- * `bl` is typed `boolean` but reached `GameState` unchecked:
- * `shareInitOptions` copies it straight into `fractalConfig`/`wavyConfig`,
- * and from there it is printed in the info modal's repro block, re-emitted
- * on a re-share, and serialized into the `piece-count-mismatch` event's
- * `styleConfig`. What an arbitrary string parked there did to generation
- * differed by style, and neither answer was good: wavy funnels into
- * `generator.ts`'s strict `borderless === true`, so the value rode along
- * inertly while the puzzle looked entirely normal; fractal ran its own
- * pipeline and read the flag for truthiness at every hop, so `'yes'`
- * generated a genuinely BORDERLESS puzzle that a re-share then described as
- * bordered. Fractal now coerces with `=== true` too (`fractal/index.ts`,
- * `game/cut-style-strategies.ts`), which makes "non-`true` means off" a
- * property of the generators rather than a claim about them — but the
- * cheapest place to stop the value is still here, before it enters state.
- * `isValidComposableCf` has always type-checked composable's equivalent
- * `cf.bl`; this closes the same hole for the other two styles.
- *
- * Rejecting the whole payload matches how the codec handles every other
- * malformed optional block (`cf`, `pr`, `bgc`, `a`), and rejects nothing
- * this app has ever emitted: both producers go through `applyStyleConfigs`,
- * which has written a boolean `bl` since either block existed (`?? false`
- * historically, `=== true` now — see the note there for why the difference
- * matters on a state restored from an older build's save).
- *
- * `bl` is REQUIRED here, unlike the optional-but-typed `cf.bl` in
- * `isValidComposableCf`. Both forms reject the same values, so the
- * difference is only that this one makes "always emit `bl`" part of the wire
- * contract: a later producer-side change that dropped a `false` `bl` to
- * shorten links would be rejected outright by every client already shipped
- * with this decoder. Loosen this to the optional form in the same change if
- * that is ever worth doing — see the note at the `ff`/`wf` branches of
- * `applyStyleConfigs`.
- *
- * `wf.tv` is deliberately NOT checked here. `decodePayload` clamps it, and
- * an unusable one falls back to classic tabs rather than losing the link —
- * see the wavy branch there.
- *
- * Applied to EVERY cut style, unlike the `cf` check one line up, which is
- * gated on `p.c === 'composable'`. So `{ c: 'classic', wf: { bl: 'yes' } }` is
- * rejected even though nothing would read that `wf`. Deliberate: no producer
- * emits a foreign block (`applyStyleConfigs` writes only the one matching
- * `payload.c`), so the gate would buy nothing, and the ungated form keeps the
- * decode-time guarantee unconditional — a later reader that started consulting
- * `wf` for another style would inherit the check rather than need one added.
+ * `bl` is REQUIRED here (unlike the optional `cf.bl`), making "always emit `bl`"
+ * part of the wire contract — loosen it only alongside the `applyStyleConfigs`
+ * producer. `wf.tv` is NOT checked here — `decodePayload` clamps it and an
+ * unusable one falls back to classic tabs. Applied to EVERY cut style (unlike
+ * the composable-gated `cf` check): no producer emits a foreign block, and the
+ * ungated form keeps the guarantee unconditional for a future reader.
  */
 function isValidBorderlessBlock(x: unknown): boolean {
     if (!x || typeof x !== 'object') return false;
@@ -428,45 +354,25 @@ function isValidBorderlessBlock(x: unknown): boolean {
 }
 
 /**
- * Validate the triangles (`tf`) and classic (`clf`) config blocks, whose only
- * field is the trace-set version.
- *
- * Shape only — `tv` is deliberately NOT checked here, exactly as `wf.tv` isn't
- * one function up. `decodePayload` clamps it through `clampTraceSetVersion`,
- * and an unusable value drops the block and falls back rather than losing the
- * whole link. Type-checking `tv` here would upgrade that graceful fallback into
- * an outright rejection, which is a worse outcome for a link whose only fault
- * is a trace set this build doesn't have.
- *
- * What the object check buys is the case the clamp cannot reach: the clamp
- * blocks are guarded on plain truthiness (`translated.clf && ...`), so before
- * this existed a *falsy* non-object — `clf: null`, `clf: 0` — skipped the clamp
- * entirely and survived decode. `decodePayload` then returned a `SharePayload`
- * whose `clf` was `null` while its declared type said `{ tv: number }`, one
- * `payload.clf.tv` away from a throw on a crafted link (#491). A truthy
- * non-object was always handled: it reached the clamp, `.tv` read `undefined`,
- * and the block was deleted.
- *
- * Ungated by `p.c` like {@link isValidBorderlessBlock}, but note the two are
- * not equivalent: that sibling fully enforces its declared shape (`bl` must be
- * a boolean) for every style, whereas leaving `tv` to the clamp means this one
- * cannot. `decodePayload` closes the difference from the other end by running
- * both clamps ungated too, so a block that survives validation is always
- * normalized or dropped whatever `c` says.
+ * Validate the triangles (`tf`) and classic (`clf`) blocks, whose only field is
+ * the trace-set version. Shape only — `tv` is NOT checked here (as `wf.tv`
+ * isn't): `decodePayload` clamps it and an unusable value drops the block rather
+ * than losing the whole link. What the object check buys is the case the clamp
+ * can't reach: its guards are plain truthiness, so a *falsy* non-object
+ * (`clf: null`, `clf: 0`) skipped the clamp and survived decode as a `clf` that
+ * contradicts its declared `{ tv: number }` (#491). Ungated by `c` like
+ * {@link isValidBorderlessBlock}, though this one leaves `tv` to the clamp;
+ * `decodePayload` runs both clamps ungated to close the difference.
  */
 function isValidTraceSetBlock(x: unknown): boolean {
     return !!x && typeof x === 'object';
 }
 
 /**
- * Validate the optional attribution block. The URLs flow into an anchor
- * `href` (see `createAttributionElement`), so a crafted link could
- * otherwise carry a `javascript:`-scheme URL that executes on click.
- * Require the shape `{ n, u, p }` with `u`/`p` restricted to absolute
- * http(s) URLs; every legitimate (Unsplash) link already satisfies this,
- * so this rejects only links that were already dangerous. Rejecting the
- * whole payload matches the codec's all-or-nothing handling of other
- * malformed optional fields (`bgc`, `pr`).
+ * Validate the optional attribution block. Its URLs flow into an anchor `href`,
+ * so a crafted link could carry a `javascript:` URL that executes on click.
+ * Require `{ n, u, p }` with `u`/`p` absolute http(s) — every Unsplash link
+ * satisfies this, so it rejects only already-dangerous links.
  */
 function isValidAttribution(a: unknown): boolean {
     if (!a || typeof a !== 'object') return false;
@@ -477,10 +383,8 @@ function isValidAttribution(a: unknown): boolean {
     return true;
 }
 
-// Lazy-cached id sets. The registries are populated at module-import
-// time (see `generator-registry.ts`), so we only need to snapshot them
-// on first lookup. O(1) `Set.has` thereafter beats the previous per-
-// decode array allocation + linear `Array.includes`.
+// Lazy-cached id sets, snapshotted on first lookup (registries are populated at
+// module-import time). O(1) `Set.has` beats a per-decode array + `Array.includes`.
 let knownBaseCutIds: Set<string> | null = null;
 let knownTabIds: Set<string> | null = null;
 
@@ -514,10 +418,9 @@ function isTuple2Number(x: unknown): x is [number, number] {
 }
 
 /**
- * A crafted link that satisfies the schema but feeds non-numeric or
- * out-of-range data through `applyProgress` would crash with a
- * `TypeError` (or write garbage into `group.rotation`). Reject obviously
- * malformed shapes here before they reach the game state.
+ * A crafted link that passes the schema but feeds non-numeric/out-of-range data
+ * through `applyProgress` would throw (or write garbage into `group.rotation`).
+ * Reject malformed shapes here, before the game state.
  */
 function isValidProgress(x: unknown): boolean {
     if (!x || typeof x !== 'object') return false;
@@ -554,11 +457,9 @@ function isValidProgress(x: unknown): boolean {
 }
 
 /**
- * `decodePayload` already translates legacy
- * share-link payloads (v1 `ha`/`hf`/`va`/`vf`/`dt` fields) to the current
- * `bg`/`bgc`/`tg`/`tgc` shape on the way in, so this is a 1:1 rename plus
- * the optional `mpa` propagation that keeps auto-grouping behavior
- * consistent between sender and receiver.
+ * `decodePayload` already translates legacy `ha`/`hf`/`va`/`vf`/`dt` payloads
+ * to `bg`/`bgc`/`tg`/`tgc`, so this is a 1:1 rename plus optional `mpa`
+ * propagation that keeps auto-grouping consistent between sender and receiver.
  */
 export function shareCfToComposableConfig(
     cf: NonNullable<SharePayload['cf']>,
@@ -606,17 +507,11 @@ export interface StyleConfigSource {
 }
 
 /**
- * Copy the config block matching `payload.c` from `source` onto the
- * payload. Shared between `gameStateToPayload` (share links) and
- * `reproParamsToPayload` (the `__reproPuzzle` console helper) so the
- * style-block wire mapping exists once.
- *
- * Precondition: `payload.c` must already hold its final value. Reading
- * the cut style off the payload rather than off `source` is deliberate —
- * it cannot disagree with the `c` that actually ships — but it means a
- * caller that assembles the payload incrementally and calls this before
- * assigning `c` gets a silent no-op, not a type error. Both current
- * callers pass a fully-initialized object literal.
+ * Copy the config block matching `payload.c` from `source` onto the payload.
+ * Shared by `gameStateToPayload` and `reproParamsToPayload` so the style-block
+ * mapping exists once. Precondition: `payload.c` holds its final value —
+ * reading the style off the payload can't disagree with what ships, but calling
+ * this before assigning `c` is a silent no-op. Both callers pass a full literal.
  */
 export function applyStyleConfigs(payload: SharePayload, source: StyleConfigSource): void {
     if (payload.c === 'composable' && source.composableConfig) {
@@ -639,35 +534,16 @@ export function applyStyleConfigs(payload: SharePayload, source: StyleConfigSour
         payload.cf = cf;
     }
 
-    // `bl` is written unconditionally on both blocks, including when it is
-    // `false`. That is load-bearing, not verbosity: `isValidBorderlessBlock`
-    // requires it, so omitting it to shorten links would make new links
-    // undecodable by every already-shipped client. Loosen that validator
-    // first if this ever changes.
+    // `bl` is written unconditionally (even when `false`): `isValidBorderlessBlock`
+    // requires it, so omitting it would make new links undecodable by shipped
+    // clients. Loosen that validator first if this changes.
     //
-    // `=== true` rather than `?? false`, on all three blocks, so the encoder
-    // can never emit a link its own decoder refuses. `borderless` is typed
-    // `boolean | undefined`, so for anything this app builds the two are the
-    // same expression — but a state restored from a save written by a PRE-
-    // tightening build can carry a crafted `bl: 'yes'` verbatim
-    // (`share-payload-to-init.ts` copies it into `wavyConfig`/`fractalConfig`,
-    // `serialization.ts` round-trips the block as-is), and `?? false` would
-    // pass that straight back onto the wire for the new `isValidBorderlessBlock`
-    // to reject — a share link broken with no signal to the sharer. Coercing
-    // also keeps the link faithful to what it REPRODUCES: `false` is what such
-    // a state now generates, because every generator entry point coerces the
-    // flag the same `=== true` way (`generator.ts` for wavy and composable,
-    // `fractal/index.ts` and `game/cut-style-strategies.ts` for fractal, which
-    // does not go through it). Not to what the sharer is looking at — a
-    // restored save rebuilds its pieces from the stored blob instead of
-    // regenerating, so a puzzle an older build cut borderless stays borderless
-    // on screen while its link says bordered. That mismatch is the old build's
-    // and needs a crafted `bl` — a hand-edited link or a hand-typed
-    // `__reproPuzzle` param, neither of which the old build validated — to
-    // exist at all; what this coercion owns is that encode and generate never
-    // disagree going forward. Those two readings are kept deliberately in
-    // step; loosening either end would make a link describe a puzzle that
-    // isn't the one it reproduces.
+    // `=== true` (not `?? false`) on all three blocks so the encoder never emits
+    // a link its own decoder refuses: a state restored from a pre-tightening
+    // build can carry a crafted `bl: 'yes'` verbatim, and `?? false` would pass
+    // it back to the wire for the new validator to reject. `=== true` also
+    // matches what such a state now REPRODUCES (every generator coerces the flag
+    // the same way), keeping encode and generate in step.
     if (payload.c === 'fractal' && source.fractalConfig) {
         payload.ff = { bl: source.fractalConfig.borderless === true };
     }
@@ -744,10 +620,8 @@ function extractProgress(state: GameState): SharePayload['pr'] | null {
     const pr: NonNullable<SharePayload['pr']> = { m };
 
     if (state.rotationMode === 'quarter-turn') {
-        // Wire format for v: 1 share links is quarter-turn integers 0..3,
-        // matching what existing shared URLs in the wild encode. The internal
-        // representation switched to degrees in the rotation-as-degrees
-        // refactor, so we divide by 90 here.
+        // v:1 wire format is quarter-turn integers 0..3 (matching URLs in the
+        // wild); the internal representation is degrees, so divide by 90.
         pr.mr = merged.map((g) => Math.round(g.rotation / 90));
         const sr: number[] = [];
         for (const g of state.groups) {
@@ -758,11 +632,9 @@ function extractProgress(state: GameState): SharePayload['pr'] | null {
         }
         if (sr.length > 0) pr.sr = sr;
     } else if (state.rotationMode === 'free') {
-        // Free mode encodes integer degrees 0..359 directly. Solo pieces are
-        // virtually always at non-zero rotation, so the sparse `sr` encoding
-        // becomes effectively dense; keep the format for consistency with v: 1.
-        // The explicit % 360 guards against float arithmetic leaving g.rotation
-        // just outside [0, 360) — e.g. 359.6 → round → 360 → % 360 → 0.
+        // Free mode encodes integer degrees 0..359 directly (sparse `sr` kept
+        // for v:1 consistency). The `% 360` guards float drift outside [0,360):
+        // 359.6 → round → 360 → % 360 → 0.
         pr.mr = merged.map((g) => normalizeDegrees(Math.round(g.rotation)));
         const sr: number[] = [];
         for (const g of state.groups) {

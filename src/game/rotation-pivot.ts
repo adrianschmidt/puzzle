@@ -1,17 +1,11 @@
 /**
- * Pivot selection for manual rotation (issue #530, follow-up).
+ * Pivot selection for manual rotation (#530). When a mated edge is within snap
+ * DISTANCE (angular error deliberately ignored — rotating is what fixes it),
+ * rotate around that mate's center so the near-connected piece stays put;
+ * closest mate wins. `null` = no mate near (caller uses bbox-center default).
  *
- * When a group's mated edge is within the snap DISTANCE — angular error is
- * deliberately ignored, since the whole point of rotating is to fix it —
- * the group rotates around that mated piece's center, so the near-connected
- * piece stays put while the rest swings into place. Closest mate wins when
- * several are in range. `null` means no mate is near: the caller falls back
- * to its bbox-center default.
- *
- * Free-rotation only — quarter-turn taps keep the group-center pivot.
- * Stickiness is the caller's job: pick once at drag start and reuse the
- * result for that whole rotation — re-picking mid-gesture would move the
- * pivot under the player's hand.
+ * Free-rotation only. Stickiness is the caller's job: pick once at drag start
+ * and reuse it — re-picking mid-gesture would move the pivot under the hand.
  */
 
 import type { GameState, Piece, PieceGroup, Point } from '../model/types.js';

@@ -1,7 +1,6 @@
 /**
- * When disabled (the default), a marquee selects every group whose bounds
- * the box touches (intersect). When enabled, only groups whose bounds lie
- * fully inside the box are selected (contain).
+ * Disabled (default) = intersect: select every group the box touches. Enabled =
+ * contain: select only groups fully inside the box.
  */
 
 import { createBooleanPreference } from './preference-store.js';

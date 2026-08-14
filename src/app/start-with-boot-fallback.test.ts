@@ -19,10 +19,9 @@ describe('startWithBootFallback', () => {
     beforeEach(() => {
         umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
-        // Both legs opt into `logInProduction`, so they log through
-        // `console.error`, not the DEV-gated `diagnostics.warn`. Spying on
-        // both keeps the suite output clean either way and lets the tests
-        // assert which channel was used — that flag is the only thing
+        // Both legs opt into `logInProduction`, logging through `console.error`
+        // not the DEV-gated `diagnostics.warn`. Spying on both keeps output
+        // clean and lets tests assert the channel — that flag is the only thing
         // keeping a boot failure visible on a deployed build.
         vi.spyOn(console, 'warn').mockImplementation(() => {});
         vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -129,17 +128,17 @@ describe('startWithBootFallback', () => {
         });
         expect(showToast).toHaveBeenCalledTimes(1);
         expect(showToast).toHaveBeenCalledWith(BOOT_FAILED_TOAST);
-        // Distinct messages, so the two phases stay tellable apart in a
-        // production console — the channel that survives an ad blocker
-        // eating the analytics script.
+        // Distinct messages so the two phases stay tellable apart in a
+        // production console — the channel that survives an ad blocker eating
+        // the analytics script.
         expect(console.error).toHaveBeenNthCalledWith(1, 'Failed to start the boot puzzle:', first);
         expect(console.error).toHaveBeenNthCalledWith(2, 'Boot fallback puzzle also failed to start:', second);
     });
 
     it('does not tell the player to reload when the fallback rendered before it threw', async () => {
-        // The fallback runs the same install the preferred start does, so
-        // it too can reject after its puzzle is on screen. BOOT_FAILED_TOAST
-        // would be untrue there, and its "try reloading" advice destructive.
+        // The fallback runs the same install, so it too can reject after its
+        // puzzle is on screen. BOOT_FAILED_TOAST would be untrue there, its
+        // "try reloading" destructive.
         let onScreen = false;
 
         await startWithBootFallback({

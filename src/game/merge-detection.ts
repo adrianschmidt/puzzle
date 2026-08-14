@@ -15,22 +15,16 @@ import {
 } from '../model/helpers.js';
 import { pieceCenterLocal } from './group-bounds.js';
 
-/** Tolerance in pixels for edge alignment. */
 export const MERGE_TOLERANCE_PX = 18;
 
 /**
- * Default angular tolerance (degrees) for free-mode merge alignment.
- * Equals the Strict preset; Normal and Forgiving presets in
- * `merge-tolerance.ts` override this via the `rotationTolerance`
- * parameter on `detectMerges`/`checkEdgeAlignment`.
+ * Default angular tolerance (deg) for free-mode merge. Equals the Strict
+ * preset; Normal/Forgiving override via `rotationTolerance` in
+ * `merge-tolerance.ts`.
  */
 export const MERGE_ROTATION_TOLERANCE_DEG = 10;
 
-/**
- * Float-comparison epsilon (degrees) for "is this rotation delta effectively
- * zero?" checks — used by callers that want to short-circuit no-op rotation
- * snaps when group rotations match within float jitter.
- */
+/** Epsilon (deg) for treating a rotation delta as zero (skip no-op snaps). */
 export const SNAP_EPSILON_DEG = 1e-9;
 
 export interface MergeCandidate {
@@ -40,19 +34,14 @@ export interface MergeCandidate {
     movedEdge: Edge;
     targetPiece: Piece;
     targetEdge: Edge;
-    /**
-     * The positional correction needed to snap the moved group
-     * into perfect alignment with the target group for this edge pair.
-     */
+    /** Positional correction to snap the moved group into alignment. */
     snapDelta: Point;
 }
 
 /**
- * Per-candidate cached quantities for `getWorldPositionAfterRotationSnap`,
- * built once per measurement and reused for both endpoints.
- *
- * `null` means the rotation delta is below `SNAP_EPSILON_DEG` and callers
- * can take the no-snap fast path.
+ * Cached quantities for `getWorldPositionAfterRotationSnap`, built once per
+ * measurement. `null` means the rotation delta is below `SNAP_EPSILON_DEG`
+ * (no-snap fast path).
  */
 interface RotationSnapContext {
     /** Rotation pivot in un-rotated group-local space — the moved candidate piece's center. */
@@ -76,11 +65,10 @@ function buildRotationSnapContext(
 }
 
 /**
- * World position of a piece-local point AS IF the group had been rotated
- * by `extraDeg` around the given pivot — the way `rotateGroup` performs a
- * rotation snap. For a null `snapCtx` (caller saw `extraDeg ≈ 0`) this
- * collapses to the existing `getWorldPosition` path, so quarter-turn-mode
- * merges are unaffected.
+ * World position of a piece-local point as if the group were rotated by
+ * `extraDeg` around the pivot (as `rotateGroup` snaps). Null `snapCtx`
+ * (`extraDeg ≈ 0`) collapses to `getWorldPosition`, leaving quarter-turn
+ * merges unaffected.
  */
 function getWorldPositionAfterRotationSnap(
     pieceLocal: Point,
@@ -115,13 +103,9 @@ function distance(a: Point, b: Point): number {
 }
 
 /**
- * Raw alignment measurement for a pair of mate edges — the single source
- * of truth shared by merge detection (thresholding on drop) and snap
- * proximity rotation (progressive rotation during drag).
- *
- * `distance` is measured AFTER simulating the rotation snap the merge
- * would perform, so it reflects how far the moved group is from its
- * snapped placement, not from its current-orientation overlap.
+ * Alignment measurement for a mate-edge pair — shared by merge detection and
+ * snap-proximity rotation. `distance` is measured AFTER simulating the merge's
+ * rotation snap, so it reflects distance from the snapped placement.
  */
 export interface EdgeAlignmentMeasurement {
     /** Signed degrees the moved group must rotate to match the target (wrap-aware). */
@@ -133,13 +117,10 @@ export interface EdgeAlignmentMeasurement {
 }
 
 /**
- * Measure how well a moved edge aligns with its mate, without applying
- * any tolerance.
- *
- * The simulated snap pivots on the MOVED PIECE's center, not the group's
- * bbox center, so a flush edge measures flush no matter how large the
- * group is (issue #530). `mergeGroups` must apply the real snap around
- * the same pivot or `snapDelta` lands the group elsewhere.
+ * Measure how well a moved edge aligns with its mate, without tolerance.
+ * The simulated snap pivots on the MOVED PIECE's center (not the group bbox),
+ * so a flush edge measures flush at any group size (#530); `mergeGroups` must
+ * snap around the same pivot or `snapDelta` lands elsewhere.
  */
 export function measureEdgeAlignment(
     movedPiece: Piece,
@@ -195,11 +176,8 @@ export function checkEdgeAlignment(
         targetPiece, targetEdge, targetGroup,
     );
 
-    // Two groups can only mate when their rotations are close enough.
-    // Exact equality is no longer required: in free-rotation mode the
-    // tolerance window lets the player land near the correct orientation
-    // and still trigger a merge. In quarter-turn mode the delta is always
-    // 0, so the tolerance is a no-op and behavior is unchanged.
+    // Groups only mate when rotations are within tolerance. In quarter-turn
+    // mode the delta is always 0, so the tolerance is a no-op.
     if (Math.abs(m.rotationDelta) > rotationTolerance) {
         return { aligned: false, snapDelta: { x: 0, y: 0 } };
     }

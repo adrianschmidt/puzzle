@@ -1,24 +1,19 @@
 /**
- * Lives in its own tiny module so consumers that only need the
- * recorder hook (notably {@link TabDebugSession}) don't transitively
- * pull in the 80 KB of trace JSONs that `tab-shapes-traced.ts` owns.
- * `tab-shapes-traced.ts` imports {@link recordTracedTabChoice} from
- * here; {@link TabDebugSession} imports
- * {@link setTracedTabChoiceRecorder} from here. Neither side reaches
- * the other through static imports any more.
+ * Its own tiny module so recorder-hook consumers (notably {@link TabDebugSession})
+ * don't transitively pull in the ~80 KB of trace JSONs `tab-shapes-traced.ts`
+ * owns. Each side imports only its half from here; neither reaches the other
+ * through static imports.
  */
 
 /**
- * Captures everything needed to
- * reproduce the curve a single tracedTabTemplate.generate() invocation
- * produced. Consumed by the dev-time {@link TabDebugSession}.
+ * Captures everything needed to reproduce the curve one
+ * tracedTabTemplate.generate() call produced. Consumed by the dev-time
+ * {@link TabDebugSession}.
  *
- * Caveat with the traced retry ladder: these params are recorded for the
- * BASE rung — the single `tracedTabTemplate.generate()` call per edge.
- * When a later rung (shrink, pull-to-center, or sign-flip) is the one the
- * framework commits, the params describe the base tab rather than the
- * committed curve (the sign-flip rung is the sharpest mismatch). The
- * recorded edge → piece and `accepted` correlation is unaffected.
+ * Caveat: params are recorded for the BASE rung of the traced retry ladder.
+ * When a later rung (shrink, pull-to-center, sign-flip) is committed instead,
+ * they describe the base tab, not the committed curve. The edge → piece and
+ * `accepted` correlation is unaffected.
  */
 export interface TracedTabChoice {
     templateIdx: number;
@@ -31,15 +26,10 @@ export interface TracedTabChoice {
 }
 
 /**
- * Recorder slot — invoked once per `tracedTabTemplate.generate()` call
- * after the choices are made. Defaults to a no-op; tests and the
- * dev-time tab-debug session swap in a real recorder via
- * {@link setTracedTabChoiceRecorder}.
- *
- * Holding a no-op default rather than a nullable lets the call site
- * (`recordTracedTabChoice` below) stay unconditional — no null check
- * per traced edge, and the optimizer can fold the empty function body
- * out of the hot path when no recorder is attached.
+ * Recorder slot, invoked once per `tracedTabTemplate.generate()` after choices
+ * are made. A no-op default (rather than nullable) keeps the call site
+ * unconditional — no per-edge null check, and the optimizer can fold the empty
+ * body out of the hot path when no recorder is attached.
  */
 let tracedTabRecorder: (choice: TracedTabChoice) => void = () => {};
 

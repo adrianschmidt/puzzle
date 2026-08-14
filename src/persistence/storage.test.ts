@@ -41,11 +41,9 @@ import {
     makeGameState as makeBaseGameState,
 } from '../test-helpers/fixtures.js';
 
-// The app installs these from `bootstrap.ts`; this file stands in for that.
-// Installed once for the whole file because that is what production does —
-// not because a second call would break anything. The listeners live on
-// `window`, which jsdom shares across every test here, and the installer is
-// idempotent (see the "registers each listener once" test below).
+// The app installs these from bootstrap.ts; this stands in. Installed once, as
+// production does — jsdom shares `window` across tests and the installer is
+// idempotent (see "registers each listener once").
 beforeAll(() => {
     installGeometryTokenInvalidation();
 });
@@ -152,9 +150,8 @@ describe('saveNewPuzzle / loadState', () => {
     });
 
     it('returns undefined for structurally invalid data', () => {
-        // Empty groups → treated as a torn v11 static-only blob (no progress key).
-        // The new two-key model returns undefined silently in this case rather
-        // than trying to deserialize and throwing.
+        // Empty groups → torn v11 static-only blob (no progress key); the
+        // two-key model returns undefined silently rather than throwing.
         const badData = {
             version: STATE_VERSION,
             pieces: [],
@@ -192,8 +189,8 @@ describe('saveNewPuzzle quota handling', () => {
         const state = makeGameState();
         const realSetItem = Storage.prototype.setItem;
 
-        // Reject all uncompressed writes; accept compressed retries.
-        // Discriminate by the marker, not by size, so the test is robust.
+        // Reject uncompressed writes, accept compressed retries. Discriminate by
+        // the marker, not size.
         const spy = vi
             .spyOn(Storage.prototype, 'setItem')
             .mockImplementation(function (this: Storage, key: string, value: string) {
@@ -229,8 +226,8 @@ describe('saveNewPuzzle quota handling', () => {
         warnSpy.mockRestore();
 
         expect(result).toBe('failed');
-        // The earlier good geometry is untouched (we never removeItem first).
-        // The prior progress key still matches the prior geometry, so load works.
+        // The earlier good geometry is untouched (never removeItem first), and
+        // its progress key still matches, so load works.
         expect(loadState()!.imageUrl).toBe('good.jpg');
     });
 
@@ -393,9 +390,8 @@ describe('split storage', () => {
         const a = makeGameState({ seed: 1 });
         const b = makeGameState({ seed: 2 });
         saveGeometry(a);
-        // saveProgress now refuses to write a seed-mismatched pair, so install the
-        // stale/cross-tab progress blob directly — the on-disk shape the load-time
-        // guard must still detect.
+        // saveProgress refuses a seed-mismatched pair, so install the stale blob
+        // directly — the shape the load-time guard must still detect.
         localStorage.setItem(PROGRESS_KEY, JSON.stringify(serializeProgress(b, [])));
         expect(loadSavedGame().status).toBe('unreadable');
         expect(warnSpy).toHaveBeenCalled(); // intentional discard leaves a trail
@@ -531,10 +527,9 @@ describe('saveProgress cross-tab guard (#404)', () => {
         saveNewPuzzle(makeGameState({ seed: 490028 }), []);
         expect(saveProgress(makeGameState({ seed: 490028 }), [1])).not.toBe('skipped');
 
-        // Another tab takes over: it writes the geometry key directly, and the
-        // browser delivers us a storage event for it. Calling saveGeometry here
-        // instead would be a *same-tab* write, which legitimately updates the
-        // seed token — and the test would pass for the wrong reason.
+        // Another tab takes over: write the geometry key directly + dispatch the
+        // storage event. saveGeometry here would be a same-tab write that updates
+        // the token, passing the test for the wrong reason.
         const raw = JSON.stringify(serializeStatic(makeGameState({ seed: 490029 })));
         localStorage.setItem(STORAGE_KEY, raw);
         window.dispatchEvent(
@@ -550,10 +545,9 @@ describe('saveProgress cross-tab guard (#404)', () => {
     });
 });
 
-// Seeds here are unique per test on purpose: `cachedGeometryRaw` inside
-// storage.ts memoizes on the raw geometry string and outlives
-// localStorage.clear(), so byte-identical geometry in two tests would make a
-// decode count depend on test order.
+// Seeds are unique per test on purpose: storage.ts's `cachedGeometryRaw`
+// memoizes on the raw geometry and outlives localStorage.clear(), so identical
+// geometry across tests would make decode counts order-dependent.
 describe('geometry seed token (#490)', () => {
     beforeEach(() => {
         localStorage.clear();
@@ -627,13 +621,10 @@ describe('geometry seed token (#490)', () => {
         warnSpy.mockRestore();
     });
 
-    // Both halves of the guard are load-bearing, and each has entries here
-    // that only it rejects. `Number('')` is 0 and `Number.isFinite(0)` is
-    // true, so without the round-trip compare an empty token reads as "the
-    // slot belongs to puzzle 0". `'NaN'` and `'Infinity'` round-trip through
-    // `String()` perfectly, so without `Number.isFinite` they are accepted as
-    // seeds that compare unequal to every real one. Either way this tab skips
-    // every save for the puzzle it actually owns, for the whole session.
+    // Both halves of the guard are load-bearing. `Number('')` is 0 (isFinite
+    // true), so without the round-trip compare an empty token reads as seed 0;
+    // `'NaN'`/`'Infinity'` round-trip through String(), so without isFinite they
+    // pass as unequal-to-every-real seeds. Either way skips every save.
     it.each(['', '   ', '0x10', ' 5 ', '1e3', 'NaN', 'Infinity'])(
         'ignores the un-writable token %o rather than reading a seed out of it',
         (token) => {
@@ -649,10 +640,9 @@ describe('geometry seed token (#490)', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         saveNewPuzzle(makeGameState({ seed: 490010 }), []); // this puzzle owns the slot
 
-        // Both the plain and the compressed geometry write throw → 'failed'.
-        // Every *other* key passes through, so a token write would really land:
-        // swallowing it here would make this test pass whether or not
-        // saveGeometry guards the recording on the write outcome.
+        // Both plain and compressed geometry writes throw → 'failed'. Other keys
+        // pass through, so a token write would land — swallowing it would pass
+        // the test whether or not saveGeometry guards on the write outcome.
         const realSetItem = Storage.prototype.setItem;
         const setItem = vi
             .spyOn(Storage.prototype, 'setItem')
@@ -690,9 +680,9 @@ describe('geometry seed token (#490)', () => {
 
     it('falls back to decoding when the token write itself throws', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        // A token from the puzzle that owned the slot before this one. It is
-        // what the failing write must destroy: leaving it behind would make
-        // this tab skip every save for the puzzle it is about to own.
+        // A token from the puzzle that owned the slot before this one — the
+        // failing write must destroy it, else this tab skips every save for the
+        // puzzle it is about to own.
         saveNewPuzzle(makeGameState({ seed: 490016 }), []);
         expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490016');
 
@@ -716,17 +706,16 @@ describe('geometry seed token (#490)', () => {
         );
         // And the guard still works, the slow way.
         expect(saveProgress(makeGameState({ seed: 490013 }), [1])).toBe('skipped');
-        // Nor is the degrade permanent: that decode backfilled the token with
-        // the identical write that just failed, so once storage recovers the
-        // fast path comes back on its own.
+        // Nor is the degrade permanent: the decode backfilled the token with the
+        // same write that just failed, so it recovers once storage does.
         expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490012');
         warnSpy.mockRestore();
     });
 
     /**
-     * A `pageshow` for a document restored from the back/forward cache.
-     * `PageTransitionEvent` is not constructible in jsdom, and `persisted` is
-     * read-only on the interface, so it is defined onto a plain event.
+     * A `pageshow` from the back/forward cache. `PageTransitionEvent` isn't
+     * constructible in jsdom and `persisted` is read-only, so it's defined onto
+     * a plain event.
      */
     function bfcacheRestore(): Event {
         const event = new Event('pageshow');
@@ -810,12 +799,9 @@ describe('geometry seed token (#490)', () => {
     it('still drops the token when the storage area is unrecognized', () => {
         saveNewPuzzle(makeGameState({ seed: 490034 }), []);
 
-        // Not a shape any engine produces — `storageArea` identity is
-        // spec-mandated. It pins the *polarity* of the guard: written as
-        // `!== localStorage` this would fail open and switch cross-tab
-        // invalidation off entirely, which is the one failure mode this
-        // mechanism must not have. Excluding only sessionStorage fails safe,
-        // at a ceiling of one redundant decode.
+        // Not a shape any engine produces (storageArea identity is spec-mandated),
+        // but it pins the guard's polarity: `!== localStorage` would fail open and
+        // switch invalidation off. Excluding only sessionStorage fails safe.
         window.dispatchEvent(
             new StorageEvent('storage', { key: STORAGE_KEY, storageArea: null }),
         );
@@ -827,10 +813,9 @@ describe('geometry seed token (#490)', () => {
         saveNewPuzzle(makeGameState({ seed: 490032 }), []);
         expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490032');
 
-        // While this document sat in the back/forward cache it was not "fully
-        // active", so any geometry write by another tab reached no listener
-        // here and is not replayed on restore. The token can only be treated
-        // as a guess from here on.
+        // While bfcached this document wasn't "fully active", so a geometry
+        // write by another tab reached no listener and isn't replayed — the
+        // token is only a guess now.
         window.dispatchEvent(bfcacheRestore());
 
         expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBeNull();
@@ -845,12 +830,10 @@ describe('geometry seed token (#490)', () => {
     });
 
     it('registers each listener once however many times it is installed', () => {
-        // `beforeAll` already installed; this is a second call. It must not
-        // stack a duplicate of either handler — which is why they are
-        // module-scope function references rather than inline arrows: the DOM
-        // spec dedupes on (type, callback, capture). Handing `addEventListener`
-        // a fresh arrow per call defeats that, and each event would then drop
-        // the token twice.
+        // Second install (beforeAll already ran). Must not stack duplicate
+        // handlers — they're module-scope refs, not arrows, so addEventListener
+        // dedupes on (type, callback, capture); a fresh arrow per call would drop
+        // the token twice per event.
         installGeometryTokenInvalidation();
         saveNewPuzzle(makeGameState({ seed: 490036 }), []);
 
@@ -959,11 +942,9 @@ describe('unreadable save carries the raw blobs for download', () => {
     });
 
     it('leaves the save keys intact, so the recovery blobs survive to be downloaded', () => {
-        // Deliberately not "does not modify localStorage": since #490 this
-        // path re-anchors the derived geometry-seed token, so `loadSavedGame`
-        // is a writer. The property the recovery dialog actually depends on is
-        // narrower — the two keys that *are* the save are untouched, and no
-        // scratch or backup key is invented.
+        // Not "does not modify localStorage": since #490 this path re-anchors the
+        // seed token, so loadSavedGame is a writer. What the recovery dialog needs
+        // is narrower — the two save keys are untouched and no extra key invented.
         localStorage.setItem(STORAGE_KEY, '{not valid json!!!');
         localStorage.setItem(PROGRESS_KEY, '{also not valid!!!');
         const geometryBefore = localStorage.getItem(STORAGE_KEY);
@@ -1032,8 +1013,8 @@ describe('createDebouncedSave', () => {
         const { save } = createDebouncedSave();
         const state = makeGameState();
 
-        // Pre-seed a selection via saveNewPuzzle, then a debounced save with no
-        // selection should overwrite the progress key with an empty selection.
+        // Pre-seed a selection, then a debounced save with none should overwrite
+        // it with an empty selection.
         saveNewPuzzle(state, [0, 1]);
         save(state);
         vi.advanceTimersByTime(500);
@@ -1122,9 +1103,8 @@ describe('createDebouncedSave', () => {
                 throw new DOMException('quota', 'QuotaExceededError');
             });
 
-        // The puzzle queued for saving. In the app a new game can start inside
-        // the debounce window, so the failure must be attributed to this state
-        // rather than to whichever puzzle is current when the timer fires.
+        // The queued puzzle. A new game can start inside the debounce window, so
+        // the failure must attribute to this state, not whatever is current at flush.
         const queued = makeGameState({ seed: 7 });
         const { save } = createDebouncedSave({ onSaveFailed });
         save(queued);
@@ -1217,10 +1197,9 @@ describe('viewport persistence through storage', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
         const state = makeGameState({ seed: 5 });
         saveGeometry(state);
-        // A viewport field is present but corrupt (non-finite scale). The save
-        // must still load — falling back to the default view — but the silent
-        // zoom loss should leave a diagnostics trail, unlike the absent-viewport
-        // pre-feature case.
+        // Viewport present but corrupt (non-finite scale). The save still loads
+        // (default view), but the silent zoom loss should leave a trail, unlike
+        // an absent-viewport pre-feature save.
         const progress = serializeProgress(state, [], {
             scale: Number.NaN,
             offset: { x: 0, y: 0 },
@@ -1243,12 +1222,10 @@ describe('viewport persistence through storage', () => {
     });
 });
 
-// The `storage` event only reaches a running, fully active document, so a
-// geometry write by a build that doesn't maintain the token — the pre-#490
-// build at `/puzzle/` sharing an origin with `/puzzle/dev/`, a rollback, a
-// stale PWA client — while this tab was closed leaves the token describing a
-// puzzle that no longer owns the slot, with nothing to correct it. Load is the
-// re-anchor point.
+// The `storage` event only reaches a fully active document, so a geometry write
+// by a token-blind build (pre-#490 `/puzzle/` sharing `/puzzle/dev/`, a rollback,
+// a stale PWA client) while this tab was closed leaves the token stale with
+// nothing to correct it. Load is the re-anchor point.
 describe('geometry seed token: re-anchored on load (#490)', () => {
     beforeEach(() => {
         localStorage.clear();
@@ -1273,8 +1250,7 @@ describe('geometry seed token: re-anchored on load (#490)', () => {
 
         expect(localStorage.getItem(GEOMETRY_SEED_KEY)).toBe('490041');
         // The restored puzzle now autosaves. Without the re-anchor the stale
-        // token skips every save for the rest of the session, and a reload
-        // does not repair it — the player silently loses the lot.
+        // token skips every save all session, and a reload doesn't repair it.
         expect(saveProgress(makeGameState({ seed: 490041 }), [1])).not.toBe('skipped');
     });
 

@@ -1,14 +1,8 @@
-/**
- * These operate on the generic graph-based model
- * and know nothing about grids or specific puzzle shapes.
- */
+/** Operate on the generic graph model — no grid or puzzle-shape assumptions. */
 
 import type { Edge, GameState, Piece, PieceGroup, Point } from './types.js';
 
-/**
- * Pieces are immutable after generation, so this Map is built once and
- * never mutated.
- */
+/** Pieces are immutable after generation; built once, never mutated. */
 export function buildPiecesById(pieces: Piece[]): Map<number, Piece> {
     const map = new Map<number, Piece>();
     for (const piece of pieces) {
@@ -55,9 +49,8 @@ export function getGroup(state: GameState, groupId: number): PieceGroup {
 }
 
 /**
- * Use when the absence of a group is a valid outcome (e.g. defensive
- * checks during pointer events, where the dragged group may have been
- * absorbed by a merge).
+ * Undefined-returning variant, for when a missing group is valid (e.g. the
+ * dragged group was absorbed by a merge).
  */
 export function tryGetGroup(
     state: GameState,
@@ -78,11 +71,7 @@ export function getGroupForPiece(
     return group;
 }
 
-/**
- * Add a group to the state, keeping the indexes in sync.
- *
- * All callers that grow `state.groups` must go through this helper.
- */
+/** Adds a group, keeping the indexes in sync. All growth of `state.groups` must go through here. */
 export function addGroup(state: GameState, group: PieceGroup): void {
     state.groups.push(group);
     state.groupsById.set(group.id, group);
@@ -92,11 +81,9 @@ export function addGroup(state: GameState, group: PieceGroup): void {
 }
 
 /**
- * Remove a group from the state, keeping the indexes in sync.
- *
- * Removes the `pieceToGroup` entries only for pieces still recorded as
- * belonging to this group — pieces that have been re-pointed to a
- * different group (e.g. after `mergeGroups`) are not touched.
+ * Removes a group, keeping the indexes in sync. Only clears `pieceToGroup`
+ * entries still pointing at this group — pieces re-pointed elsewhere (e.g. by
+ * `mergeGroups`) are left alone.
  */
 export function removeGroup(state: GameState, groupId: number): void {
     const group = state.groupsById.get(groupId);
@@ -147,12 +134,9 @@ export function moveGroup(
 }
 
 /**
- * Rotate a point by `degrees` clockwise around the origin.
- *
- * Used for converting between a group's un-rotated local space and its
- * rotated world projection. Accepts any float (positive, negative, or out
- * of `[0, 360)` range) — callers that need a normalized group rotation
- * should pass values through `normalizeDegrees` themselves.
+ * Rotate a point `degrees` clockwise around the origin. Accepts any float
+ * (negative or out of `[0, 360)`); callers needing a normalized angle apply
+ * `normalizeDegrees` themselves.
  */
 export function rotatePoint(point: Point, degrees: number): Point {
     const rad = (degrees * Math.PI) / 180;
@@ -170,13 +154,8 @@ export function normalizeDegrees(deg: number): number {
 }
 
 /**
- * Smallest signed angular delta from `b` to `a` in degrees, in the
- * half-open range `(-180, 180]`.
- *
- * Wrap-aware: the delta between 359° and 1° is `-2`, not `-358`.
- *
- * `a − b` is the convention: positive when `a` is "ahead" of `b` going
- * clockwise.
+ * Smallest signed delta `a − b` in degrees, wrap-aware, in `(-180, 180]`
+ * (359→1 is `-2`, not `-358`). Positive when `a` leads `b` clockwise.
  */
 export function signedAngularDelta(a: number, b: number): number {
     const raw = (((a - b) % 360) + 540) % 360 - 180;
@@ -184,12 +163,10 @@ export function signedAngularDelta(a: number, b: number): number {
 }
 
 /**
- * Project a point from a group's un-rotated local space into world space.
- *
- * Applies `group.rotation` around the group's own origin, then translates
- * by `group.position`. The input is assumed to already be in the group's
- * piece-offset frame (so for points expressed relative to a specific piece,
- * use `getWorldPosition` instead, which adds the piece offset first).
+ * Project a point from a group's un-rotated local space to world space:
+ * rotate by `group.rotation` about the group origin, then translate by
+ * `group.position`. For points relative to a specific piece, use
+ * `getWorldPosition` (it adds the piece offset first).
  */
 export function localToWorld(local: Point, group: PieceGroup): Point {
     const rotated = rotatePoint(local, group.rotation);
@@ -201,9 +178,8 @@ export function localToWorld(local: Point, group: PieceGroup): Point {
 }
 
 /**
- * Piece offsets and edge endpoints live in the group's un-rotated local
- * space. The point is shifted by the piece's offset within the group, then
- * projected to world space via `localToWorld`.
+ * Adds the piece's in-group offset to `point` (both in un-rotated local space),
+ * then projects to world via `localToWorld`.
  */
 export function getWorldPosition(
     point: Point,
@@ -234,10 +210,8 @@ export interface GroupBorderEdge {
 }
 
 /**
- * Get all border edges of a group — edges whose mates
- * are in a different group.
- *
- * These are the candidates for merge detection after a drop.
+ * A group's border edges — those whose mate is in a different group. These are
+ * the candidates for merge detection after a drop.
  */
 export function getBorderEdges(
     group: PieceGroup,

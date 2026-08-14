@@ -25,9 +25,7 @@ function makeGroup(id: number, pieceId: number, position: Point): PieceGroup {
     };
 }
 
-/**
- * Create a simple 100×100 piece with four straight edges.
- */
+/** 100×100 piece with four straight edges. */
 function makeSquarePiece(id: number): Piece {
     const edgeBase = id * 4;
 
@@ -122,7 +120,7 @@ describe('reorderGroupsAfterDrop', () => {
             makeEdge(11, { x: 0, y: 40 }, { x: 0, y: 0 }),
         ] });
 
-        // Create an additional piece to make the large group actually have more pieces
+        // Extra piece so the large group actually has more pieces.
         const additionalPiece = makePiece({ id: 3, edges: [
             makeEdge(12, { x: 0, y: 0 }, { x: 200, y: 0 }),
             makeEdge(13, { x: 200, y: 0 }, { x: 200, y: 200 }),

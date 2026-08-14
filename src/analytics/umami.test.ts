@@ -283,8 +283,8 @@ describe('track', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
 
-        // `'repro'` rather than `'fresh'`: the schema has to be able to
-        // express the dev-console sources, or the widening is decorative.
+        // `'repro'` not `'fresh'`: the schema must express dev-console sources,
+        // or the widening is decorative.
         track('generation-canceled', {
             source: 'repro',
             cutStyle: 'wavy',

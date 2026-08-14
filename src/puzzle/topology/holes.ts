@@ -1,8 +1,6 @@
 /**
- * Only single-level hole nesting is exercised by current tests
- * (frame + free-floating circle, frame + two-circle Venn). Deeper
- * nesting (a hole containing another hole) may behave correctly via
- * natural fall-through of the same logic, but is not verified.
+ * Only single-level hole nesting is verified by tests (frame + circle,
+ * frame + two-circle Venn); deeper nesting is unverified.
  */
 
 import type { TopologyGraph, Face, HalfEdge } from './dcel.js';
@@ -19,19 +17,17 @@ export function assignHoles(graph: TopologyGraph, components: Component[]): void
         const containingFace = findContainingFace(probe, graph, inner);
         if (!containingFace) continue;
 
-        // The local-outer Face object is redundant after attachment —
-        // it represents the same physical region as `containingFace` —
-        // so it gets removed from the graph.
+        // Redundant after attachment — same physical region as
+        // `containingFace` — so remove it from the graph.
         const localOuterFace = findLocalOuterFace(inner, graph);
         if (!localOuterFace) continue;
 
         containingFace.innerBoundaries.push(localOuterFace.outerEdge);
 
-        // Without retargeting, downstream consumers (faces-to-pieces) walk
-        // `he.twin.face` and land on the now-removed local-outer Face
-        // object, which fails the faceId→pieceId lookup and produces
-        // matePieceId = -1 (i.e. the system thinks the inner-boundary
-        // edges are unmated borders, breaking interactive merge).
+        // Retarget: else faces-to-pieces walks `he.twin.face` into the removed
+        // local-outer Face, the faceId→pieceId lookup misses and yields
+        // matePieceId = -1, marking inner-boundary edges as unmated borders and
+        // breaking interactive merge.
         let cur: HalfEdge = localOuterFace.outerEdge;
         do {
             cur.face = containingFace;
@@ -44,15 +40,9 @@ export function assignHoles(graph: TopologyGraph, components: Component[]): void
 }
 
 function findLocalOuterFace(component: Component, graph: TopologyGraph): Face | null {
-    // Most-negative signed area = the local outer face, by analogy with
-    // the global outer face.
-    //
-    // Uses SAMPLED curve points for the shoelace formula so that faces
-    // whose boundaries are curved arcs with very few vertices (e.g. a
-    // circle split into 2 arcs has just 2 vertices, vertex-based shoelace
-    // collapses to zero) get a meaningful signed area. This is essential
-    // for circle-based components like Venn where every face's vertex
-    // count is small.
+    // Most-negative signed area = the local outer face. Uses SAMPLED curve
+    // points: vertex-only shoelace collapses to zero for few-vertex curved
+    // faces (a 2-arc circle has 2 vertices), essential for Venn.
     let bestFace: Face | null = null;
     let mostNegative = Infinity;
     for (const faceId of component.faces) {
@@ -123,16 +113,14 @@ function polygonArea(polygon: Point[]): number {
 }
 
 /**
- * Uses SAMPLED points along each half-edge curve, not just the
- * half-edge endpoints: vertex-only shoelace collapses to zero for faces
- * bounded by curves with few vertices (e.g. a 2-vertex circle).
+ * SAMPLED points along each edge curve, not endpoints: vertex-only shoelace
+ * collapses to zero for few-vertex curved faces (a 2-vertex circle).
  */
 function sampledSignedArea(face: Face): number {
     const points: { x: number; y: number }[] = [];
     let current: HalfEdge = face.outerEdge;
     do {
-        // Endpoints are duplicated between adjacent edges, but shoelace
-        // is robust to repeated points.
+        // Shoelace is robust to the endpoints duplicated between edges.
         points.push(...current.curve.sample(8));
         current = current.next;
     } while (current !== face.outerEdge);

@@ -49,16 +49,14 @@ describe('buildRandomPhotoUrl', () => {
     });
 
     it('never carries a client_id — the Worker authenticates by header', () => {
-        // The reason this module exists in its current shape (#534). A key in
-        // this URL means the key is back in the bundle.
+        // A key in this URL means the key is back in the bundle (#534).
         const url = buildRandomPhotoUrl(PROXY, 'nature', 'portrait', 4);
 
         expect(url).not.toContain('client_id');
     });
 
     it('goes nowhere near api.unsplash.com', () => {
-        // The client must not reach Unsplash directly: an unproxied call is
-        // an unauthenticated one, and would 401 rather than fail loudly here.
+        // An unproxied call is unauthenticated and would 401, not fail here.
         const url = buildRandomPhotoUrl(PROXY, 'nature');
 
         expect(url).not.toContain('api.unsplash.com');
@@ -395,8 +393,8 @@ describe('triggerPhotoDownload', () => {
         expect(calledUrl.origin + calledUrl.pathname).toBe(
             `${PROXY}${PROXY_DOWNLOAD_PATH}`,
         );
-        // Round-trips whole, ixid included — the Worker re-parses it, and a
-        // mangled ixid would break Unsplash's download attribution silently.
+        // Round-trips whole, ixid included — a mangled ixid silently breaks
+        // Unsplash's download attribution.
         expect(calledUrl.searchParams.get('url')).toBe(location);
         expect(calledUrl.searchParams.get('client_id')).toBeNull();
     });
@@ -511,9 +509,8 @@ describe('getImageProxyBaseUrl', () => {
     });
 
     it('strips a trailing slash so callers can append a rooted path', () => {
-        // Callers concatenate `${base}/random`. A pasted URL keeps the slash a
-        // dashboard shows, and `//random` misses the Worker's exact-path check
-        // and 404s every photo request.
+        // `//random` (from a trailing slash) misses the Worker's exact-path
+        // check and 404s every photo request.
         vi.stubEnv('VITE_IMAGE_PROXY_URL', 'https://proxy.example/');
         expect(getImageProxyBaseUrl()).toBe('https://proxy.example');
 
@@ -528,11 +525,9 @@ describe('getImageProxyBaseUrl', () => {
 });
 
 /**
- * The client and the Worker agree on the wire format through two independent
- * sets of string literals — `PROXY_*_PATH` and the `url` parameter here,
- * `'/random'`/`'/download'`/`'url'` there. Nothing else tests across that
- * boundary, so renaming a route on either side leaves both suites green and
- * 404s every photo request in production.
+ * Client and Worker agree on the wire format via two independent sets of
+ * string literals; nothing else tests across the boundary, so renaming a route
+ * on either side leaves both suites green and 404s every request in production.
  */
 describe('client/Worker route contract', () => {
     it('routes a URL the client builds for a random photo', () => {
@@ -569,10 +564,8 @@ describe('client/Worker route contract', () => {
     });
 
     it('emits exactly the parameters the Worker forwards', () => {
-        // The other half of the seam: route names are pinned above, but the
-        // parameter lists are independent too, and one added here without a
-        // matching entry in RANDOM_PARAMS is dropped in silence — a new search
-        // facet that quietly does nothing.
+        // Param lists are independent too: one added here without a matching
+        // RANDOM_PARAMS entry is silently dropped by the Worker.
         const built = new URL(buildRandomPhotoUrl(PROXY, 'face', 'portrait', 4));
 
         expect([...built.searchParams.keys()].sort()).toEqual(

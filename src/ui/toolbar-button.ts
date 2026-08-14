@@ -1,7 +1,6 @@
 /**
- * Buttons that own their own state (selection-driven visibility, paired
- * controls, confirm dialogs, etc.) should not use this helper — they
- * have responsibilities beyond what it covers.
+ * For simple stateless buttons only — buttons owning their own state (visibility,
+ * paired controls, confirm dialogs) need more than this helper covers.
  */
 
 export interface ToolbarButtonOptions {

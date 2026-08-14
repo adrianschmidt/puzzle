@@ -15,13 +15,10 @@ export const DEFAULT_BASE_CUT: ComposableBaseCut = 'sine';
 export const DEFAULT_JITTER = 0.15;
 
 /**
- * Translate the legacy `disableTabs: boolean` field into the new
- * `tabGenerator` enum. Centralised so the localStorage preference,
- * save-file, and share-link legacy paths agree on the mapping.
- *
- * Per the keep-old-save-migrations rule this branch is permanent —
- * users may still hold v1/v2 saves and share links from before the
- * traced-tabs PR landed.
+ * Legacy `disableTabs: boolean` → `tabGenerator` enum. Centralized so the
+ * localStorage, save-file, and share-link legacy paths share one mapping.
+ * Permanent migration (keep-old-save-migrations): pre-traced-tabs saves/links
+ * still hold `disableTabs`.
  */
 export function legacyDisableTabsToTabGenerator(
     rawDisableTabs: unknown,
@@ -57,8 +54,7 @@ function parseComposableConfig(
 
     const config = raw as Record<string, unknown>;
 
-    // Migration: legacy { disableTabs: boolean } → { tabGenerator: 'none' | 'classic' }.
-    // Per feedback_keep_old_save_migrations, this branch stays indefinitely.
+    // Legacy { disableTabs } migration; kept indefinitely (feedback_keep_old_save_migrations).
     let tabGenerator: ComposableTabGenerator;
     if (config.tabGenerator === 'classic' || config.tabGenerator === 'traced' || config.tabGenerator === 'none') {
         tabGenerator = config.tabGenerator;
@@ -70,10 +66,8 @@ function parseComposableConfig(
 
     const baseCut: ComposableBaseCut =
         config.baseCut === 'triangular' ? 'triangular' : DEFAULT_BASE_CUT;
-    // Clamp to the slider's [0, 0.5] range. The generator re-clamps too, but
-    // clamping here keeps the persisted preference within the documented range
-    // (a hand-edited or stale localStorage value can't smuggle out-of-range
-    // jitter back into the UI).
+    // Clamp to the slider's [0, 0.5] range so a hand-edited/stale localStorage
+    // value can't smuggle out-of-range jitter into the UI (generator re-clamps too).
     const jitterRaw = Number(config.jitter);
     const jitter = Number.isFinite(jitterRaw)
         ? Math.min(0.5, Math.max(0, jitterRaw))

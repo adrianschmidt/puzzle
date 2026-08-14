@@ -22,11 +22,7 @@ interface MakeGenPieceOpts {
     imageOffset?: Point;
 }
 
-/**
- * Build a pre-seal `GeneratedPiece` (edges may carry `curvePoints`, no
- * `bounds`) — this pass runs before sealing, so tests exercise the
- * generator-side shape rather than the sealed `Piece`.
- */
+/** Pre-seal `GeneratedPiece` (edges may carry `curvePoints`, no `bounds`). */
 function makePiece(opts: MakeGenPieceOpts = {}): GeneratedPiece {
     return {
         id: opts.id ?? 0,
@@ -62,9 +58,8 @@ describe('quantizePieceGeometry', () => {
         ]);
     });
 
-    // A tiny negative coordinate rounds to -0, which JSON.stringify writes as
-    // "0". Left alone, in-memory geometry would stop matching the geometry read
-    // back from disk — the exact property this pass exists to guarantee.
+    // A tiny negative coord rounds to -0, which `JSON.stringify` writes as "0" —
+    // so in-memory geometry would stop matching what's read back from disk.
     it('normalizes negative zero so it survives a JSON round-trip', () => {
         const edge = makeEdge({ start: { x: -0.001, y: -0.001 } });
 
@@ -153,9 +148,8 @@ describe('quantizePieceGeometry', () => {
             .toBeLessThanOrEqual(GEOMETRY_PRECISION_DECIMALS);
     });
 
-    // Math.round(v * 100) overflows to Infinity above ~1.798e306, and
-    // JSON.stringify writes a non-finite number as `null` — a value nothing on
-    // the load path re-validates. Unreachable from any real generator, but
+    // `Math.round(v * 100)` overflows to Infinity above ~1.798e306, which
+    // `JSON.stringify` writes as `null` — unreachable from real generators, but
     // rounding must not be the step that makes a coordinate unrepresentable.
     it('leaves a coordinate too large to scale untouched', () => {
         const huge = 1.5e308;
@@ -166,11 +160,10 @@ describe('quantizePieceGeometry', () => {
         expect(piece.edges[0].start).toEqual({ x: huge, y: -huge });
     });
 
-    // Characterization, not coverage of the guard above: `Math.round(NaN * 100)
-    // / 100` is already `NaN`, so this passes with the guard deleted. What it
-    // pins is that the pass rounds coordinates rather than policing them — a
-    // non-finite input survives, and the finite coordinate beside it is still
-    // rounded normally.
+    // Characterization, not coverage of the guard: `Math.round(NaN*100)/100` is
+    // already NaN, so this passes with the guard gone. It pins that the pass
+    // rounds rather than polices — non-finite inputs survive, finite neighbors
+    // still round.
     it('passes non-finite coordinates through unchanged', () => {
         const edge = makeEdge({
             start: { x: NaN, y: Infinity },

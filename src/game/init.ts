@@ -12,12 +12,7 @@ import type { GenerationRequest, GenerationResult } from './generation-core.js';
 import { generatePiecesOffThread } from './generate-async.js';
 import type { OffThreadGeneration } from './generate-async.js';
 
-/**
- * Read-once URL-param check for the tab-debug session opt-in. Returns
- * true if the page was opened with `?tabDebug=1` (or any truthy value
- * other than `0` / `false`). Safe under SSR / tests — falls back to
- * false when `window` isn't available.
- */
+/** Opt-in via `?tabDebug=1` (any value but `0`/`false`); false when no `window`. */
 function tabDebugEnabled(): boolean {
     if (typeof window === 'undefined' || !window.location) return false;
     const v = new URLSearchParams(window.location.search).get('tabDebug');
@@ -34,30 +29,19 @@ export interface InitOptions {
     random?: () => number;
     /** PRNG seed for procedural cut generation. If omitted, a random seed is generated. */
     seed?: number;
-    /** Defaults to 'classic'. */
     cutStyle?: CutStyle;
     composableConfig?: ComposableConfig;
     fractalConfig?: FractalConfig;
     wavyConfig?: { borderless?: boolean; traceSetVersion?: number };
     trianglesConfig?: { traceSetVersion?: number };
     classicConfig?: { traceSetVersion?: number };
-    /**
-     * Rotation mode for this puzzle. Defaults to `'none'`.
-     *
-     * When set to `'quarter-turn'`, each initial single-piece group gets a
-     * random rotation in {0,1,2,3} so the player must solve orientation
-     * as well as position.
-     */
+    /** Defaults to `'none'`. `'quarter-turn'` gives each piece a random {0..3}×90° start. */
     rotationMode?: 'none' | 'quarter-turn' | 'free';
     /**
-     * Called when generation produced a different piece count than the base
-     * cut declared (#512). Invoked synchronously during generation, before
-     * this function returns — so a caller that wants to report it alongside
-     * game state must capture it into a local and act after `createNewGame`
-     * returns, when the state exists.
-     *
-     * Optional: omitting it silently discards the diagnostic, which is the
-     * right default for tests and for any caller with nowhere to send it.
+     * Fires when generation produced a different piece count than the base cut
+     * declared (#512). Called synchronously before this function returns, so a
+     * caller must capture it into a local and act after the return. Optional;
+     * omitting discards the diagnostic.
      */
     onPieceCountMismatch?: (mismatch: PieceCountMismatch) => void;
 }
@@ -76,42 +60,23 @@ export function createNewGame(
 }
 
 /**
- * How one generation ran, for the `new-game-started` analytics fields.
- *
- * Named and exported rather than spelled inline at each site: it is
- * produced here and consumed by both payload builders in
- * `app/new-game-payload.ts`, so a new field has one place to be added
- * and the builders go red instead of silently ignoring it.
- *
- * Derived from {@link OffThreadGeneration} rather than redeclaring its
- * `mode`/`fallbackKind`/`fallbackReason` triple: `createNewGameAsync`
- * rebuilds the object to attach `durationMs`, and with two independent
- * declarations a new *optional* field added to both would be dropped by
- * that rebuild with nothing going red (excess-property checking doesn't
- * catch a missing optional).
+ * How one generation ran, for the `new-game-started` analytics fields. Derived
+ * from {@link OffThreadGeneration} (not redeclared) so a new optional field
+ * can't be silently dropped by `createNewGameAsync`'s rebuild.
  */
 export type GenerationOutcome = Omit<OffThreadGeneration, 'result'> & { durationMs: number };
 
-/** What {@link createNewGameAsync} resolves to: the state plus how its
- * generation ran, for the `new-game-started` analytics fields. */
+/** State plus how its generation ran, for the `new-game-started` analytics. */
 export interface CreateNewGameAsyncResult {
     state: GameState;
     generation: GenerationOutcome;
 }
 
 /**
- * Async counterpart of {@link createNewGame}: identical inputs and
- * resulting state, but the expensive generate phase runs in a Web
- * Worker when the environment provides one (`generate-async.ts`),
- * falling back to the synchronous path otherwise. The orchestrators
- * (`app/start-new-game.ts`, `app/load-shared-puzzle.ts`) call this;
- * everything else — tests included — can keep using the sync function.
- *
- * `options.onPieceCountMismatch` fires before the promise resolves, so
- * callers that capture into a local and read it after the await behave
- * exactly as they did around the sync call.
- *
- * Rejects with {@link GenerationCanceledError} when `signal` aborts.
+ * Async counterpart of {@link createNewGame}: same inputs and state, but the
+ * generate phase runs in a Web Worker when available, else synchronously.
+ * `options.onPieceCountMismatch` fires before the promise resolves. Rejects
+ * with {@link GenerationCanceledError} when `signal` aborts.
  */
 export async function createNewGameAsync(
     imageUrl: string | null,
@@ -123,9 +88,8 @@ export async function createNewGameAsync(
 ): Promise<CreateNewGameAsyncResult> {
     const seed = options.seed ?? generateSeed();
     const startedAt = performance.now();
-    // Rest spread, not a field-by-field copy: a field added to
-    // `OffThreadGeneration` reaches analytics without this line knowing
-    // about it, and absent optionals stay absent.
+    // Rest spread (not field-by-field) so a new `OffThreadGeneration` field
+    // reaches analytics automatically and absent optionals stay absent.
     const { result, ...ranAs } = await generatePiecesOffThread(
         buildGenerationRequest(gridSize, imageSize, seed, options),
         signal,
@@ -206,19 +170,11 @@ function assembleGameState(
 }
 
 /**
- * If `autoGroups` is omitted (or empty), each piece becomes its own
- * single-piece group — the legacy behavior, used by Fractal and by
- * pre-upgrade (legacy-generator) Classic puzzles.
- *
- * If `autoGroups` is provided — any style running the composable pipeline
- * with `minPieceArea` configured, which is Wavy, Triangles, sine-based
- * Classic and Composable — it dictates the partition: each {@link AutoGroup}
- * becomes one `PieceGroup` containing all its pieces. Within a multi-
- * piece group, the anchor is the lowest piece id and gets local offset
- * `(0,0)`; other pieces are offset so the source image lines up
- * seamlessly across the group, computed from `imageOffset` deltas.
- * One world position and one rotation are picked per group, not per
- * piece.
+ * `autoGroups` omitted/empty: each piece becomes its own group (legacy Fractal
+ * / pre-upgrade Classic). Provided: it dictates the partition — one
+ * `PieceGroup` per {@link AutoGroup}, anchor = lowest piece id at local
+ * `(0,0)`, others offset from `imageOffset` deltas so the image is seamless.
+ * One world position and rotation per group, not per piece.
  */
 export function createInitialGroups(
     pieces: Piece[],
@@ -266,21 +222,12 @@ export function createInitialGroups(
 }
 
 /**
- * Single-piece groups trivially map to `{[id]: (0,0)}`. For multi-
- * piece groups (auto-grouped tiny pieces from the topology generator),
- * we pick the lowest piece id as the anchor — by construction this
- * is also the group id — and compute every other piece's local
- * offset as `anchor.imageOffset - piece.imageOffset`.
- *
- * Why this delta works: each piece's `imageOffset` says where to put
- * the source image so the piece's own clip-path lines up. For two
- * pieces in the same group to render the puzzle picture seamlessly,
- * their world-space clip-path positions must differ by the same
- * vector their `imageOffset`s differ by — but with the sign flipped,
- * because `imageOffset` is "image relative to clip-path". Mid-game
- * merges (`game/group-merging.ts`) compute the equivalent delta from
- * world coordinates; here we derive it from image-space offsets,
- * which haven't been placed in the world yet.
+ * Anchor = lowest piece id (also the group id), at local `(0,0)`; others get
+ * `anchor.imageOffset - piece.imageOffset`. The sign flips because
+ * `imageOffset` is "image relative to clip-path", so pieces render seamlessly
+ * when their clip-path positions differ by minus their `imageOffset` delta.
+ * (Mid-game merges derive the same delta from world coords; here the pieces
+ * aren't placed yet.)
  */
 function buildGroupPieceMap(
     group: AutoGroup,
@@ -292,9 +239,8 @@ function buildGroupPieceMap(
         return out;
     }
 
-    // `pieceIds` is sorted ascending by `autoGroupSmallPieces`, and
-    // the group id equals the smallest piece id (the union-find root).
-    // The anchor is therefore `pieceIds[0]`.
+    // `pieceIds` is sorted ascending (`autoGroupSmallPieces`) and the group id
+    // equals the smallest piece id (union-find root), so the anchor is `[0]`.
     const anchorId = group.pieceIds[0];
     const anchor = piecesById.get(anchorId);
     if (!anchor) {

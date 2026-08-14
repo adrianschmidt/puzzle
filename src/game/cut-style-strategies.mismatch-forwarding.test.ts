@@ -1,27 +1,21 @@
 /**
- * The middle hop of a piece-count mismatch's journey (#512).
+ * The middle hop of a piece-count mismatch's journey (#512): `generator.test.ts`
+ * pins detection, `init.test.ts` pins `createNewGame` → `onPieceCountMismatch`.
+ * Nothing structural forces `generatePieces` to forward the field — the styles
+ * that reach the topology pipeline get it only by returning
+ * `generateComposablePuzzle(...)` directly; a future style that rebuilt
+ * `{ pieces }` (as `fractal`/legacy Classic do) would drop it with every other
+ * test still green.
  *
- * `generator.test.ts` pins that the topology layer detects a mismatch, and
- * `init.test.ts` pins that `createNewGame` hands it to `onPieceCountMismatch`.
- * Between them sits `CutStyleStrategy.generatePieces`, and nothing structural
- * forces a strategy to pass the field along: the four styles that reach the
- * topology pipeline get it for free only because they `return
- * generateComposablePuzzle(...)` directly. A future strategy that destructured
- * the topology result and rebuilt `{ pieces }` — exactly what `fractal` and
- * legacy Classic legitimately do — would drop the diagnostic with every other
- * test in the repo still green.
- *
- * The generator is mocked rather than driven to a real mismatch: forcing one
- * through a shipped style would need an extreme cut config none of them
- * expose, and what is under test here is the forwarding, not the detection.
+ * The generator is mocked, not driven to a real mismatch: forcing one needs an
+ * extreme cut config no shipped style exposes, and forwarding is what's tested.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// A `vi.spyOn` on the export cannot intercept the call `cut-style-strategies`
+// A `vi.spyOn` on the export can't intercept the call `cut-style-strategies`
 // makes internally under Vite's ESM; the passthrough factory can. Only
-// `generateComposablePuzzle` is replaced, so `DEFAULT_MIN_PIECE_AREA` and the
-// rest of the module stay real for anything else in this graph.
+// `generateComposablePuzzle` is replaced; the rest of the module stays real.
 vi.mock('../puzzle/composable-generator.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../puzzle/composable-generator.js')>();
     return { ...actual, generateComposablePuzzle: vi.fn() };
@@ -36,30 +30,18 @@ const MISMATCH = { expected: 192, actual: 189, baseCutId: 'sine' };
 const FRAME = { width: 1080, height: 720 };
 
 /**
- * Every cut style, classified: the context it is generated under in
- * production, plus whether that context reaches `generateComposablePuzzle`.
+ * Every cut style, classified: its production context plus whether that context
+ * reaches `generateComposablePuzzle`.
  *
- * A `Record<CutStyle, …>` rather than a hand-written list of the four that
- * qualify, because the risk this file's doc names is a NEW style — and a list
- * of existing entries only pins an EDIT to one of them. A sixth style fails
- * to compile here until someone states which side of the line it falls on,
- * and anything classified as topology-backed is then covered by the
- * `it.each` below. Same forcing function `CUT_STYLE_OPTIONS` gives rotation
- * and traced tabs.
+ * A `Record<CutStyle, …>` (not a list of the qualifying four) so a NEW style
+ * fails to compile until classified — a list would only pin an EDIT to an
+ * existing entry. Context and classification are separate fields on purpose:
+ * folding them into one slot would let a mislabeled topology-backed style also
+ * lose the context that reaches its topology path, so it would pass the
+ * negative case while silently dropping out of the forwarding `it.each`.
  *
- * The context and the classification are separate fields on purpose. A single
- * slot holding either a context or a `'not-topology'` marker couples the two:
- * mislabeling a topology-backed style would ALSO deprive it of the context
- * that reaches its topology path, so classic marked that way would run on
- * `{}`, take the legacy `generateProceduralPuzzle` branch, and satisfy the
- * negative case below while quietly dropping out of the forwarding `it.each`
- * — both arms green, classic's forwarding silently uncovered. Carrying both
- * halves runs every style under its real context and lets only the flag pick
- * the arm, so a mislabel fails instead of relaxing coverage.
- *
- * Classic needs a `traceSetVersion`: without one it takes the legacy
- * `generateProceduralPuzzle` branch, which produces no topology result to
- * forward in the first place.
+ * Classic needs a `traceSetVersion`, else it takes the legacy
+ * `generateProceduralPuzzle` branch, which produces no topology result.
  */
 const STYLE_PATHS: Record<CutStyle, { ctx: StrategyContext; topology: boolean }> = {
     classic: { ctx: { classicConfig: { traceSetVersion: 1 } }, topology: true },
@@ -80,9 +62,9 @@ const NON_TOPOLOGY_STYLES = stylesWhere(false);
 
 describe('cut-style strategies forward a piece-count mismatch', () => {
     beforeEach(() => {
-        // Cleared explicitly: this repo sets no `clearMocks`/`restoreMocks` in
-        // `vite.config.ts`, so call records otherwise accumulate across cases
-        // — and the `topology: false` assertion below reads them.
+        // Cleared explicitly: no `clearMocks`/`restoreMocks` in `vite.config.ts`,
+        // so call records otherwise accumulate — the `topology: false` assertion
+        // below reads them.
         vi.mocked(generateComposablePuzzle).mockClear();
         vi.mocked(generateComposablePuzzle).mockReturnValue({
             pieces: [],
@@ -103,16 +85,12 @@ describe('cut-style strategies forward a piece-count mismatch', () => {
     it.each(NON_TOPOLOGY_STYLES)(
         '%s is genuinely off the composable pipeline, as classified',
         (cutStyle, ctx) => {
-            // `STYLE_PATHS` forces a new style to be *classified*; without
-            // this, nothing checks the classification is TRUE.
-            // `topology: false` is the cheapest label to write when you don't
-            // yet know, and it excludes the style from the `it.each` above —
-            // so a topology-backed style mislabeled here would walk straight
-            // past the forwarding check this file exists to enforce. Run
-            // under the style's OWN context, so mislabeling one cannot also
-            // deprive it of the context that reaches its topology path. A
-            // small grid: fractal really generates, and this is not a perf
-            // test.
+            // `STYLE_PATHS` forces classification; this checks the label is
+            // actually TRUE, since `topology: false` excludes a style from the
+            // `it.each` above — a mislabeled topology-backed style would skip the
+            // forwarding check. Run under the style's OWN context so a mislabel
+            // can't also deprive it of its topology path. Small grid: fractal
+            // really generates, and this isn't a perf test.
             const strategy = getCutStyleStrategy(cutStyle);
             const grid = strategy.scaleGrid({ cols: 3, rows: 2 }, FRAME, ctx);
             const puzzleSize = strategy.inscribePuzzleSize(FRAME, grid, ctx);

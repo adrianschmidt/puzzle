@@ -46,8 +46,8 @@ describe('classifyImageSource', () => {
 
 describe('resolveNewGameImageSource', () => {
     it('returns first-run for the sentinel, regardless of the URL', () => {
-        // The first-run start reuses the bundled URL, which classifyImageSource
-        // would otherwise report as 'bundled' — the sentinel wins.
+        // The first-run start reuses the bundled URL, which would classify as
+        // 'bundled' — the sentinel wins.
         expect(resolveNewGameImageSource('first-run', BUNDLED_IMAGE_URL)).toBe('first-run');
     });
 

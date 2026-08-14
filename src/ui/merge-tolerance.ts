@@ -1,12 +1,8 @@
 /**
- * Tolerance is expressed as a fraction of the reference piece width
- * (imageWidth / cols), so it feels consistent regardless of puzzle
- * size or image resolution.
- *
- * Storage format: each preset has a stable string `id` written to
- * localStorage. Legacy integer indices (pre-migration:
- * 0=strict, 1=forgiving, 2=normal) still load via the
- * `createIdPreferenceStore` factory's legacy-order translation.
+ * Tolerance is a fraction of the reference piece width (imageWidth / cols), so
+ * it feels consistent across puzzle size and resolution. Each preset has a
+ * stable string `id` in localStorage; legacy integer indices (0=strict,
+ * 1=forgiving, 2=normal) still load via createIdPreferenceStore's legacy-order.
  */
 
 import type { CutStyle } from '../game/cut-styles.js';
@@ -15,14 +11,10 @@ import type { CutStyle } from '../game/cut-styles.js';
 import { createIdPreferenceStore } from './preference-store.js';
 
 /**
- * A known cut style, or any other string.
- *
- * `CutStyle | string` collapses to `string` — the linter is right about that —
- * so the `& {}` is what keeps the union from being flattened, preserving
- * autocomplete on the four known styles while still accepting the bare
- * `string` that `GameState.cutStyle` is declared as. Plain `string` also
- * satisfies the linter, so deleting the `CutStyle |` half looks free and is
- * not: it silently drops the only place naming the intended domain.
+ * A known cut style, or any other string. The `& {}` stops `CutStyle | string`
+ * from collapsing to `string`, preserving autocomplete on the known styles while
+ * still accepting the bare `string`. Deleting the `CutStyle |` half looks free
+ * but drops the only place naming the intended domain.
  */
 export type CutStyleOrOther = CutStyle | (string & {});
 
@@ -33,9 +25,9 @@ export interface MergeTolerancePreset {
     /** Tolerance as a fraction of the reference piece width. */
     fraction: number;
     /**
-     * Maximum angular misalignment (in degrees) at which two free-rotation
-     * groups can still merge. In quarter-turn mode the rotations are always
-     * exactly equal, so this value is effectively a no-op there.
+     * Max angular misalignment (degrees) at which two free-rotation groups can
+     * still merge. In quarter-turn mode rotations are always equal, so it's a
+     * no-op there.
      */
     rotationDegrees: number;
     displayOrder: number;
@@ -71,8 +63,8 @@ export const MERGE_TOLERANCE_PRESETS: readonly MergeTolerancePreset[] = [
 export const DEFAULT_TOLERANCE_ID = 'normal';
 
 /**
- * Pre-migration storage order — DO NOT reorder. Used by the loader to
- * translate legacy integer indices to ids.
+ * Pre-migration storage order — DO NOT reorder. The loader maps legacy integer
+ * indices to ids by position.
  */
 const LEGACY_ORDER = ['strict', 'forgiving', 'normal'] as const;
 
@@ -98,8 +90,8 @@ export const saveTolerancePreference = store.save;
 export const loadTolerancePreference = store.load;
 
 /**
- * Applied on top of the preset fraction to allow each puzzle style
- * to feel right without exposing extra UI to the player.
+ * Applied on top of the preset fraction so each puzzle style can feel right
+ * without extra UI.
  */
 const STYLE_SNAP_MULTIPLIERS: Record<string, number> = {
     classic: 1.0,

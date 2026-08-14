@@ -1,16 +1,13 @@
 /**
- * The background-color state: the currently-selected preset id, the swatch
- * picker, the OS-theme re-apply, and the piece-outline setup that shares
- * this module because it's installed at the same point in boot.
+ * The background-color state: selected preset id, swatch picker, OS-theme
+ * re-apply, and the piece-outline setup (here because it installs at the same
+ * boot point).
  *
- * `currentColorId` has two independent readers — the OS-theme change
- * handler (which recomputes the luminance-derived chrome scheme on a
- * light/dark flip) and the share-link path (which offers a sharer's color
- * to a recipient who never picked one). Before this module existed, the
- * share path reached into the module global *and* the picker separately;
- * missing either half left the OS-theme handler re-applying a stale color
- * after adoption. Consolidating both readers behind one `adopt()` makes
- * that split impossible.
+ * `currentColorId` has two readers — the OS-theme change handler (recomputes
+ * the luminance-derived chrome on a light/dark flip) and the share-link path
+ * (offers a sharer's color to a recipient who never picked one). Consolidating
+ * both behind one `adopt()` stops the pre-existing split where updating the
+ * global but not the picker left the theme handler re-applying a stale color.
  */
 
 import {
@@ -31,12 +28,10 @@ import { track } from '../analytics/index.js';
 
 export interface BackgroundColorControl {
     /**
-     * Offer a sharer's color to a recipient who never picked one. Returns
-     * the adoption outcome for analytics; 'none' (the link carried no
-     * color at all) is the caller's business, not this module's.
-     *
-     * On `'adopted'`, updates both the closed-over id and the picker's
-     * selection — the pair that keeps a later OS-theme re-apply correct.
+     * Offer a sharer's color to a recipient who never picked one. Returns the
+     * adoption outcome for analytics ('none' — no color in the link — is the
+     * caller's business). On 'adopted', updates both the closed-over id and the
+     * picker's selection, the pair that keeps a later OS-theme re-apply correct.
      */
     adopt(id: string): SharedColorOutcome;
 }
@@ -47,7 +42,7 @@ export function installBackgroundColor(deps: {
     const { container } = deps;
 
     // The outline color flips with the OS theme via CSS, so (unlike the
-    // background) no re-apply on theme change is needed.
+    // background) it needs no re-apply on theme change.
     installPieceOutlineFilter();
     applyPieceOutline(loadPieceOutlinePreference());
     applyPieceOutlineColor(loadPieceOutlineColorPreference());

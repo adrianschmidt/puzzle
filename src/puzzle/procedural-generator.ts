@@ -1,14 +1,9 @@
 /**
- * Using the same seed reproduces the exact same cut pattern,
- * which is essential for save/restore.
+ * Same seed reproduces the exact cut pattern — essential for save/restore.
  *
- * Edge Matching Approach (generate once, reverse for mate):
- * Each shared internal edge is generated ONCE as a series of Bézier
- * curve points. The "first side" (bottom of upper piece, right of
- * left piece) uses these points directly. The "second side" (top of
- * lower piece, left of right piece) reverses the points array.
- * This guarantees perfect matching since reversed Bézier control
- * points produce exact mirror curves.
+ * Each shared internal edge is generated ONCE (first-side perspective: bottom of
+ * upper piece, right of left piece); the mating second side reverses the point
+ * array, which yields an exact mirror curve and guarantees perfect matching.
  */
 
 import type { Edge, GeneratedPiece, Point, Size } from '../model/types.js';
@@ -130,9 +125,6 @@ export function generateProceduralPuzzle(
     return pieces;
 }
 
-/**
- * Each edge is generated ONCE from the "first side" perspective.
- */
 function generateAllSharedEdgePaths(
     cols: number,
     rows: number,
@@ -142,8 +134,7 @@ function generateAllSharedEdgePaths(
     verticalIsTab: boolean[][],
     random: () => number,
 ): SharedEdgePaths {
-    // Horizontal edges (between row and row+1)
-    // The "first side" is the bottom edge of the upper piece
+    // Horizontal edges (between row and row+1); first side = bottom of upper piece
     const horizontal: BezierPath[][] = [];
     for (let row = 0; row < rows - 1; row++) {
         horizontal[row] = [];
@@ -160,8 +151,7 @@ function generateAllSharedEdgePaths(
         }
     }
 
-    // Vertical edges (between col and col+1)
-    // The "first side" is the right edge of the left piece
+    // Vertical edges (between col and col+1); first side = right of left piece
     const vertical: BezierPath[][] = [];
     for (let row = 0; row < rows; row++) {
         vertical[row] = [];
@@ -182,19 +172,9 @@ function generateAllSharedEdgePaths(
 }
 
 /**
- * Generate a Bézier path for a shared edge using the classic 6-segment
- * jigsaw shape inspired by Dillo's twist0 algorithm.
- *
- * The algorithm uses a coordinate system relative to the edge:
- * - p0, p1 = start and end of the edge
- * - dxh, dyh = delta along the edge (horizontal in edge-relative coords)
- * - dxv, dyv = delta perpendicular to edge (vertical in edge-relative coords)
- * - pointAt(coeffh, coeffv) = p0 + coeffh * (dxh, dyh) + coeffv * (dxv, dyv)
- *
- * This produces the path from the "first side" perspective.
- * The "second side" will reverse this path.
- *
- * `start`/`end` are in piece-local coordinates.
+ * Bézier path for a shared edge (classic 6-segment jigsaw shape), from the
+ * first-side perspective, in an edge-relative frame: along-edge (dxh,dyh) and
+ * perpendicular (dxv,dyv), combined by pointAt. `start`/`end` are piece-local.
  */
 function generateSharedEdgePath(
     start: Point,
@@ -205,17 +185,16 @@ function generateSharedEdgePath(
     const dxh = end.x - start.x;
     const dyh = end.y - start.y;
 
-    // Perpendicular vectors (90° counterclockwise rotation)
-    // For a tab, this points outward from the piece
+    // Perpendicular (90° CCW); for a tab this points outward from the piece
     const sign = isTab ? 1 : -1;
     const dxv = -dyh * sign;
     const dyv = dxh * sign;
 
-    const scalex = lerp(0.65, 1.0, random()); // horizontal scale of tab
-    const scaley = lerp(0.7, 1.1, random()); // vertical scale/height
+    const scalex = lerp(0.65, 1.0, random());
+    const scaley = lerp(0.7, 1.1, random());
     const mid = lerp(0.38, 0.62, random()); // center position along edge
 
-    // neckRatio = ratio of neck width to head width (0.25 = thin classic look, 0.80 = thick)
+    // neckRatio: neck width / head width
     const neckRatio = lerp(0.25, 0.80, random());
 
     const pointAt = (coeffh: number, coeffv: number): Point => ({
@@ -223,15 +202,9 @@ function generateSharedEdgePath(
         y: start.y + coeffh * dyh + coeffv * dyv,
     });
 
-    const halfWidth = 0.17 * scalex; // half-width of the tab section (head width)
+    const halfWidth = 0.17 * scalex; // half-width of the tab head
 
-    // 5 key points along the tab:
-    // pa = neck entry (where edge curves into neck)
-    // pb = head left (left side of mushroom head)
-    // pc = head top (top center of mushroom)
-    // pd = head right (right side of mushroom head)
-    // pe = neck exit (where neck returns to edge)
-
+    // Tab key points: pa neck-entry, pb head-left, pc head-top, pd head-right, pe neck-exit
     const neckHalfWidth = halfWidth * neckRatio;
 
     const pa = pointAt(mid - neckHalfWidth, 0.08 * scaley);
@@ -240,9 +213,8 @@ function generateSharedEdgePath(
     const pd = pointAt(mid + halfWidth * 0.9, 0.25 * scaley);
     const pe = pointAt(mid + neckHalfWidth, 0.08 * scaley);
 
-    // First and last segments have control points ON the edge line
-    // (zero perpendicular component) to prevent bulging that depends on
-    // tab direction: their control points only vary along the edge axis.
+    // First/last segments keep control points ON the edge line (zero perpendicular)
+    // to prevent bulging that depends on tab direction.
     const cp1_1 = pointAt(mid - neckHalfWidth * 2.5, 0);
     const cp1_2 = pointAt(mid - neckHalfWidth * 1.5, 0);
 
@@ -406,7 +378,6 @@ function buildSharedEdgePath(
     switch (dir) {
         case Dir.Bottom:
             // First side: bottom edge of this piece
-            // Path was generated for bottom edge: (w, h) → (0, h)
             storedPath = sharedPaths.horizontal[row][col];
             originalStart = { x: pieceWidth, y: pieceHeight };
             originalEnd = { x: 0, y: pieceHeight };
@@ -414,8 +385,7 @@ function buildSharedEdgePath(
             break;
 
         case Dir.Top:
-            // Second side: top edge of this piece = mate of bottom edge of piece above
-            // Path was generated for bottom edge of piece at (row-1, col)
+            // Second side: top edge = mate of the piece-above's bottom edge (horizontal[row-1])
             storedPath = sharedPaths.horizontal[row - 1][col];
             originalStart = { x: pieceWidth, y: pieceHeight };
             originalEnd = { x: 0, y: pieceHeight };
@@ -424,7 +394,6 @@ function buildSharedEdgePath(
 
         case Dir.Right:
             // First side: right edge of this piece
-            // Path was generated for right edge: (w, 0) → (w, h)
             storedPath = sharedPaths.vertical[row][col];
             originalStart = { x: pieceWidth, y: 0 };
             originalEnd = { x: pieceWidth, y: pieceHeight };
@@ -432,8 +401,7 @@ function buildSharedEdgePath(
             break;
 
         case Dir.Left:
-            // Second side: left edge of this piece = mate of right edge of piece to left
-            // Path was generated for right edge of piece at (row, col-1)
+            // Second side: left edge = mate of the left-piece's right edge (vertical[col-1])
             storedPath = sharedPaths.vertical[row][col - 1];
             originalStart = { x: pieceWidth, y: 0 };
             originalEnd = { x: pieceWidth, y: pieceHeight };
@@ -527,15 +495,13 @@ function getMatePosition(
 }
 
 /**
- * Build a 2D map of isTab flags (one per shared internal edge).
- * true = first side gets a tab, false = first side gets a blank.
+ * 2D map of isTab flags per shared internal edge (true = first side gets a tab).
  *
- * Advances the seeded PRNG by 6 calls per edge: the historical
- * randomTabParams() consumed 6 values (isTab + 5 shape fields that
- * the rest of the generator never read). Existing share links store
- * only the seed and re-run this generator, so the exact sequence of
- * PRNG calls is part of the on-the-wire contract. The 5 reserved
- * calls are also slots available for future per-edge shape randomness.
+ * Advances the PRNG by 6 calls per edge: historically randomTabParams() consumed
+ * 6 values (isTab + 5 shape fields the generator never read). Share links store
+ * only the seed and re-run this generator, so the exact PRNG call sequence is an
+ * on-the-wire contract; the 5 reserved calls are also slots for future per-edge
+ * randomness.
  */
 function createIsTabMap(
     width: number,
@@ -560,14 +526,12 @@ function buildFlatEdgePath(end: Point): string {
 }
 
 /**
- * Deliberately not `model/build-shape.ts`: that one starts a fresh subpath
- * where consecutive edges don't chain, this one always emits a single
- * `M …/Z`. The two agree on every piece this generator emits today, and the
- * save path depends on it — `serializePiece` omits `shape` from the v12 blob
- * only for pieces where the shared builder reproduces this string byte for
- * byte. Changing what this emits therefore changes rendered geometry on
- * existing share links *and* moves pieces out of the dedup, which
- * `game/init-geometry-precision.test.ts` pins per style.
+ * Deliberately not `model/build-shape.ts`: that starts a fresh subpath where
+ * consecutive edges don't chain; this always emits a single `M …/Z`. The save
+ * path depends on the two agreeing — `serializePiece` omits `shape` from the v12
+ * blob only where the shared builder reproduces this byte-for-byte. Changing what
+ * this emits alters rendered geometry on existing share links and moves pieces
+ * out of the dedup, which `game/init-geometry-precision.test.ts` pins per style.
  */
 function buildShape(edges: Edge[]): string {
     if (edges.length === 0) return '';

@@ -1,6 +1,5 @@
 /**
- * The helpers know nothing about which template they're using — they
- * take a TabTemplate via parameter and produce a transformed, spliced
+ * Template-agnostic: takes a TabTemplate by parameter and produces a spliced
  * curve.
  */
 
@@ -32,10 +31,8 @@ export interface PreparedTab {
 }
 
 /**
- * Returns null if the tab is too wide for the edge.
- *
- * Split out from the full tab-creation flow so the tab geometry can be
- * inspected (or rejected) before `commitTab` joins everything together.
+ * Returns null if the tab is too wide for the edge. Split from the full flow so
+ * the geometry can be inspected/rejected before `commitTab` joins it.
  */
 export function prepareTab(
     curve: Curve,
@@ -48,11 +45,10 @@ export function prepareTab(
 }
 
 /**
- * Like {@link prepareTab} but takes an already-generated normalized tab
- * path instead of a template + PRNG. Pure and deterministic — consumes
- * no randomness — so the same path can be re-spliced (shrunk, moved,
- * sign-flipped) without advancing the PRNG. `tabPath` is in the tab
- * orientation (bump protruding); `isTab=false` mirrors it to a blank here.
+ * Like {@link prepareTab} but takes an already-generated normalized tab path.
+ * Consumes no randomness, so the same path can be re-spliced (shrunk, moved,
+ * sign-flipped) without advancing the PRNG. `tabPath` is in tab orientation
+ * (bump protruding); `isTab=false` mirrors it to a blank.
  */
 export function prepareTabFromPath(
     curve: Curve,
@@ -65,30 +61,27 @@ export function prepareTabFromPath(
         normalizedPath = mirrorBezierPathY(normalizedPath);
     }
 
-    // The template's start/end x-values define how much of the edge
-    // the tab occupies. These are fractions of edge length.
+    // Template start/end x = how much of the edge the tab occupies (edge-length
+    // fractions).
     const templateStartX = normalizedPath[0].x;
     const templateEndX = normalizedPath[normalizedPath.length - 1].x;
 
-    // All placement is done in arc-length fraction space (s ∈ [0,1]),
-    // then converted to uniform t for the actual curve splitting.
-    // This is critical for multi-segment curves where uniform t
-    // distributes across segment indices, NOT proportional to length.
+    // Placement is in arc-length fraction space (s ∈ [0,1]), then converted to
+    // uniform t for splitting: uniform t distributes across segment indices, NOT
+    // proportional to length, so multi-segment curves need this.
 
     const templateMidX = (templateStartX + templateEndX) / 2;
 
-    // Compute the FULL x-extent of the tab (including head control
-    // points that bulge beyond the neck splice points).
+    // Full x-extent, including head control points that bulge beyond the neck.
     const allXs = normalizedPath.map(p => p.x);
     const tabMinX = Math.min(...allXs);
     const tabMaxX = Math.max(...allXs);
 
-    // Full tab extent from center (in edge-length fractions)
+    // Head overhang from center (edge-length fractions).
     const headOverhangLeft = templateMidX - tabMinX;
     const headOverhangRight = tabMaxX - templateMidX;
 
-    // Enforce edge margins: the tab's full extent (including head)
-    // must stay at least `margin` from both edge endpoints.
+    // Full extent (incl. head) must stay ≥ margin from both endpoints.
     const margin = 0.12;
     const sCenterMin = margin + headOverhangLeft;
     const sCenterMax = 1 - margin - headOverhangRight;
@@ -97,8 +90,7 @@ export function prepareTabFromPath(
         return null;
     }
 
-    // tCenter was generated in [0,1] as a placement hint. Treat it as
-    // an arc-length fraction and clamp to margins.
+    // tCenter is a [0,1] placement hint; treat as arc-length fraction and clamp.
     let sCenter = Math.max(sCenterMin, Math.min(sCenterMax, tCenter));
 
     // Splice points in arc-length space
@@ -111,18 +103,15 @@ export function prepareTabFromPath(
     const pLeft = curve.pointAt(tLeft);
     const pRight = curve.pointAt(tRight);
 
-    // Transform tab from template space to edge coordinates.
-    // Both x and y are edge-length fractions — scale both by edge length.
+    // Template space → edge coordinates; x and y are edge-length fractions.
     const edgeLength = curve.arcLength();
     const transformedPath = transformTabToEdge(
         normalizedPath, pLeft, pRight, edgeLength,
     );
 
-    // Split the curve using segment-local coordinates to avoid
-    // global-t remapping precision loss. The uniform t distribution
-    // across segments breaks down after splitting because the first
-    // segment of `rest` is a partial segment with different arc length
-    // than full segments, yet pointAt/splitAt treat all segments equally.
+    // Split in segment-local coords to avoid global-t remapping precision loss:
+    // after splitting, `rest`'s first segment is partial, but pointAt/splitAt
+    // treat all segments' t equally.
     const leftResolved = curve.resolveTWithIndex(tLeft);
     const rightResolved = curve.resolveTWithIndex(tRight);
 
@@ -134,27 +123,23 @@ export function prepareTabFromPath(
     let restLocalT: number;
 
     if (rightResolved.segmentIndex === leftResolved.segmentIndex) {
-        // Same segment: rest's first segment is the right portion after
-        // splitting at leftResolved.localT. Remap rightResolved.localT
-        // into [0,1] of the remaining portion.
+        // Same segment: remap rightResolved.localT into [0,1] of the portion
+        // remaining after the left split.
         restSegIndex = 0;
         const remainingRange = 1 - leftResolved.localT;
         restLocalT = remainingRange > 1e-10
             ? (rightResolved.localT - leftResolved.localT) / remainingRange
             : 0.5;
     } else {
-        // Different segment: rest's segment 0 is the tail of the split
-        // segment, then segments follow in order. The right split point
-        // is in segment (rightResolved.segmentIndex - leftResolved.segmentIndex)
-        // of `rest`, with the same localT.
+        // Different segment: rest's segment 0 is the split segment's tail, so
+        // the right point sits in segment (right - left) of `rest`, same localT.
         restSegIndex = rightResolved.segmentIndex - leftResolved.segmentIndex;
         restLocalT = rightResolved.localT;
     }
 
     const [_middle, after] = rest.splitAtSegmentLocal(restSegIndex, restLocalT);
 
-    // Snap the transformed tab endpoints to the exact split points
-    // to ensure perfect continuity (no gaps between segments).
+    // Snap tab endpoints to the split points for exact continuity (no gaps).
     const snappedPath = [...transformedPath];
     snappedPath[0] = { ...before.end };
     snappedPath[snappedPath.length - 1] = { ...after.start };
@@ -186,8 +171,7 @@ export function computeTabPlacement(
         return null;
     }
 
-    // Don't place tabs if the edge is too short for the tab fraction
-    // (the tab itself would consume most of the edge)
+    // Too short for the tab fraction — the tab would consume most of the edge.
     if (length < config.minEdgeLength * 1.5) {
         return null;
     }
@@ -218,14 +202,9 @@ function joinCurves(curves: Curve[]): Curve {
 }
 
 /**
- * Transform a tab BezierPath from template space to world coordinates.
- *
- * Template x and y are both fractions of edge length. The transform
- * maps them onto the edge using the tangent/normal frame at the
- * anchor chord (pLeft → pRight).
- *
- * x is positioned along the edge direction, y perpendicular to it.
- * Both are scaled by edgeLength, keeping width and height independent.
+ * Template space → world. Template x and y are both edge-length fractions,
+ * mapped onto the tangent/normal frame at the anchor chord (pLeft → pRight):
+ * x along the edge, y perpendicular, both scaled by edgeLength.
  */
 function transformTabToEdge(
     path: BezierPath,
@@ -243,7 +222,6 @@ function transformTabToEdge(
     const px = -uy;
     const py = ux;
 
-    // The midpoint of the chord anchors the tab center.
     const templateStartX = path[0].x;
     const templateEndX = path[path.length - 1].x;
     const templateMidX = (templateStartX + templateEndX) / 2;
@@ -267,10 +245,8 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 /**
- * Default splicer: standard `prepareTab` + `commitTab` with no
- * post-processing. The tab's first/last control points stay where
- * `transformTabToEdge` put them, so the join is C0 (positions match
- * but directions can disagree — visible as a corner on flowy templates).
+ * Default splicer: `prepareTab` + `commitTab`, no post-processing. The join is
+ * C0 (positions match, directions can disagree — a corner on flowy templates).
  */
 export const standardTabSplicer: TabSplicer = {
     id: 'standard',
@@ -281,9 +257,8 @@ export const standardTabSplicer: TabSplicer = {
 };
 
 /**
- * Smoothed splice from an already-generated path (no PRNG). Same output
- * as {@link smoothedTabSplicer} for a given path; used by generators that
- * re-splice one path into several placement/scale variants.
+ * Smoothed splice from an already-generated path (no PRNG). Same output as
+ * {@link smoothedTabSplicer}; used to re-splice one path into several variants.
  */
 export function spliceSmoothedFromPath(
     edge: Curve,
@@ -297,15 +272,9 @@ export function spliceSmoothedFromPath(
 }
 
 /**
- * Tangent-aligned splicer: same as `standardTabSplicer` but rotates
- * the tab's first segment's cp1 and last segment's cp2 to lie along
- * the parent edge's tangent at the splice points. Result is a C1
- * join (smooth direction across the splice) instead of C0. Suited to
- * templates with continuous-looking curves (e.g. photographed tabs).
- *
- * The cp distances (|p0→cp1| and |p3→cp2|) are preserved, so the
- * tab's overall "strength" of curvature isn't changed — only the
- * direction of its first/last handles.
+ * Tangent-aligned splicer: rotates the tab's first cp1 and last cp2 onto the
+ * parent tangent at the splices for a C1 join (vs standard's C0). cp distances
+ * are preserved, so only handle direction changes, not curvature strength.
  */
 export const smoothedTabSplicer: TabSplicer = {
     id: 'tangent-smoothed',
@@ -317,14 +286,9 @@ export const smoothedTabSplicer: TabSplicer = {
 };
 
 /**
- * Smoothing distance for a splice angle correction, expressed as a
- * fraction of the tab's splice-to-splice chord. Monotonic
- * piecewise-linear ramp: 0 at/below 10°, rising to 0.30 at 90° and
- * clamped flat beyond. A bigger angle correction is spread over a
- * longer arc (more anchors fall in the smoothing zone).
- *
- * Breakpoints are the issue's empirical starting values (issue #371);
- * retune here after inspecting the seed-1086655870 reference puzzle.
+ * Smoothing distance for a splice angle correction, as a fraction of the tab's
+ * splice-to-splice chord. Bigger angle → spread over a longer arc. Breakpoints
+ * are empirical (issue #371); retune here against the seed-1086655870 puzzle.
  */
 const SPLICE_SMOOTHING_RAMP: ReadonlyArray<readonly [number, number]> = [
     [10, 0.0],
@@ -351,17 +315,11 @@ export function spliceSmoothingChordFraction(thetaRadians: number): number {
 }
 
 /**
- * Bring the tab to a C1 (smooth-direction) join with the parent at both
- * splices. On a near-straight parent the angle correction is tiny and we
- * just rotate the outermost control point (the original behavior). On a
- * highly-curved parent the correction is large, so we spread it: drop the
- * template anchors within a splice-angle-scaled zone of each splice and
- * bridge the gap with one cubic that leaves the splice along the parent's
- * tangent. This avoids the sharp corner the single-segment rotation leaves
- * on curved parents (issue #371, Variant B).
- *
- * Pure post-processing on the already-spliced tab — no PRNG involvement,
- * so the share-link contract is unaffected.
+ * Bring the tab to a C1 join with the parent at both splices. Near-straight
+ * parent: rotate just the outermost cp. Curved parent: drop template anchors
+ * within a splice-angle-scaled zone and bridge with one cubic that leaves along
+ * the parent tangent, avoiding the sharp corner single-segment rotation leaves
+ * (issue #371, Variant B). Pure post-processing, no PRNG — share-link unaffected.
  */
 function alignTangentsAtSplice(prepared: PreparedTab): PreparedTab {
     const { before, after } = prepared;
@@ -379,8 +337,7 @@ function alignTangentsAtSplice(prepared: PreparedTab): PreparedTab {
     const rightRemoves = lastSurvR < segs.length - 1;
 
     if (!leftRemoves && !rightRemoves) {
-        // Small angles at both ends: preserve the original behavior of
-        // rotating just the outermost cp at each splice.
+        // Small angles both ends: rotate just the outermost cp at each splice.
         return alignOutermostOnly(prepared, segs, beforeTangent, afterTangent);
     }
 
@@ -421,9 +378,8 @@ function unitVec(dx: number, dy: number, fbx: number, fby: number): Point {
 }
 
 /**
- * Index of the interior anchor farthest (perpendicular distance) from the
- * chord between the first and last anchors — i.e. the tab's head. Used to
- * stop the smoothing zones from ever consuming the head.
+ * Index of the interior anchor farthest (perpendicular) from the first-last
+ * chord — the tab's head. Used to keep smoothing zones from consuming the head.
  */
 function farthestAnchorIndex(anchors: Point[]): number {
     const a = anchors[0];
@@ -441,20 +397,14 @@ function farthestAnchorIndex(anchors: Point[]): number {
 }
 
 /**
- * Decide which anchors survive at each end. Returns the index of the first
- * surviving anchor from the left (`firstSurvL`, >= 1) and the last surviving
- * anchor from the right (`lastSurvR`, <= m-1). `firstSurvL === 1` /
- * `lastSurvR === m-1` mean "no removal at that end".
+ * Decide which anchors survive at each end: `firstSurvL` (>=1) first survivor
+ * from the left, `lastSurvR` (<=m-1) last from the right; `firstSurvL===1` /
+ * `lastSurvR===m-1` mean no removal at that end. Guards: the head anchor never
+ * falls in a zone, and >=1 original segment survives between the two bridges;
+ * when neither holds (tab too short) returns the no-removal sentinel.
  *
- * Guards: the head anchor never falls inside a zone, and at least one
- * original segment survives between the two bridges (so each bridge's far
- * tangent comes from real template geometry). When neither can be honoured
- * (tab too short), returns the no-removal sentinel.
- *
- * Exported for unit tests, which exercise the guard branches directly:
- * driving the `m < 3`, head-clamp, and "bridges would meet" cases through
- * the full splice pipeline is brittle (a far-from-chord head is inherently
- * far in arc distance, so the clamp rarely binds via real templates).
+ * Exported for unit tests that exercise the guard branches directly — driving
+ * m<3, head-clamp, and "bridges would meet" through the full pipeline is brittle.
  */
 export function computeSpliceZones(
     segs: readonly BezierSegment[],
@@ -515,10 +465,9 @@ export function computeSpliceZones(
 }
 
 /**
- * One cubic from the left splice (anchor 0) to the first surviving anchor.
- * Leaves the splice along the parent tangent; arrives along the surviving
- * segment's forward tangent (C1 with surviving geometry). Control magnitudes
- * = chord/3 (cubic-Hermite default), matching smooth-clusters.py.
+ * One cubic from the left splice (anchor 0) to the first surviving anchor:
+ * leaves along the parent tangent, arrives along the surviving segment's
+ * forward tangent (C1). Control magnitudes = chord/3, matching smooth-clusters.py.
  */
 function buildLeftBridge(
     segs: readonly BezierSegment[],
@@ -542,11 +491,10 @@ function buildLeftBridge(
 }
 
 /**
- * One cubic from the last surviving anchor to the right splice (anchor m).
- * Leaves the surviving anchor along the preceding segment's tangent (C1);
- * arrives at the splice along the parent tangent. Control magnitudes =
- * chord/3, the same cubic-Hermite default `buildLeftBridge` and
- * smooth-clusters.py use — keep the three in step if you retune it.
+ * One cubic from the last surviving anchor to the right splice (anchor m):
+ * leaves along the preceding segment's tangent (C1), arrives along the parent
+ * tangent. Control magnitudes = chord/3, as buildLeftBridge and
+ * smooth-clusters.py use — keep the three in step.
  */
 function buildRightBridge(
     segs: readonly BezierSegment[],
@@ -591,8 +539,8 @@ function rotateLastCp(seg: BezierSegment, tangent: Point): BezierSegment {
 }
 
 /**
- * Original behavior: rotate only the tab's outermost control points onto
- * the parent tangents. Used when no anchors fall in either smoothing zone.
+ * Rotate only the tab's outermost control points onto the parent tangents.
+ * Used when no anchors fall in either smoothing zone.
  */
 function alignOutermostOnly(
     prepared: PreparedTab,
@@ -613,8 +561,7 @@ function alignOutermostOnly(
 
 function tangentAtEnd(curve: Curve): Point {
     const lastSeg = curve.segments[curve.segments.length - 1];
-    // Prefer cp2 → p3 for the tangent direction at the curve's end.
-    // Fall back to p0 → p3 if cp2 ≈ p3 (degenerate / linear segment).
+    // Prefer cp2 → p3; fall back to p0 → p3 when cp2 ≈ p3 (degenerate segment).
     let dx = lastSeg.p3.x - lastSeg.cp2.x;
     let dy = lastSeg.p3.y - lastSeg.cp2.y;
     let len = Math.hypot(dx, dy);

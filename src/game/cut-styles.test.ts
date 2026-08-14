@@ -198,11 +198,10 @@ describe('cutStyleNeedsTracedTabs', () => {
     });
 
     it('covers every declared cut style, so a new one cannot be missed', () => {
-        // Compared as a whole map rather than looped over, so adding a cut
-        // style fails here until someone states its traced-tab capability
-        // deliberately. A `typeof … === 'boolean'` loop would pass for any
-        // new style: `tsc` already rejects a missing or invalid `tracedTabs`,
-        // so there'd be nothing left for the assertion to catch.
+        // Compared as a whole map, not looped, so adding a cut style fails here
+        // until its traced-tab capability is stated deliberately. A `typeof ===
+        // 'boolean'` loop would pass for any new style, since `tsc` already
+        // rejects a missing/invalid `tracedTabs`.
         const expected: Record<CutStyle, CutStyleOption['tracedTabs']> = {
             classic: 'always',
             fractal: 'never',

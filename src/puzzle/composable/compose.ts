@@ -1,8 +1,5 @@
 /**
- * No grid-specific concepts (rows, columns, directions) — just edges.
- *
- * See issue #154 and docs/composable-reference/tab-clamping-reference.md
- * for the coordinate frame approach.
+ * Edge-based composition — no grid concepts (rows, columns, directions).
  */
 
 import type { GeneratedEdge, GeneratedPiece, Point } from '../../model/types.js';
@@ -18,15 +15,14 @@ import { clampTabToCurve } from './curve-clamp.js';
 import { buildShape, fmt } from '../../model/build-shape.js';
 
 export interface ComposeOptions {
-    /** When true, skip tab generation entirely — all shared edges are flat lines. */
+    /** Skip tab generation; all shared edges become flat lines. */
     disableTabs?: boolean;
 }
 
 /**
- * @param template - Tab shape template; only read when tabs are
- *   enabled (`options.disableTabs` falsy). May be `null` for callers
- *   that bring their own tab geometry — e.g. the topology pipeline,
- *   which writes tabs directly into edge curves before calling here.
+ * @param template - Tab shape template; read only when tabs are enabled. May
+ *   be `null` for callers with their own tab geometry (e.g. the topology
+ *   pipeline, which writes tabs into edge curves before calling here).
  */
 export function composePuzzle(
     pieceDefs: PieceDefinition[],
@@ -153,9 +149,8 @@ function buildEdge(
 
 /**
  * Transform a BezierPath from normalized space ((0,0)→(1,0), +Y protrusion)
- * to actual edge coordinates (start→end) using the tangent/normal frame.
- *
- * No explicit rotation angles — the tangent/normal vectors ARE the rotation.
+ * to edge coordinates (start→end) via the tangent/normal frame — the
+ * tangent/normal vectors are the rotation, so no explicit angles.
  */
 function transformToEdge(
     path: BezierPath,
@@ -164,7 +159,7 @@ function transformToEdge(
 ): BezierPath {
     const dx = end.x - start.x;
     const dy = end.y - start.y;
-    // Perpendicular (90° counterclockwise — tab protrudes to the left of travel)
+    // Perpendicular (90° CCW — tab protrudes left of travel)
     const px = -dy;
     const py = dx;
 

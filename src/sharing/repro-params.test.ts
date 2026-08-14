@@ -148,9 +148,8 @@ describe('reproParamsToPayload', () => {
 
     it('throws naming the field when it is null rather than absent', () => {
         const params = buildReproParams(classicTracedState());
-        // A hand-edited params object can carry an explicit `null`. Without
-        // `required` rejecting it, the `imageSize.width` read below throws an
-        // unattributed TypeError instead of naming the field.
+        // A hand-edited params object can carry an explicit `null`; without
+        // `required` the `imageSize.width` read throws an unattributed TypeError.
         (params as { imageSize?: unknown }).imageSize = null;
         expect(() => reproParamsToPayload(params)).toThrow(/imageSize/);
     });
@@ -169,10 +168,9 @@ describe('reproParamsToPayload', () => {
 
     it('throws naming cutStyle for a non-string that stringifies to a style', () => {
         const params = buildReproParams(classicTracedState());
-        // `hasOwnProperty` coerces its key, so `['classic']` passes the
-        // membership test on its own; the predicate checks `typeof` internally
-        // so this names the field here instead of degrading to the decoder's
-        // unattributed `null`.
+        // `hasOwnProperty` coerces its key, so `['classic']` passes membership;
+        // the predicate's `typeof` check names the field here instead of the
+        // decoder's unattributed `null`.
         (params as { cutStyle?: unknown }).cutStyle = ['classic'];
         expect(() => reproParamsToPayload(params)).toThrow(/cutStyle/);
     });

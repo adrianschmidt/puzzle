@@ -1,14 +1,8 @@
 /**
- * Boot flow: on load, a `#p=` share link wins over a saved game, which wins
- * over a fresh start.
- *
- * `index.html` renders the loading overlay up front so the player sees
- * feedback before JS finishes booting.
- *
- * An unreadable save (present but not restorable) stops the flow before a
- * fresh puzzle can overwrite it: the player is shown a recovery dialog with
- * the raw blobs and boot only continues once they dismiss it, so a fresh
- * start can never race ahead of that decision.
+ * Boot flow priority: a `#p=` share link wins over a saved game, which wins
+ * over a fresh start. An unreadable save stops the flow before a fresh puzzle
+ * can overwrite it — a recovery dialog holds boot until the player dismisses
+ * it, so a fresh start can never race ahead of that decision.
  */
 
 import type { GridSize } from '../model/types.js';
@@ -45,8 +39,8 @@ import { track } from '../analytics/index.js';
 export interface BootSequenceDeps {
     container: HTMLElement;
     /**
-     * Deliberately not `current` — the fallback gate turns on `hasGame`,
-     * and the two are not interchangeable (see `game-session.ts`).
+     * Not `current` — the fallback gate turns on `hasGame`, and the two are
+     * not interchangeable (see `game-session.ts`).
      */
     session: Pick<GameSession, 'install' | 'restoreSelection' | 'hasGame'>;
     viewportTransform: ViewportTransform;
@@ -60,9 +54,9 @@ export interface BootSequenceDeps {
 }
 
 /**
- * Always tears down the pre-boot loading overlay — except when a share-link
- * rescue reload is about to land, in which case leaving the overlay up
- * avoids a blank-page flash for the up-to-3s gap before the reload fires.
+ * Tears down the pre-boot loading overlay in `finally`, except when a
+ * share-link rescue reload is imminent — leaving it up avoids a blank-page
+ * flash for the up-to-3s gap before the reload fires.
  */
 export async function runBootSequence(deps: BootSequenceDeps): Promise<void> {
     try {
@@ -74,18 +68,17 @@ export async function runBootSequence(deps: BootSequenceDeps): Promise<void> {
             deps.session.install(saved.state);
             deps.session.restoreSelection(saved.selection);
             if (saved.viewport) {
-                // Restore the zoom/pan the player last had (#420). Absent on
-                // pre-feature saves — those keep the default view, as before.
+                // Restore last zoom/pan (#420). Absent on pre-feature saves,
+                // which keep the default view.
                 deps.viewportTransform.setState(saved.viewport);
                 deps.applyTransform();
             }
             return;
         }
         if (saved.status === 'unreadable') {
-            // Stop before the fresh puzzle overwrites the unreadable save:
-            // let the player download the raw (in-memory) blobs for
-            // recovery. The pre-boot loading overlay (z-index above the
-            // dialog) is hidden so the modal is visible.
+            // Stop before the fresh puzzle overwrites the unreadable save, so
+            // the player can download the raw in-memory blobs. The overlay
+            // (z-index above the dialog) is hidden so the modal is visible.
             track('save-unreadable', { reason: saved.reason });
             hideLoadingOverlay();
             await new Promise<void>((resolve) => {
@@ -100,11 +93,9 @@ export async function runBootSequence(deps: BootSequenceDeps): Promise<void> {
             });
         }
 
-        // Mirror the New Game dialog path so a first-load (or post-regeneration) puzzle
-        // respects every remembered preference — otherwise composable cuts,
-        // image source/category, and vibrancy silently fall back to defaults
-        // and the resulting save (and any share link from it) wouldn't match
-        // what the user last chose.
+        // Mirror the New Game dialog path so a first-load puzzle respects
+        // every remembered preference — otherwise the save (and any share link
+        // from it) wouldn't match what the user last chose.
         const preferredSizeId = loadSizePreference();
         const option = getSizeOption(preferredSizeId);
         const preferredCutStyle = loadCutStylePreference() as CutStyle;
@@ -112,11 +103,10 @@ export async function runBootSequence(deps: BootSequenceDeps): Promise<void> {
         const preferredFractalConfig = loadFractalConfigPreference();
         const preferredWavyConfig = loadWavyConfigPreference();
         const preferredRotationEnabled = loadRotationEnabledPreference();
-        // A brand-new visitor (no save at all, never touched an image
-        // preference) gets the hand-picked bundled image instead of a
-        // random one, so the first impression works against the default
-        // background. An unreadable save means a returning user — they
-        // keep today's random-image behavior.
+        // A brand-new visitor (no save, never touched an image preference)
+        // gets the bundled image instead of a random one, for a first
+        // impression against the default background. An unreadable save means
+        // a returning user, who keeps random-image behavior.
         const firstRun = saved.status === 'empty'
             && !imageSourcePreferenceExists()
             && !imageCategoryPreferenceExists();
@@ -139,10 +129,9 @@ export async function runBootSequence(deps: BootSequenceDeps): Promise<void> {
                 vibrant,
                 rotationEnabled: preferredRotationEnabled,
             }),
-            // Everything except the cut is kept: same size, image source,
-            // category, vibrancy, rotation. The per-style configs are
-            // deliberately dropped — with the style forced to Classic they
-            // are dead weight, and a saved Composable config the build
+            // Keeps size, image source, category, vibrancy, rotation but
+            // drops the per-style configs: with the style forced to Classic
+            // they are dead weight, and a saved Composable config the build
             // cannot generate is one of the failures being recovered from.
             startFallback: () => deps.start(gridSize, {
                 bootFallback: true,
@@ -151,17 +140,12 @@ export async function runBootSequence(deps: BootSequenceDeps): Promise<void> {
                 vibrant,
                 rotationEnabled: preferredRotationEnabled,
             }),
-            // Deliberately not `deps.session.current() !== undefined`:
-            // `GameSession.install` makes the state current before it
-            // renders and wires interaction, so a throw inside that window
-            // would report "a puzzle reached the screen" over a blank or
-            // undraggable canvas — the fallback skipped and no toast shown,
-            // which is the #488 symptom again. `hasGame()` is false until
-            // the interaction teardown handle is assigned, which is
-            // `install`'s last statement, so it means exactly what this
-            // predicate has to mean. (A throw in that window makes the
-            // fallback re-run `install` and most likely fail the same way —
-            // but then the player gets told.)
+            // Not `current() !== undefined`: `install` makes the state
+            // current before it renders and wires interaction, so a throw in
+            // that window would report success over a blank canvas (#488).
+            // `hasGame()` is false until `install`'s last statement assigns
+            // the interaction teardown handle, so it means exactly what this
+            // gate needs.
             hasGame: () => deps.session.hasGame(),
         });
     } finally {

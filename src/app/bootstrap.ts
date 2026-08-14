@@ -1,35 +1,17 @@
 /**
- * The composition root: construct the app's singletons, wire them together,
- * and kick off boot.
+ * The composition root: construct the app's singletons, wire them, and kick
+ * off boot. `bootstrap` is a function and **this module runs nothing on
+ * import**, so the wiring order is testable; `bootstrap.test.ts` pins the
+ * orderings that previously held only because of where a statement sat in
+ * `main.ts`.
  *
- * This is what `main.ts` used to be, and the reason that file grew to 1939
- * lines no test could reach. `bootstrap` is a function and **this module runs
- * nothing on import**, so the wiring — and in particular its order — is
- * finally testable; `bootstrap.test.ts` pins the orderings that previously
- * held only because of where a statement happened to sit.
- *
- * Statement order here is a contract, not a style choice:
- *
- *  - `installGlobalHandlers` goes first, so analytics and error reporting are
- *    up before anything that can throw.
- *  - `installGeometryTokenInvalidation` follows it, ahead of boot. Not because
- *    of *this* tab's writes — storage events never fire in the window that
- *    made the change, so our own saves are invisible to that listener by
- *    design. Because another tab's write is only ever seen live: there is no
- *    replay for a document that was not listening at the time. Nothing below
- *    can deliver one today, since this function runs synchronously through to
- *    `runBootSequence`; installing here is what keeps that true if any
- *    statement above it ever gains an `await`.
- *  - The rotation UI is built before the session. The session's `onInstalled`
- *    is built from `rotationUi.syncVisibility` read as a bare value, which
- *    makes reordering the two a use-before-declaration error the compiler
- *    reports rather than a convention a comment asks for.
- *  - `installToolbar` runs before `sharedDeps`: the toolbar is what invokes
- *    `installBackgroundColorControl`, and the handle it hands back is what
- *    the share path reads. That one is a plain data dependency now, so the
- *    compiler holds it rather than this comment.
- *  - The `hashchange` listener is registered *after* boot is kicked off. Boot
- *    runs synchronously to its first await, so the order is observable.
+ * Statement order is a contract where the compiler can't enforce it:
+ * `installGlobalHandlers` first (analytics up before anything can throw);
+ * `installGeometryTokenInvalidation` before boot (a storage event reaches only
+ * a document already listening, never replayed); the `hashchange` listener
+ * after boot is kicked off (boot runs synchronously to its first await). The
+ * rotation-UI-before-session and toolbar-before-sharedDeps orders are plain
+ * data dependencies the compiler holds. Each is detailed at its call site.
  */
 
 import type { GameState, PieceGroup } from '../model/types.js';
@@ -70,28 +52,19 @@ export function bootstrap(
 ): void {
     installGlobalHandlers(root);
 
-    // Distrust the persisted geometry-ownership token as soon as another tab
-    // touches the geometry, or as soon as we come back from the back/forward
-    // cache having missed those events. Installed ahead of boot because a
-    // storage event is delivered only to a document already listening — it is
-    // never replayed — so any turn of the event loop that precedes this is a
-    // turn whose cross-tab writes we never learn about.
+    // Distrust the persisted geometry-ownership token once another tab touches
+    // the geometry, or on bfcache restore that missed those events. Ahead of
+    // boot: a storage event reaches only a document already listening and is
+    // never replayed, so any event-loop turn before this loses cross-tab
+    // writes.
     installGeometryTokenInvalidation();
 
     /**
-     * Populated when a puzzle starts (fresh or shared). Stays null when
-     * the user resumes a previous session from localStorage — in that
-     * case `puzzle-completed` falls back to deriving fields from the
-     * installed game state alone.
-     *
-     * Deliberately *not* cleared by `session.install`, so it can outlive the
-     * puzzle it describes: both start flows install first and assign this
-     * several statements later, and a throw in between (fitting the view,
-     * persisting, adopting a shared color) leaves the previous puzzle's
-     * payload cached against the newly installed game, where
-     * `buildPuzzleCompletedData` lets it win over the derived fields.
-     * Carried verbatim from `main.ts` rather than fixed here — this refactor
-     * changes no behavior. Tracked as #507.
+     * Populated when a puzzle starts (fresh or shared); null when resuming
+     * from localStorage, where `puzzle-completed` derives fields from the game
+     * state alone. Not cleared by `session.install`, so a throw between
+     * install and the assignment below leaves a stale payload cached against
+     * the new game (#507); carried verbatim from `main.ts`, unchanged here.
      */
     let currentGameAnalytics: NewGameData | null = null;
 
@@ -104,9 +77,8 @@ export function bootstrap(
 
     const completionPresenter = createCompletionPresenter({ container: root, rotationFocus });
 
-    // The selection is stored alongside the game state, so it is cleared
-    // automatically when the user deselects all or starts a new game, and
-    // never leaks into share links.
+    // Selection is stored alongside the game state, so it clears on deselect /
+    // new game and never leaks into share links.
     selectionManager.onChange((selectedIds) => {
         const state = session.current();
         for (const group of state?.groups ?? []) {
@@ -127,35 +99,27 @@ export function bootstrap(
         renderer,
         viewportTransform,
         applyTransform: applyViewportTransform,
-        // Late-bound: the completion cleanup can fire up to 1000ms after the
-        // triggering call, by which time a new game may have started — or, if
-        // boot failed, none may be installed at all. Nothing installed means
-        // nothing to re-render, so the settle step is simply skipped; throwing
-        // here would abort the cleanup before the completion overlay is shown.
+        // Late-bound: the completion cleanup fires up to 1000ms later, by
+        // which time a new game may have started or (boot failed) none is
+        // installed. Nothing installed means nothing to re-render — skip
+        // rather than throw, which would abort the cleanup before the overlay.
         renderCurrent: () => {
             const state = session.current();
             if (state) renderer.renderState(state);
         },
     };
 
-    /**
-     * Persists the new view via the debounced auto-save, so the
-     * player's zoom level and pan offset survive a reload (#420).
-     */
+    /** Persists the view via debounced auto-save so zoom/pan survive a reload (#420). */
     function onViewportChanged(): void {
         applyViewportTransform();
         const state = session.current();
         if (state) saveCoordinator.autoSave(state);
     }
 
-    // Installs its own pagehide / visibilitychange listeners as a side
-    // effect of construction.
+    // Installs its own pagehide / visibilitychange listeners on construction.
     const saveCoordinator = createSaveCoordinator({ selectionManager, viewportTransform });
 
-    /**
-     * Shared, unmodified, by the rotation UI and the game session — both
-     * drive a merge outcome through the exact same follow-up.
-     */
+    /** Shared by the rotation UI and game session so both merge through the same follow-up. */
     const applyMerge = (
         state: GameState,
         result: MergeResult,
@@ -170,8 +134,7 @@ export function bootstrap(
         });
     };
 
-    // Constructed before `session` — see `createOnInstalled` for why the
-    // compiler now enforces that.
+    // Before `session` — see `createOnInstalled` for why the compiler enforces it.
     const rotationUi = createRotationUi({
         container: root,
         renderer,
@@ -184,29 +147,21 @@ export function bootstrap(
     });
 
     /**
-     * Taking `syncRotationUi` as a parameter rather than closing over
-     * `rotationUi` is the whole point: the call site below reads
-     * `rotationUi.syncVisibility` as a bare value — no wrapper arrow, no
-     * `.bind`, which requires `createRotationUi` to return closures rather
-     * than a class instance. That read sits in `createGameSession`'s argument
-     * list rather than inside a closure, so hoisting `createGameSession` above
-     * `createRotationUi` is a use-before-declaration error the compiler
-     * reports, rather than an ordering that merely holds because of where two
-     * `const`s sit.
+     * Takes `syncRotationUi` as a parameter so the call site reads
+     * `rotationUi.syncVisibility` as a bare value in `createGameSession`'s
+     * argument list — making a `createGameSession`-before-`createRotationUi`
+     * reorder a use-before-declaration error the compiler reports.
      *
-     * **Do not inline this back into the deps literal.** Doing so puts the
-     * read inside a closure again, and the compile-time guard disappears
-     * without a word: `tsc` stays clean, the suite stays green, and
-     * `bootstrap.test.ts`'s `creates the rotation UI before the game session`
-     * is then the only thing standing between a reorder and a TDZ crash at
-     * boot.
+     * **Do not inline this into the deps literal.** That puts the read back
+     * inside a closure and the compile-time guard silently disappears, leaving
+     * only `bootstrap.test.ts` between a reorder and a TDZ crash at boot.
      */
     function createOnInstalled(
         syncRotationUi: RotationUi['syncVisibility'],
     ): (state: GameState) => void {
         return (state) => {
-            // Any overlay from the previous game goes before this one's can be
-            // shown — `completionPresenter.show` no-ops while one is already up.
+            // Remove the previous game's overlay first — `show` no-ops while
+            // one is already up.
             completionPresenter.remove();
             updateAttribution(state);
             syncRotationUi(state);
@@ -216,10 +171,9 @@ export function bootstrap(
         };
     }
 
-    // Owns the installed game and the interaction wiring bound to it. Everything
-    // above reads it through `session.current()`, which is `GameState |
-    // undefined` — boot can fail and install nothing (#488), and the compiler
-    // now makes each reader say what it does about that.
+    // Owns the installed game and its interaction wiring. Readers go through
+    // `session.current()` (`GameState | undefined`) — boot can fail and
+    // install nothing (#488).
     const session = createGameSession({
         container: root,
         renderer,
@@ -238,26 +192,13 @@ export function bootstrap(
     const pwaUpdates = initPwaUpdates(() => saveCoordinator.flush());
 
     /**
-     * The overlay reads the session late, as the module global did: the zoom
-     * lands up to ~1000ms later, by which time a new game may have replaced
-     * this one — and the overlay carries a "Challenge a friend" link built
-     * from the state it is given, so showing the finished puzzle over a fresh
-     * one would hand out a link to the wrong puzzle.
-     *
-     * The identity test is what makes that real. Nothing owns the settle:
-     * `zoomToFitCompletedPuzzle` returns no cancel handle, so once its rAF
-     * has run the callback *will* fire, and a bare "something is installed"
-     * test passes for the fresh puzzle the player just started — the very
-     * case the paragraph above is about. `session.current() === state` asks
-     * the narrower question the paragraph actually poses: is the game I
-     * zoomed for still the installed one? Anything else — nothing installed,
-     * a fresh game, a restored save, or a second puzzle already solved
-     * inside this one's zoom window — means this celebration is stale and
-     * the overlay is simply skipped. The installed game's own completion,
-     * if it has one, gets its own zoom and its own overlay.
-     *
-     * Shared by both completion routes — a merge-to-one-group win and the
-     * debug Solve action — so the two cannot drift apart on this.
+     * Reads the session late: the zoom settles up to ~1000ms later, by which
+     * time a new game may have replaced this one, and the overlay's "Challenge
+     * a friend" link is built from the state it's given. The settle has no
+     * cancel handle, so `session.current() === state` (not a bare "something
+     * installed") is what keeps a stale celebration — fresh game, restored
+     * save, a second puzzle solved inside this zoom — from showing the wrong
+     * link. Shared by both completion routes so they can't drift apart.
      */
     function celebrateCompletion(state: GameState, group: PieceGroup): void {
         zoomToFitCompletedPuzzle(state, group, viewportFitDeps, () => {
@@ -265,17 +206,13 @@ export function bootstrap(
         });
     }
 
-    /**
-     * Passed to `applyMergeResult` as `onCompleted`, which owns detecting the
-     * win but not the viewport — that stays here.
-     */
+    /** `onCompleted` for `applyMergeResult`: it detects the win, the viewport stays here. */
     function onPuzzleCompleted(state: GameState): void {
         if (state.groups.length === 1) {
             celebrateCompletion(state, state.groups[0]);
         } else {
-            // Fallback: shouldn't happen if the puzzle just completed. Shows
-            // `state` directly rather than re-reading the session, because
-            // nothing defers here — the two are the same object.
+            // Fallback (shouldn't happen post-completion). Shows `state`
+            // directly — nothing defers here, so it equals the session.
             completionPresenter.show(state);
         }
     }
@@ -290,10 +227,9 @@ export function bootstrap(
     }
 
     /**
-     * `fitView` folds the gather-and-zoom-to-fit step and
-     * the follow-up render together: `session.install` already renders the state
-     * at its pre-gather positions, so the view-fit's repositioning needs a
-     * second render to reach the screen.
+     * `fitView` folds gather-and-zoom-to-fit with a follow-up render:
+     * `session.install` already rendered at pre-gather positions, so the
+     * repositioning needs a second render to reach the screen.
      */
     const startNewGameDeps: StartNewGameDeps = {
         container: root,
@@ -310,55 +246,34 @@ export function bootstrap(
         onGameAnalytics: (data) => {
             currentGameAnalytics = data;
         },
-        // `hasGame()`, not `current() !== undefined`: the same distinction
-        // `boot-sequence.ts` makes for its fallback gate. `install` makes the
-        // state current *before* it renders and wires interaction, so
-        // `current()` can be non-undefined over a blank canvas — and Cancel's
-        // promise ("return to your current puzzle") is the interactive-puzzle
-        // question, not the reference-assigned one.
+        // `hasGame()`, not `current() !== undefined` (same distinction as
+        // `boot-sequence.ts`): `install` makes the state current before wiring
+        // interaction, so `current()` can be set over a blank canvas — and
+        // Cancel's "return to your current puzzle" is the interactive question.
         hasCurrentGame: () => session.hasGame(),
     };
 
     /**
-     * Solve the puzzle: one binding, shared by `window.__solvePuzzle` and the
-     * info modal's Solve button. The button receiving it as a dependency
-     * instead of looking `window.__solvePuzzle` up at click time is the one
-     * sanctioned behavior change in this refactor (see the plan's Global
-     * Constraints).
-     *
-     * Bound here, once, and handed to both `installDevHooks` and
-     * `installToolbar`: while each owned its own `solvePuzzle` call, an edit to
-     * either `onSolved` would have silently desynchronized the console hook
-     * from the button — the exact agreement the change exists to establish.
+     * One solve binding, shared by `window.__solvePuzzle` and the info modal's
+     * Solve button and handed to both `installDevHooks` and `installToolbar`.
+     * While each owned its own `solvePuzzle` call an edit to either `onSolved`
+     * would silently desync the console hook from the button.
      */
     const solve = (): void =>
         solvePuzzle({ session, renderer, onSolved: celebrateCompletion });
 
     installDevHooks({
-        // 'dev': this binding is exclusively dev-console starts (e.g.
-        // `__newComposableGame`), never the new-game dialog or the boot
-        // path. Dev-deploy reports to the same Umami website ID as
-        // production, so without this a developer poking at cut parameters
-        // would inflate the field-incident count with games no player ever
-        // started. Not 'repro': a fresh dev game is not a replay of anything.
-        //
-        // It is not the only developer route to an arbitrary sine config: on
-        // a dev build `isComposableVisible()` also puts Composable in the
-        // new-game dialog, frequency sliders and all, and that binding below
-        // reports the default 'fresh'. Deliberately left that way — labeling
-        // it would mean labeling the whole dialog on a dev build, which would
-        // also suppress genuine Classic/Wavy mismatches seen while reviewing
-        // a preview, and those are real signal from the production code path.
-        // Production hides Composable from the dialog, so the dev rows are
-        // separable by query instead; see `PieceCountMismatchData`'s `source`
-        // note for the exclusion the operator applies.
+        // 'dev': exclusively dev-console starts (e.g. `__newComposableGame`).
+        // Dev-deploy shares production's Umami website ID, so without this a
+        // developer's cut-parameter games inflate the field-incident count.
+        // The dev-build new-game dialog is another route to a sine config but
+        // stays 'fresh' — labeling it would also suppress genuine Classic/Wavy
+        // mismatches from the real production path; those dev rows are
+        // separable by query (see `PieceCountMismatchData`'s `source` note).
         start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps, 'dev'),
-        // 'repro': this binding is exclusively `__reproPuzzle`'s replay path
-        // (see `dev-hooks.ts`), never a real recipient's `#p=` link — so a
-        // piece-count mismatch it surfaces is a developer re-running a
-        // known-bad puzzle while investigating, not a new field incident.
-        // Mirrors the same distinction `runWithErrorReport`'s `source:
-        // 'repro'` already makes for `shared-load-failed` on this path.
+        // 'repro': exclusively `__reproPuzzle`'s replay path, never a real
+        // `#p=` link — a mismatch it surfaces is a developer re-running a
+        // known-bad puzzle, not a field incident.
         loadShared: (payload, recipientHadSavedState) =>
             loadSharedPuzzle(payload, recipientHadSavedState, sharedDeps, 'repro'),
         solve,
@@ -366,22 +281,13 @@ export function bootstrap(
 
     /**
      * `installToolbar` invokes `installBackgroundColorControl` between the
-     * deselect and Info buttons (see `install-toolbar.ts`'s module doc) so
-     * DOM order matches the visual top-to-bottom control stack, then hands
-     * the handle back. The `installBackgroundColor` call itself stays here,
-     * rather than moving into `install-toolbar.ts`, so that the toolbar
-     * takes the installer as a dependency instead of reaching for it:
-     * `install-toolbar.test.ts` substitutes a marker div and asserts DOM
-     * order without running an installer that touches localStorage and an
-     * SVG filter. The toolbar module owns *when* the picker's DOM lands,
-     * not the picker itself.
-     *
-     * Taking it as a return value rather than letting the callback assign an
-     * outer binding is what keeps `sharedDeps` honest: a `let backgroundColor!`
-     * captured by side effect type-checks even when the assignment never
-     * happens, and the resulting `undefined` would only surface at
-     * `deps.backgroundColor.adopt(...)` — *after* the shared puzzle has
-     * already been installed (#500's half-applied state, by a new route).
+     * deselect and Info buttons and hands the handle back. The installer is
+     * passed as a dependency (not reached for) so `install-toolbar.test.ts`
+     * can substitute a marker div without touching localStorage and an SVG
+     * filter. Returned rather than assigned to an outer binding to keep
+     * `sharedDeps` honest: a side-effect `let backgroundColor!` type-checks
+     * even if never assigned, and the `undefined` would surface only after the
+     * shared puzzle is installed (#500's half-applied state).
      */
     const backgroundColor = installToolbar({
         container: root,
@@ -400,12 +306,9 @@ export function bootstrap(
     });
 
     /**
-     * Reuses `startNewGameDeps`'s `fitView`,
-     * `persistNewPuzzle` and `onGameAnalytics`: installing a freshly generated
-     * puzzle works the same whether it came from a fresh start or a share link.
-     *
-     * Built after `installToolbar`, which is what invokes
-     * `installBackgroundColorControl` and so returns `backgroundColor`.
+     * Reuses `startNewGameDeps`'s `fitView` / `persistNewPuzzle` /
+     * `onGameAnalytics` — installing a generated puzzle is the same fresh or
+     * shared. Built after `installToolbar`, which returns `backgroundColor`.
      */
     const sharedDeps: LoadSharedPuzzleDeps = {
         container: root,
@@ -433,13 +336,10 @@ export function bootstrap(
         start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps),
     });
 
-    // Handle share links pasted into the address bar of a tab that already
-    // has the app loaded. Without this, the hash changes but nothing reacts
-    // until the user reloads. `history.replaceState` calls inside
-    // shareLinks.tryLoad don't fire hashchange, so there's no loop risk.
-    //
-    // Registered after the boot sequence is kicked off, matching main.ts's
-    // original ordering: boot runs synchronously to its first await.
+    // Handle a share link pasted into an already-loaded tab: the hash changes
+    // but nothing reacts otherwise. `history.replaceState` inside
+    // `shareLinks.tryLoad` doesn't fire hashchange, so no loop risk. Registered
+    // after boot is kicked off (boot runs synchronously to its first await).
     window.addEventListener('hashchange', () => {
         void shareLinks.tryLoad();
     });

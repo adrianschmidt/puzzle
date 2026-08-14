@@ -89,10 +89,9 @@ describe('SnapProximityPositionController', () => {
         expect(getGroup(state, 11).position.x).toBeCloseTo(startX);
     });
 
-    // `getState` is `GameState | undefined` because boot can fail and install
-    // no game at all (#488). That widening is what lets callers stop proving a
-    // game exists before touching the controller, so the two branches it added
-    // are exercised here even though the app never reaches them today.
+    // getState is GameState | undefined because boot can fail and install no game
+    // (#488). These tests exercise the two branches that widening added, even
+    // though the app never reaches them today.
     it('builds no context when there is no game', () => {
         const state = makePairState({ x: 170, y: 50 }, 5);
         let live: GameState | undefined;
@@ -109,8 +108,7 @@ describe('SnapProximityPositionController', () => {
         // Nothing to derive tolerances from, so they are never read.
         expect(getTolerances).not.toHaveBeenCalled();
 
-        // A game arriving after the gesture began does not retroactively arm
-        // it: the context is null, so the controller stays inert.
+        // A game arriving after the gesture began doesn't retroactively arm it (context stays null).
         live = state;
         controller.onGroupRotated();
         expect(getGroup(state, 11).position.x).toBeCloseTo(startX);
@@ -126,8 +124,7 @@ describe('SnapProximityPositionController', () => {
         });
         const startX = getGroup(state, 11).position.x;
 
-        // A real context is built first, so this test fails for the right
-        // reason: the guard in onGroupRotated, not a missing context.
+        // Build a real context first, so the test exercises the onGroupRotated guard, not a missing context.
         controller.start(11);
         live = undefined;
         controller.onGroupRotated();

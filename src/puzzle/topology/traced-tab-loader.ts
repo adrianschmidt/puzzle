@@ -1,16 +1,13 @@
 /**
- * The 20 trace JSONs (~80 KB raw / ~10–15 KB gzipped) and
- * `tab-shapes-traced.ts` live behind a dynamic `import()`, so they
- * don't ship in the main chunk. The only UI route that can ever
- * select traced tabs (the Composable cut style) is hidden in
- * production, but a share link with `cf.tg: "traced"` can land at
- * any client, so the code path stays reachable — just lazily.
+ * The 20 trace JSONs and `tab-shapes-traced.ts` live behind a dynamic
+ * `import()`, so they don't ship in the main chunk. The Composable cut style is
+ * hidden in production, but a share link with `cf.tg: "traced"` can land at any
+ * client, so the path stays reachable — lazily.
  *
- * The registry hands out the {@link tracedTabGeneratorStub} at boot.
- * Callers that are about to run traced generation must `await
- * preloadTracedTabGenerator()` first so the dynamic import resolves
- * and the stub's delegate slot is filled. After preload the stub
- * keeps doing the dispatch — no re-registration is required.
+ * The registry hands out {@link tracedTabGeneratorStub} at boot. Callers about
+ * to run traced generation must `await preloadTracedTabGenerator()` first so the
+ * dynamic import resolves and the stub's delegate slot fills; the stub keeps
+ * dispatching after, no re-registration needed.
  */
 
 import { track } from '../../analytics/index.js';
@@ -18,12 +15,10 @@ import { sanitizeErrorReason } from '../../analytics/sanitize-error-reason.js';
 import type { TabGenerator } from './plugin-types.js';
 
 /**
- * Bucket a chunk-load failure so events aggregate despite the
- * high-cardinality raw `reason`. Matches the phrasings the major
- * engines use for a failed dynamic `import()` (Chromium "Failed to
- * fetch", Firefox "error loading", Safari "Importing a module script
- * failed"), and groups parse/eval failures of the fetched chunk —
- * including the missing-export invariant below — under `parse`.
+ * Bucket a chunk-load failure so analytics aggregate despite the high-cardinality
+ * raw `reason`. Matches the engines' dynamic-`import()` phrasings (Chromium
+ * "Failed to fetch", Firefox "error loading", Safari "Importing a module script
+ * failed") and groups parse/eval failures (incl. the missing-export below) as `parse`.
  */
 function classifyFailure(reason: string): 'network' | 'parse' | 'unknown' {
     const msg = reason.toLowerCase();
@@ -48,22 +43,13 @@ function classifyFailure(reason: string): 'network' | 'parse' | 'unknown' {
 }
 
 /**
- * Classify a resolved-chunk timing entry into the latency-relevant
- * cache states, from transfer size relative to the cached body size
- * (both populated for our same-origin chunk):
- *
- * - `warm`        — `transferSize === 0`: served from cache, no network.
- * - `revalidated` — a small nonzero transfer below the body size: a 304
- *                   round trip carried headers only, body from cache.
- *                   Still pays a round trip, so its latency sits between
- *                   warm and cold.
- * - `cold`        — transfer at/above the body size: full download.
- *
- * Keeping `revalidated` distinct stops 304s from inflating the
- * cold-latency distribution this metric exists to measure.
- * `deliveryType` is intentionally not consulted: it's ambiguous for
- * 304s across engines and redundant with `transferSize === 0` for a
- * true cache hit.
+ * Classify a resolved-chunk timing entry from transfer size vs cached body size
+ * (both populated for our same-origin chunk): `warm` (transferSize 0, from
+ * cache), `revalidated` (small nonzero below body size — a 304 carried headers
+ * only, still a round trip), `cold` (at/above body size, full download). Keeping
+ * `revalidated` distinct stops 304s inflating the cold-latency distribution.
+ * `deliveryType` is not consulted: ambiguous for 304s across engines and
+ * redundant with transferSize 0 for a true hit.
  */
 function classifyEntryCache(
     entry: PerformanceResourceTiming,
@@ -78,14 +64,11 @@ function classifyEntryCache(
 }
 
 /**
- * Locate the resolved chunk's Resource Timing entry and classify it.
- *
- * Returns `'unknown'` when no usable entry is available — the API is
- * absent (non-browser/jsdom), the entry was evicted from a full
- * Resource Timing buffer (long-lived PWA sessions; the buffer size is
- * bumped at boot in app/global-handlers.ts to reduce this), or the import
- * was mocked in tests. `'unknown'` therefore conflates "unsupported" with
- * "evicted"; they aren't separable from here.
+ * Locate the resolved chunk's Resource Timing entry and classify it. Returns
+ * `'unknown'` when no usable entry exists — API absent (non-browser/jsdom),
+ * entry evicted from a full buffer (buffer size bumped at boot in
+ * app/global-handlers.ts), or the import was mocked in tests; `'unknown'` thus
+ * conflates unsupported with evicted.
  */
 function detectCacheState(): 'cold' | 'warm' | 'revalidated' | 'unknown' {
     if (typeof performance === 'undefined'
@@ -94,10 +77,9 @@ function detectCacheState(): 'cold' | 'warm' | 'revalidated' | 'unknown' {
     }
     const entries = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
     for (let i = entries.length - 1; i >= 0; i--) {
-        // Coupled to the dynamic import below: Vite names the lazy chunk
-        // after its entry module, so the emitted file is
-        // `traced-tab-generator-<hash>.js`. A manualChunks/chunkFileNames
-        // rename would break this match — keep the two in sync.
+        // Coupled to the dynamic import below: Vite names the chunk
+        // `traced-tab-generator-<hash>.js`; a manualChunks/chunkFileNames rename
+        // would break this match — keep the two in sync.
         if (entries[i].name.includes('traced-tab-generator')) {
             return classifyEntryCache(entries[i]);
         }
@@ -111,14 +93,10 @@ let attemptCount = 0;
 
 /**
  * Thrown when traced generation runs before {@link preloadTracedTabGenerator}
- * has resolved in this realm.
- *
- * Its own class rather than a bare `Error` so a caller can tell it apart from
- * a genuine generation fault. The distinction matters across a worker
- * boundary: this error says the chunk is missing *here*, which is a property
- * of the realm rather than of the request — the main thread loads the chunk
- * on its own predicate and may well have it. `generation-worker-core.ts`
- * classifies it as an infrastructure failure for exactly that reason.
+ * has resolved in this realm. A distinct class so callers (across a worker
+ * boundary) can tell "chunk missing *here*" apart from a real generation fault:
+ * the realm, not the request — `generation-worker-core.ts` classifies it as an
+ * infrastructure failure for that reason.
  */
 export class TracedTabLibraryNotLoadedError extends Error {
     constructor() {
@@ -142,11 +120,10 @@ export const tracedTabGeneratorStub: TabGenerator = {
     generate(edge, random, config) {
         return ensureLoaded().generate(edge, random, config);
     },
-    // Forward the retry ladder too, so `applyTabs` runs it via the
-    // registry path (not just the single-candidate `generate`). Without
-    // this, the stub looks like a non-variant generator and the ladder
-    // silently never runs in the app. Falls back to a single `generate`
-    // candidate if a future real generator drops `generateVariants`.
+    // Forward the retry ladder too, so `applyTabs` runs it via the registry
+    // path. Without this the stub looks non-variant and the ladder silently
+    // never runs. Falls back to a single `generate` candidate if a future real
+    // generator drops `generateVariants`.
     generateVariants(edge, random, config) {
         const real = ensureLoaded();
         if (real.generateVariants) {
@@ -158,36 +135,26 @@ export const tracedTabGeneratorStub: TabGenerator = {
 };
 
 /**
- * Idempotent and safe to call repeatedly — concurrent callers and
- * later retry attempts all share the same in-flight promise.
- * Awaiting the returned promise guarantees that the next synchronous
- * traced-tab generation will use the real implementation.
+ * Idempotent — concurrent callers and retries share one in-flight promise;
+ * awaiting it guarantees the next synchronous generation uses the real impl.
+ * On import rejection the cached promise is cleared so the next call retries
+ * (the rejection still propagates).
  *
- * If the dynamic import rejects (transient network failure, stale
- * deploy hash mismatch, offline), the cached promise is cleared so
- * the next call retries from scratch. The rejection is still
- * propagated to the awaiting caller.
- *
- * Emits analytics per actual import attempt: `traced-chunk-preload-started`
- * up front, then `traced-chunk-loaded` (with `durationMs` + `cacheState`)
- * on success or `traced-chunk-load-failed` (with `reason` + `kind`) on
- * rejection. Every event carries the 1-based `attempt` counter so a
- * retry after a failure is distinguishable from an unrelated cold load.
- * Repeat calls that return the cached promise emit nothing, so the
- * events count real fetches rather than awaits.
+ * Emits per-import-attempt analytics (`traced-chunk-preload-started`, then
+ * `traced-chunk-loaded` or `traced-chunk-load-failed`), each carrying a 1-based
+ * `attempt` so a retry is distinguishable from a cold load. Cached-promise
+ * repeats emit nothing, so events count real fetches, not awaits.
  */
 export function preloadTracedTabGenerator(): Promise<void> {
     if (preloadPromise) return preloadPromise;
     const attempt = ++attemptCount;
     const startedAt = performance.now();
     track('traced-chunk-preload-started', { attempt });
-    // The chunk emitted for this specifier is `traced-tab-generator-<hash>.js`;
-    // detectCacheState() matches its Resource Timing entry by that name.
+    // Emits `traced-tab-generator-<hash>.js`; detectCacheState() matches that name.
     const inflight = import('./traced-tab-generator.js').then((m) => {
         if (!m.tracedTabGenerator) {
-            // Chunk fetched and parsed, but the expected export is absent
-            // (a tree-shake / rename regression). Treat as a failure so it
-            // surfaces here instead of as a confusing stub throw later.
+            // Fetched/parsed but the expected export is absent (tree-shake/rename
+            // regression); fail here rather than as a confusing stub throw later.
             throw new Error('Traced chunk resolved without a tracedTabGenerator export');
         }
         realGenerator = m.tracedTabGenerator;

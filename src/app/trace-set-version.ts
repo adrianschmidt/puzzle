@@ -1,19 +1,13 @@
 import type { GameState } from '../model/types.js';
 
 /**
- * The version survives in the per-style config on the saved state, so
- * resumed Wavy/Triangles/Classic games report it just like fresh ones (where
- * the cached new-game payload carries it). For Classic it doubles as the
- * generator discriminator, separating sine-generated puzzles from legacy
- * ones — which is what makes the heavy-geometry regime attributable on the
- * save events as well as on completion.
+ * The version survives in the per-style config on the saved state, so resumed
+ * Wavy/Triangles/Classic games report it like fresh ones. For Classic it also
+ * discriminates sine-generated puzzles from legacy ones.
  *
- * Gated on `cutStyle` rather than on "whichever config block is present", so
- * a state carrying a stray foreign config block — a crafted share link, a
- * hand-edited save — can't mis-attribute a version to a style that didn't
- * generate with one. `createNewGame` already drops config blocks that don't
- * match the selected style, so on every state this codebase produces the two
- * readings agree; the gate keeps them agreeing structurally.
+ * Gated on `cutStyle` rather than "whichever config block is present", so a
+ * state with a stray foreign block (a crafted share link, a hand-edited save)
+ * can't mis-attribute a version to a style that didn't generate with one.
  */
 export function traceSetVersionOf(state: GameState): number | undefined {
     return state.cutStyle === 'triangles'

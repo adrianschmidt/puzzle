@@ -1,14 +1,11 @@
 /**
- * Owns the per-drag context (built once at drag start) and frame gating:
- * pointer-move events can outpace the display refresh, so evaluation runs
- * at most once per animation frame. The first move in a frame evaluates
- * immediately (no added latency); later moves in the same frame are
- * skipped. All the geometry lives in `game/snap-proximity-rotation.ts`.
+ * Owns the per-drag context and frame gating: moves can outpace the refresh, so
+ * evaluation runs at most once per frame (first in a frame runs immediately,
+ * later ones skipped). Geometry lives in game/snap-proximity-rotation.ts.
  *
- * `stop()` only discards the context — rotation already applied stays,
- * including on a canceled drag (it rotated toward the correct alignment,
- * so keeping it is harmless). Callers must stop() before a cancel-restore
- * so the restore's moveGroup callback doesn't trigger a stray evaluation.
+ * stop() only discards the context — rotation already applied stays, even on a
+ * canceled drag. Callers must stop() before a cancel-restore, or the restore's
+ * moveGroup callback triggers a stray evaluation.
  */
 
 import type { GameState } from '../model/types.js';
@@ -42,10 +39,7 @@ export class SnapProximityRotationController {
             ?? ((cb) => { requestAnimationFrame(() => cb()); });
     }
 
-    /**
-     * Cheap no-op context (null) unless the game is in free-rotation mode
-     * and the group has cross-group mates.
-     */
+    /** Null (no-op) context unless the game is free-rotation and the group has cross-group mates. */
     start(groupId: number): void {
         this.ctx = buildProximityContext(
             this.getState(), groupId, this.getTolerances(),

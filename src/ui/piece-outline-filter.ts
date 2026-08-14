@@ -1,7 +1,6 @@
 /**
- * Consumers apply the filter with `filter: url(#piece-outline)`.
- * The host `<svg>` is zero-sized and aria-hidden so it occupies no
- * layout space and is excluded from a11y trees.
+ * Consumers apply the filter with `filter: url(#piece-outline)`. The host `<svg>`
+ * is zero-sized and aria-hidden so it takes no layout space and stays out of a11y trees.
  */
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -35,10 +34,9 @@ export function installPieceOutlineFilter(): void {
     filter.appendChild(morph);
 
     const flood = document.createElementNS(SVG_NS, 'feFlood');
-    // Read the outline color from a CSS custom property so the picker can
-    // recolor the outline live (a presentation attribute can't hold a
-    // var()). The `#080808` fallback (= gray-darker-3) keeps the outline
-    // black if the property is never set.
+    // Set flood-color via the style property, not a presentation attribute (which
+    // can't hold a var()), so the picker can recolor live. `#080808` (gray-darker-3)
+    // is the fallback if the property is never set.
     flood.style.setProperty(
         'flood-color',
         'var(--piece-outline-color, #080808)',

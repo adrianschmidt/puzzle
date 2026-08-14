@@ -103,9 +103,8 @@ describe('wavy borderless', () => {
         expect(bordered.pieces.length).toBe(12);
         expect(borderless.pieces.length).toBe(12);
 
-        // Borderless strips the flat frame, so the set of piece silhouettes
-        // differs from bordered for the same seed — proves oversize+strip
-        // actually ran rather than borderless being silently ignored.
+        // Borderless strips the flat frame, so silhouettes differ from bordered
+        // for the same seed — proves oversize+strip ran, not silently ignored.
         const borderedShapes = bordered.pieces.map((p) => p.shape).sort();
         const borderlessShapes = borderless.pieces.map((p) => p.shape).sort();
         expect(borderlessShapes).not.toEqual(borderedShapes);
@@ -113,15 +112,12 @@ describe('wavy borderless', () => {
 });
 
 describe('fractal borderless coercion', () => {
-    // Fractal is the one style that does not funnel into `generator.ts`'s
-    // strict `borderless === true` — it runs its own pipeline and reads the
-    // flag in three places. Those reads used truthiness, so a crafted
-    // non-boolean (a `"borderless": "true"` hand-typed into `__reproPuzzle`,
-    // a config restored from a pre-tightening save) generated a genuinely
-    // BORDERLESS puzzle — while `applyStyleConfigs` encodes it as
-    // `ff: { bl: false }`, so a re-share described a bordered one. Pinning all
-    // three at once: reverting any single read makes the `'yes'` result differ
-    // from the `false` result somewhere below.
+    // Fractal runs its own pipeline (not `generator.ts`'s strict `=== true`) and
+    // reads borderless in three places. With truthiness, a crafted non-boolean
+    // (`"true"` in `__reproPuzzle`, a pre-tightening save) generated a BORDERLESS
+    // puzzle while `applyStyleConfigs` encodes `ff: { bl: false }`, so a re-share
+    // described a bordered one. This pins all three: reverting any read makes the
+    // `'yes'` result differ from `false` somewhere below.
     const strategy = getCutStyleStrategy('fractal');
     const imageSize = { width: 400, height: 300 };
     const ctxWith = (borderless: unknown) =>
@@ -141,10 +137,9 @@ describe('fractal borderless coercion', () => {
 
     it('reads a non-boolean borderless as off, matching what a re-share encodes', () => {
         const off = readings(false);
-        // The control, asserted per field rather than on the aggregate: an
-        // aggregate `not.toEqual` proves only that ONE of the three reads
-        // moves, so a later change making a site ignore the flag would leave
-        // it green — the same silent degradation this test exists to catch.
+        // Per-field control, not aggregate: an aggregate `not.toEqual` proves
+        // only ONE of the three reads moves, so a site later ignoring the flag
+        // stays green — the degradation this test exists to catch.
         const on = readings(true);
         expect(on.grid).not.toEqual(off.grid);
         expect(on.size).not.toEqual(off.size);
@@ -157,8 +152,8 @@ describe('fractal borderless coercion', () => {
 
     it('is unchanged for the boolean and absent values the type admits', () => {
         expect(readings(undefined)).toEqual(readings(false));
-        // Only `scaleGrid` is compared here, so call it directly rather than
-        // paying for a whole `readings(false)` run to read `.grid` off it.
+        // Only `scaleGrid` is compared, so call it directly rather than running
+        // a whole `readings(false)` to read `.grid`.
         expect(
             strategy.scaleGrid({ cols: 6, rows: 4 }, imageSize, {}),
         ).toEqual(strategy.scaleGrid({ cols: 6, rows: 4 }, imageSize, ctxWith(false)));

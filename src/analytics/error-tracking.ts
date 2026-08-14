@@ -1,57 +1,37 @@
 /**
- * App-wide backstop for async failures that no local `try/catch`
- * handled. Registers global `unhandledrejection` and `error` listeners
- * and reports each to Umami as an `unhandled-error` event.
+ * App-wide backstop for uncaught async failures, reported to Umami as
+ * `unhandled-error`. Observe-only: never calls `preventDefault()`, so the
+ * browser's own console logging still happens (`diagnostics.warn` mirrors in
+ * dev/test, no-op in production).
  *
- * Observe-only: the listeners never call `preventDefault()`, so the
- * browser's own console logging still happens. `diagnostics.warn`
- * mirrors them in dev/test (it's a no-op in production builds).
- *
- * The traced-chunk preload paths catch and report their own failures
- * (`traced-chunk-load-failed`), so they don't reach here; this catches
- * everything else uncaught in the page realm — image fetches, persistence,
- * future async code. It does NOT see errors thrown inside the service
- * worker's own scope: a `window` listener runs in the page realm, so only
- * SW→page message failures surface here. The worker's own scope is
- * instrumented separately — its `error`/`unhandledrejection` handlers post
- * reports to the page, which `pwa/sw-error-bridge.ts` relays into the same
- * `unhandled-error` event under the `sw-error` / `sw-rejection` source.
+ * A `window` listener runs in the page realm, so it never sees errors thrown
+ * inside the service worker's scope — those are relayed separately by
+ * `pwa/sw-error-bridge.ts` under the `sw-error` / `sw-rejection` source.
  */
 
 import { diagnostics } from '../diagnostics.js';
 import { track } from './umami.js';
 import { sanitizeErrorReason } from './sanitize-error-reason.js';
 
-/** Max reports of any one distinct `reason` per session. */
+/** Max reports per distinct `reason`, per session. */
 const MAX_PER_REASON = 5;
-/** Max total reports per session before a flood is capped. */
+/** Max total reports per session. */
 const MAX_TOTAL = 50;
 
 /**
- * Constructor name of a thrown value, for the low-cardinality `name`
- * dimension. `'unknown'` when the value isn't an `Error` (rejections
- * can carry strings/objects).
+ * Constructor name of a thrown value (low-cardinality `name` dimension);
+ * `'unknown'` when it isn't an `Error`.
  */
 function errorName(value: unknown): string {
     return value instanceof Error ? (value.name || 'Error') : 'unknown';
 }
 
 /**
- * Conservatively drop `error` events that are pure noise rather than
- * signal:
- *
- * - Opaque cross-origin script errors. A script loaded without CORS
- *   surfaces as a bare `"Script error."` with an empty filename and no
- *   `error` object — the browser strips everything actionable, so it's
- *   un-triageable.
- * - Exceptions thrown from browser-extension content scripts, which
- *   inject into the page but aren't our code (identified by an
- *   extension-scheme `filename`).
- *
- * Kept deliberately narrow so a real application error is never
- * swallowed. Promise rejections are not filtered: extension content
- * scripts run in isolated worlds and rarely surface rejections into the
- * page's realm, so an `unhandledrejection` here is almost always ours.
+ * Drop pure-noise `error` events: opaque cross-origin `"Script error."` (the
+ * browser strips everything actionable) and browser-extension content-script
+ * throws (extension-scheme `filename`). Kept narrow so a real app error is
+ * never swallowed. Rejections aren't filtered — extension scripts rarely
+ * surface them into the page realm.
  */
 function isIgnorableErrorEvent(event: ErrorEvent): boolean {
     if (/^script error\.?$/i.test((event.message ?? '').trim())) {
@@ -62,17 +42,13 @@ function isIgnorableErrorEvent(event: ErrorEvent): boolean {
 
 /**
  * Install the global handlers. Call once at boot, after
- * {@link import('./umami.js').initAnalytics}. Returns a disposer that
- * removes the listeners (used by tests; the app keeps them for its
- * lifetime). No-op — returning a no-op disposer — when there is no
- * `window` (non-browser/test contexts).
+ * {@link import('./umami.js').initAnalytics}. Returns a disposer that removes
+ * the listeners (used by tests). No-op without a `window`.
  *
- * Rate limiting (per-session, state scoped to this call) protects the
- * analytics stream from a tight error loop: each distinct `reason` is
- * reported at most {@link MAX_PER_REASON} times and the session at most
- * {@link MAX_TOTAL} times. When the global cap is first hit, a single
- * `RateLimited` notice is emitted so the flood is visible, then the
- * backstop goes quiet (the browser still logs everything natively).
+ * Per-session rate limiting guards the analytics stream against error loops:
+ * each distinct `reason` at most {@link MAX_PER_REASON} times, the session at
+ * most {@link MAX_TOTAL}. A single `RateLimited` notice is emitted when the
+ * global cap is first hit, then the backstop goes quiet.
  */
 export function initErrorTracking(): () => void {
     if (typeof window === 'undefined') return () => {};
@@ -100,8 +76,8 @@ export function initErrorTracking(): () => void {
             track('unhandled-error', { source, name: errorName(cause), reason });
             return;
         }
-        // Surface the flood once (only when the *global* cap is the
-        // blocker, not ordinary per-reason dedup), then stay silent.
+        // Surface the flood once, only when the *global* cap (not per-reason
+        // dedup) is the blocker, then stay silent.
         if (totalSent >= MAX_TOTAL && !capNoticeSent) {
             capNoticeSent = true;
             track('unhandled-error', {
@@ -117,28 +93,25 @@ export function initErrorTracking(): () => void {
     };
 
     // No capture phase, so failed-resource load errors (which only reach
-    // window in the capture phase) don't land here — only uncaught
-    // script exceptions do.
+    // window in capture) never land here — only uncaught script exceptions.
     const onError = (event: ErrorEvent): void => {
         if (isIgnorableErrorEvent(event)) return;
         report('error', event.error ?? event.message);
     };
 
-    // A CSP refusal is not an error event at all — it has its own event, and
-    // the `error` listener above deliberately skips the capture phase where
-    // failed resource loads surface. Without this, `index.html`'s `img-src`
-    // policy blocking an image is invisible: the SVG `<image>` has no error
-    // handler, so the puzzle just renders transparent pieces.
+    // A CSP refusal has its own event, not an `error` event. Without this,
+    // `index.html`'s `img-src` blocking an image is invisible — the SVG
+    // `<image>` has no error handler, so pieces render transparent.
     const onCspViolation = (event: SecurityPolicyViolationEvent): void => {
-        // Keyed on the directive rather than the URI so a page blocking one
-        // image per piece cannot exhaust the session budget by itself.
+        // Keyed on the directive, not the URI, so a page blocking one image
+        // per piece can't exhaust the session budget.
         const reason = `csp:${event.effectiveDirective}`;
         if (!reportingAllowed(reason)) return;
         diagnostics.warn('CSP violation:', event.effectiveDirective, event.blockedURI);
         track('csp-violation', {
             directive: event.effectiveDirective,
-            // Already stripped by the browser: `'data'` for a data: URL, and
-            // scheme/host/port for a cross-origin one. See CspViolationData.
+            // Already stripped by the browser (`'data'` for data: URLs,
+            // scheme/host/port for cross-origin). See CspViolationData.
             blockedUri: event.blockedURI,
         });
     };

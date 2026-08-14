@@ -33,21 +33,17 @@ export interface StrategyContext {
     trianglesConfig?: { traceSetVersion?: number };
     classicConfig?: { traceSetVersion?: number };
     /**
-     * Optional dev-time tab-debug session. When provided, strategies
-     * whose pipeline supports it (composable, wavy, sine-based classic)
-     * thread it through to the topology generator. Fractal — and legacy
-     * classic, which never reaches the composable pipeline — ignore it.
-     * Set by `init.ts` based on the `tabDebug=1` URL flag.
+     * Dev-time tab-debug session (set by `init.ts` from the `tabDebug=1` flag).
+     * Threaded to the topology generator by strategies whose pipeline supports
+     * it; fractal and legacy classic ignore it.
      */
     tabDebug?: TabDebugSession;
 }
 
 /**
- * What a strategy returns from `generatePieces`.
- *
- * `autoGroups` is set by styles whose generator emits starting groups
- * (currently only composable, when `minPieceArea` is configured). When
- * absent or empty, `init.ts` falls back to one-piece-per-group.
+ * `autoGroups` is set by styles whose generator emits starting groups (only
+ * composable, when `minPieceArea` is set); when absent/empty, `init.ts` falls
+ * back to one-piece-per-group.
  */
 export interface StrategyPuzzle {
     pieces: GeneratedPiece[];
@@ -55,9 +51,9 @@ export interface StrategyPuzzle {
     /** Tab-debug report produced when `ctx.tabDebug` was set. */
     tabDebugReport?: TabDebugReport;
     /**
-     * Set when the style's generator declared an expected piece count and
-     * produced a different one. Styles that `return generateComposablePuzzle(...)`
-     * directly get this for free — the topology result already carries it.
+     * Set when the generator declared an expected piece count and produced a
+     * different one. Styles returning `generateComposablePuzzle(...)` directly
+     * get it for free — the topology result already carries it.
      */
     pieceCountMismatch?: PieceCountMismatch;
 }
@@ -77,7 +73,6 @@ export interface CutStyleStrategy {
         generationGrid: GridSize,
         ctx: StrategyContext,
     ): Size;
-    /** Generate the pieces (and optional starting groups) for this style. */
     generatePieces(
         grid: GridSize,
         puzzleSize: Size,
@@ -85,9 +80,8 @@ export interface CutStyleStrategy {
         ctx: StrategyContext,
     ): StrategyPuzzle;
     /**
-     * Where the generator's config should be stored on `GameState`. Optional
-     * for a future style that takes no config at all; every current style
-     * has one.
+     * Where the generator's config is stored on `GameState`. Optional for a
+     * future config-less style; every current style has one.
      */
     configKey?: 'fractalConfig' | 'composableConfig' | 'wavyConfig' | 'trianglesConfig' | 'classicConfig';
 }
@@ -105,17 +99,12 @@ const classicStrategy: CutStyleStrategy = {
                 pieces: generateProceduralPuzzle(grid.cols, grid.rows, puzzleSize, seed),
             };
         }
-        // Sine-based Classic: a gentle Wavy. Params are fixed here (not on the
-        // wire), so Classic links carry no attacker-controllable sine config.
-        // `puzzle/topology/repro-bug.test.ts` hand-copies this config to
-        // reproduce #498 from a shipping setup (it cannot import from
-        // `src/game`); keep the two in step if these values change. A
-        // retune of the tuned values below cannot slip past unnoticed —
-        // each is pinned in `cut-style-strategies.classic-traced.test.ts`,
-        // so that goes red first, and it is the cue to update the copy.
-        // Those pins are `objectContaining`, though, so an *added* key
-        // moves geometry without turning anything red: add one and you
-        // have to update the copy by hand.
+        // Sine-based Classic: a gentle Wavy. Params are fixed here, not on the
+        // wire, so Classic links carry no attacker-controllable sine config.
+        // `puzzle/topology/repro-bug.test.ts` hand-copies this config (it can't
+        // import from `src/game`); keep them in step. Value changes turn its
+        // `objectContaining` pins in `cut-style-strategies.classic-traced.test.ts`
+        // red, but an *added* key slips past — update the copy by hand.
         const avgPieceArea =
             (puzzleSize.width * puzzleSize.height) / (grid.cols * grid.rows);
         return generateComposablePuzzle(grid.cols, grid.rows, puzzleSize, seed, {
@@ -155,15 +144,12 @@ const composableStrategy: CutStyleStrategy = {
 };
 
 const fractalStrategy: CutStyleStrategy = {
-    // `=== true` rather than `?? false`/truthiness on both reads below, and
-    // once more in `generateFractalPuzzle`. Identical for every `boolean |
-    // undefined` — which is all the type admits — so no generated geometry
-    // moves; what it buys is that a crafted non-boolean (a hand-typed
-    // `__reproPuzzle` param, a pre-tightening save) generates the BORDERED
-    // puzzle the share encoder then writes as `ff: { bl: false }`. Truthiness
-    // here would generate a borderless one and re-share it as bordered. The
-    // other styles funnel into `generator.ts`'s strict `borderless === true`;
-    // fractal has its own pipeline and has to say it itself.
+    // `=== true` (not truthiness) here and in `generateFractalPuzzle`: for a
+    // crafted non-boolean borderless (hand-typed `__reproPuzzle`, pre-tightening
+    // save) this generates the BORDERED puzzle the share encoder writes as
+    // `ff: { bl: false }`; truthiness would generate borderless and re-share it
+    // as bordered. Other styles get `generator.ts`'s strict check; fractal has
+    // its own pipeline.
     scaleGrid: (userGrid, imageSize, ctx) =>
         scaleFractalGrid(
             userGrid.cols * userGrid.rows,
@@ -195,13 +181,11 @@ const wavyStrategy: CutStyleStrategy = {
     scaleGrid: (grid) => grid,
     inscribePuzzleSize: (imageSize) => imageSize,
     generatePieces: (grid, puzzleSize, seed, ctx) => {
-        // avgPieceArea is intentionally computed from the requested grid.
-        // In borderless mode the generator oversizes the grid internally
-        // (extra cols/rows that get stripped), so real pieces are a bit
-        // smaller than this average. The fixed minPieceArea (= /4) stays
-        // well below legitimate piece area in both modes, so it only ever
-        // catches sub-pixel slivers and never causes false auto-grouping;
-        // the bordered path uses the same formula.
+        // avgPieceArea is computed from the requested grid on purpose. Borderless
+        // oversizes the grid internally (extra cols/rows get stripped), so real
+        // pieces run a bit smaller; minPieceArea (= /4) still stays well below
+        // legitimate piece area in both modes, catching only sub-pixel slivers,
+        // never false auto-grouping.
         const avgPieceArea =
             (puzzleSize.width * puzzleSize.height) /
             (grid.cols * grid.rows);
@@ -228,18 +212,15 @@ const wavyStrategy: CutStyleStrategy = {
 };
 
 /**
- * Pick the triangle row count whose estimated piece count lands closest to
- * the requested target for this image's shape. The triangular lattice takes
- * only `rows` from the grid — its column count derives from the frame aspect
- * ratio — so the same target needs more rows on portrait images than on
- * landscapes. Bounded by the generator's MAX_ROWS; extreme portraits
- * (aspect ≲ 1:3 at the largest size) therefore undershoot the target, which
- * the size buttons' approximate ~N labels absorb.
+ * Pick the triangle row count whose estimated piece count lands closest to the
+ * target for this image's shape (the lattice derives columns from the frame
+ * aspect, so portraits need more rows than landscapes). Bounded by MAX_ROWS, so
+ * extreme portraits undershoot — the size buttons' ~N labels absorb it.
  *
- * Part of the released Triangles share-link contract — the receiver re-runs
- * this selection from the encoded image size, so any change to the formula,
- * loop bound, or tie-break reproduces different puzzles from existing links.
- * Ties (strict `<`) deliberately resolve to the smaller row count.
+ * Released Triangles share-link contract: the receiver re-runs this from the
+ * encoded image size, so any change to formula, loop bound, or tie-break
+ * reproduces different puzzles from existing links. Ties (strict `<`) resolve
+ * to the smaller row count.
  */
 export function selectTriangleRows(targetPieceCount: number, imageSize: Size): number {
     let best = 1;
@@ -255,24 +236,20 @@ export function selectTriangleRows(targetPieceCount: number, imageSize: Size): n
 }
 
 const trianglesStrategy: CutStyleStrategy = {
-    // The generator ignores `cols` (it derives columns from the aspect);
-    // pass the user grid's cols through so the generation grid stays
-    // well-formed for the shared plumbing.
+    // The generator ignores `cols` (derives columns from aspect); pass the
+    // user grid's cols through to keep the generation grid well-formed.
     scaleGrid: (userGrid, imageSize) => ({
         cols: userGrid.cols,
         rows: selectTriangleRows(userGrid.cols * userGrid.rows, imageSize),
     }),
     inscribePuzzleSize: (imageSize) => imageSize,
     generatePieces: (grid, puzzleSize, seed, ctx) =>
-        // Fixed production preset: max irregularity with flowing edges and
-        // hand-traced tabs. No explicit minPieceArea — the composable
-        // generator still applies its 4px² DEFAULT_MIN_PIECE_AREA floor;
-        // what's deliberately avoided is wavy's aggressive avgPieceArea/4
-        // threshold, since the lattice's snapped columns leave clean border
-        // half-triangles, not slivers (matches the dev-tested
-        // composable-triangular path). The trace-set version
-        // falls back to the current one only for payloads that lost their
-        // config block (crafted links); every real game/link carries it.
+        // Fixed production preset: max irregularity, flowing edges, hand-traced
+        // tabs. No explicit minPieceArea — deliberately avoiding wavy's
+        // avgPieceArea/4 threshold (the lattice's snapped columns leave clean
+        // border half-triangles, not slivers); the composable generator's 4px²
+        // floor still applies. traceSetVersion falls back to current only for
+        // crafted links that lost their config block; real games/links carry it.
         generateComposablePuzzle(grid.cols, grid.rows, puzzleSize, seed, {
             baseCutGenerator: 'triangular',
             baseCutConfig: { jitter: 0.5, smooth: true },
@@ -299,9 +276,8 @@ export function getCutStyleStrategy(cutStyle: CutStyle): CutStyleStrategy {
 }
 
 /**
- * Return the largest rectangle of `gridAspect` that fits inside `imageSize`,
- * centered. Used so the tile grid scales uniformly (arcs stay circular) and
- * the image is cropped to cover the puzzle rect.
+ * Largest rectangle of `gridAspect` fitting inside `imageSize`. Keeps the tile
+ * grid scaling uniform (arcs stay circular) with the image cropped to cover.
  */
 function inscribeToGridAspect(imageSize: Size, gridAspect: number): Size {
     const imageAspect = imageSize.width / imageSize.height;

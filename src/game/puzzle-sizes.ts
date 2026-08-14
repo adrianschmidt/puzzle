@@ -11,9 +11,8 @@ export interface PuzzleSizeOption {
 }
 
 /**
- * Storage is id-keyed; declaration order is no longer load-bearing for
- * persistence. The legacy-integer migration (`LEGACY_ORDER` below)
- * relies on the original pre-migration order, captured separately.
+ * Storage is id-keyed; declaration order here isn't load-bearing. The
+ * legacy-integer migration relies on `LEGACY_ORDER` below instead.
  */
 export const PUZZLE_SIZE_OPTIONS: readonly PuzzleSizeOption[] = [
     { id: '24',  label: '24 pieces',  pieceCount: 24,  cols: 6,  rows: 4 },
@@ -26,10 +25,7 @@ export const DEFAULT_SIZE_ID = '48';
 
 export const SIZE_PREFERENCE_KEY = 'puzzle-size-preference';
 
-/**
- * Pre-migration storage order — DO NOT reorder. Drop in a follow-up
- * release once enough users have loaded the migrated build.
- */
+/** Pre-migration storage order for the legacy-integer migration — DO NOT reorder. */
 const LEGACY_ORDER = ['24', '48', '96', '192'] as const;
 
 const store = createIdPreferenceStore({

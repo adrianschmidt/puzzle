@@ -96,7 +96,7 @@ describe('AutoPanController', () => {
         moveCalls = [];
         renderCount = 0;
 
-        // Ensure RAF/CAF exist on globalThis (missing in some test environments)
+        // RAF/CAF are missing in some test environments.
         if (!globalThis.requestAnimationFrame) {
             (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame = () => 0;
         }
@@ -107,7 +107,7 @@ describe('AutoPanController', () => {
         callbacks = {
             panViewport: (delta) => panCalls.push({ ...delta }),
             moveGroup: (groupId, delta) => moveCalls.push({ groupId, delta: { ...delta } }),
-            screenDeltaToWorld: (d) => d, // identity (scale=1)
+            screenDeltaToWorld: (d) => d,
             requestRender: () => renderCount++,
             getViewportSize: () => ({ width: 1000, height: 800 }),
         };
@@ -174,7 +174,6 @@ describe('AutoPanController', () => {
 
             rafCallback!(16);
 
-            // Tick saw zero velocity and must not have requested another frame.
             expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
         });
 
@@ -193,7 +192,7 @@ describe('AutoPanController', () => {
         it('restarts RAF when pointer re-enters an edge zone after a zero-velocity tick', () => {
             controller.start(42);
             controller.updatePointer({ x: 500, y: 400 }); // center
-            rafCallback!(16); // zero-velocity tick — does not reschedule
+            rafCallback!(16); // zero-velocity tick
             expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
 
             controller.updatePointer({ x: 5, y: 400 }); // now in edge zone

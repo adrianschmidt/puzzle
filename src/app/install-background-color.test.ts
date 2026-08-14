@@ -80,9 +80,8 @@ describe('installBackgroundColor', () => {
     });
 
     it('updates the picker’s selection when a shared color is adopted', () => {
-        // Pins the picker half of adopt(): re-opening after adopt() must show
-        // the adopted swatch as selected, not the id the picker was created
-        // with.
+        // Pins the picker half of adopt(): re-opening after adopt() shows the
+        // adopted swatch, not the id the picker was created with.
         const control = installBackgroundColor({ container });
         expect(control.adopt(OTHER_PRESET.id)).toBe('adopted');
 
@@ -92,10 +91,9 @@ describe('installBackgroundColor', () => {
     });
 
     it('re-applies the adopted color, not the original, on a theme flip', () => {
-        // Pins the id half of adopt(): the OS-theme handler closes over the
-        // same id adopt() updates, so a flip after adopting must re-apply the
-        // adopted color rather than reverting to whatever was current when
-        // the handler was created.
+        // Pins the id half of adopt(): the OS-theme handler closes over the id
+        // adopt() updates, so a flip after adopting re-applies the adopted
+        // color, not whatever was current when the handler was created.
         let onChange: (() => void) | undefined;
         vi.stubGlobal('matchMedia', () => ({
             matches: false,

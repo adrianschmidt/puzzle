@@ -92,8 +92,7 @@ describe('createImagePicker', () => {
         container.appendChild(picker.element);
         await flush();
 
-        // Hidden-slot logic lives on the cell (the tile/credit wrapper), not
-        // the tile button itself.
+        // Hidden-slot logic lives on the cell wrapper, not the tile button.
         const cells = container.querySelectorAll<HTMLElement>('.image-picker-cell');
         expect(cells[1].hidden).toBe(false);
         expect(cells[2].hidden).toBe(true);
@@ -227,8 +226,8 @@ describe('createImagePicker', () => {
                 expect(credit.hidden).toBe(false);
                 expect(credit.textContent).toBe(`Photographer ${i + 1}`);
                 expect(credit.href).toBe(candidates[i].attribution.photographerUrl);
-                // A link inside a button is invalid HTML — the credit must be
-                // a sibling of the tile, not a descendant.
+                // A link inside a button is invalid HTML — the credit must be a
+                // sibling of the tile, not a descendant.
                 expect(credit.closest('button')).toBeNull();
             });
         });
@@ -244,9 +243,8 @@ describe('createImagePicker', () => {
             await flush();
 
             const credit = credits(container)[0];
-            // jsdom logs a "Not implemented: navigation" warning for anchor
-            // clicks with an href; swallow the navigation in the capture
-            // phase so the test output stays clean.
+            // jsdom logs "Not implemented: navigation" for anchor clicks with an
+            // href; swallow it in the capture phase to keep test output clean.
             const stopNav = (e: Event) => e.preventDefault();
             document.addEventListener('click', stopNav, true);
             credit.click();

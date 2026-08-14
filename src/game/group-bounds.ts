@@ -3,17 +3,11 @@ import { localToWorld } from '../model/helpers.js';
 import { getPathBounds } from './path-bounds.js';
 
 /**
- * Memoised path-bounds for an edge.
- *
- * `getPathBounds` is a regex-based parser; on a 50-piece group with four
- * edges per piece, free-rotation drag would re-parse ~200 path strings on
- * every pointermove. Edge objects are immutable for the lifetime of a
- * puzzle (paths are baked at generation time and never reassigned), so we
- * key the cache directly off the Edge reference. WeakMap means the cache
- * drops automatically when a new puzzle replaces `state.piecesById`.
- *
- * The returned BoundingRect is shared with future callers — treat it as
- * read-only.
+ * Memoized path-bounds for an edge. `getPathBounds` is a regex parser, and
+ * free-rotation drag would re-parse every edge's path on each pointermove. Edge
+ * objects are immutable for a puzzle's lifetime, so the cache keys off the Edge
+ * reference; the WeakMap drops it when a new puzzle replaces `state.piecesById`.
+ * The returned BoundingRect is shared — treat it as read-only.
  */
 const edgePathBoundsCache = new WeakMap<
     Edge,
@@ -48,23 +42,16 @@ export interface GroupBoundsOptions {
     space: 'local' | 'world';
 
     /**
-     * If true, samples bezier control points from each edge's `path`
-     * string for a tighter fit that includes tab geometry. If false,
-     * samples only the `start` and `end` corner points.
+     * If true, samples bezier control points from each edge's `path` (tighter
+     * fit including tab geometry); if false, only `start`/`end` corners.
      */
     includePathGeometry: boolean;
 }
 
 /**
- * Single source of truth for group bounds. Pile detection (world-space,
- * endpoints only) and layout (local-space, with path geometry) both call
- * into this via `options`.
- *
- * Takes the `piecesById` index (typically `state.piecesById`) so the
- * per-piece lookup inside the loop is O(1).
- *
- * Returns Infinity-valued bounds when the group has no findable pieces;
- * sugar wrappers normalize that to zero-sized.
+ * Single source of truth for group bounds; callers pick space/path-geometry via
+ * `options`. Returns Infinity-valued bounds when the group has no findable
+ * pieces — the sugar wrappers normalize that to zero-sized.
  */
 export function getGroupBounds(
     group: PieceGroup,
@@ -106,9 +93,9 @@ export function getGroupBounds(
 }
 
 /**
- * Uses piece offsets only (group-local space, no edge geometry). For
- * accurate world-space bounding boxes that include tab shapes, use
- * `getGroupBounds` with `space: 'world'` and `includePathGeometry: true`.
+ * Piece offsets only (group-local, no edge geometry). For world-space bounds
+ * including tab shapes use `getGroupBounds` with `space: 'world'` +
+ * `includePathGeometry: true`.
  */
 export function getGroupOffsetBounds(group: PieceGroup): BoundingRect {
     let minX = Infinity;
@@ -138,15 +125,9 @@ export function getGroupOffsetBounds(group: PieceGroup): BoundingRect {
 }
 
 /**
- * Compute the bounding box of a group in its un-rotated local space by
- * examining the actual SVG shape geometry of its pieces. Piece offsets
- * live in un-rotated local coordinates, and so do the bounds this returns.
- *
- * Includes bezier control points from edge paths to account for tab
- * geometry that extends beyond the start/end corner vertices.
- *
- * Use this (not `getGroupVisualBounds`) when doing rotation pivot math or
- * anywhere else you need rotation-invariant bounds.
+ * Group bounding box in un-rotated local space, including bezier control points
+ * for tab geometry beyond the corners. Use this (not `getGroupVisualBounds`)
+ * for rotation pivot math or anywhere you need rotation-invariant bounds.
  */
 export function getGroupLocalBounds(
     group: PieceGroup,
@@ -170,14 +151,10 @@ export function getGroupLocalBounds(
 }
 
 /**
- * Center of the assembled image rectangle in un-rotated local space.
- *
- * Samples piece-body corner vertices only (no tab protrusions), so for a
- * completed puzzle — whose outer border is flat — this is the geometric
- * center of the image. Use it as the pivot when spinning the finished
- * puzzle upright, so the rotation looks centered rather than offset by the
- * asymmetric tabs that `getGroupLocalBounds` would include.
- *
+ * Center of the assembled image rectangle in un-rotated local space. Samples
+ * piece-body corners only (no tabs), so for a completed puzzle (flat border)
+ * this is the image's geometric center — use it as the pivot when spinning the
+ * finished puzzle upright, so the spin isn't offset by asymmetric tabs.
  * Returns the local origin for a group with no findable pieces.
  */
 export function getGroupImageCenter(
@@ -200,17 +177,14 @@ export function getGroupImageCenter(
 }
 
 /**
- * Center of one piece's tab-inclusive footprint in the group's un-rotated
- * local space — the rotation-snap pivot shared by merge measurement, merge
- * application, and the snap assists, which must agree on it or the measured
- * snapDelta lands the group elsewhere.
+ * Center of one piece's tab-inclusive footprint in the group's un-rotated local
+ * space — the rotation-snap pivot shared by merge measurement, merge
+ * application, and the snap assists; they must agree or the measured snapDelta
+ * lands the group elsewhere.
  *
- * Sampled from edge path geometry (like `getGroupLocalBounds`) rather than
- * `piece.bounds`: legacy-Classic edges carry no `curvePoints`, so their
- * `bounds` exclude tab protrusions and the two centers diverge. Matching
- * the group-bounds definition keeps a single-piece group's pivot identical
- * to its pre-#530 group-center pivot. Throws if the piece is not in the
- * group.
+ * Sampled from edge path geometry, not `piece.bounds`: legacy-Classic edges
+ * carry no `curvePoints`, so their `bounds` exclude tabs and the centers
+ * diverge. Throws if the piece is not in the group.
  */
 export function pieceCenterLocal(group: PieceGroup, piece: Piece): Point {
     const offset = group.pieces.get(piece.id);
@@ -247,13 +221,10 @@ export function pieceCenterLocal(group: PieceGroup, piece: Piece): Point {
 }
 
 /**
- * Compute the bounding box of a group as it actually renders, accounting
- * for `group.rotation`. Returned coordinates are offsets from the group's
- * `position` (pre-translation) in rotated local space, so
- * `group.position.x + bounds.minX` is the world-space left edge.
- *
- * Use this for layout, gather packing, or anywhere the rendered footprint
- * matters. For rotation pivot math use `getGroupLocalBounds` instead.
+ * Group bounding box as rendered (accounts for `group.rotation`). Coordinates
+ * are offsets from `group.position`, so `group.position.x + bounds.minX` is the
+ * world-space left edge. Use for layout/gather packing; for rotation pivot math
+ * use `getGroupLocalBounds`.
  */
 export function getGroupVisualBounds(
     group: PieceGroup,

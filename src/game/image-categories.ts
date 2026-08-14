@@ -24,10 +24,9 @@ export interface ImageCategoryOption {
 }
 
 /**
- * `any` sends no query parameter at all, so Unsplash picks from everything.
- * Every other option's query is the bare Unsplash tag term its label names —
- * the same term the tag chips on a photo page link to. Keep them single
- * words: extra words AND-narrow the search rather than broadening it.
+ * `any` sends no query, so Unsplash picks from everything. Every other query is
+ * the bare Unsplash tag term its label names. Keep them single words: extra
+ * words AND-narrow the search rather than broadening it.
  */
 export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
     {
@@ -97,9 +96,8 @@ export const IMAGE_CATEGORY_PREFERENCE_KEY = 'puzzle-image-category';
 export const VIBRANT_PREFERENCE_KEY = 'puzzle-image-vibrant';
 
 /**
- * Keywords appended to the Unsplash query when the player wants
- * vibrant/colorful photos. Unsplash has no saturation/HDR filter,
- * so we bias the search via descriptive tags photographers use.
+ * Appended to the Unsplash query for vibrant/colorful photos. Unsplash has no
+ * saturation filter, so we bias the search via descriptive tags.
  */
 export const VIBRANT_QUERY_TERMS = 'vibrant colorful';
 

@@ -65,11 +65,9 @@ describe('prepareTab + commitTab', () => {
 });
 
 describe('smoothedTabSplicer', () => {
-    // Single-segment cubic parent that bends strongly up in the middle.
-    // The chord runs 0,0 → 240,0; the segment's interior y > 0 puts a
-    // non-trivial tangent at the splice points (parent tangent at
-    // t=0.5 is NOT along the chord), which is exactly the case where
-    // C1 alignment is visible.
+    // Single-segment cubic parent bending strongly up in the middle: the chord
+    // is 0,0 → 240,0 but the parent tangent at t=0.5 is NOT along it, which is
+    // exactly where C1 alignment is visible.
     function curvedParent(): Curve {
         return new Curve([{
             p0: { x: 0, y: 0 },
@@ -89,12 +87,8 @@ describe('smoothedTabSplicer', () => {
         )!;
         expect(result).not.toBeNull();
 
-        // A single-segment edge splits into before/after of 1 segment each,
-        // so the joined result lays out as
-        //   segs[0]                 = before
-        //   segs[1..N]              = tab
-        //   segs[N+1]               = after
-        // where N = total - 2.
+        // Single-segment edge → 1-segment before/after, so the joined result is
+        // segs[0]=before, segs[1..N]=tab, segs[N+1]=after, N=total-2.
         const segs = result.segments;
         const N = segs.length - 2;
         expect(N).toBeGreaterThanOrEqual(1);
@@ -111,12 +105,9 @@ describe('smoothedTabSplicer', () => {
     });
 
     it('differs from standardTabSplicer at the splice (which is only C0)', () => {
-        // On the same curved parent, the standard splicer keeps the tab's
-        // chord-frame tangents — so the tab's first/last tangent is along
-        // the local chord direction, not the parent's actual tangent.
-        // This test pins the *difference*: were the smoothed splicer ever
-        // silently reduced to standard behavior, this assertion would
-        // start passing where it should fail.
+        // Standard splicer keeps the tab's chord-frame tangents, not the parent's.
+        // Pins the *difference*: if smoothed were silently reduced to standard,
+        // this assertion would start passing where it should fail.
         const edge = curvedParent();
         const placement = { tCenter: 0.5, isTab: true };
 
@@ -127,12 +118,10 @@ describe('smoothedTabSplicer', () => {
             edge, placement, classicTabTemplate, createSeededRandom(42),
         )!;
 
-        // Tab's first segment is at index 1 in both results (single-segment
-        // parent → 1-segment before/after).
+        // Tab's first segment is index 1 (single-segment parent → 1-seg before/after).
         const standardTabIn = unitTangentEntering(standardResult.segments[1]);
         const smoothedTabIn = unitTangentEntering(smoothedResult.segments[1]);
-        // They must differ in at least one component by more than the C1
-        // tolerance (otherwise smoothing did nothing).
+        // Must differ by more than the C1 tolerance, else smoothing did nothing.
         const dx = Math.abs(standardTabIn.x - smoothedTabIn.x);
         const dy = Math.abs(standardTabIn.y - smoothedTabIn.y);
         expect(dx + dy).toBeGreaterThan(1e-3);
@@ -174,10 +163,9 @@ describe('spliceSmoothingChordFraction', () => {
 });
 
 /**
- * A template with closely-spaced neck anchors and a head bump, so a
- * curved parent's smoothing zone drops a predictable number of anchors.
- * Control points sit at 1/3 and 2/3 between consecutive anchors
- * (chord-aligned tangents). 9 anchors → 8 segments; apex at index 4.
+ * Closely-spaced neck anchors + head bump, so a curved parent's smoothing zone
+ * drops a predictable number of anchors. Control points at 1/3 and 2/3 between
+ * anchors (chord-aligned). 9 anchors → 8 segments; apex at index 4.
  */
 const NECK_HEAVY_ANCHORS: Point[] = [
     { x: 0.30, y: 0.00 },
@@ -225,8 +213,7 @@ function farthestTabAnchor(result: Curve): Point {
 }
 
 describe('smoothedTabSplicer anchor-removal', () => {
-    // A hard parabola-like parent: tangent at the splices is far from the
-    // splice chord, forcing a large angle correction θ at each splice.
+    // Hard parabola-like parent: splice tangents far from the chord → large θ.
     function hardCurvedParent(): Curve {
         return new Curve([{
             p0: { x: 0, y: 0 },
@@ -236,8 +223,8 @@ describe('smoothedTabSplicer anchor-removal', () => {
         }]);
     }
 
-    // Steep LEFT neck (~73°), shallow RIGHT neck (~8°): on a straight parent
-    // only the left splice removes anchors → exercises the left-only branch.
+    // Steep LEFT neck, shallow RIGHT: on a straight parent only the left splice
+    // removes anchors → exercises the left-only branch.
     const LEFT_STEEP_ANCHORS: Point[] = [
         { x: 0.30, y: 0.000 },
         { x: 0.315, y: 0.050 },
@@ -344,8 +331,7 @@ describe('smoothedTabSplicer anchor-removal', () => {
             edge, placement, tmpl, createSeededRandom(1),
         )!;
 
-        // The head (anchor farthest from the splice chord) is untouched, so
-        // it appears at the same world position in both results.
+        // Head (farthest from the splice chord) is untouched → same world position.
         const apexStd = farthestTabAnchor(standard);
         const apexSm = farthestTabAnchor(smoothed);
         expect(apexSm.x).toBeCloseTo(apexStd.x, 3);
@@ -386,9 +372,8 @@ describe('smoothedTabSplicer anchor-removal', () => {
 });
 
 describe('computeSpliceZones guard branches', () => {
-    // Build segments through anchors with chord-aligned control points
-    // (cp1/cp2 at 1/3 and 2/3), so each segment's tangent points along its
-    // anchor chord — matching makeTemplate above but yielding BezierSegments.
+    // Segments through anchors with chord-aligned control points (1/3, 2/3),
+    // like makeTemplate above but yielding BezierSegments.
     function segsFromAnchors(anchors: Point[]): BezierSegment[] {
         const segs: BezierSegment[] = [];
         for (let i = 0; i < anchors.length - 1; i++) {
@@ -411,8 +396,7 @@ describe('computeSpliceZones guard branches', () => {
     }
 
     it('removes nothing on a tab too short to keep a surviving core (m < 3)', () => {
-        // Two segments → m = 2. Tangents are irrelevant; the m < 3 guard
-        // returns the no-removal sentinel before any angle math runs.
+        // m = 2: the m < 3 guard returns the no-removal sentinel before any angle math.
         const segs = segsFromAnchors([
             { x: 0, y: 0 }, { x: 0.5, y: 0.3 }, { x: 1, y: 0 },
         ]);
@@ -422,11 +406,10 @@ describe('computeSpliceZones guard branches', () => {
     });
 
     it('clamps the left zone to the head index so the head is never dropped', () => {
-        // Anchors stay close to the chord (head perp distance is small) and
-        // cluster near the left neck, so a 90° left correction (dL = 0.30 of
-        // the unit chord) would walk PAST every interior anchor. The head
-        // clamp must pin firstSurvL to headIndex (= 2) — without it the raw
-        // walk would reach 5. The right side is aligned (θ ≈ 0 → no removal).
+        // Anchors cluster near the left neck, so a 90° left correction (dL = 0.30
+        // of the unit chord) would walk PAST every interior anchor; the head clamp
+        // pins firstSurvL to headIndex (2), else the raw walk reaches 5. Right side
+        // aligned (θ ≈ 0 → no removal).
         const anchors: Point[] = [
             { x: 0.00, y: 0.000 },
             { x: 0.05, y: 0.010 },
@@ -444,12 +427,9 @@ describe('computeSpliceZones guard branches', () => {
     });
 
     it('removes nothing when both zones would meet at the head', () => {
-        // Symmetric short tab with the head in the middle (index 2). A 90°
-        // correction at BOTH splices drives each raw zone up to the head, so
-        // after clamping firstSurvL === lastSurvR === headIndex. With no
-        // original segment left between the bridges, the disjoint guard
-        // returns the no-removal sentinel rather than a degenerate two-bridge
-        // tab.
+        // Symmetric short tab, head at index 2. A 90° correction at BOTH splices
+        // clamps firstSurvL === lastSurvR === headIndex, leaving no segment
+        // between the bridges, so the disjoint guard returns the no-removal sentinel.
         const anchors: Point[] = [
             { x: 0.00, y: 0.000 },
             { x: 0.05, y: 0.010 },
@@ -465,8 +445,8 @@ describe('computeSpliceZones guard branches', () => {
     });
 });
 
-// A fixed, symmetric tab path in template space (x roughly 0.4..0.6,
-// bump up to y = -0.15). Deterministic — no PRNG.
+// Fixed symmetric tab path in template space (x ~0.4..0.6, bump to y=-0.15);
+// deterministic, no PRNG.
 const FIXED_PATH: BezierPath = [
     { x: 0.40, y: 0 },
     { x: 0.44, y: 0 }, { x: 0.46, y: -0.15 }, { x: 0.50, y: -0.15 },

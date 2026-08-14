@@ -35,7 +35,6 @@ describe('createPieceOutlineColorPicker', () => {
         ).click();
         const swatches = container.querySelectorAll('.swatch-grid .swatch');
         expect(swatches.length).toBe(PIECE_OUTLINE_COLOR_PRESETS.length);
-        // The adapter supplies its own panel-positioning class.
         expect(
             container.querySelector('.swatch-grid.outline-color-panel'),
         ).toBeTruthy();

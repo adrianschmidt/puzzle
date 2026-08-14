@@ -1,7 +1,7 @@
 /**
- * The handler is exercised directly rather than through a Workers runtime:
- * it takes `(request, env, fetchFn)` and uses only standard web APIs, so a
- * plain vitest run covers every routing and validation decision in it.
+ * The handler is exercised directly, not through a Workers runtime: it takes
+ * `(request, env, fetchFn)` and uses only standard web APIs, so a plain vitest
+ * run covers every routing and validation decision.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -17,10 +17,9 @@ import deployWorkerSrc from '../../.github/workflows/deploy-worker.yml?raw';
 const ENV: Env = { UNSPLASH_ACCESS_KEY: 'test-key' };
 
 /**
- * Spelled out rather than read from `ALLOWED_ORIGINS[0]`: taking it from the
- * array would make every CORS assertion below self-referential, proving only
- * that *some* allowed origin works while dropping the production origin left
- * the whole suite green.
+ * Spelled out, not read from `ALLOWED_ORIGINS[0]`: taking it from the array
+ * would make every CORS assertion self-referential, so dropping the production
+ * origin would leave the suite green.
  */
 const ALLOWED = 'https://adrianschmidt.github.io';
 
@@ -35,9 +34,8 @@ function get(path: string, origin?: string): Request {
 }
 
 /**
- * The upstream URL a resolution routes to, asserting it resolved at all — so
- * a routing regression fails by name here rather than as `Invalid URL` inside
- * whichever assertion happened to run first.
+ * The upstream URL a resolution routes to, asserting it resolved at all — so a
+ * routing regression fails by name, not as `Invalid URL` elsewhere.
  */
 function upstreamUrl(result: ReturnType<typeof resolveUpstream>): URL {
     expect(result.ok).toBe(true);
@@ -46,9 +44,9 @@ function upstreamUrl(result: ReturnType<typeof resolveUpstream>): URL {
 }
 
 /**
- * A stub upstream that records the URL it was called with. Clones per call
- * because a `Response` body is single-use, and a second read would otherwise
- * surface as a silent 502 from the handler's own catch.
+ * Stub upstream recording the URL it was called with. Clones per call because
+ * a `Response` body is single-use — a second read would surface as a silent
+ * 502 from the handler's catch.
  */
 function stubFetch(
     response: Response = new Response('{}', {
@@ -66,23 +64,17 @@ function authHeader(call: Parameters<typeof fetch>): string | null {
 }
 
 /**
- * Guard: the Worker is an island.
- *
- * Two mechanisms depend on it silently, and both fail in production rather
- * than in CI. It is type-checked against the *app's* lib set, so importing
- * app code — or reaching for `document`/`localStorage` — compiles, lints and
- * passes `wrangler deploy --dry-run`, then throws on every request in
- * workerd. And `deploy-worker.yml` redeploys only on `src/worker/**`, so the
- * moment a shared module exists, editing it ships the app and leaves the
- * Worker on old code with every check green. The reverse direction is the
- * bundle leak: an app module importing from here puts `api.unsplash.com`, and
- * potentially the routing logic, back into the artifact this PR emptied.
+ * Guard: the Worker is an island. It's type-checked against the *app's* lib
+ * set, so importing app code (or touching document/localStorage) compiles,
+ * lints and passes `wrangler deploy --dry-run`, then throws in workerd. And
+ * `deploy-worker.yml` redeploys only on `src/worker/**`, so a shared module
+ * gets edited without republishing the Worker. The reverse is the bundle leak:
+ * an app module importing from here puts api.unsplash.com back into the bundle.
  */
 describe('the image-proxy Worker island', () => {
     /**
-     * Every `.ts` under `src/`, read as text. `import.meta.glob` rather than
-     * `node:fs` because `@types/node` is not a dependency here — `vite/client`
-     * types this, and it resolves the same set the bundler would.
+     * Every `.ts` under `src/`, read as text. `import.meta.glob`, not
+     * `node:fs`, because `@types/node` isn't a dependency here.
      */
     const SOURCES = import.meta.glob('/src/**/*.ts', {
         query: '?raw',
@@ -91,12 +83,9 @@ describe('the image-proxy Worker island', () => {
     }) as Record<string, string>;
 
     /**
-     * Every non-test module wrangler could pull into the deployed Worker.
-     *
-     * The whole directory, not just `image-proxy.ts` — the outbound guard
-     * below permits siblings, so it has to inspect them too. A
-     * `src/worker/helpers.ts` importing app code would otherwise satisfy
-     * every check while breaking both properties this block exists to keep.
+     * Every non-test module wrangler could pull into the Worker — the whole
+     * directory, since the outbound guard permits siblings and must inspect
+     * them too (a `src/worker/helpers.ts` importing app code would slip past).
      */
     const WORKER_SOURCES = Object.entries(SOURCES).filter(
         ([path]) => path.startsWith('/src/worker/') && !path.endsWith('.test.ts'),
@@ -112,13 +101,10 @@ describe('the image-proxy Worker island', () => {
     }
 
     it('lives where deploy-worker.yml watches', () => {
-        // Two independent strings: wrangler.jsonc's `main` decides what gets
-        // deployed, deploy-worker.yml's path filter decides when. ci.yml's
-        // `--dry-run` catches an uncoordinated rename, but not a coordinated
-        // move — update both `main` and this file's location and everything
-        // stays green while every SUBSEQUENT Worker edit stops triggering a
-        // deploy. The move itself still deploys, because wrangler.jsonc is in
-        // the filter, so the divergence begins one commit later.
+        // Two independent strings: wrangler.jsonc's `main` decides what
+        // deploys, deploy-worker.yml's path filter decides when. A coordinated
+        // move keeps CI green while every subsequent Worker edit stops
+        // triggering a deploy — the divergence begins one commit later.
         const main = (JSON.parse(
             wranglerSrc.replace(/^\s*\/\/.*$/gm, ''),
         ) as { main: string }).main;
@@ -140,15 +126,11 @@ describe('the image-proxy Worker island', () => {
     });
 
     it('imports nothing from outside its own directory', () => {
-        // Not a style preference: this is the property the whole `src/worker/`
-        // placement argument rests on, recorded in the module header.
-        //
-        // Matches `export … from`, dynamic `import(…)` and a bare side-effect
-        // `import '…'` as well as a static import — each creates the same
-        // edge. Scoped to specifiers that *leave* src/worker/ rather than
-        // banning imports outright, because a sibling breaks neither property
-        // that matters: wrangler bundles from `main`, so it cannot reach the
-        // client, and editing it still trips deploy-worker.yml's path filter.
+        // The property the whole src/worker/ placement rests on. Matches every
+        // edge form (static/dynamic/side-effect import, re-export), scoped to
+        // specifiers that *leave* src/worker/ — a sibling breaks neither
+        // property (wrangler bundles from main; editing it still trips the
+        // path filter).
         const escaping = WORKER_SOURCES.flatMap(([path, source]) =>
             specifiersIn(source)
                 .filter((s) => !s.startsWith('./') || s.includes('../'))
@@ -159,16 +141,11 @@ describe('the image-proxy Worker island', () => {
     });
 
     it('reaches for no browser-only global', () => {
-        // The other hazard the module header names, and the more dangerous
-        // one: `document` type-checks here (the Worker is compiled against the
-        // app's DOM lib), lints, and passes `wrangler deploy --dry-run`, then
-        // throws on every request in workerd with every check green.
-        //
-        // Matches the property-access form rather than the bare identifier, so
-        // that the module header can name these globals in prose without
-        // tripping its own guard. `const d = document;` would slip through —
-        // nobody writes that, and the alternative is stripping comments, which
-        // would silently eat `https://` and turn this into a false negative.
+        // The more dangerous hazard: `document` type-checks here (compiled
+        // against the app's DOM lib) and passes --dry-run, then throws in
+        // workerd. Matches the property-access form, not the bare identifier,
+        // so the module header can name these globals in prose; stripping
+        // comments instead would eat `https://` and false-negative.
         const hits = WORKER_SOURCES.flatMap(([path, source]) =>
             (
                 source.match(
@@ -181,10 +158,9 @@ describe('the image-proxy Worker island', () => {
     });
 
     it('is imported by no shipped module', () => {
-        // Matches the same edge forms as the outbound guard — dynamic
-        // `import()` is how this repo code-splits (`traced-tab-loader.ts`), so
-        // a `from`-only pattern would miss the most likely offender — and any
-        // file under `src/worker/`, not just this one.
+        // Matches the same edge forms as the outbound guard — dynamic import()
+        // is how this repo code-splits, so a from-only pattern would miss the
+        // likeliest offender.
         const offenders = Object.entries(SOURCES)
             .filter(
                 ([path]) =>
@@ -233,9 +209,8 @@ describe('resolveUpstream', () => {
     });
 
     it('drops parameters outside the allowlist', () => {
-        // The point of the allowlist: `collections` and `topics` would let a
-        // caller reshape the search under our key, and `username` would let
-        // them mine one photographer's catalogue through our quota.
+        // The allowlist's point: collections/topics would reshape the search
+        // under our key, username would mine one photographer via our quota.
         const url = upstreamUrl(
             resolveUpstream(
                 new URL(
@@ -305,12 +280,9 @@ describe('resolveUpstream', () => {
         });
     });
 
-    // These all *look* like api.unsplash.com to a careless check. The first
-    // two are the ones that matter most: they are the shapes a suffix match
-    // (`hostname.endsWith('unsplash.com')`) would wave through, which is the
-    // most plausible way this guard gets "generalized" into an open relay.
-    // CLAUDE.md opens with the precedent — a lint autofix silently deleted a
-    // security coercion in `share-link.ts`, and only a test caught it.
+    // All look like api.unsplash.com to a careless check. The first two matter
+    // most: a suffix match (`endsWith('unsplash.com')`) would wave them
+    // through, the likeliest way this guard becomes an open relay.
     it.each([
         ['hostname ending in unsplash.com', 'https://evil-unsplash.com/photos/x/download'],
         ['different unsplash.com subdomain', 'https://cdn.unsplash.com/photos/x/download'],
@@ -403,10 +375,9 @@ describe('handleRequest', () => {
     });
 
     it('pins the Unsplash API version', async () => {
-        // The client can no longer send this — an extra header would make its
-        // simple GET preflighted — so the Worker is the only place it can go,
-        // and without it a v2 response shape would fail `isUnsplashPhoto` and
-        // silently degrade every game to the bundled image.
+        // The client can't send this (an extra header would make its GET
+        // preflighted), so the Worker is the only place for it — without it a
+        // v2 response shape fails isUnsplashPhoto and degrades to bundled images.
         const fetchFn = stubFetch();
 
         await handleRequest(get('/random'), ENV, fetchFn);
@@ -419,13 +390,10 @@ describe('handleRequest', () => {
     });
 
     it('bounds how long it will wait on Unsplash', async () => {
-        // The client cannot cancel this request — the loading overlay only
-        // reads its abort flag after the await (#536) — so this signal is the
-        // only thing standing between a stalled upstream and a browser-length
-        // wait. That makes the duration the point, not just the presence: a
-        // controller signal that never fires is also an AbortSignal. The
-        // literal is spelled out rather than imported, so that raising
-        // UPSTREAM_TIMEOUT_MS has to be a deliberate edit here too.
+        // The client can't cancel this (#536), so this signal is all that
+        // stands between a stalled upstream and a browser-length wait — the
+        // duration is the point, not just presence. The literal is spelled out
+        // so raising UPSTREAM_TIMEOUT_MS is a deliberate edit here too.
         const timeout = vi.spyOn(AbortSignal, 'timeout');
         const fetchFn = stubFetch();
 
@@ -438,9 +406,8 @@ describe('handleRequest', () => {
     });
 
     it('passes an upstream rate-limit status through unchanged', async () => {
-        // The property #533 depends on: a 403 must not be flattened into a
-        // 200-with-empty-body or a 500, or the client cannot tell a rate
-        // limit from any other failure.
+        // #533 depends on this: a 403 must not be flattened to 200/500, or the
+        // client can't tell a rate limit from any other failure.
         const fetchFn = stubFetch(
             new Response('{"errors":["Rate Limit Exceeded"]}', { status: 403 }),
         );
@@ -496,10 +463,9 @@ describe('handleRequest', () => {
         'http://10.0.0.7:5173',
         'http://172.16.0.3:5173',
     ])('allows any port on the developer machine (%s)', async (origin) => {
-        // `vite` and `vite preview` both fall back to the next free port, so
-        // pinning literal ones broke the picker for anyone running two dev
-        // servers — routine here, given sibling worktrees. The private ranges
-        // are `npm run dev -- --host` opened on a phone, which worked on main
+        // `vite`/`vite preview` fall back to the next free port, so pinning
+        // literal ones broke the picker with sibling worktrees running. The
+        // private ranges are `dev --host` on a phone, which worked on main
         // because api.unsplash.com answers `Access-Control-Allow-Origin: *`.
         const response = await handleRequest(
             get('/random', origin),
@@ -543,12 +509,10 @@ describe('handleRequest', () => {
     });
 
     it('states its own content type rather than reflecting upstream', async () => {
-        // Both routes return JSON. Reflecting upstream's value is the one
-        // place an upstream-controlled string reaches the browser from our own
-        // origin — enough to re-serve an Unsplash HTML error page as
-        // renderable HTML on a workers.dev subdomain, which `nosniff` does not
-        // prevent (it stops sniffing away from a declared type, not a wrong
-        // declared type).
+        // Reflecting upstream's content-type is the one place an
+        // upstream-controlled string reaches the browser from our origin —
+        // enough to re-serve an Unsplash HTML error page as renderable HTML on
+        // a workers.dev subdomain; nosniff doesn't stop a *wrong* declared type.
         const fetchFn = stubFetch(
             new Response('<html>Bad Gateway</html>', {
                 status: 502,
@@ -562,9 +526,9 @@ describe('handleRequest', () => {
     });
 
     it('tells caches not to store a photo response', async () => {
-        // `/random` must return different photos each time; Unsplash's own
-        // directives do not survive the hop, so without this the response
-        // reaches the client with no cache policy at all.
+        // /random must return different photos each time; Unsplash's own
+        // directives don't survive the hop, so without this there's no cache
+        // policy at all.
         const response = await handleRequest(
             get('/random', ALLOWED),
             ENV,
@@ -618,9 +582,8 @@ describe('handleRequest', () => {
     });
 
     it('reports an unreachable upstream as a readable 502', async () => {
-        // Letting the exception escape would hand the browser Cloudflare's own
-        // HTML error page, which carries no CORS header and so surfaces as an
-        // opaque TypeError rather than a status.
+        // Letting the exception escape hands the browser Cloudflare's HTML
+        // error page — no CORS header, so an opaque TypeError, not a status.
         const fetchFn = vi
             .fn<typeof fetch>()
             .mockRejectedValue(new Error('connection reset'));
@@ -638,10 +601,9 @@ describe('handleRequest', () => {
     });
 
     it('does not report the upstream failure back to the caller', async () => {
-        // The cause is dropped deliberately. Asserting the body is exactly the
-        // fixed message pins that decision — a `String(error)` in the catch
-        // hands an anonymous caller whatever the runtime knows about our
-        // network, and is the mutation this test exists to redden.
+        // The cause is dropped deliberately: a `String(error)` in the catch
+        // would hand an anonymous caller what the runtime knows about our
+        // network. This pins the fixed message against that mutation.
         const fetchFn = vi
             .fn<typeof fetch>()
             .mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.1:443'));
@@ -654,9 +616,9 @@ describe('handleRequest', () => {
     });
 
     it('passes a null-body upstream status through without throwing', async () => {
-        // `new Response('', { status: 204 })` throws: an empty string is still
-        // a body. Flattening 204 into a 502 instead would break the
-        // pass-through-status property #533 is built on.
+        // `new Response('', { status: 204 })` throws — an empty string is still
+        // a body. Flattening 204 to 502 breaks the pass-through-status #533
+        // relies on.
         const fetchFn = stubFetch(new Response(null, { status: 204 }));
 
         const response = await handleRequest(get('/random'), ENV, fetchFn);
@@ -665,13 +627,10 @@ describe('handleRequest', () => {
     });
 
     // deploy.yml and deploy-preview.yml probe `GET {base}/download` with no
-    // `url`, reading 400 as "live, routed, and has a key set" and 500 as "the
-    // secret is unset". That discrimination holds only while the config guard
-    // runs BEFORE routing and validation — swap them, which is the more
-    // conventional order, and an unkeyed Worker answers 400, so both deploys
-    // report themselves healthy while every real request 500s. Nothing else in
-    // the repo states this contract, so it is pinned on the exact request CI
-    // issues rather than on a request that merely resembles it.
+    // url, reading 400 as "live and keyed" and 500 as "secret unset". That
+    // holds only while the config guard runs BEFORE routing — swap them and an
+    // unkeyed Worker answers 400, so both deploys look healthy while every real
+    // request 500s. Pinned on the exact request CI issues.
     it('answers the deploy probe with 500 when no key is set', async () => {
         const fetchFn = stubFetch();
 
@@ -699,10 +658,9 @@ describe('handleRequest', () => {
     });
 
     it('names missing configuration rather than forwarding an unauthorized request', async () => {
-        // `{}` is the real never-set shape — `wrangler secret put` is a step
-        // separate from the deploy, so the binding is absent rather than
-        // empty. Unsplash answers an unauthorized call with an opaque 401,
-        // which sends the operator hunting the wrong problem.
+        // `{}` is the real never-set shape (the secret is a separate deploy
+        // step, so the binding is absent, not empty). An unauthorized upstream
+        // call returns an opaque 401 that sends the operator the wrong way.
         const fetchFn = stubFetch();
 
         const response = await handleRequest(get('/random'), {}, fetchFn);

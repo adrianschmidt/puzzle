@@ -126,8 +126,8 @@ describe('createInfoModal', () => {
         const parsed = JSON.parse(
             container.querySelector<HTMLElement>('[data-testid="repro-params"]')!.textContent ?? '{}',
         );
-        // Presence of classicConfig is the generator discriminator, so a repro
-        // block without it describes the legacy straight-grid puzzle instead.
+        // classicConfig presence is the generator discriminator: a repro block
+        // without it describes the legacy straight-grid puzzle instead.
         expect(parsed.classicConfig).toEqual({ traceSetVersion: 1 });
     });
 
@@ -168,9 +168,9 @@ describe('createInfoModal', () => {
     });
 
     it('gives every toggle checkbox the shared form-checkbox accent class', () => {
-        // Pass state so the share section (guarded on options.state) renders;
-        // its "Include my current progress" checkbox is itself an
-        // .info-setting-toggle and must carry the shared accent class too.
+        // Pass state so the share section renders; its "Include my current
+        // progress" checkbox is an .info-setting-toggle and must carry the
+        // accent class too.
         createInfoModal({ container, state: makeState() });
 
         const checkboxes = container.querySelectorAll<HTMLInputElement>(
@@ -181,8 +181,8 @@ describe('createInfoModal', () => {
             expect(checkbox.classList.contains('form-checkbox')).toBe(true);
         }
 
-        // Explicitly assert the share checkbox is among those covered, so the
-        // loop above can't pass vacuously by the share section not rendering.
+        // Assert the share checkbox is covered, so the loop can't pass vacuously
+        // if the share section doesn't render.
         const shareCheckbox = container.querySelector<HTMLInputElement>(
             '[data-testid="share-include-progress"]',
         );

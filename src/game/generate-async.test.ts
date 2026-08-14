@@ -26,30 +26,27 @@ class StubWorker {
     terminate() { this.terminated = true; }
 
     /**
-     * Production registers with `addEventListener`; the tests below drive the
-     * captured handlers directly. Route registrations into those slots so both
-     * sides stay simple — the stub models one handler per type, which is all
-     * production installs.
+     * Production registers via `addEventListener`; tests drive the captured
+     * handlers directly. One handler per type, which is all production installs.
      */
     addEventListener(type: string, handler: (event: never) => void): void {
         if (type === 'message') this.messageHandler = handler as StubWorker['messageHandler'];
         else if (type === 'error') this.errorHandler = handler as StubWorker['errorHandler'];
         else if (type === 'messageerror') this.messageErrorHandler = handler as StubWorker['messageErrorHandler'];
-        // Throw rather than drop: silently accepting a type this stub does not
-        // model would leave a real handler unwired with every test still green.
+        // Throw rather than drop: silently accepting an unmodeled type would
+        // leave a real handler unwired with every test still green.
         else throw new Error(`StubWorker: unmodeled event type '${type}'`);
     }
 }
 
 /**
- * A `postMessage` that throws synchronously, the way a real Worker's does on
- * a request it cannot structured-clone (`DataCloneError`).
+ * A `postMessage` that throws synchronously, as a real Worker's does on a
+ * request it can't structured-clone (`DataCloneError`).
  *
- * Not reachable from production today — nothing under `src/` writes
- * `ComposableConfig.tabDebug` before `buildGenerationRequest` runs, and the
- * `Omit<…, 'tabDebug'>` on `GenerationRequest` documents that at the type
- * level — but the runtime guard is what keeps a future non-cloneable request
- * field from wedging the overlay instead of falling back.
+ * Not reachable today (nothing writes `ComposableConfig.tabDebug` before
+ * `buildGenerationRequest`, and `Omit<…, 'tabDebug'>` pins that in the type),
+ * but the runtime guard keeps a future non-cloneable field from wedging the
+ * overlay instead of falling back.
  */
 class ThrowingPostMessageWorker extends StubWorker {
     postMessage(): never {
@@ -58,10 +55,9 @@ class ThrowingPostMessageWorker extends StubWorker {
 }
 
 /**
- * A `new Worker(...)` that throws, e.g. a blocked or missing worker script.
- *
- * Has to be a class, not a factory: production reaches it through
- * `new Worker(...)`, so the throw must happen during construction.
+ * A `new Worker(...)` that throws (blocked/missing script). Must be a class,
+ * not a factory — production reaches it via `new Worker(...)`, so the throw
+ * must happen during construction.
  */
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 class ThrowingConstructorWorker {
@@ -113,9 +109,8 @@ describe('generatePiecesOffThread', () => {
 
     it('puts the worker-side error name in front of the fallback reason', async () => {
         // `generationFallbackReason` is the only place a worker-side failure
-        // reaches analytics, and `sanitizeErrorReason` reads `.message`
-        // only — so without the prefix the `name` the worker ships across
-        // `postMessage` would be dropped before it gets there.
+        // reaches analytics, and `sanitizeErrorReason` reads `.message` only —
+        // without the prefix the worker's `name` is dropped before it arrives.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
         StubWorker.instances[0].messageHandler!({
@@ -141,9 +136,8 @@ describe('generatePiecesOffThread', () => {
     });
 
     it('rethrows a worker generation error instead of re-running it here', async () => {
-        // Generation is a pure function of the request, so the main-thread
-        // rerun would freeze for a full generation and throw identically.
-        // Load-bearing: with a fallback the assertion below would resolve.
+        // Pure function of the request: a main-thread rerun would freeze and
+        // throw identically. With a fallback the assertion below would resolve.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
         StubWorker.instances[0].messageHandler!({
@@ -156,21 +150,19 @@ describe('generatePiecesOffThread', () => {
         });
         const rejection: unknown = await promise.then(() => null, (err: unknown) => err);
         expect(StubWorker.instances[0].terminated).toBe(true);
-        // The worker-side type is folded into the message rather than left
-        // on `name`: this is the one error that leaves the module, and the
-        // caller's `new-game-failed` / `shared-load-failed` reason comes
-        // from `sanitizeErrorReason`, which reads `.message` only. Asserted
-        // through the sanitizer so the pin is on what analytics receives.
+        // The worker-side type is folded into the message, not `name`: this is
+        // the one error that leaves the module, and its reason comes from
+        // `sanitizeErrorReason` (reads `.message` only). Asserted through the
+        // sanitizer to pin what analytics receives.
         expect(sanitizeErrorReason(rejection)).toBe('TypeError: x is not a function');
         expect(rejection).toMatchObject({ name: 'WorkerGenerationError' });
     });
 
     it('does not spend the rethrown reason budget on a bare Error name either', async () => {
-        // The same budget rule as the fallback branch above, pinned
-        // separately here: the two branches fold the name in at different
-        // call sites, so a regression confined to this one would ship a
-        // useless `'Error: boom'` on `new-game-failed` / `shared-load-failed`
-        // with the fallback branch's assertions still green.
+        // Same budget rule as the fallback branch, pinned separately: the two
+        // branches fold the name in at different call sites, so a regression
+        // here alone would ship a useless `'Error: boom'` with the other
+        // branch's assertions still green.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
         StubWorker.instances[0].messageHandler!({
@@ -189,9 +181,8 @@ describe('generatePiecesOffThread', () => {
         expect(outcome.mode).toBe('sync-fallback');
         expect(outcome.fallbackKind).toBe('worker-error');
         expect(StubWorker.instances[0].terminated).toBe(true);
-        // Uncanceled, the worker's error event is re-reported on the
-        // parent's global scope, so a failure handled gracefully here would
-        // also ship a spurious `unhandled-error` analytics event.
+        // Uncanceled, the worker's error event is re-reported on the parent's
+        // global scope, shipping a spurious `unhandled-error` analytics event.
         expect(preventDefault).toHaveBeenCalledOnce();
     });
 
@@ -216,16 +207,16 @@ describe('generatePiecesOffThread', () => {
     });
 
     it('falls back when the worker posts a response that cannot be read', async () => {
-        // Reading `.ok` off a malformed message throws inside `settle`.
-        // Without `settle` catching it the promise would never settle at
-        // all, leaving the loading overlay up until the page is reloaded.
+        // Reading `.ok` off a malformed message throws inside `settle`; without
+        // it catching, the promise never settles and the overlay stays up until
+        // reload.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const promise = generatePiecesOffThread(REQUEST);
         StubWorker.instances[0].messageHandler!({ data: null });
         const outcome = await promise;
         expect(outcome.mode).toBe('sync-fallback');
-        // Bucketed as an unusable response, not as `'spawn-failed'` — the
-        // catch-all default, which names a cause that did not happen.
+        // Bucketed as an unusable response, not the `'spawn-failed'` catch-all,
+        // which would name a cause that didn't happen.
         expect(outcome.fallbackKind).toBe('message-error');
         expect(StubWorker.instances[0].terminated).toBe(true);
     });
@@ -248,8 +239,8 @@ describe('generatePiecesOffThread', () => {
 
         expect(outcome.mode).toBe('sync-fallback');
         expect(outcome.result).toEqual(runGeneration(REQUEST));
-        // Load-bearing: without routing the synchronous throw through
-        // `settle`, the worker is constructed and never terminated.
+        // Without routing the synchronous throw through `settle`, the worker is
+        // constructed and never terminated.
         expect(StubWorker.instances[0].terminated).toBe(true);
         // The abort listener attached before `postMessage` must also be
         // cleaned up, or it (and the signal it closes over) leaks.
@@ -257,10 +248,9 @@ describe('generatePiecesOffThread', () => {
     });
 
     it('honors an abort that lands while a worker error is being handled', async () => {
-        // The worker path has already settled by then — `settle` detached
-        // the abort listener — so only the re-check before the sync rerun
-        // can honor this cancel. Without it the player gets a puzzle they
-        // asked not to have, generated during a freeze they asked to skip.
+        // The worker path has already settled (`settle` detached the abort
+        // listener), so only the re-check before the sync rerun can honor this
+        // cancel — else the player gets a puzzle they asked not to have.
         (globalThis as { Worker?: unknown }).Worker = StubWorker;
         const controller = new AbortController();
         const promise = generatePiecesOffThread(REQUEST, controller.signal);
@@ -270,11 +260,10 @@ describe('generatePiecesOffThread', () => {
     });
 
     it('honors a Cancel that lands during the synchronous fallback generation', async () => {
-        // A click made during a blocking generation cannot be dispatched
-        // until that generation returns, so the abort is queued as a task
-        // ahead of the fallback's own post-generation yield — the ordering
-        // this timer reproduces. Without that yield the click is dropped
-        // outright: the puzzle installs and nothing is even counted.
+        // A click during a blocking generation can't dispatch until it returns,
+        // so the abort queues as a task ahead of the fallback's post-generation
+        // yield — the ordering this timer reproduces. Without that yield the
+        // click is dropped: the puzzle installs and nothing is counted.
         delete (globalThis as { Worker?: unknown }).Worker;
         const controller = new AbortController();
         setTimeout(() => controller.abort(), 0);

@@ -1,25 +1,12 @@
-/**
- * Pan speed is proportional to how deep into the edge zone the pointer
- * is (0 at inner boundary, max at screen edge).
- *
- * Pure logic with a thin RAF layer. The core `computeAutoPanVelocity`
- * function is fully testable without DOM/timers.
- */
-
 import type { Point } from '../model/types.js';
 
 export const EDGE_ZONE_PX = 50;
 
-/** Maximum pan speed in screen pixels per second. */
 export const MAX_PAN_SPEED_PX_PER_SEC = 600;
 
 /**
- * Returns {x, y} velocity in screen pixels/second, where positive x = pan
- * right (viewport moves left in world space, so the pointer effectively
- * moves right on the table), etc. Returns {0,0} if the pointer is not in
- * any edge zone.
- *
- * @param pointer - Pointer position in client/screen coordinates
+ * Velocity in screen pixels/second; positive x = pan right (viewport moves
+ * left in world space). {0,0} if the pointer is in no edge zone.
  */
 export function computeAutoPanVelocity(
     pointer: Point,
@@ -32,7 +19,7 @@ export function computeAutoPanVelocity(
     let vy = 0;
 
     if (pointer.x < edgeZone) {
-        const depth = 1 - pointer.x / edgeZone; // 0 at inner boundary, 1 at screen edge
+        const depth = 1 - pointer.x / edgeZone;
         vx = -maxSpeed * depth;
     }
     else if (pointer.x > viewportWidth - edgeZone) {
@@ -53,9 +40,7 @@ export function computeAutoPanVelocity(
 }
 
 export interface AutoPanCallbacks {
-    /** Pan the viewport by screen-space delta. */
     panViewport(screenDelta: Point): void;
-    /** Move the dragged group by world-space delta. */
     moveGroup(groupId: number, worldDelta: Point): void;
     screenDeltaToWorld(delta: Point): Point;
     requestRender(): void;
@@ -76,10 +61,9 @@ export class AutoPanController {
     start(groupId: number): void {
         this.activeGroupId = groupId;
         this.lastTimestamp = null;
-        // Don't start the loop yet — wait for first pointer update
+        // Loop starts on the first pointer update, not here.
     }
 
-    /** Update the pointer position (call on every pointer move during drag). */
     updatePointer(pointer: Point): void {
         this.currentPointer = pointer;
 
@@ -89,7 +73,6 @@ export class AutoPanController {
         }
     }
 
-    /** Stop auto-panning (call when drag ends or is canceled). */
     stop(): void {
         this.activeGroupId = null;
         this.currentPointer = null;
@@ -105,7 +88,6 @@ export class AutoPanController {
         return this.activeGroupId !== null;
     }
 
-    /** Bound as arrow function for stable reference. */
     private tick = (timestamp: number): void => {
         this.animFrameId = null;
 
@@ -121,8 +103,7 @@ export class AutoPanController {
         );
 
         if (velocity.x === 0 && velocity.y === 0) {
-            // Pointer is outside every edge zone — stop the loop.
-            // updatePointer() will restart it if the pointer re-enters one.
+            // Outside every edge zone — stop the loop; updatePointer() restarts it.
             this.lastTimestamp = null;
             return;
         }
@@ -133,15 +114,14 @@ export class AutoPanController {
 
         if (dt > 0) {
             const screenDelta: Point = {
-                x: -velocity.x * dt, // negate: positive velocity = pointer wants to go right
-                y: -velocity.y * dt, // = viewport pans left (negative screen delta)
+                x: -velocity.x * dt, // negate: +velocity = pointer wants right = viewport pans left
+                y: -velocity.y * dt,
             };
 
             this.callbacks.panViewport(screenDelta);
 
-            // Also move the group in world space so the piece stays
-            // under the pointer. The viewport moved, but the pointer
-            // didn't, so without this the piece would appear to drift.
+            // Move the group in world space too, so the piece stays under the
+            // pointer as the viewport pans (otherwise it drifts).
             const worldDelta = this.callbacks.screenDeltaToWorld({
                 x: -screenDelta.x,
                 y: -screenDelta.y,

@@ -28,21 +28,15 @@ import {
     type RotateHandleOptions,
 } from '../ui/index.js';
 
-// `createRotateButtons`/`createRotateHandle` only put anything in the DOM
-// once `rotationFocus` already has a focused group (see
-// rotate-buttons.test.ts / rotate-handle.test.ts: "starts hidden — no
-// buttons exist before show() and focus is set"). Asserting DOM presence
-// here would either be vacuously null or require duplicating that focus
-// setup, so instead the two factories are replaced with spy handles:
-// `syncVisibility` is asserted against `show`/`hide` calls, and the
-// callbacks the real controls would invoke are driven through the options
-// each factory was handed — the same seam the real code drives.
+// `createRotateButtons`/`createRotateHandle` only touch the DOM once
+// `rotationFocus` has a focused group, so DOM assertions here would be vacuous
+// or duplicate that setup. Replace the two factories with spy handles instead:
+// `syncVisibility` is asserted against `show`/`hide`, and the callbacks are
+// driven through the options each factory was handed.
 //
-// Passthrough rather than a two-export factory: `rotation-ui.ts` also reaches
-// this barrel transitively, through `snap-tolerances.ts`'s
-// `getActiveTolerance`/`getActiveRotationTolerance`, which every commit path
-// below calls. Replacing the module wholesale would fail those with "No
-// export is defined on the mock" instead of asserting anything.
+// Passthrough, not a two-export factory: `rotation-ui.ts` also reaches this
+// barrel transitively via `snap-tolerances.ts`, which every commit path calls;
+// replacing the module wholesale would fail those with "No export is defined".
 vi.mock('../ui/index.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../ui/index.js')>();
     return {
@@ -87,10 +81,9 @@ function handleOptions(): RotateHandleOptions {
 }
 
 /**
- * A state with one real, well-formed group (rather than the default empty
- * `groups: []`) so bounds/pivot math has something to actually measure.
- * Group id 9 — deliberately neither 0 nor an array index — so an assertion
- * on a specific id can't pass by coincidence.
+ * One real group so bounds/pivot math has something to measure. Group id 9
+ * (neither 0 nor an array index) so an assertion on a specific id can't pass
+ * by coincidence.
  */
 function makeStateWithGroup(): GameState {
     const pieces = [makeRectPiece({ id: 0, width: 100, height: 100 })];
@@ -108,17 +101,11 @@ function groupBoundsCenterWorld(state: GameState, groupId: number): { x: number;
 }
 
 /**
- * A 100×100 piece whose top edge bulges 30 units *above* the corner line,
- * via bezier control points at y = −30.
- *
- * The bulge is what separates the two candidate rotation pivots: the
- * tab-inclusive local bounds run y ∈ [−30, 100], so their center sits 15
- * units above the corner-only image center that `getGroupImageCenter`
- * would return. A pivot computed the other way lands somewhere else, which
- * is what the pivot test below relies on.
- *
- * `makePiece` re-derives `bounds` from the edges it is handed, so the tab
- * is reflected there too rather than leaving `makeRectPiece`'s square.
+ * A 100×100 piece whose top edge bulges 30 units above the corner line. The
+ * bulge separates the two candidate pivots: tab-inclusive local bounds run
+ * y ∈ [−30, 100], so their center sits 15 units above the corner-only image
+ * center `getGroupImageCenter` returns. `makePiece` re-derives `bounds` from
+ * the edges, so the tab is reflected there too.
  */
 function makeTabbedPiece(id: number): Piece {
     const [top, ...sides] = makeRectPiece({ id, width: 100, height: 100 }).edges;
@@ -132,20 +119,17 @@ describe('createRotationUi', () => {
     let selectionManager: SelectionManager;
     let rotationFocus: RotationFocus;
     let state: GameState | undefined;
-    // `Mock<...>` (not bare `ReturnType<typeof vi.fn>`, which widens to
-    // vi.fn's full generic constraint and stops being assignable to the
-    // dep's signature).
+    // `Mock<...>`, not `ReturnType<typeof vi.fn>` — the latter widens and
+    // stops being assignable to the dep's signature.
     let save: Mock<(state: GameState) => void>;
     let applyMerge: Mock<
         (state: GameState, result: MergeResult, droppedGroupIds: readonly number[]) => void
     >;
     // Prototype spies, not a module mock: `rotation-ui` constructs the
     // controller itself, so this is the only seam that can observe whether a
-    // handle callback entered the snap gesture at all. Both keep the real
-    // implementation, so the gesture still behaves normally. Installed after
-    // `clearAllMocks` and torn down in `afterEach` — `vite.config.ts` sets no
-    // `restoreMocks`, so a spy left on a shared prototype would follow every
-    // later test file in the same worker.
+    // handle callback entered the snap gesture. Both keep the real
+    // implementation. Torn down in `afterEach` — `vite.config.ts` sets no
+    // `restoreMocks`, so a spy left on a shared prototype follows every later test.
     let snapStart: MockInstance<SnapProximityPositionController['start']>;
     let snapStop: MockInstance<SnapProximityPositionController['stop']>;
 
@@ -216,8 +200,8 @@ describe('createRotationUi', () => {
         });
 
         it('tolerates being asked to sync with no game, hiding both controls', () => {
-            // Boot can leave no game behind; syncing must not throw, and must
-            // hide rather than leave whatever was showing before.
+            // Boot can leave no game behind; syncing must not throw and must
+            // hide, not leave the prior control showing.
             const ui = make();
             expect(() => ui.syncVisibility(undefined)).not.toThrow();
 
@@ -226,11 +210,9 @@ describe('createRotationUi', () => {
         });
 
         it('survives being called detached from the returned object', () => {
-            // The composition root passes `rotationUi.syncVisibility` as a bare
-            // value into the session's `onInstalled` — no wrapper, no `.bind`.
-            // If the implementation ever grew a `this` dependency (e.g. method
-            // shorthand on the returned object literal), destructuring it out
-            // and calling it standalone would break that at the call site.
+            // The composition root passes `syncVisibility` as a bare value (no
+            // `.bind`). A `this` dependency (e.g. method shorthand) would break
+            // when destructured out and called standalone.
             const ui = make();
             const { syncVisibility } = ui;
 
@@ -241,9 +223,9 @@ describe('createRotationUi', () => {
         });
     });
 
-    // Asserted through the options the two controls were handed rather than
-    // off the returned object: that is the only consumer in production, and
-    // the projector is deliberately not part of `RotationUi`'s surface.
+    // Asserted through the options the controls were handed, not the returned
+    // object: that's the only production consumer, and the projector isn't part
+    // of `RotationUi`'s surface.
     describe('getFocusedGroupScreenBounds', () => {
         it('is handed to both controls', () => {
             make();
@@ -269,10 +251,9 @@ describe('createRotationUi', () => {
             const bounds = buttonsOptions().getFocusedGroupScreenBounds(9);
 
             expect(bounds).not.toBeNull();
-            // Identity viewport transform (scale 1, offset 0,0): world bounds
-            // pass through as screen bounds unchanged, so this pins the exact
-            // numbers rather than just "some finite box" — a group centered at
-            // (100, 100) with a 100x100 piece spans (50,50)-(150,150).
+            // Identity viewport transform: world bounds pass through unchanged,
+            // so the exact numbers are pinned. Group centered at (100,100) with
+            // a 100x100 piece spans (50,50)-(150,150).
             expect(bounds).toEqual({ left: 50, top: 50, right: 150, bottom: 150 });
         });
     });
@@ -287,8 +268,8 @@ describe('createRotationUi', () => {
 
             expect(state!.groupsById.get(9)!.rotation).toBe(90);
             expect(renderer.renderState).toHaveBeenCalledWith(state);
-            // Re-render recreates group elements, so the selection visual has
-            // to be re-applied after it or the highlight silently drops.
+            // Re-render recreates group elements, so the selection visual must
+            // be re-applied or the highlight silently drops.
             expect(renderer.setGroupSelected).toHaveBeenCalledWith(9, true);
             expect(save).toHaveBeenCalledWith(state);
         });
@@ -297,8 +278,7 @@ describe('createRotationUi', () => {
             make();
             buttonsOptions().onRotate(9, 'ccw');
 
-            // `rotateGroup` normalizes into [0, 360), so a −90° delta lands
-            // on 270 rather than staying negative.
+            // `rotateGroup` normalizes into [0, 360), so a −90° delta lands on 270.
             expect(state!.groupsById.get(9)!.rotation).toBe(270);
         });
 
@@ -322,8 +302,8 @@ describe('createRotationUi', () => {
 
     describe('free rotation', () => {
         it('rotates by the drag delta and re-renders without saving', () => {
-            // The drag fires this on every frame; saving per tick would
-            // restart the debounced write continuously. The commit saves.
+            // The drag fires this per frame; saving per tick would restart the
+            // debounced write continuously. The commit saves.
             make();
             selectionManager.select(9);
             renderer.setGroupSelected.mockClear();
@@ -337,10 +317,9 @@ describe('createRotationUi', () => {
         });
 
         it('does not open a snap-proximity gesture when no mate is in range', () => {
-            // Unanchored, the assist keeps every candidate live, and
-            // bbox-center rotation sweeps their piece-anchored distances —
-            // a far mate could latch mid-drag and translate a gesture the
-            // player meant as a pure rotation.
+            // Unanchored, the assist keeps every candidate live and bbox-center
+            // rotation sweeps their piece-anchored distances — a far mate could
+            // latch mid-drag and translate a pure rotation.
             make();
 
             handleOptions().onRotateStart(9);
@@ -349,9 +328,9 @@ describe('createRotationUi', () => {
         });
 
         it('anchors the snap-proximity gesture to the manual pivot piece', () => {
-            // The assist must target the same mate the rotation is anchored
-            // on — an unanchored assist could chase a different mate and
-            // slide the pivot piece out of merge range mid-rotate.
+            // The assist must target the same mate the rotation is anchored on;
+            // an unanchored assist could chase a different mate and slide the
+            // pivot piece out of merge range mid-rotate.
             state = makeTwoMatedEndsRow(1).state;
             make();
 
@@ -361,11 +340,9 @@ describe('createRotationUi', () => {
         });
 
         it('declines a rotate start with no game, without opening a gesture', () => {
-            // `SnapProximityPositionController.start` already tolerates an
-            // undefined state on its own, so "returned null" alone would pass
-            // just as well with `rotation-ui`'s own state guard deleted.
-            // Asserting the controller is never entered is what actually pins
-            // that guard.
+            // `SnapProximityPositionController.start` tolerates an undefined
+            // state, so "returned null" alone would pass with the guard deleted.
+            // Asserting the controller is never entered pins the guard.
             make();
             state = undefined;
 
@@ -383,8 +360,8 @@ describe('createRotationUi', () => {
         });
 
         it('closes the snap-proximity gesture when the drag ends', () => {
-            // Unconditional — the gesture has to be released on a canceled
-            // drag too, or the stale context follows the next one.
+            // Unconditional: the gesture must release on a canceled drag too,
+            // or the stale context follows the next one.
             make();
 
             handleOptions().onRotateEnd(9);
@@ -403,16 +380,12 @@ describe('createRotationUi', () => {
 
     describe('drag pivot (onRotateStart return value)', () => {
         it('pivots about the tab-inclusive bounds center, in world space', () => {
-            // The pivot the drag handle rotates the group around. Two things
-            // are pinned by the exact number: that the bounds include tab
-            // path geometry (a corner-only center — what the completion spin
-            // uses via `getGroupImageCenter` — would sit 15 units lower), and
-            // that the local center is projected through the group's own
-            // rotation rather than merely offset by its position.
-            //
-            // Tab-inclusive local bounds: x ∈ [0, 100], y ∈ [−30, 100], so
-            // the center is (50, 35). Rotated 90° CW that is (−35, 50), which
-            // lands at (200 − 35, 300 + 50) from the group's position.
+            // The pivot the drag rotates around, pinned by exact number: the
+            // bounds include tab path geometry (a corner-only center would sit
+            // 15 units lower), and the local center is projected through the
+            // group's rotation, not merely offset by position. Tab-inclusive
+            // bounds x ∈ [0,100], y ∈ [−30,100] → center (50,35); rotated 90° CW
+            // → (−35,50), landing at (200−35, 300+50).
             const pieces = [makeTabbedPiece(0)];
             const groups: PieceGroup[] = [
                 { id: 9, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 200, y: 300 }, rotation: 90 },
@@ -426,10 +399,9 @@ describe('createRotationUi', () => {
 
     describe('manual rotation pivot latch', () => {
         // makeTwoMatedEndsRow(1): group 11 is a five-piece row at 8° whose
-        // piece 1 (world center (150, 50)) sits 7.2 px from its mate —
-        // within the active tolerance — and piece 5 sits 10.8 px from its
-        // own. The row's bbox center is 200 px from piece 1's center, so a
-        // bbox-center pivot sweeps piece 1 far and every assertion below
+        // piece 1 (world center (150,50)) sits 7.2 px from its mate (within
+        // tolerance) and piece 5 sits 10.8 px. The bbox center is 200 px from
+        // piece 1, so a bbox-center pivot sweeps it far — every assertion below
         // discriminates the two pivots.
         it('onRotateStart returns the nearest mated piece center when in range', () => {
             state = makeTwoMatedEndsRow(1).state;
@@ -444,7 +416,7 @@ describe('createRotationUi', () => {
             state = makeTwoMatedEndsRow(1).state;
             make();
 
-            handleOptions().onRotateStart(11); // pointerdown latches
+            handleOptions().onRotateStart(11);
             handleOptions().onRotate(11, 30);
 
             const center = getWorldPosition({ x: 50, y: 50 }, 1, getGroup(state!, 11));
@@ -453,9 +425,9 @@ describe('createRotationUi', () => {
         });
 
         it('never applies the latch to a group it was not computed for', () => {
-            // The real handle only rotates the group it started on; this
-            // guard is what keeps a future lifecycle change from rotating
-            // some other group about a pivot computed in the wrong frame.
+            // The real handle only rotates the group it started on; this guard
+            // stops a future lifecycle change from rotating another group about
+            // a wrong-frame pivot.
             state = makeTwoMatedEndsRow(5).state;
             make();
 
@@ -476,9 +448,9 @@ describe('createRotationUi', () => {
             handleOptions().onRotateStart(11);
             handleOptions().onRotateEnd(11);
 
-            // Group-center pivot: the bounds center holds still under the
-            // rotation. Any still-latched piece pivot would sweep it — this
-            // names the expected pivot rather than just excluding piece 1's.
+            // Group-center pivot: the bounds center holds still. A still-latched
+            // piece pivot would sweep it — names the expected pivot, not just
+            // excludes piece 1's.
             const before = groupBoundsCenterWorld(state!, 11);
             handleOptions().onRotate(11, 30);
             const after = groupBoundsCenterWorld(state!, 11);
@@ -503,10 +475,9 @@ describe('createRotationUi', () => {
 
     describe('commit', () => {
         it('hands a merge off to applyMerge and saves', () => {
-            // Two mated pieces placed at exactly their aligned offset, so
-            // `processDrop` merges for the real reason (real tolerances, via
-            // the un-mocked `getActiveTolerance` this file's passthrough
-            // keeps reachable) rather than a stubbed one.
+            // Two mated pieces at exactly their aligned offset, so `processDrop`
+            // merges for the real reason (real tolerances via the un-mocked
+            // `getActiveTolerance` the passthrough keeps reachable).
             const { piece0, piece1 } = makeMatedPiecePair();
             state = makeGameState({
                 pieces: [piece0, piece1],

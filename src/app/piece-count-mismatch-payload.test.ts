@@ -32,11 +32,8 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('carries a dev-console source distinctly from a real-player one', () => {
-        // #512: `'dev'` (a dev-console start, e.g. `__newComposableGame`)
-        // must stay distinguishable from `'fresh'` (a real player) and from
-        // `'repro'` (a `__reproPuzzle` replay) — all three are excluded from
-        // the incident count differently: 'fresh' is the count itself,
-        // 'repro'/'dev' are both subtracted from it.
+        // #512: 'dev' (dev-console start) must stay distinct from 'fresh' (real
+        // player) and 'repro' (__reproPuzzle replay) — all three count differently.
         const data = buildPieceCountMismatchData(stateFixture(), MISMATCH, 'dev');
         expect(data.source).toBe('dev');
     });
@@ -63,11 +60,10 @@ describe('buildPieceCountMismatchData', () => {
             '{"baseCutGenerator":"sine","tabGenerator":"classic"}',
         ],
     ])('reports %s\'s own config block, never a foreign one', (cutStyle, config, expected) => {
-        // The fixture always sets `classicConfig`, which stands in here for
-        // the stray foreign block a crafted link or hand-edited save can
-        // carry: `buildReproParams` copies every block on the state, so a
-        // builder that took "whichever is present" would report it for all
-        // five styles. Only the classic row should resolve to it.
+        // The fixture always sets `classicConfig`, standing in for the stray
+        // foreign block a crafted link/save can carry: `buildReproParams`
+        // copies every block, so a "whichever is present" builder would report
+        // it for all five styles. Only the classic row should resolve to it.
         const data = buildPieceCountMismatchData(
             stateFixture({ cutStyle, ...config } as Partial<GameState>),
             MISMATCH, 'fresh');
@@ -80,22 +76,16 @@ describe('buildPieceCountMismatchData', () => {
         'reads %s\'s config from the block createNewGame writes it to',
         (cutStyle, configKey) => {
             // `STYLE_CONFIG_READERS` is the READ side of the style ->
-            // config-block mapping; `CutStyleStrategy.configKey` (consumed by
-            // `init.ts`) is the WRITE side, and nothing else forces the two to
-            // agree. A sixth style whose entries disagreed would compile and
-            // pass the `it.each` above — which sets the block the reader reads
-            // — while shipping rows with `styleConfig` silently absent,
-            // indistinguishable from legacy Classic, whose absence is
-            // load-bearing. Deriving the read from `configKey` instead is not
-            // the fix: it is optional on the strategy, so the reader table
-            // would lose its forced-entry property.
+            // config-block mapping; `CutStyleStrategy.configKey` is the WRITE
+            // side, and nothing forces the two to agree. A sixth style whose
+            // entries disagreed would compile and pass, shipping `styleConfig`
+            // silently absent — indistinguishable from legacy Classic, whose
+            // absence is load-bearing.
             if (configKey === undefined) {
-                // The documented allowance on `CutStyleStrategy.configKey`:
-                // "a future style that takes no config at all". There is no
-                // write side to cross-check, so pin the property that still
-                // has to hold — the fixture's `classicConfig` is foreign to
-                // such a style, and its reader must report nothing rather
-                // than pick that block up.
+                // The documented "future style with no config" allowance: no
+                // write side to cross-check, so pin what still holds — the
+                // fixture's `classicConfig` is foreign to such a style, and its
+                // reader must report nothing rather than pick that block up.
                 const data = buildPieceCountMismatchData(
                     stateFixture({ cutStyle } as Partial<GameState>),
                     MISMATCH, 'fresh');
@@ -119,12 +109,10 @@ describe('buildPieceCountMismatchData', () => {
     it.each(['constructor', 'toString', '__proto__', 'valueOf'])(
         'reports no styleConfig for the inherited key %s',
         (cutStyle) => {
-            // Two layers hold this: `isCutStyle` narrows with an own-key
-            // `hasOwnProperty` check, and `STYLE_CONFIG_READERS` is
-            // prototype-less. This case exercises LAYER 1 only — the predicate
-            // rejects the key before the table is ever indexed — so it passes
-            // with the prototype strip deleted. The test below covers layer 2
-            // on its own; keep both.
+            // Two layers: `isCutStyle`'s own-key check (layer 1) and the
+            // prototype-less table (layer 2). This exercises layer 1 only —
+            // passes with the prototype strip deleted; the next test covers
+            // layer 2. Keep both.
             const data = buildPieceCountMismatchData(
                 stateFixture({ cutStyle } as Partial<GameState>), MISMATCH, 'fresh');
 
@@ -135,30 +123,20 @@ describe('buildPieceCountMismatchData', () => {
     );
 
     it('resolves no reader for an inherited key even if isCutStyle admits one', async () => {
-        // Layer 2 alone: `Object.setPrototypeOf(STYLE_CONFIG_READERS, null)`.
-        // Its comment says the point is that the table is safe on its own
-        // terms, without depending on a predicate in another module — so the
-        // test has to remove that predicate. Mocking `isCutStyle` to accept
-        // anything is exactly the "simplification to `value in CUT_STYLES`"
-        // the comment warns about, made concrete.
-        //
-        // Without the prototype strip, `STYLE_CONFIG_READERS['constructor']`
-        // resolves to `Object`, `Object(repro)` returns `repro` itself, and
-        // `styleConfig` becomes `JSON.stringify(repro)` — shipping `imageUrl`,
-        // the one field this event promises never to carry. The fixture's
-        // Unsplash URL is what makes the last assertion discriminating.
-        //
-        // `vi.doMock` (not `vi.mock`) plus a dynamic import, so the stub is
-        // scoped to this test instead of being hoisted over the whole file:
-        // every other case here needs the real predicate.
+        // Layer 2 alone (the prototype-less table): remove the `isCutStyle`
+        // predicate so only the strip stands between an inherited key and
+        // egress. Without the strip, `STYLE_CONFIG_READERS['constructor']` is
+        // `Object`, `Object(repro)` returns `repro`, and `styleConfig` becomes
+        // `JSON.stringify(repro)` — shipping `imageUrl`; the fixture's Unsplash
+        // URL makes the last assertion discriminating. `vi.doMock` + dynamic
+        // import scopes the stub to this test; every other case needs the real
+        // predicate.
         vi.resetModules();
-        // A spy, not a bare arrow, so the assertion below can prove the stub
-        // was the predicate the builder actually called. Without that proof
-        // this test degrades silently into a duplicate of the layer-1 `it.each`
-        // above the moment `isCutStyle` moves out of the `../sharing/index.js`
-        // barrel: `vi.doMock` would stop applying, the real predicate would
-        // reject `'constructor'` before the table is indexed, and all three
-        // expectations would still pass — with layer 2 no longer exercised.
+        // A spy, not a bare arrow, so the assertion can prove the stub was the
+        // predicate the builder called — otherwise, if `isCutStyle` ever leaves
+        // the `../sharing/index.js` barrel, `vi.doMock` stops applying, the real
+        // predicate rejects `'constructor'`, and the test silently degrades to a
+        // layer-1 duplicate that still passes.
         const isCutStyleStub = vi.fn(() => true);
         vi.doMock('../sharing/index.js', async (importOriginal) => {
             const actual = await importOriginal<typeof import('../sharing/index.js')>();
@@ -180,31 +158,24 @@ describe('buildPieceCountMismatchData', () => {
             expect(data.styleConfigOmitted).toBeUndefined();
             expect(JSON.stringify(data)).not.toContain('unsplash');
         } finally {
-            // Explicit teardown: `vite.config.ts` sets no `restoreMocks`, and a
-            // leaked module mock would silently disable `isCutStyle` for every
-            // test declared after this one.
+            // `vite.config.ts` sets no `restoreMocks`; a leaked module mock
+            // would disable `isCutStyle` for every later test.
             vi.doUnmock('../sharing/index.js');
             vi.resetModules();
         }
     });
 
-    // `isValidPayload` only checks `typeof s === 'number'`, so a crafted share
-    // link can carry a fraction, a negative, or a value past Umami's
-    // DECIMAL(19,4) range — rounded or row-losing respectively, in both cases
-    // leaving a seed that reads as replayable and isn't.
-    //
-    // Each expectation is spelled out rather than asserted as a range: a plain
-    // "is a uint32" check passes for `% 4294967296` and `Math.trunc` too, and
-    // both of those differ from `>>> 0` on the negative row (`-1` would ship
-    // as `-1` and lose the row to the unsigned column).
+    // `isValidPayload` only checks `typeof s === 'number'`, so a crafted link
+    // can carry a fraction, negative, or out-of-range value. Each expectation
+    // is spelled out rather than asserted as a range: a "is a uint32" check
+    // passes for `% 4294967296` and `Math.trunc` too, which differ from `>>> 0`
+    // on the negative row.
     it.each([
         ['a fraction', 1.5, 1],
         ['a negative value', -1, 4294967295],
         ['a value past the uint32 range', 4294967296 + 7, 7],
-        // Beyond DECIMAL(19,4). Worth pinning even though it normalizes to a
-        // useless 0: 1e30's ulp is 2^47, so the crafted value collapses onto a
-        // multiple of 2^32 — an assertion built on this value alone proves
-        // nothing, which is why the discriminating rows above exist.
+        // Beyond DECIMAL(19,4). 1e30's ulp is 2^47, so it collapses onto a
+        // multiple of 2^32 — proves nothing alone, hence the rows above.
         ['a value past DECIMAL(19,4)', 1e30, 0],
     ])('normalizes %s to a uint32', (_label, crafted, expected) => {
         const { seed } = buildPieceCountMismatchData(
@@ -213,11 +184,10 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('normalizes a crafted seed without changing which puzzle it replays', () => {
-        // The point of normalizing rather than dropping: the reported value
-        // drives the same PRNG stream the puzzle was generated from
-        // (`createSeededRandom` applies ToInt32, and ToInt32(ToUint32(x)) ===
+        // Normalizing rather than dropping: the reported value drives the same
+        // PRNG stream the puzzle was generated from (ToInt32(ToUint32(x)) ===
         // ToInt32(x)). `-1` so the two arguments genuinely differ — the
-        // assertion is vacuous on any value normalization leaves alone.
+        // assertion is vacuous on a value normalization leaves alone.
         const crafted = -1;
         const { seed } = buildPieceCountMismatchData(
             stateFixture({ seed: crafted }), MISMATCH, 'fresh');
@@ -227,9 +197,8 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('leaves a real uint32 seed exactly as generated', () => {
-        // `generateSeed` reaches the top of the uint32 range; normalizing
-        // must not turn those into negative or otherwise unfamiliar numbers,
-        // or the event would stop matching the info modal's repro block.
+        // `generateSeed` reaches the top of the uint32 range; normalizing must
+        // not turn those negative, or the event stops matching the modal's repro block.
         const data = buildPieceCountMismatchData(
             stateFixture({ seed: 4294967295 }), MISMATCH, 'fresh');
         expect(data.seed).toBe(4294967295);
@@ -250,12 +219,10 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('reads the classic config for a state with no cutStyle, matching the cutStyle fallback', () => {
-        // `cutStyle` falls back to 'classic' for the payload, so the config
-        // must be read under the same rule. Reporting `cutStyle: 'classic'`
-        // with no `styleConfig` would mean LEGACY classic to an operator — a
-        // different generator — so the row would replay the wrong puzzle
-        // while looking valid. Unreachable via createNewGame; pinned so the
-        // two readings cannot drift apart.
+        // `cutStyle` falls back to 'classic', so the config must be read under
+        // the same rule. `cutStyle: 'classic'` with no `styleConfig` means
+        // LEGACY classic (a different generator) — the row would replay the
+        // wrong puzzle while looking valid. Pinned so the two readings can't drift.
         const data = buildPieceCountMismatchData(
             stateFixture({ cutStyle: undefined, classicConfig: { traceSetVersion: 1 } }),
             MISMATCH, 'fresh');
@@ -264,8 +231,8 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('reports the user grid, not the generation grid', () => {
-        // A borderless puzzle generates an oversized grid, but the repro params
-        // must be what __reproPuzzle replays from, which is the user grid.
+        // Borderless generates an oversized grid, but repro params must be the
+        // user grid __reproPuzzle replays from.
         const data = buildPieceCountMismatchData(
             stateFixture({ gridSize: { cols: 16, rows: 12 } }),
             { expected: 252, actual: 249, baseCutId: 'sine' },
@@ -277,16 +244,11 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('stays inside Umami event-data limits for every production cut style', () => {
-        // Strings <=500 chars, <=50 properties. The loop below only checks
-        // finiteness on numbers — 4-decimal precision is pinned separately,
-        // for imageWidth/imageHeight only, by the rounding test below. The
-        // export shows 102 chars as the longest string shipping today;
-        // nothing currently holds that, so this does.
-        //
-        // Every non-classic case clears `classicConfig`, which the fixture
-        // sets: without that, the builder resolves the classic block for all
-        // of them and this loop measures the same string five times over
-        // instead of each style's own.
+        // Strings <=500 chars, <=50 properties. The loop only checks finiteness
+        // on numbers (4-decimal precision is pinned by the rounding test).
+        // Every non-classic case clears `classicConfig`, which the fixture sets:
+        // otherwise the builder resolves the classic block for all of them and
+        // the loop measures the same string five times instead of each style's.
         const styles: Array<Partial<GameState>> = [
             { cutStyle: 'classic', classicConfig: { traceSetVersion: 1 } },
             { cutStyle: 'classic', classicConfig: undefined },
@@ -321,9 +283,8 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('omits an oversized composable styleConfig and flags styleConfigOmitted instead', () => {
-        // A crafted share link can give composable's baseCutConfig/tabConfig
-        // (opaque Record<string, unknown>, unbounded by the decoder) enough
-        // bulk to cross Umami's 500-char string limit. Build one that does.
+        // A crafted link can bulk composable's baseCutConfig (unbounded by the
+        // decoder) past Umami's 500-char string limit. Build one that does.
         const oversizedBaseCutConfig: Record<string, number> = {};
         for (let i = 0; i < 60; i++) {
             oversizedBaseCutConfig[`param${i}`] = i;
@@ -352,13 +313,11 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('reports an unserializable styleConfig instead of throwing', () => {
-        // `JSON.stringify` is the one operation in the builder that can throw,
-        // and composable's baseCutConfig reaches it as an opaque
-        // Record<string, unknown> — a dev-console `__newComposableGame` config
-        // is a live object, so a circular reference is constructible. Both
-        // call sites fire this event AFTER installing the game, from inside
-        // the flow's own try/finally, so an escape here would show a false
-        // "Couldn't load shared puzzle" toast on a game that started fine.
+        // `JSON.stringify` is the one operation that can throw, and composable's
+        // baseCutConfig reaches it as a live object (dev-console
+        // `__newComposableGame`), so a circular reference is constructible. Both
+        // call sites fire AFTER installing the game, inside the flow's try, so
+        // an escape would show a false load-failure toast on a game that started fine.
         const circular: Record<string, unknown> = { ha: 0.15 };
         circular.self = circular;
         const state = stateFixture({
@@ -374,8 +333,8 @@ describe('buildPieceCountMismatchData', () => {
         const data = buildPieceCountMismatchData(state, MISMATCH, 'fresh');
 
         expect(data.styleConfig).toBeUndefined();
-        // Same bucket as an oversized config: the row loses its replayability
-        // but keeps every other repro field and the counts.
+        // Same bucket as an oversized config: loses replayability, keeps every
+        // other repro field and the counts.
         expect(data.styleConfigOmitted).toBe(true);
         expect(data.seed).toBe(124741785);
         expect(data.expected).toBe(192);
@@ -399,9 +358,9 @@ describe('buildPieceCountMismatchData', () => {
     });
 
     it('rounds fractional image dimensions to Umami number precision', () => {
-        // Inscribed rectangles produce fractional sizes. Umami keeps 4
-        // decimals; the share-link decoder floors to whole pixels, so
-        // rounding here loses nothing a replay would have kept.
+        // Inscribed rectangles produce fractional sizes; Umami keeps 4 decimals
+        // and the decoder floors to whole pixels, so rounding loses nothing a
+        // replay keeps.
         const data = buildPieceCountMismatchData(
             stateFixture({ imageSize: { width: 1080.123456, height: 719.987654 } }),
             MISMATCH, 'fresh');

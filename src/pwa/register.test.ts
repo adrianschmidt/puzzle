@@ -1,11 +1,9 @@
 /**
  * @vitest-environment jsdom
  *
- * jsdom is needed because the share-link-rescue wiring tests below drive
- * `onRegisteredSW` with a truthy registration, which runs the real
- * `setupUpdateChecks` (touches `document`) and — via the rescue's
- * `applyUpdate` — the update controller's fallback path (touches
- * `location`).
+ * The rescue-wiring tests drive `onRegisteredSW` with a truthy registration,
+ * which runs the real `setupUpdateChecks` (`document`) and the update
+ * controller's fallback path (`location`).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { RegisterSWOptions } from 'vite-plugin-pwa/types';
@@ -24,13 +22,12 @@ const { registerSW, capturedOptions } = vi.hoisted(() => {
 });
 vi.mock('virtual:pwa-register', () => ({ registerSW }));
 
-// Avoid pulling the DOM-dependent UI barrel into the test; the indicator is
-// only ever constructed via `showIndicator`, which this test never triggers.
+// Avoid pulling the DOM-dependent UI barrel in; the indicator is only built
+// via `showIndicator`, which this test never triggers.
 vi.mock('../ui/index.js', () => ({ createUpdateAvailableIndicator: vi.fn() }));
 
-// Intercept the analytics `track` call made inside register.ts. A plain
-// vi.spyOn would not catch a call made through the module's own import binding
-// under Vite, so mock the module and pass the rest through.
+// A plain vi.spyOn won't catch `track` called through register.ts's own import
+// binding under Vite, so mock the module and pass the rest through.
 const { track } = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('../analytics/index.js', async (importActual) => {
     const actual = await importActual<typeof import('../analytics/index.js')>();
@@ -46,8 +43,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-    // Safety net for the fake-timers test below: restores real timers even
-    // if an assertion throws before its own cleanup runs.
+    // Safety net: restores real timers even if the fake-timers test throws
+    // before its own cleanup.
     vi.useRealTimers();
 });
 
@@ -60,8 +57,7 @@ describe('initPwaUpdates onRegisterError', () => {
         expect(track).toHaveBeenCalledWith('pwa-register-failed', {
             reason: 'boom',
         });
-        // `registerSW` calls `onRegisterError` at most once per page load, so a
-        // single failure must produce exactly one event — no duplicate report.
+        // onRegisterError fires at most once per load, so one failure = one event.
         expect(track).toHaveBeenCalledTimes(1);
     });
 
@@ -112,13 +108,10 @@ describe('initPwaUpdates share-link rescue wiring', () => {
     });
 
     it('applies and resolves updated when the check surfaces a waiting worker', async () => {
-        // Applying the update schedules a 3s fallback reload via the update
-        // controller's real (uninjected) `globalThis.setTimeout`, which
-        // would eventually call jsdom's unimplemented `location.reload` as
-        // an async uncaught error. Fake timers keep that fallback pending
-        // but never fired — the assertions below only depend on the
-        // microtask-driven `onNeedRefresh` resolution below, not on the
-        // fallback timer.
+        // Applying the update schedules a 3s fallback reload on the real
+        // setTimeout, which would hit jsdom's unimplemented location.reload as
+        // an async uncaught error. Fake timers keep it pending but unfired; the
+        // assertions depend only on the microtask onNeedRefresh resolution.
         vi.useFakeTimers();
         const updateSW = vi.fn(() => Promise.resolve());
         registerSW.mockImplementationOnce((options?: RegisterSWOptions) => {

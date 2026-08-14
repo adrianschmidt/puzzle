@@ -4,9 +4,8 @@ const COMMAND_REGEX = /([MLCSQTZHVAmlcsqtzhva])\s*([-\d.,eE\s]*)/g;
 const NUMBER_REGEX = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
 
 /**
- * Conservative bounding box — bezier control points are included, so they
- * may extend beyond the actual curve, but the result is guaranteed to
- * contain the full path geometry. Good enough for layout spacing.
+ * Conservative bounding box: bezier control points are included, so it may be
+ * larger than the curve but always contains the full path geometry.
  */
 export function getPathBounds(
     path: string,
@@ -157,8 +156,7 @@ export function getPathBounds(
                 break;
             case 'A':
                 for (let i = 0; i + 6 < nums.length; i += 7) {
-                    // Include the arc endpoint; radii are harder to bound
-                    // but including the endpoint is a reasonable approximation
+                    // Only the arc endpoint (approximate; radii are harder to bound).
                     curX = nums[i + 5];
                     curY = nums[i + 6];
                     expand(curX, curY);

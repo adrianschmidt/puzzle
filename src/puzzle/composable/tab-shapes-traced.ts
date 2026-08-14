@@ -1,9 +1,9 @@
 /**
- * Traced tab shape template — pulls cubic-Bezier paths from a
- * photographed library and applies six PRNG-driven transforms.
+ * Traced tab shape template — pulls cubic-Bezier paths from a photographed
+ * library and applies six PRNG-driven transforms.
  *
- * Outer-PRNG contract LOCKED: exactly ONE outer call per generation.
- * That call seeds a local sub-PRNG used for all per-edge transforms.
+ * Outer-PRNG contract LOCKED: exactly ONE outer call per generation, which
+ * seeds a local sub-PRNG for all per-edge transforms.
  * See project_share_link_prng_contract.
  */
 
@@ -24,10 +24,9 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 /**
- * Derive a deterministic integer seed for the local sub-PRNG from one
- * outer-PRNG draw. createSeededRandom normalizes via `seed | 0`, so any
- * integer in the int32 range is fine; we use the canonical mulberry32
- * pattern of scaling [0,1) → uint32.
+ * Derive a deterministic int seed for the local sub-PRNG from one outer draw.
+ * createSeededRandom normalizes via `seed | 0`, so any int32 works; this is the
+ * canonical mulberry32 [0,1) → uint32 scaling.
  */
 function seedFromFloat(v: number): number {
     return Math.floor(v * 4294967296);
@@ -47,10 +46,10 @@ function mirrorLandmarksX(lm: TracedLandmarks): TracedLandmarks {
 function neckWeight(y: number, neckY: number, headY: number): number {
     if (y <= 0 || y >= headY) return 0;
     if (y < neckY) {
-        const t = y / neckY; // 0 → 1
+        const t = y / neckY;
         return t * t * (3 - 2 * t);
     } else {
-        const t = (headY - y) / (headY - neckY); // 1 at neck.y → 0 at head.y
+        const t = (headY - y) / (headY - neckY);
         return t * t * (3 - 2 * t);
     }
 }
@@ -79,13 +78,12 @@ function pinchNeck(
 }
 
 /**
- * Build a traced tab template bound to a specific (frozen) ordered trace
- * list. The trace-set version chooses which list — see getTracedTemplates.
+ * Build a traced tab template bound to a specific (frozen) ordered trace list;
+ * the trace-set version chooses which list (see getTracedTemplates).
  *
  * Outer-PRNG contract LOCKED: exactly ONE outer call per generation, which
- * seeds a local sub-PRNG that drives every per-edge transform. Changing
- * `templates` changes only which trace is selected and its geometry; it does
- * not change the outer- or local-PRNG call sequence.
+ * seeds a local sub-PRNG driving every per-edge transform. Changing `templates`
+ * changes only which trace is selected and its geometry, not the PRNG call sequence.
  */
 export function createTracedTabTemplate(
     templates: readonly TracedTemplate[],
@@ -99,7 +97,7 @@ export function createTracedTabTemplate(
 
             const idx       = Math.floor(local() * templates.length); // local 1
             const flip      = local() < 0.5;                          // local 2
-            // Cache the template id now so the recorder below sees the same index→id mapping the chosen template will use.
+            // Cache the template id now (no PRNG draw) so the recorder sees the same index→id mapping.
             const templateId = templates[idx].id;
             const scalex    = lerp(0.14, 0.20, local());              // local 3
             const scaley    = lerp(0.85, 1.15, local());              // local 4
@@ -136,9 +134,8 @@ export function createTracedTabTemplate(
 }
 
 /**
- * Default (version 1) traced template. Retained for the TabTemplate surface,
- * the traced-tab-recorder docs, and direct unit tests; production generation
- * resolves the template for the requested trace-set version via the generator
+ * Default (version 1) traced template. Retained for the TabTemplate surface and
+ * unit tests; production resolves per trace-set version via the generator
  * (see traced-tab-generator.ts).
  */
 export const tracedTabTemplate: TabTemplate = createTracedTabTemplate(TRACED_TEMPLATES);

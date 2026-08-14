@@ -11,8 +11,8 @@ export interface CompletionOverlayOptions {
     container: HTMLElement;
     state: GameState;
     /**
-     * Fires when the user dismisses the overlay (tap-anywhere). Not
-     * fired when the caller invokes the returned `hide` function.
+     * Fires when the user dismisses (tap-anywhere), not when the caller invokes
+     * the returned `hide`.
      */
     onDismiss?: () => void;
 }

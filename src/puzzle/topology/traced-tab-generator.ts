@@ -1,18 +1,15 @@
 /**
- * Uses the tangent-smoothed splicer so the flowy photographed curves join the
- * parent edge with C1 continuity.
+ * Uses the tangent-smoothed splicer so flowy photographed curves join with C1
+ * continuity. The trace-set version selects which frozen trace list backs the
+ * template (getTracedTemplates). Per edge it consumes EXACTLY 3 outer PRNG calls
+ * (2 placement + 1 template subSeed), regardless of version or retry rungs.
  *
- * The trace-set version (from the opaque tab config) selects which frozen,
- * ordered trace list backs the template — see getTracedTemplates. Per edge the
- * generator consumes EXACTLY 3 outer PRNG calls (2 placement + 1 template
- * subSeed) regardless of version or how many retry rungs are tried.
- *
- * Both entry points share one ladder generator, `tracedTabVariants`: it yields
- * the base tab first, then a short "retry ladder" of cheap local variations
- * (sign flip, shrink, shrunk-and-centered). The framework commits the first
- * that survives its crossing checks. When the opaque config sets
- * `deepResolve` (triangular cuts), the ladder expands to scale×invert rungs
- * plus a smallest-scale center-pull tier; the PRNG draw count is unchanged.
+ * Both entry points share `tracedTabVariants`: it yields the base tab, then a
+ * short retry ladder of cheap local variations (sign flip, shrink,
+ * shrunk-and-centered); the framework commits the first that survives its
+ * crossing checks. With `deepResolve` (triangular cuts) the ladder expands to
+ * scale×invert rungs plus a smallest-scale center-pull tier; the PRNG draw count
+ * is unchanged.
  */
 
 import type { Curve } from './curve.js';
@@ -35,9 +32,8 @@ const SHRINK = 0.8;
 const CENTER_PULL = 0.5;
 
 /**
- * Scale factors for the deep ladder (triangular base cut): full size, then
- * three steps of *0.8, so the smallest tab is ~0.51 of full. Each scale is
- * tried upright then inverted before dropping to the next, smaller one.
+ * Deep-ladder scale factors (triangular base cut): full, then three ×0.8 steps
+ * (smallest ~0.51). Each is tried upright then inverted before the next.
  */
 const DEEP_SCALES = [1, SHRINK, SHRINK * SHRINK, SHRINK * SHRINK * SHRINK] as const;
 
@@ -45,9 +41,9 @@ const DEEP_SCALES = [1, SHRINK, SHRINK * SHRINK, SHRINK * SHRINK * SHRINK] as co
 type Rung = readonly [number, boolean, BezierPath];
 
 /**
- * Read the deep-resolution flag from the opaque tab config. The generator
- * itself is base-cut agnostic; `generateTopologyPuzzle` sets this only for the
- * triangular cut, whose cramped pieces reject the shallow ladder too often.
+ * Read the deep-resolution flag from the opaque tab config. The generator is
+ * base-cut agnostic; `generateTopologyPuzzle` sets this only for triangular
+ * cuts, whose cramped pieces reject the shallow ladder too often.
  */
 function readDeepResolve(config: unknown): boolean {
     return (config as { deepResolve?: unknown } | null | undefined)?.deepResolve === true;
@@ -69,11 +65,10 @@ function defaultRungs(
 }
 
 /**
- * Deep ladder for triangular cuts. Each scale is tried upright then inverted
- * (place -> invert -> scale -> scale+invert -> ...), then a final center-pull
- * tier at the smallest scale (upright, inverted) as a last resort. All rungs
- * are cheap local variations; the framework commits the first that survives
- * its crossing checks, so an edge takes the largest, most-upright tab that fits.
+ * Deep ladder for triangular cuts. Each scale is tried upright then inverted,
+ * then a center-pull tier at the smallest scale as a last resort. The framework
+ * commits the first rung that survives its crossing checks, so an edge takes the
+ * largest, most-upright tab that fits.
  */
 function deepRungs(
     basePath: BezierPath,
@@ -94,8 +89,8 @@ function deepRungs(
 }
 
 /**
- * Build each version's template once (not per edge). The factory is cheap, but
- * memoizing keeps the per-edge path allocation-free beyond the template's own.
+ * Build each version's template once (not per edge) — keeps the per-edge path
+ * allocation-free beyond the template's own.
  */
 const templatesByVersion = new Map<number, TabTemplate>();
 function templateForVersion(version: number): TabTemplate {
@@ -108,10 +103,9 @@ function templateForVersion(version: number): TabTemplate {
 }
 
 /**
- * Read the trace-set version from the opaque tab config. Absent / invalid ⇒
- * version 1 (the original set): an un-versioned config is a pre-versioning
- * (legacy) caller and must reproduce against v1. Share-link decode clamps a
- * future version to a known one before it ever reaches here.
+ * Read the trace-set version from the opaque tab config. Absent/invalid ⇒
+ * version 1: an un-versioned config is a legacy caller that must reproduce
+ * against v1. Share-link decode clamps a future version to a known one first.
  */
 function readTraceSetVersion(config: unknown): number {
     const v = (config as { traceSetVersion?: unknown } | null | undefined)?.traceSetVersion;

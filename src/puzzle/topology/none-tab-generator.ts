@@ -1,6 +1,6 @@
 /**
- * For base-cut-driven topologies (e.g. Venn) where the cuts themselves
- * define the piece geometry and tabs would only confuse it.
+ * For base-cut-driven topologies (e.g. Venn) where the cuts define the piece
+ * geometry and tabs would only confuse it.
  */
 
 import type { Curve } from './curve.js';

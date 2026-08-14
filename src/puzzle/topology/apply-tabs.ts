@@ -1,7 +1,6 @@
 /**
- * Topology is never modified — only the `curve` field of each
- * half-edge changes (and its twin's reversed curve). Faces, vertices,
- * and connectivity are untouched.
+ * Topology is never modified — only each half-edge's `curve` (and its
+ * twin's reversed curve) changes. Faces, vertices, connectivity untouched.
  */
 
 import { Curve } from './curve.js';
@@ -11,10 +10,8 @@ import type { TabGenerator, TabPolicy, TopologyEdge } from './plugin-types.js';
 
 const ENDPOINT_TOLERANCE = 0.5;          // px — candidate endpoint must match
 const CROSSING_ENDPOINT_TOLERANCE = 2;   // px — ignore intersections at endpoint joins
-const CROSSING_BBOX_MARGIN = 0.5;        // px — conservative cull margin; the control-point box already overshoots the drawn curve
+const CROSSING_BBOX_MARGIN = 0.5;        // px — cull margin (control-point box already overshoots)
 
-// Bump-extraction tuning: identify where the candidate diverges from
-// its parent edge (the `before`/`after` overlap regions vs the bump).
 const BUMP_SAMPLE_COUNT = 60;            // uniform samples across the candidate
 const BUMP_OVERLAP_THRESHOLD = 0.5;      // px — samples within this of parent are "on the overlap"
 const BUMP_SPLICE_TOLERANCE = 2;         // px — intersections this close to bump endpoints ignored
@@ -25,22 +22,11 @@ export interface ApplyTabsOptions {
     /** Tab-generator-specific config, forwarded to TabGenerator.generate. */
     tabConfig?: unknown;
     /**
-     * Optional dev-time hook fired once per eligible edge with whether
-     * a tab was committed. Receives the half-edge, whether the
-     * framework's collision / fold-back checks let a candidate through,
-     * and — for a variant generator — the 0-based ordinal of the
-     * committed variant in the generator's yielded sequence (0 = the
-     * base tab, 1+ = a retry rung). This counts every yielded slot,
-     * including any the generator yields as `null`, so a generator that
-     * yields one stable slot per rung gets the fixed rung index here.
-     * `committedVariantIndex` is `undefined` when the edge stays flat or
-     * the generator has no `generateVariants` (no rung concept).
-     *
-     * Intended for debug instrumentation (e.g. correlating each tab
-     * with the piece it ended up on, or measuring per-rung retry
-     * recovery). Production paths leave this unset and pay an extra
-     * branch only — `applyTabs` callers that don't care don't need to
-     * wire anything up.
+     * Dev-time hook fired once per eligible edge. `committedVariantIndex`
+     * is the 0-based ordinal of the committed variant in the generator's
+     * yielded sequence, counting every slot including `null`s (so a
+     * skipped rung can't shift later indices); `undefined` when the edge
+     * stays flat or the generator has no `generateVariants`.
      */
     onCandidate?: (
         he: HalfEdge,
@@ -70,8 +56,8 @@ export function applyTabs(
         sharedEdges.push(he);
     }
 
-    // Per-edge bounding-box cache for the crossing cull. Invalidated for
-    // a half-edge pair when a tab is committed (its curve grows).
+    // Per-edge bbox cache for the crossing cull; invalidated for a pair
+    // when its tab commits (the curve grows).
     const boxes = new Map<number, BoundingBox>();
     const boxOf = (he: HalfEdge): BoundingBox => {
         let b = boxes.get(he.id);
@@ -138,16 +124,10 @@ function endpointsMatch(candidate: Curve, original: Curve): boolean {
 }
 
 /**
- * Returns true if the candidate curve crosses any OTHER edge in the
- * graph at a point that isn't already a shared endpoint of the
- * original edge.
- *
- * Self-crossings (the bump folding back through the parent edge) are
- * NOT checked here — see `foldsBackThroughSelf`. Naively running
- * `candidate.intersect(parent)` is unusable because `candidate`
- * embeds literal slices of `parent` (the `before`/`after` regions),
- * which produce a flood of overlap-region "intersections" that aren't
- * transverse crossings.
+ * True if the candidate crosses any OTHER edge away from the original's
+ * shared endpoints. Self-crossings are handled by `foldsBackThroughSelf`,
+ * not here — a naive `candidate.intersect(parent)` floods on the
+ * `before`/`after` parent slices the candidate embeds.
  */
 function introducesNewCrossing(
     candidate: Curve,
@@ -159,7 +139,6 @@ function introducesNewCrossing(
     const candEnd = candidate.end;
     const candBox = candidate.boundingBox();
 
-    // Skip self and self.twin — the candidate IS self's new curve.
     const seen = new Set<number>();
     for (const he of graph.halfEdges) {
         if (seen.has(he.id) || seen.has(he.twin.id)) continue;
@@ -182,41 +161,26 @@ function introducesNewCrossing(
 }
 
 /**
- * Returns true if the candidate's bump portion crosses the parts of
- * the parent edge that the candidate KEEPS — i.e., the `before` and
- * `after` overlap regions on either side of the splice. Crossings
- * through the middle section the candidate replaces are ignored,
- * since that section doesn't exist in the final boundary.
+ * True if the candidate's bump crosses the `before`/`after` overlap
+ * regions it KEEPS (crossings through the replaced middle are fine —
+ * that section isn't in the final boundary). Prevents self-intersecting
+ * piece boundaries.
  *
- * The legacy `createTabCollisionDetector` rejected such tabs to keep
- * piece boundaries free of self-intersections. The pluggable topology
- * pipeline reintroduces the check here.
- *
- * Why we don't just `candidate.intersect(parent)`: every candidate
- * built via the shared `prepareTab` / `commitTab` helpers (both classic
- * and traced) is `join([before, tab, after])` where `before` and
- * `after` are literal slices of the parent. A direct intersect
- * produces 10+ phantom crossings along those overlap regions, which
- * bezier-js's recursive subdivision happily reports even though the
- * curves coincide rather than cross.
- *
- * Why we don't use signed-perpendicular sampling: with sparse samples,
- * shallow fold-backs (where the tab dips just slightly past the parent
- * line) can be missed entirely — all post-dip samples may land on the
- * original side. Bump-only intersect handles sub-pixel crossings
- * exactly via bezier-js's recursive subdivision.
+ * Bump-only intersect, not `candidate.intersect(parent)`: the candidate
+ * is `join([before, tab, after])` with `before`/`after` literal parent
+ * slices, so a direct intersect reports phantom overlap crossings. Not
+ * signed-perpendicular sampling either — sparse samples miss shallow
+ * fold-backs; bezier-js subdivision catches sub-pixel crossings exactly.
  */
 function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
     const n = BUMP_SAMPLE_COUNT;
 
     let firstFar = -1;
     let lastFar = -1;
-    // Float64Array rather than the `new Array(n)` this wants, which
-    // `unicorn/no-new-array` forbids: every index is written before any
-    // is read, and this runs once per tab candidate per internal edge (~3.5k
-    // times on a 192-piece traced puzzle). `Array.from({length})` walks the
-    // array-like protocol — measurably ~30x the cost of a sized allocation —
-    // and its `number[]` annotation would claim contents it does not yet have.
+    // Float64Array, not `new Array(n)` (banned by `unicorn/no-new-array`)
+    // nor `Array.from({length})` (much slower, walks the array-like
+    // protocol): every index is written before read, so a raw sized
+    // allocation is safe on this hot path.
     const tOnParentBySample = new Float64Array(n + 1);
     for (let i = 0; i <= n; i++) {
         const t = i / n;
@@ -232,12 +196,9 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
     }
     if (firstFar < 0) return false;
 
-    // The samples just before firstFar and just after lastFar are the
-    // last/first ones still on the overlap; their nearest-t on the
-    // parent give us the splice points of the range the bump REPLACES.
-    // Intersections that land in this range are crossings through a
-    // section of the parent that won't exist in the final geometry —
-    // so they're not fold-backs.
+    // Samples bracketing [firstFar, lastFar] give the parent t-range the
+    // bump REPLACES; crossings inside it aren't fold-backs (that section
+    // won't exist in the final geometry).
     const leftAnchorIdx = Math.max(0, firstFar - 1);
     const rightAnchorIdx = Math.min(n, lastFar + 1);
     let tReplacedStart = tOnParentBySample[leftAnchorIdx];
@@ -246,31 +207,23 @@ function foldsBackThroughSelf(candidate: Curve, parent: Curve): boolean {
         [tReplacedStart, tReplacedEnd] = [tReplacedEnd, tReplacedStart];
     }
 
-    // The half-step inset pulls the cut just into the overlap region,
-    // so the extracted bump's endpoints land on the parent rather than
-    // inside the bump.
+    // Half-step inset pulls the cut into the overlap so the extracted
+    // bump's endpoints land on the parent, not inside the bump.
     const tLeft = Math.max(0, (firstFar - 0.5) / n);
     const tRight = Math.min(1, (lastFar + 0.5) / n);
     if (tRight <= tLeft) return false;
 
-    // Parameter rescaling after the first split: `rest` covers
-    // t ∈ [tLeft, 1] on the original curve, so the local t for tRight
-    // on `rest` is (tRight - tLeft) / (1 - tLeft).
+    // After splitAt(tLeft), `rest` spans t ∈ [tLeft, 1]; rescale tRight
+    // into rest-local coords: (tRight - tLeft) / (1 - tLeft).
     const [, rest] = candidate.splitAt(tLeft);
     const restLocalTRight = (tRight - tLeft) / (1 - tLeft);
     const bump = restLocalTRight > 0 && restLocalTRight < 1
         ? rest.splitAt(restLocalTRight)[0]
         : rest;
 
-    // Skip intersections that:
-    //    - sit within `BUMP_SPLICE_TOLERANCE` of the bump's own
-    //      endpoints (where the bump rejoins the parent at the splice
-    //      points — those are by-construction touches, not crossings);
-    //    - land on the parent inside the replaced middle section
-    //      (parent t in [tReplacedStart, tReplacedEnd]) — that section
-    //      isn't part of the final boundary, so crossing through it is
-    //      fine. Anything else is a real fold-back through the
-    //      `before`/`after` portion that the candidate keeps.
+    // Skip touches within BUMP_SPLICE_TOLERANCE of the bump's endpoints
+    // (by-construction rejoins) and crossings inside the replaced middle
+    // (not in the final boundary). Anything else is a real fold-back.
     const intersections = bump.intersect(parent);
     if (intersections.length === 0) return false;
 

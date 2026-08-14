@@ -1,11 +1,3 @@
-/**
- * The two rotation controls are bundled because they share almost
- * everything: both float next to whichever group has rotate focus, both
- * rotate the same way (`rotateGroup` + re-render + re-apply selection
- * visuals), and both commit through the same merge-detection path. Only
- * which pair is visible depends on the game's `rotationMode`.
- */
-
 import type { GameState, Point } from '../model/types.js';
 import type { MergeResult } from '../game/group-merging.js';
 import type { Renderer } from '../renderer/index.js';
@@ -20,23 +12,18 @@ import { localToWorld } from '../model/helpers.js';
 import { activeSnapTolerances } from './snap-tolerances.js';
 
 /**
- * Syncing visibility is deliberately the whole public surface. Everything
- * else the module builds — the screen-space bounds projection, the
- * rotate/commit handlers — is handed to the two controls themselves, so the
- * composition root needs none of it.
+ * Deliberately the whole public surface — everything else the module builds is
+ * handed to the two controls, so the composition root needs none of it.
  */
 export interface RotationUi {
     syncVisibility: (state: GameState | undefined) => void;
 }
 
 /**
- * Returns an object literal of closures rather than a class instance so
- * `syncVisibility` can be handed to a caller as a bare value — no `.bind`,
- * no wrapper arrow — and still work. The composition root passes it into
- * the game session's `onInstalled` hook, which makes "the rotation UI must
- * exist before the session" a data dependency the compiler enforces, rather
- * than an ordering that only happens to hold because of where two `const`s
- * sit in a file.
+ * Returns closures, not a class instance, so `syncVisibility` works as a bare
+ * value (no `.bind`). It's passed into the session's `onInstalled`, making
+ * "rotation UI before session" a compiler-enforced data dependency rather than
+ * a source-order coincidence.
  */
 export function createRotationUi(deps: {
     container: HTMLElement;
@@ -93,8 +80,7 @@ export function createRotationUi(deps: {
             rotateGroup(group, state.piecesById, deltaDeg);
 
             renderer.renderState(state);
-            // Re-apply selection visuals after re-render (renderState may
-            // recreate elements).
+            // Re-apply selection visuals: renderState may recreate elements.
             for (const selectedId of selectionManager.selectedGroupIds) {
                 renderer.setGroupSelected(selectedId, true);
             }
@@ -108,11 +94,10 @@ export function createRotationUi(deps: {
         getTolerances: activeSnapTolerances,
     });
 
-    // Sticky pivot for the current handle drag: latched in onRotateStart —
-    // which fires exactly once per drag — and cleared on drag end. Never
-    // re-picked mid-gesture — that would move the pivot under the player's
-    // hand. Carries the group id so a latch can never be applied to a group
-    // it wasn't computed for.
+    // Sticky pivot for the current handle drag: latched once in onRotateStart,
+    // cleared on drag end. Never re-picked mid-gesture (would move the pivot
+    // under the player's hand). Carries the group id so a latch can't apply to
+    // the wrong group.
     let manualPivot: { groupId: number; pivotLocal: Point } | null = null;
 
     const rotateHandle = createRotateHandle({
@@ -123,20 +108,14 @@ export function createRotationUi(deps: {
             if (!state) return null;
             const group = state.groupsById.get(groupId);
             if (!group) return null;
-            // A mate within snap distance pins the pivot to that piece for
-            // the whole drag (rotation-pivot.ts), and the position assist is
-            // anchored to the same piece so the gesture has one winner —
-            // unanchored, the assist could latch a different mate and slide
-            // the anchored piece out of merge range. With no mate in range
-            // the assist stays off entirely: bbox-center rotation sweeps
-            // each candidate's piece-anchored distance, so a far mate could
-            // latch mid-drag and translate a gesture the player meant as a
-            // pure rotation. The rotation then pivots about the
-            // tab-inclusive bounds center so the handle tracks the visible
-            // footprint of a mid-assembly group with exposed tabs/blanks.
-            // (The completion spin instead pivots about the corner-only
-            // image center via getGroupImageCenter — a deliberately
-            // different point, since a solved puzzle has a flat border.)
+            // A mate within snap distance pins the pivot to that piece for the
+            // whole drag, and the assist anchors to the same piece so the
+            // gesture has one winner. With no mate in range the assist stays
+            // off: bbox-center rotation sweeps each candidate's piece-anchored
+            // distance, so a far mate could latch mid-drag and translate a pure
+            // rotation. Pivots about the tab-inclusive bounds center so the
+            // handle tracks a mid-assembly group's visible footprint (the
+            // completion spin instead uses the corner-only image center).
             const picked = pickManualRotationPivot(
                 state, group, activeSnapTolerances(state).tolerancePx,
             );
@@ -163,8 +142,7 @@ export function createRotationUi(deps: {
             );
             snapPosition.onGroupRotated();
             renderer.renderState(state);
-            // Re-apply selection visuals after re-render (renderState may
-            // recreate elements).
+            // Re-apply selection visuals: renderState may recreate elements.
             for (const selectedId of selectionManager.selectedGroupIds) {
                 renderer.setGroupSelected(selectedId, true);
             }

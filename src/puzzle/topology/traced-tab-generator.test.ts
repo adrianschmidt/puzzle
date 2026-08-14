@@ -93,9 +93,9 @@ describe('tracedTabGenerator.generateVariants', () => {
     });
 
     it('deep ladder shares its first three rungs with the default ladder', () => {
-        // Order contract: place -> invert -> shrink0.8 are identical in both
-        // ladders (deep only diverges at rung 3, where it inverts the 0.8 tab
-        // instead of pulling toward center).
+        // Order contract: rungs 0-2 (place, invert, shrink 0.8) are identical in
+        // both ladders; deep diverges at rung 3 (inverts the 0.8 tab vs pulling
+        // toward center).
         const edge = Curve.line({ x: 0, y: 0 }, { x: 240, y: 0 });
         const def = [...tracedTabGenerator.generateVariants!(edge, createSeededRandom(7), {})];
         const deep = [

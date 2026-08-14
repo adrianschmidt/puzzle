@@ -1,12 +1,10 @@
 /**
- * "mulberry32" — a simple, fast, 32-bit PRNG
- * with good statistical properties for game use.
- *
+ * "mulberry32" — a fast 32-bit PRNG.
  * @see https://gist.github.com/tommyettinger/46a874533244883189143505d203312c
  */
 
 /**
- * @returns A function that returns the next pseudo-random number in [0, 1)
+ * @returns A function that returns the next pseudo-random number in [0, 1).
  */
 export function createSeededRandom(seed: number): () => number {
     let state = seed | 0;

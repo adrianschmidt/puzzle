@@ -50,8 +50,7 @@ function gameState(pieces: Piece[]): GameState {
     return makeGameState({ pieces });
 }
 
-// The generation-time walk: the only place bounds are derived from geometry
-// (sealing, and the v≤11 save migration that stands in for it).
+// The only place bounds are derived from geometry: sealing and the v≤11 migration.
 describe('computePieceBounds', () => {
     it('returns the full bbox for a rectangular piece at the origin', () => {
         const edges = rectPiece(0, 100, 75).edges;
@@ -157,8 +156,8 @@ describe('getImageDimensions', () => {
 
     it('returns correct size for a 6×8 grid (800×600)', () => {
         const pieces: Piece[] = [];
-        const pw = 100; // 800/8
-        const ph = 100; // 600/6
+        const pw = 100;
+        const ph = 100;
 
         for (let row = 0; row < 6; row++) {
             for (let col = 0; col < 8; col++) {

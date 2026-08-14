@@ -1,7 +1,6 @@
 /**
- * Unlike the other dialog sections, this one is the game-start trigger:
- * every tile and action button fires `onPick`, and the dialog dismisses
- * itself in response. There is no selected state.
+ * The game-start trigger: every tile and action button fires `onPick` and the
+ * dialog dismisses itself. There is no selected state.
  */
 
 import { isSafeHttpUrl } from '../sharing/safe-url.js';
@@ -14,8 +13,8 @@ export type NewGameImageChoice =
 
 export interface ImagePickerOptions {
     /**
-     * Absent when no image proxy is configured — the grid and refresh
-     * button are then hidden and only Surprise me / Blank puzzle remain.
+     * Absent when no image proxy is configured — the grid and refresh button
+     * are then hidden, leaving only Surprise me / Blank puzzle.
      */
     fetchCandidates?: () => Promise<CandidateImage[] | null>;
     onPick: (choice: NewGameImageChoice) => void;
@@ -69,9 +68,8 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
         tile.disabled = true;
         cell.appendChild(tile);
 
-        // A link inside a button is invalid HTML, so the credit is a sibling
-        // of the tile — outside its tap target, so clicking it never starts
-        // a game.
+        // A link inside a button is invalid HTML, so the credit is a sibling of
+        // the tile — outside its tap target, so clicking it never starts a game.
         const credit = document.createElement('a');
         credit.className = 'image-picker-credit';
         credit.dataset.testid = 'image-picker-credit';
@@ -113,9 +111,8 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
 
     section.appendChild(actions);
 
-    // Stale-response guard: each refresh bumps the token, and only the
-    // newest in-flight fetch may apply its result. A slow response from a
-    // superseded fetch (earlier category, earlier refresh) is dropped.
+    // Stale-response guard: each refresh bumps the token; only the newest
+    // in-flight fetch may apply its result, so a slow superseded response is dropped.
     let fetchToken = 0;
 
     function hideCredit(credit: HTMLAnchorElement): void {
@@ -142,8 +139,7 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
             tile.replaceChildren();
             tile.classList.remove('image-picker-tile--loading');
 
-            // Unsplash may return fewer photos than requested for narrow
-            // queries; hide the slots that have nothing to show.
+            // Unsplash may return fewer photos than requested; hide the empty slots.
             if (!candidate) {
                 cell.hidden = true;
                 tile.disabled = true;
@@ -161,19 +157,16 @@ export function createImagePicker(options: ImagePickerOptions): ImagePicker {
             img.draggable = false;
             tile.appendChild(img);
 
-            // Property assignment (not addEventListener) so each refresh
-            // replaces the previous candidate's handler. Tiles are reused
-            // across refreshes, so accumulating listeners would fire onPick
-            // once per stale candidate as well as the current one.
+            // Property assignment (not addEventListener) so each refresh replaces
+            // the previous handler — tiles are reused, so listeners would
+            // otherwise accumulate and fire onPick once per stale candidate too.
             // eslint-disable-next-line unicorn/prefer-add-event-listener
             tile.onclick = () => options.onPick({ kind: 'photo', photo: candidate });
 
-            // The photographer URL already carries the utm_source=puzzle
-            // referral params from the API layer — don't append anything.
-            // Defense-in-depth parity with createAttributionElement: only
-            // assign the href when it's an http(s) URL, so a non-http(s)
-            // scheme (e.g. `javascript:`) can't be smuggled into the DOM. The
-            // name still renders as text when the URL is dropped.
+            // The photographer URL already carries the utm_source=puzzle referral
+            // params from the API layer — don't append. Defense-in-depth parity
+            // with createAttributionElement: only assign an http(s) href, else
+            // the name still renders as text.
             credit.hidden = false;
             if (isSafeHttpUrl(candidate.attribution.photographerUrl)) {
                 credit.href = candidate.attribution.photographerUrl;

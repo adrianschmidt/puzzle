@@ -1,8 +1,7 @@
 /**
- * The framework's smoke test that non-grid topologies work. Two
- * overlapping circles inside a rectangular frame produce four
- * inner faces: the frame piece (with the circle component as
- * an inner boundary), two crescents, and a lens.
+ * Non-grid topology (framework smoke test): two overlapping circles in a
+ * rectangular frame produce four inner faces — the frame piece (circles as an
+ * inner boundary), two crescents, and a lens.
  */
 
 import type { Size, Point } from '../../model/types.js';

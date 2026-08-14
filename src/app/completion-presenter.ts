@@ -1,11 +1,8 @@
 /**
  * Presenter for the "Puzzle Complete!" overlay, owning the re-entrancy guard
- * around `showCompletionOverlay`.
- *
- * The overlay's `hide` handle can be cleared two independent ways: the
- * caller invoking `remove()` (e.g. when starting a new game), or the player
- * dismissing the overlay themselves (tap-anywhere). Both must leave the
- * presenter able to show again.
+ * around `showCompletionOverlay`. The `hide` handle clears two ways — the
+ * caller's `remove()` or the player dismissing (tap-anywhere) — and both must
+ * leave the presenter able to show again.
  */
 
 import type { GameState } from '../model/types.js';
@@ -28,9 +25,8 @@ export function createCompletionPresenter(deps: {
     return {
         show(state: GameState): void {
             if (hideCurrent) return;
-            // Clear focus so any visible rotate buttons quick-fade out before the
-            // celebratory zoom; without this the buttons would linger in front
-            // of (or under) the completion overlay during the animation.
+            // Clear focus so visible rotate buttons quick-fade out before the
+            // celebratory zoom, rather than lingering over the overlay.
             rotationFocus.clearFocus();
             hideCurrent = showCompletionOverlay({
                 container,

@@ -1,9 +1,6 @@
 /**
- * Tests across the codebase used to roll their own makePiece / makeGameState
- * helpers, each subtly different. Drift across copies meant a test failure in
- * one file could be papered over by an inconsistent fixture rather than the
- * real bug. These canonical builders accept overrides so individual tests can
- * still tune the shape they need.
+ * Canonical builders, replacing per-file copies that drifted (an inconsistent
+ * fixture could paper over a real bug). Accept overrides to tune the shape.
  */
 
 import type { Edge, GameState, Piece, PieceBounds, PieceGroup, Point } from '../model/types.js';
@@ -17,11 +14,7 @@ import {
 import { computePieceBounds } from '../model/derive.js';
 import { ROTATION_COMPLETE_AT_FRACTION } from '../game/snap-proximity-rotation.js';
 
-/**
- * Re-export `buildPiecesById` for tests that call helpers expecting the
- * `piecesById` index (e.g. `getGroupBounds`, `getGroupVisualBounds`,
- * `rotateGroup`) without going through `makeGameState`.
- */
+/** Re-exported for tests that need the `piecesById` index without `makeGameState`. */
 export { buildPiecesById };
 
 export interface MakePieceOpts {
@@ -39,9 +32,8 @@ export function makePiece(opts: MakePieceOpts = {}): Piece {
         edges,
         shape: opts.shape ?? '',
         imageOffset: opts.imageOffset ?? { x: 0, y: 0 },
-        // Infinite for the default empty-edge piece, matching what the old
-        // on-demand walk produced for it. Tests that read bounds pass real
-        // edges or an explicit override.
+        // Infinite for the default empty-edge piece (matches the old on-demand
+        // walk); tests reading bounds pass real edges or an override.
         bounds: opts.bounds ?? computePieceBounds({ edges }),
     };
 }
@@ -59,12 +51,10 @@ export interface MakeRectPieceOpts {
 }
 
 /**
- * Build a 4-edge rectangular Piece spanning (0,0) to (width, height) in piece-local coords.
- *
- * All edges are border edges (no mates). Edge ids are deterministic (id*4 .. id*4+3)
- * so they don't collide between pieces. imageOffset defaults to (-col*width, -row*height)
- * — i.e. the piece tiled at column `col`, row `row` behind a single source image.
- * `col` defaults to `id` so a single-row strip works without specifying it.
+ * A 4-edge rectangular Piece spanning (0,0)–(width, height), all border edges.
+ * Edge ids are deterministic (id*4 .. id*4+3) so they don't collide between
+ * pieces. imageOffset defaults to (-col*width, -row*height) — the piece tiled
+ * at (col, row) behind one source image; `col` defaults to `id`.
  */
 export function makeRectPiece(opts: MakeRectPieceOpts = {}): Piece {
     const id = opts.id ?? 0;
@@ -113,8 +103,8 @@ export function makeRectPiece(opts: MakeRectPieceOpts = {}): Piece {
         id,
         edges,
         shape: `M0,0 L${width},0 L${width},${height} L0,${height} Z`,
-        // `|| 0` normalizes `-0` (from `-0 * width`) to `0` so values survive
-        // JSON round-trips unchanged in serialization tests.
+        // `|| 0` normalizes `-0` to `0` so values survive JSON round-trips in
+        // serialization tests.
         imageOffset: opts.imageOffset ?? {
             x: -col * width || 0,
             y: -row * height || 0,
@@ -124,10 +114,9 @@ export function makeRectPiece(opts: MakeRectPieceOpts = {}): Piece {
 }
 
 /**
- * The `piecesById`, `groupsById`, and `pieceToGroup` indexes are derived
- * from the final `pieces`/`groups` (overrides included) so callers don't
- * have to keep them in sync manually. Override them explicitly only if
- * a test needs to exercise an inconsistent state.
+ * The `piecesById` / `groupsById` / `pieceToGroup` indexes are derived from the
+ * final pieces/groups (overrides included). Override them explicitly only to
+ * exercise an inconsistent state.
  */
 export function makeGameState(overrides: Partial<GameState> = {}): GameState {
     const pieces = overrides.pieces ?? [];
@@ -149,12 +138,10 @@ export function makeGameState(overrides: Partial<GameState> = {}): GameState {
 }
 
 /**
- * Two 100×100 pieces mated along a vertical edge, for snap/merge tests.
- *
- * Piece 0's right edge (id 0) mates with piece 1's left edge (id 1);
- * all other edges are puzzle borders. With both groups un-rotated and
- * piece offsets at (0,0), the correct relative placement puts piece 1's
- * group origin exactly 100px right of piece 0's.
+ * Two 100×100 pieces mated along a vertical edge, for snap/merge tests. Piece
+ * 0's right edge (id 0) mates piece 1's left edge (id 1); all others are
+ * borders. Un-rotated with offsets at (0,0), the aligned placement puts piece
+ * 1's group origin exactly 100px right of piece 0's.
  */
 export function makeMatedPiecePair(): { piece0: Piece; piece1: Piece } {
     const edge = (
@@ -179,15 +166,10 @@ export function makeMatedPiecePair(): { piece0: Piece; piece1: Piece } {
 }
 
 /**
- * Single-piece group (the piece at local offset (0,0)) positioned so the
- * group's bbox center sits at `center` under `rotation`.
- *
- * Assumes a 100×100 piece — e.g. one of `makeMatedPiecePair` — so the
- * un-rotated bbox center is at local (50, 50). Placing by center rather
- * than by raw position matters for rotation tests: pivot-preserving
- * rotation (`rotateGroup`) keeps the bbox center fixed in world space,
- * so tests that reason about snap distances pin that point, not
- * `position`.
+ * Single-piece group placed so the bbox center sits at `center` under
+ * `rotation`. Assumes a 100×100 piece (local center (50, 50)). Placing by
+ * center matters for rotation tests: `rotateGroup` keeps the bbox center fixed
+ * in world space, so snap-distance reasoning pins that point, not `position`.
  */
 export function makeCenteredGroup(
     id: number,
@@ -205,14 +187,12 @@ export function makeCenteredGroup(
 }
 
 /**
- * The issue-#530 scenario: a stationary single-piece target (piece 0,
- * group 10, at the origin) and a five-piece 500×100 moved row (pieces
- * 1–5, group 11) rotated `rotationDeg`, positioned so piece 1's center
- * sits exactly at its aligned world position (150, 50). Piece 1 is the
- * row's only mated piece and sits 200 px from the row's bbox center, so
- * at 8° a group-center-pivot rotation snap sweeps its edge ≈ 27.9 px
- * (2·200·sin 4°) — past MERGE_TOLERANCE_PX — while a piece-center pivot
- * measures ≈ 0.
+ * The issue-#530 scenario: a stationary single-piece target (piece 0, group
+ * 10, at origin) and a five-piece 500×100 moved row (pieces 1–5, group 11)
+ * rotated `rotationDeg`, placed so piece 1's center sits at its aligned world
+ * position (150, 50). Piece 1 is the row's only mated piece, 200px from the
+ * row's bbox center, so at 8° a group-center-pivot snap sweeps its edge ≈27.9px
+ * (2·200·sin 4°) — past MERGE_TOLERANCE_PX — while a piece-center pivot ≈0.
  */
 export function makeWideRowScenario(rotationDeg: number): {
     state: GameState;
@@ -255,11 +235,9 @@ export function makeWideRowScenario(rotationDeg: number): {
 }
 
 /**
- * A game state that round-trips through the persistence layer.
- *
- * `recombine` rejects an empty `pieces` array — which is exactly what
- * `makeGameState()`'s bare default has — so a fixture that gets saved and
- * read back needs at least one real piece, and a group holding it.
+ * A game state that round-trips through persistence. `recombine` rejects an
+ * empty `pieces` array (makeGameState()'s bare default), so a saved-and-read
+ * fixture needs at least one real piece and a group holding it.
  */
 export function makeSavedGameState(): GameState {
     const pieces = [makeRectPiece({ id: 0 })];
@@ -270,21 +248,16 @@ export function makeSavedGameState(): GameState {
 }
 
 /**
- * The wide row extended with a second mate at the far end: piece 1 (local
- * center (50, 50)) mates group 10, piece 5 (local center (450, 50)) mates
- * group 12. Built against the merge-default tolerances (18 px / 10°): at
- * 8° both candidates qualify, at ramp fractions 0.25 and 0.5 — anchored to
- * `ROTATION_COMPLETE_AT_FRACTION` so the caps at those fractions survive a
- * retune (7.2 px and 10.8 px at the current fraction). Each target starts
- * flush and is shifted away from the row along x, which the piece-anchored
- * measurement reports directly as that candidate's distance; a +x shift of
- * the row moves it away from group 10 and toward group 12, so the two
- * distances trade places.
+ * The wide row with a second mate at the far end: piece 1 (center (50, 50))
+ * mates group 10, piece 5 (center (450, 50)) mates group 12. At 8° both
+ * candidates qualify at ramp fractions 0.25 and 0.5, anchored to
+ * `ROTATION_COMPLETE_AT_FRACTION` so the caps survive a retune. Each target
+ * starts flush and is shifted along x by its candidate distance; a +x shift of
+ * the row trades the two distances.
  *
  * `closest` picks which piece carries the closer candidate. Run both
- * arrangements when the subject picks between candidates: `getBorderEdges`
- * always visits piece 1's candidate before piece 5's, so only running both
- * separates closest-wins from iteration-order accidents.
+ * arrangements: `getBorderEdges` always visits piece 1 before piece 5, so only
+ * running both separates closest-wins from iteration-order accidents.
  */
 export function makeTwoMatedEndsRow(closest: 1 | 5): { state: GameState } {
     const { state: base, movedGroup, targetGroup } = makeWideRowScenario(8);

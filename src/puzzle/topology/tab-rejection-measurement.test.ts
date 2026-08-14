@@ -1,11 +1,11 @@
 /**
- * Gated measurement: traced-tab rejection rate at the user's real
- * Composable settings. Skipped unless MEASURE_TABS=1.
+ * Gated measurement: traced-tab rejection rate at the user's real Composable
+ * settings. Skipped unless MEASURE_TABS=1:
  *
  *   MEASURE_TABS=1 npx vitest run src/puzzle/topology/tab-rejection-measurement.test.ts
  *
- * Baseline (before the retry ladder): ~20.7% of internal edges flat,
- * all R4 crossings. Expect a substantial drop after the ladder lands.
+ * Baseline before the retry ladder: ~20.7% of internal edges flat (all R4
+ * crossings); with the ladder ~2%.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -26,10 +26,9 @@ describe('traced-tab rejection measurement', () => {
         const frame = { width: 1600, height: 1200 };
         const SEEDS = 15;
 
-        // Go through the SAME path the app uses: preload the lazy chunk,
-        // then resolve the generator from the registry (the stub). This
-        // exercises the registry/stub forwarding, so the number reflects
-        // what players actually get — not a direct-import shortcut.
+        // SAME path the app uses: preload the lazy chunk, then resolve from the
+        // registry (the stub). Exercises the stub forwarding, so the number
+        // reflects what players get, not a direct-import shortcut.
         await preloadTracedTabGenerator();
         const generator = getTabGenerator('traced');
 
@@ -57,12 +56,10 @@ describe('traced-tab rejection measurement', () => {
         console.log(`eligible=${total} accepted=${accepted} flat=${(total - accepted)} reject=${rejectPct.toFixed(1)}%`);
         console.log(`per-rung commits: base=${base} flip=${flip} shrink=${shrink} shrink+center=${shrinkCenter}`);
         expect(total).toBeGreaterThan(0);
-        // MANUAL-ONLY guard: this whole test is it.skip in CI (runs only
-        // with MEASURE_TABS=1), so this numeric assertion is NOT a CI gate.
-        // CI's "the ladder is actually wired" guard is the non-gated
-        // stub-forwarding test in traced-tab-loader.test.ts. When run here,
-        // it goes through the real registry+preload path; pre-ladder this
-        // regime sat at ~20.7%, with the ladder ~2%.
+        // MANUAL-ONLY: it.skip in CI (needs MEASURE_TABS=1), so this numeric
+        // assertion is NOT a CI gate — the "ladder is wired" gate is the
+        // stub-forwarding test in traced-tab-loader.test.ts. Pre-ladder ~20.7%,
+        // with the ladder ~2%.
         expect(rejectPct).toBeLessThan(6);
     });
 

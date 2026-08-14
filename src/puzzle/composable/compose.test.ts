@@ -176,19 +176,16 @@ describe('composePuzzle', () => {
 
     describe('multi-loop pieces', () => {
         it('emits multi-subpath SVG when consecutive edges break the end→start chain', () => {
-            // Outer rectangle (chain-connected) followed by an inner
-            // triangle loop (also chain-connected internally, but its
-            // first edge does NOT pick up where the rectangle's last
-            // edge ended). buildShape should emit one M..Z per loop.
+            // Outer rectangle followed by an inner triangle loop whose first edge
+            // does not continue the rectangle's chain; buildShape should emit one
+            // M..Z per loop.
             const twoLoopPieceDefs: PieceDefinition[] = [{
                 id: 0,
                 edges: [
-                    // outer rectangle 0,0 → 100,0 → 100,100 → 0,100 → 0,0
                     { id: 0, start: { x: 0, y: 0 }, end: { x: 100, y: 0 }, mateEdgeId: -1, matePieceId: -1 },
                     { id: 1, start: { x: 100, y: 0 }, end: { x: 100, y: 100 }, mateEdgeId: -1, matePieceId: -1 },
                     { id: 2, start: { x: 100, y: 100 }, end: { x: 0, y: 100 }, mateEdgeId: -1, matePieceId: -1 },
                     { id: 3, start: { x: 0, y: 100 }, end: { x: 0, y: 0 }, mateEdgeId: -1, matePieceId: -1 },
-                    // inner triangle hole: (40,40)→(60,40)→(50,60)→(40,40)
                     { id: 4, start: { x: 40, y: 40 }, end: { x: 60, y: 40 }, mateEdgeId: -1, matePieceId: -1 },
                     { id: 5, start: { x: 60, y: 40 }, end: { x: 50, y: 60 }, mateEdgeId: -1, matePieceId: -1 },
                     { id: 6, start: { x: 50, y: 60 }, end: { x: 40, y: 40 }, mateEdgeId: -1, matePieceId: -1 },

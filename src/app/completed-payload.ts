@@ -4,10 +4,9 @@ import { classifyImageSource } from './classify-image-source.js';
 import { traceSetVersionOf } from './trace-set-version.js';
 
 /**
- * Always derives geometry/style fields from gameState (so resumed
- * games still get a useful event), then merges in any cached
- * NewGameData fields the user wouldn't be able to recover otherwise
- * (source, imageCategory, vibrant, etc.).
+ * Derives geometry/style from gameState (so resumed games still get a useful
+ * event), then merges in any cached NewGameData fields state can't recover
+ * (source, imageCategory, vibrant).
  */
 export function buildPuzzleCompletedData(
     state: GameState,
@@ -22,8 +21,8 @@ export function buildPuzzleCompletedData(
         imageSource: classifyImageSource(state.imageUrl),
     };
 
-    // For Classic this also separates sine-generated puzzles from legacy ones
-    // on the completion event — the metric that says whether the new cut works.
+    // For Classic, separates sine-generated puzzles from legacy ones on the
+    // completion event — the metric for whether the new cut works.
     const traceSetVersion = traceSetVersionOf(state);
     if (traceSetVersion !== undefined) {
         derived.traceSetVersion = traceSetVersion;

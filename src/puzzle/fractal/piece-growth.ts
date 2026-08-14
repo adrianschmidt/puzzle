@@ -1,10 +1,7 @@
 /**
- * Pipeline order:
- *   1. createPiece — grow one piece from a random empty tile.
- *   2. fillHoles  — extend existing pieces into any remaining slack.
- *   3. adoptOrphanTiles — attach visited-but-unassigned tiles to a
- *      neighbour piece via a fresh diagonal.
- *   4. fillEmptyCells — close star-shaped gaps left between pieces.
+ * Pipeline order: createPiece (grow from a random empty tile) → fillHoles
+ * (extend pieces into slack) → adoptOrphanTiles (attach visited-but-unassigned
+ * tiles) → fillEmptyCells (close star-shaped gaps between pieces).
  */
 
 import { diagnostics } from '../../diagnostics.js';
@@ -42,8 +39,8 @@ function findPossibleConnections(
 }
 
 /**
- * Detect pinwheel/swastika shapes: a tile with connections spiralling
- * out in all 4 quadrants creates an unfortunate resemblance.
+ * Detect pinwheel/swastika shapes — a tile with connections in all 4 quadrants,
+ * an unfortunate resemblance to avoid.
  */
 function hasPinwheelShape(connections: DiagonalConnection[]): boolean {
     const quadsByTile = new Map<string, Set<number>>();
@@ -155,8 +152,7 @@ export function fillHoles(
 }
 
 /**
- * Find tiles that were visited but never made it into any piece,
- * and attach them to the nearest adjacent piece via a diagonal connection.
+ * Attach visited-but-unassigned tiles to an adjacent piece via a new diagonal.
  */
 export function adoptOrphanTiles(
     grid: CellGrid,
@@ -211,9 +207,8 @@ export function adoptOrphanTiles(
 }
 
 /**
- * A cell at (cx, cy) has 4 corner tiles: (cx,cy), (cx+1,cy),
- * (cx,cy+1), (cx+1,cy+1). An empty cell means no diagonal
- * connection passes through it, leaving a visible star-shaped hole.
+ * A cell's 4 corner tiles are (cx,cy), (cx+1,cy), (cx,cy+1), (cx+1,cy+1). An
+ * empty cell has no diagonal through it, leaving a visible star-shaped hole.
  */
 export function fillEmptyCells(
     grid: CellGrid,

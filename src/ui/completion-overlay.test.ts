@@ -33,9 +33,8 @@ describe('showCompletionOverlay', () => {
     beforeEach(() => {
         container = document.createElement('div');
         document.body.replaceChildren(container);
-        // Clipboard fallback path — sharePuzzle is invoked from the share
-        // button click; stubbing prevents jsdom 'no share mechanism' error
-        // toasts and lets us assert on the side-effects we care about.
+        // Stub navigator.share so sharePuzzle doesn't hit jsdom's 'no share
+        // mechanism' error toast; lets us assert the side-effects we care about.
         vi.stubGlobal('navigator', {
             share: vi.fn().mockResolvedValue(undefined),
         });
@@ -138,8 +137,8 @@ describe('showCompletionOverlay', () => {
     it('sanitizes a URL-bearing error message before tracking share-failed', async () => {
         const umamiTrack = vi.fn();
         window.umami = { track: umamiTrack };
-        // No native share; clipboard write rejects with a URL-bearing message.
-        // The call site must run it through sanitizeErrorReason before tracking.
+        // Clipboard write rejects with a URL-bearing message; the call site must
+        // run it through sanitizeErrorReason before tracking.
         vi.stubGlobal('navigator', {
             clipboard: {
                 writeText: () =>
