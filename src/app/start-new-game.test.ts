@@ -169,6 +169,13 @@ describe('startNewGame', () => {
         expect(onGameAnalytics).toHaveBeenCalledWith(
             expect.objectContaining({ source: 'fresh' }),
         );
+        // #507: bootstrap clears the cached analytics on every `session.install`,
+        // which is safe only because this assignment runs *after* it. Pin that
+        // order — a reorder above `install` would let the clear wipe the fresh
+        // payload, silently degrading every completion event to state-derived.
+        expect(vi.mocked(install).mock.invocationCallOrder[0]).toBeLessThan(
+            vi.mocked(onGameAnalytics).mock.invocationCallOrder[0],
+        );
         // An ordinary start must carry no `bootFallback` key at all. Absence,
         // not `false`, is what `umami.ts` subtracts to size the #488 recovery
         // bucket — setting the flag unconditionally would inflate exactly that

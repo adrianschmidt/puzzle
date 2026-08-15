@@ -102,6 +102,14 @@ vi.mock('./dev-hooks.js', async (importOriginal) => {
     return { ...actual, installDevHooks: vi.fn(actual.installDevHooks) };
 });
 
+// Spy on `track` so the completion payload `merge-result` emits is
+// observable; every other export (only types are load-bearing here) passes
+// through untouched.
+vi.mock('../analytics/index.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../analytics/index.js')>();
+    return { ...actual, track: vi.fn() };
+});
+
 import { installGlobalHandlers } from './global-handlers.js';
 import { runBootSequence } from './boot-sequence.js';
 import { startNewGame } from './start-new-game.js';
@@ -115,6 +123,8 @@ import { createShareLinkLoader } from './share-link-loader.js';
 import { installBackgroundColor } from './install-background-color.js';
 import { installToolbar } from './install-toolbar.js';
 import { installDevHooks } from './dev-hooks.js';
+import { track } from '../analytics/index.js';
+import type { NewGameData, PuzzleCompletedData } from '../analytics/index.js';
 // From the module, not the barrel: the token key is deliberately not part of
 // the persistence layer's public surface.
 import { STORAGE_KEY, GEOMETRY_SEED_KEY } from '../persistence/storage.js';
@@ -561,6 +571,53 @@ describe('bootstrap', () => {
         onSettled();
 
         expect(createdCompletionPresenter().show).toHaveBeenCalledTimes(beforeSettle);
+    });
+
+    it('clears the cached new-game analytics when a game is installed (#507)', () => {
+        // A throw between `session.install` and the deferred `onGameAnalytics`
+        // assignment leaves the *previous* puzzle's payload cached against the
+        // *new* game (both start flows install first, assign later). Clearing
+        // in the install hook means the worst case is a state-derived
+        // completion event — the supported resume-from-localStorage shape —
+        // not one carrying another puzzle's `source` / `imageCategory` /
+        // `vibrant` / geometry.
+        bootstrap(root);
+        const session = createdSession();
+
+        // Prime the cache through the same `onGameAnalytics` binding the start
+        // flow uses, then install a new game without a following assignment —
+        // the "threw before the analytics were re-cached" window.
+        const { start } = vi.mocked(installDevHooks).mock.calls[0][0];
+        void start({ cols: 2, rows: 2 }, {});
+        const startNewGameDeps = vi.mocked(startNewGame).mock.calls.at(-1)![2];
+        const staleAnalytics: NewGameData = {
+            source: 'fresh', cutStyle: 'wavy', rotationMode: 'none',
+            orientation: 'landscape', cols: 9, rows: 9, pieceCount: 81,
+            imageSource: 'unsplash', imageCategory: 'nature', vibrant: true,
+            generationMode: 'worker', generationMs: 42,
+        };
+        startNewGameDeps.onGameAnalytics(staleAnalytics);
+
+        const completed = makeCompletedState();
+        session.install(completed);
+
+        vi.mocked(track).mockClear();
+        const { applyMerge } = vi.mocked(createGameSession).mock.calls[0][0];
+        applyMerge(completed, { group: completed.groups[0], mergeCount: 1 } satisfies MergeResult, [0]);
+
+        // `track`'s overloads collapse to the last signature under
+        // `mock.calls`, so widen to a plain event tuple to read any event.
+        const calls = vi.mocked(track).mock.calls as unknown as Array<[string, PuzzleCompletedData]>;
+        const completedCall = calls.find(([name]) => name === 'puzzle-completed');
+        expect(completedCall, 'no puzzle-completed event fired').toBeDefined();
+        const payload = completedCall![1];
+        // Derived from `completed`, not the stale 'wavy' cache.
+        expect(payload.cutStyle).toBe('classic');
+        // Fields only a cached NewGameData carries — their absence is proof the
+        // stale payload did not win.
+        expect(payload).not.toHaveProperty('source');
+        expect(payload).not.toHaveProperty('imageCategory');
+        expect(payload).not.toHaveProperty('vibrant');
     });
 
     it('renders the toolbar into the given root', () => {
