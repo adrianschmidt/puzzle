@@ -581,6 +581,29 @@ describe('startNewGame', () => {
             cutStyle: 'wavy',
         }));
     });
+
+    // #536: Cancel used to be dead while a new game waited on the image fetch —
+    // the abort signal never reached the network phase. Prove the signal handed
+    // to `resolveUnsplashImage` is the one `onCancel` aborts, so a cancel during
+    // a stalled fetch is observed there (`resolve-image.test.ts` covers the
+    // abort → GenerationCanceledError map inside that call).
+    it('aborts the signal it hands resolveUnsplashImage when Cancel is clicked', async () => {
+        vi.mocked(getImageProxyBaseUrl).mockReturnValue('https://proxy.example');
+        let capturedSignal: AbortSignal | undefined;
+        vi.mocked(resolveUnsplashImage).mockImplementation(async (_proxy, _category, _vibrant, _orientation, signal) => {
+            capturedSignal = signal;
+            vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!();
+            return null;
+        });
+
+        await startNewGame(
+            { cols: 2, rows: 2 },
+            { cutStyle: 'wavy' },
+            { ...deps, hasCurrentGame: () => true },
+        );
+
+        expect(capturedSignal?.aborted).toBe(true);
+    });
 });
 
 function makeCandidateImage() {

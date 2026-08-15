@@ -169,10 +169,11 @@ export async function fetchRandomImage(
     fetchFn: typeof fetch = fetch,
     query?: string,
     orientation: Orientation = 'landscape',
+    signal?: AbortSignal,
 ): Promise<UnsplashImageResult | undefined> {
     const url = buildRandomPhotoUrl(proxyBaseUrl, query, orientation);
 
-    const response = await fetchFn(url);
+    const response = await fetchFn(url, { signal });
 
     if (!response.ok) {
         reportProxyHttpError(response, 'single');

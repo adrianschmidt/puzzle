@@ -7,6 +7,7 @@
 import { diagnostics } from '../diagnostics.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { fetchRandomImage } from '../images/index.js';
+import { GenerationCanceledError } from '../game/index.js';
 import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
 import { toDisplayImage, type DisplayImage } from './unsplash-display-image.js';
 import type { Orientation } from '../model/types.js';
@@ -18,12 +19,12 @@ export async function resolveUnsplashImage(
     imageCategory: string,
     vibrant: boolean,
     orientation: Orientation,
-    fetchFn: typeof fetch = fetch,
+    signal?: AbortSignal,
 ): Promise<ResolvedImage | null> {
     try {
         const category = findImageCategory(imageCategory);
         const query = buildImageQuery(category.query, vibrant);
-        const result = await fetchRandomImage(proxyBaseUrl, fetchFn, query, orientation);
+        const result = await fetchRandomImage(proxyBaseUrl, fetch, query, orientation, signal);
 
         if (!result) {
             return null;
@@ -31,6 +32,10 @@ export async function resolveUnsplashImage(
 
         return toDisplayImage(result);
     } catch (error) {
+        // A canceled start aborts the fetch; surface it as the same cancellation
+        // the generation phase throws so `startNewGame` tears the overlay down,
+        // and don't file it as a fetch failure.
+        if (signal?.aborted) throw new GenerationCanceledError();
         diagnostics.warn('Failed to fetch Unsplash image, using fallback:', error);
         track('image-fetch-failed', {
             reason: sanitizeErrorReason(error),

@@ -177,7 +177,7 @@ export async function startNewGame(
             attribution = pickedImage.attribution;
             downloadLocation = pickedImage.downloadLocation;
         } else if (proxyBaseUrl) {
-            const resolved = await resolveUnsplashImage(proxyBaseUrl, imageCategory ?? 'any', vibrant, orientation);
+            const resolved = await resolveUnsplashImage(proxyBaseUrl, imageCategory ?? 'any', vibrant, orientation, controller.signal);
             if (resolved) {
                 imageUrl = resolved.imageUrl;
                 imageSize = resolved.imageSize;
