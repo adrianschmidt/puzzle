@@ -321,6 +321,18 @@ describe('fetchRandomImage', () => {
         const calledUrl = mockFetch.mock.calls[0][0] as string;
         expect(calledUrl).toContain('orientation=portrait');
     });
+
+    it('forwards the abort signal to the fetch call', async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve(makeUnsplashResponse()),
+        });
+        const { signal } = new AbortController();
+
+        await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch, undefined, 'landscape', signal);
+
+        expect(mockFetch.mock.calls[0][1]).toEqual({ signal });
+    });
 });
 
 describe('fetchRandomImages', () => {
