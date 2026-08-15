@@ -62,9 +62,10 @@ export function bootstrap(
     /**
      * Populated when a puzzle starts (fresh or shared); null when resuming
      * from localStorage, where `puzzle-completed` derives fields from the game
-     * state alone. Not cleared by `session.install`, so a throw between
-     * install and the assignment below leaves a stale payload cached against
-     * the new game (#507); carried verbatim from `main.ts`, unchanged here.
+     * state alone. `createOnInstalled` clears it on every install (#507): both
+     * start flows install first and assign this several statements later, so a
+     * throw in that gap would otherwise cache the *previous* puzzle's payload
+     * against the *new* game and misattribute its completion.
      */
     let currentGameAnalytics: NewGameData | null = null;
 
@@ -160,6 +161,9 @@ export function bootstrap(
         syncRotationUi: RotationUi['syncVisibility'],
     ): (state: GameState) => void {
         return (state) => {
+            // Drop the outgoing puzzle's cached analytics (#507; the field's
+            // contract covers why this can't wipe the incoming game's payload).
+            currentGameAnalytics = null;
             // Remove the previous game's overlay first — `show` no-ops while
             // one is already up.
             completionPresenter.remove();
