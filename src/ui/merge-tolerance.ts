@@ -90,15 +90,11 @@ export const saveTolerancePreference = store.save;
 export const loadTolerancePreference = store.load;
 
 /**
- * Applied on top of the preset fraction so each puzzle style can feel right
- * without extra UI.
+ * Per-style multipliers on the preset snap fraction. Empty by design —
+ * unlisted styles use the 1.0 fallback; add an entry only when a style needs a
+ * different value to feel the same.
  */
-const STYLE_SNAP_MULTIPLIERS: Record<string, number> = {
-    classic: 1.0,
-    fractal: 1.0,
-    composable: 1.0,
-    wavy: 1.0,
-};
+const STYLE_SNAP_MULTIPLIERS: Record<string, number> = {};
 
 export function getStyleSnapMultiplier(style: CutStyleOrOther): number {
     return STYLE_SNAP_MULTIPLIERS[style] ?? 1.0;
