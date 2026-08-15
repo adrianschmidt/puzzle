@@ -4,7 +4,7 @@
  */
 
 import { isSafeHttpUrl } from '../sharing/safe-url.js';
-import { CANDIDATE_COUNT, type CandidateImage } from '../app/unsplash-display-image.js';
+import { CANDIDATE_COUNT, type CandidateImage } from '../images/index.js';
 
 export type NewGameImageChoice =
     | { kind: 'photo'; photo: CandidateImage }

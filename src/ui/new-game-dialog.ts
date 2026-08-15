@@ -9,7 +9,7 @@ import { cutStyleNeedsTracedTabs, DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOption
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
 import { createImagePicker, type ImagePicker, type NewGameImageChoice } from './image-picker.js';
-import type { CandidateImage } from '../app/unsplash-display-image.js';
+import type { CandidateImage } from '../images/index.js';
 
 export interface ComposableSliderConfig {
     baseCut: 'sine' | 'triangular';

@@ -6,10 +6,9 @@
 
 import { diagnostics } from '../diagnostics.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
-import { fetchRandomImage } from '../images/index.js';
+import { fetchRandomImage, toDisplayImage, type DisplayImage } from '../images/index.js';
 import { GenerationCanceledError } from '../game/index.js';
 import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
-import { toDisplayImage, type DisplayImage } from './unsplash-display-image.js';
 import type { Orientation } from '../model/types.js';
 
 export type ResolvedImage = DisplayImage;
