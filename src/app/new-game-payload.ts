@@ -1,7 +1,7 @@
 import type { GameState, GridSize, Orientation } from '../model/types.js';
 import type { NewGameData } from '../analytics/index.js';
 import type { GenerationOutcome } from '../game/index.js';
-import type { CandidateImage } from './unsplash-display-image.js';
+import type { CandidateImage } from '../images/index.js';
 import { classifyImageSource, resolveNewGameImageSource } from './classify-image-source.js';
 import { traceSetVersionOf } from './trace-set-version.js';
 

@@ -5,7 +5,7 @@
  * original aspect ratio.
  */
 
-import type { UnsplashImageResult } from '../images/index.js';
+import type { UnsplashImageResult } from './unsplash.js';
 
 export interface DisplayImage {
     imageUrl: string;

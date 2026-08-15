@@ -5,9 +5,8 @@
  */
 
 import { diagnostics } from '../diagnostics.js';
-import { fetchRandomImages } from '../images/index.js';
+import { fetchRandomImages, CANDIDATE_COUNT, toDisplayImage, type CandidateImage } from '../images/index.js';
 import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
-import { CANDIDATE_COUNT, toDisplayImage, type CandidateImage } from './unsplash-display-image.js';
 import type { Orientation } from '../model/types.js';
 
 /** Candidates per picker fetch — one per grid tile, so tied to the tile count. */

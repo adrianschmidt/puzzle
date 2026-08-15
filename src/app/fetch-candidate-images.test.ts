@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../images/index.js', () => ({ fetchRandomImages: vi.fn() }));
+vi.mock('../images/index.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../images/index.js')>()),
+    fetchRandomImages: vi.fn(),
+}));
 
 import { fetchRandomImages } from '../images/index.js';
 import { fetchCandidateImages, CANDIDATE_IMAGE_COUNT } from './fetch-candidate-images.js';

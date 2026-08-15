@@ -4,7 +4,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-vi.mock('../images/index.js', () => ({ fetchRandomImage: vi.fn() }));
+vi.mock('../images/index.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../images/index.js')>()),
+    fetchRandomImage: vi.fn(),
+}));
 
 import { fetchRandomImage } from '../images/index.js';
 import { GenerationCanceledError } from '../game/index.js';

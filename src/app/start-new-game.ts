@@ -13,7 +13,7 @@ import { rotationModeForNewGame } from '../game/cut-styles.js';
 import type { ComposableConfig } from '../puzzle/composable-generator.js';
 import type { FractalDialogConfig, WavyDialogConfig } from '../ui/index.js';
 import { showLoadingOverlay, hideLoadingOverlay, yieldForPaint } from '../ui/index.js';
-import { getImageProxyBaseUrl, triggerPhotoDownload } from '../images/index.js';
+import { getImageProxyBaseUrl, triggerPhotoDownload, type CandidateImage } from '../images/index.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { diagnostics } from '../diagnostics.js';
@@ -31,7 +31,6 @@ import {
     orientGridSize,
     blankSizeForOrientation,
 } from './orientation.js';
-import type { CandidateImage } from './unsplash-display-image.js';
 import type { GameSession } from './game-session.js';
 
 export interface StartNewGameOptions {
