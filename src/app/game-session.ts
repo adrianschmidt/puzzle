@@ -45,6 +45,8 @@ export function createGameSession(deps: {
     onInstalled: (state: GameState) => void;
     /** Debounced progress save. */
     save: (state: GameState) => void;
+    /** Drop any pending debounced save (see the ordering note in `install`). */
+    cancelPendingSave: () => void;
     applyMerge: (
         state: GameState,
         result: MergeResult,
@@ -66,6 +68,7 @@ export function createGameSession(deps: {
         rotationFocus,
         onInstalled,
         save,
+        cancelPendingSave,
         applyMerge,
         onViewportChanged,
         applyTransform,
@@ -84,11 +87,15 @@ export function createGameSession(deps: {
         },
 
         install(state: GameState): void {
-            // Clears before `installed = state`, so bootstrap's selection
-            // listener autosaves the *outgoing* puzzle — a spurious
-            // `progress-save-skipped` the new slot then refuses (#514).
+            // `clearAll` notifies while `installed` is still the outgoing
+            // state, so bootstrap's selection listener arms an autosave for it.
+            // `cancelPendingSave` drops that save (and any other pending one):
+            // the new puzzle is about to take the save slot, so it could only
+            // skip (#514). Order matters — cancel must follow the clear, or the
+            // save it arms isn't pending yet.
             selectionManager.clearAll();
             rotationFocus.clearFocus();
+            cancelPendingSave();
 
             if (teardown) {
                 teardown();

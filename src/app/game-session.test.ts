@@ -63,6 +63,7 @@ describe('createGameSession', () => {
     // widens and stops being assignable to the dep's signature.
     let onInstalled: Mock<(state: GameState) => void>;
     let save: Mock<(state: GameState) => void>;
+    let cancelPendingSave: Mock<() => void>;
     let applyMerge: Mock<
         (state: GameState, result: MergeResult, droppedGroupIds: readonly number[]) => void
     >;
@@ -78,6 +79,7 @@ describe('createGameSession', () => {
         rotationFocus = new RotationFocus();
         onInstalled = vi.fn();
         save = vi.fn();
+        cancelPendingSave = vi.fn();
         applyMerge = vi.fn();
         applyTransform = vi.fn();
         onViewportChanged = vi.fn();
@@ -99,6 +101,7 @@ describe('createGameSession', () => {
             rotationFocus,
             onInstalled,
             save,
+            cancelPendingSave,
             applyMerge,
             applyTransform,
             onViewportChanged,
@@ -194,6 +197,29 @@ describe('createGameSession', () => {
 
         expect(selectionManager.hasSelection).toBe(false);
         expect(rotationFocus.focusedGroupId).toBeNull();
+    });
+
+    it('cancels a pending save on every install, after clearing the selection', () => {
+        // #514: clearing the selection makes bootstrap's listener arm an
+        // autosave for the *outgoing* puzzle, which the incoming slot then
+        // refuses. `install` must cancel it, and only after the clear —
+        // otherwise nothing is pending yet and the doomed save survives.
+        const cancel = vi.fn(() => {
+            expect(selectionManager.hasSelection).toBe(false);
+        });
+        const session = make({ cancelPendingSave: cancel });
+
+        // Unconditional — also covers the edit-then-new-game race, where a real
+        // edit (not a selection) armed the outgoing save.
+        session.install(makeState());
+        expect(cancel).toHaveBeenCalledTimes(1);
+
+        selectionManager.toolActive = true;
+        selectionManager.select(7);
+        session.install(makeState());
+
+        expect(cancel).toHaveBeenCalledTimes(2);
+        expect(selectionManager.hasSelection).toBe(false);
     });
 
     it('tears down the previous interaction before wiring the next', () => {

@@ -22,6 +22,8 @@ export interface SaveCoordinator {
     autoSave(state: GameState): void;
     persistNewPuzzle(state: GameState): void;
     flush(): void;
+    /** Drop any pending debounced save without flushing it (see `GameSession.install`). */
+    cancel(): void;
 }
 
 /**
@@ -39,8 +41,6 @@ export function createSaveCoordinator(deps: {
 
     // A suppressed repeat still leaves a diagnostic trail rather than vanishing.
     let lastSaveFailedToastAt = -Infinity;
-    // `state` is the puzzle whose save failed — not always the current
-    // `gameState`: a debounced progress save can flush after a new game starts.
     function notifySaveFailed(op: 'progress' | 'new-puzzle', state: GameState): void {
         track('save-failed', {
             op,
@@ -57,17 +57,13 @@ export function createSaveCoordinator(deps: {
         showToast(SAVE_FAILED_TOAST);
     }
 
-    // Both callbacks attribute to the flushed state, not the next `autoSave`
-    // state: a save queued for the previous puzzle can flush after a new game
-    // starts, which would otherwise report the new puzzle's fields for the old
-    // failure.
     const debouncedSave = createDebouncedSave({
         onSaveFailed: (state) => notifySaveFailed('progress', state),
         // The save slot is recorded as another puzzle's, so this autosave was
         // refused rather than allowed to tear the pair. A cross-tab takeover on
         // the same origin is the race this targets, but a quota-failed geometry
-        // write and a late-flushing outgoing save land here too (see
-        // `ProgressSaveSkippedData`). Not user-facing, but worth measuring.
+        // write lands here too (see `ProgressSaveSkippedData`). Not user-facing,
+        // but worth measuring.
         onSaveSkipped: (state) =>
             track('progress-save-skipped', {
                 cutStyle: state.cutStyle ?? 'classic',
@@ -115,6 +111,10 @@ export function createSaveCoordinator(deps: {
 
         flush(): void {
             debouncedSave.flush();
+        },
+
+        cancel(): void {
+            debouncedSave.cancel();
         },
     };
 }
