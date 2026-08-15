@@ -25,6 +25,7 @@ describe('createSaveCoordinator', () => {
     let umamiTrack: Mock;
     let save: Mock;
     let flush: Mock;
+    let cancel: Mock;
     let onSaveFailed: (state: ReturnType<typeof makeGameState>) => void;
     let onSaveSkipped: (state: ReturnType<typeof makeGameState>) => void;
     // Each `make()` installs real pagehide/visibilitychange listeners on
@@ -37,10 +38,11 @@ describe('createSaveCoordinator', () => {
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
         save = vi.fn();
         flush = vi.fn();
+        cancel = vi.fn();
         vi.mocked(createDebouncedSave).mockImplementation((opts) => {
             onSaveFailed = opts!.onSaveFailed!;
             onSaveSkipped = opts!.onSaveSkipped!;
-            return { save, flush, cancel: vi.fn() };
+            return { save, flush, cancel };
         });
         vi.mocked(saveNewPuzzle).mockReturnValue('ok');
         vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -78,6 +80,14 @@ describe('createSaveCoordinator', () => {
         make();
         window.dispatchEvent(new Event('pagehide'));
         expect(flush).toHaveBeenCalled();
+    });
+
+    it('cancels the pending debounced save without flushing it', () => {
+        // `GameSession.install` calls this to drop the outgoing puzzle's
+        // doomed autosave (#514) — a cancel, never a flush.
+        make().cancel();
+        expect(cancel).toHaveBeenCalledTimes(1);
+        expect(flush).not.toHaveBeenCalled();
     });
 
     it('flushes when the document becomes hidden', () => {
@@ -147,8 +157,6 @@ describe('createSaveCoordinator', () => {
     });
 
     it('attributes a progress failure to the flushed state, not the current one', () => {
-        // A save queued for the previous puzzle can flush after a new game
-        // starts; reporting the new puzzle's fields would be wrong.
         make();
         onSaveFailed(makeGameState({ cutStyle: 'fractal' }));
 

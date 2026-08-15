@@ -251,14 +251,11 @@ export function saveProgress(
         diagnostics.warn(
             `Skipping progress save: the recorded owner of the save slot (seed ` +
                 `${geometrySeed}) is not the puzzle being saved (seed ${state.seed}); ` +
-                'not overwriting it. Three causes are indistinguishable here: another ' +
-                'tab started a puzzle over this one, a geometry write from this tab ' +
-                'failed on quota so the previous puzzle still owns the slot, or a ' +
-                'debounced save queued for the outgoing puzzle flushed after a new ' +
-                'game replaced it (which a new game started with an active selection ' +
-                'hits every time). See `ProgressSaveSkippedData` in analytics/umami.ts ' +
-                'for how to tell them apart. Since #490 the deciding read is the ' +
-                'token, not the blob.',
+                'not overwriting it. Two causes are indistinguishable here: another ' +
+                'tab started a puzzle over this one, or a geometry write from this ' +
+                'tab failed on quota so the previous puzzle still owns the slot. See ' +
+                '`ProgressSaveSkippedData` in analytics/umami.ts for how to tell them ' +
+                'apart. Since #490 the deciding read is the token, not the blob.',
         );
         return 'skipped';
     }
@@ -401,8 +398,8 @@ export function loadState(): GameState | undefined {
  * - `onSaveSkipped` — write refused because the slot belongs to a different
  *   puzzle (see {@link saveProgress}); not a failure, record for telemetry.
  *
- * Each callback receives the state whose save failed/skipped — attribute
- * telemetry to *that* state, since the debounce window can straddle a new game.
+ * Each callback receives the state whose save failed/skipped; attribute
+ * telemetry to that state.
  */
 export function createDebouncedSave(
     {

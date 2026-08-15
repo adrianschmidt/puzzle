@@ -1103,8 +1103,6 @@ describe('createDebouncedSave', () => {
                 throw new DOMException('quota', 'QuotaExceededError');
             });
 
-        // The queued puzzle. A new game can start inside the debounce window, so
-        // the failure must attribute to this state, not whatever is current at flush.
         const queued = makeGameState({ seed: 7 });
         const { save } = createDebouncedSave({ onSaveFailed });
         save(queued);

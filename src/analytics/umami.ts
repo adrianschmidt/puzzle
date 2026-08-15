@@ -1117,8 +1117,8 @@ export interface SaveUnreadableData {
  * than the one being saved (see `saveProgress`). `cutStyle`/`pieceCount`
  * describe the puzzle whose progress was dropped.
  *
- * **Not a synonym for "cross-tab takeover".** It counts three distinct causes,
- * and the takeover may well be the smallest:
+ * **Not a synonym for "cross-tab takeover".** It counts two distinct causes,
+ * and the takeover may well be the smaller:
  *
  * 1. **The cross-tab race** (#404) — another tab started a puzzle over this
  *    one. This is what the guard was built for, and what previously produced a
@@ -1131,18 +1131,12 @@ export interface SaveUnreadableData {
  *    rest of the session, with no second tab involved at all. Note this
  *    produces exactly the shape a sustained takeover would: a long run of this
  *    event from one user.
- * 3. **A debounced save that straddled a new game.** A progress save queued
- *    for the outgoing puzzle can still be pending when the new puzzle's
- *    geometry (and token) replace it, and nothing cancels it — `SaveCoordinator`
- *    never calls `cancel()`. The flush then names the old puzzle against the
- *    new slot and skips. Starting a new game *while a multi-select selection is
- *    active* hits this every time rather than on a race: `GameSession.install`
- *    clears the selection before assigning the new state, so bootstrap's
- *    selection listener autosaves the state that is still current — the
- *    outgoing one. Single tab, no quota, and exactly **one** event per new
- *    game: the next autosave carries the new state, which matches. The skip
- *    is correct — that progress had already been superseded. Pre-existing and
- *    deliberately not changed here; tracked as #514.
+ *
+ * A new game does *not* strand a save here: `GameSession.install` cancels the
+ * outgoing puzzle's pending autosave before the new geometry takes the slot,
+ * so the doomed save never flushes (#514). Before that fix it was a third
+ * cause — an isolated skip around every new game started with an active
+ * multi-select selection — so sessions predating the fix can still show it.
  *
  * Discriminating them is per-session inspection, not arithmetic on the totals.
  * `save-failed` with `op: 'new-puzzle'` is the useful marker but it neither
@@ -1154,7 +1148,7 @@ export interface SaveUnreadableData {
  * run at all. Absence is not filterable here either (see
  * {@link NewGameFailedData}). So read sessions: a `save-failed{op:'new-puzzle'}`
  * followed by a long run is cause 2; a long run with no `save-failed` is
- * cause 1; an isolated event around a new game is cause 3.
+ * cause 1.
  *
  * Since #490 the comparison reads the derived `puzzle-geometry-seed` token
  * instead of decoding the geometry blob. That does not add a cause: every path

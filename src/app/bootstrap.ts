@@ -182,6 +182,7 @@ export function bootstrap(
         rotationFocus,
         onInstalled: createOnInstalled(rotationUi.syncVisibility),
         save: (state) => saveCoordinator.autoSave(state),
+        cancelPendingSave: () => saveCoordinator.cancel(),
         applyMerge,
         onViewportChanged,
         applyTransform: applyViewportTransform,
