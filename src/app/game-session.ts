@@ -32,6 +32,14 @@ export interface GameSession {
     /** Whether a puzzle is rendered *and* interactive — stricter than `current() !== undefined`; see `install`. */
     hasGame(): boolean;
     install(state: GameState): void;
+    /**
+     * Undo the last install: tear the interaction wiring down and drop the
+     * reference, so `current()` is `undefined` and `hasGame()` is `false`
+     * again. A share load that throws after `install` calls this so it leaves
+     * no half-applied puzzle for the boot fallback's `hasGame()` gate to read
+     * as a finished game (#500).
+     */
+    uninstall(): void;
     restoreSelection(saved: readonly number[]): void;
 }
 
@@ -84,6 +92,14 @@ export function createGameSession(deps: {
 
         hasGame(): boolean {
             return teardown !== null;
+        },
+
+        uninstall(): void {
+            if (teardown) {
+                teardown();
+                teardown = null;
+            }
+            installed = undefined;
         },
 
         install(state: GameState): void {

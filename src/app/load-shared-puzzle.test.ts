@@ -67,6 +67,7 @@ function payload(overrides: Partial<SharePayload> = {}): SharePayload {
 describe('loadSharedPuzzle', () => {
     let umamiTrack: ReturnType<typeof vi.fn>;
     let install: Mock<(state: GameState) => void>;
+    let uninstall: Mock<() => void>;
     let fitView: Mock<(state: GameState) => void>;
     let persistNewPuzzle: Mock<(state: GameState) => void>;
     let onGameAnalytics: Mock<(data: unknown) => void>;
@@ -88,13 +89,14 @@ describe('loadSharedPuzzle', () => {
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
 
         install = vi.fn();
+        uninstall = vi.fn();
         fitView = vi.fn();
         persistNewPuzzle = vi.fn();
         onGameAnalytics = vi.fn();
         adopt = vi.fn();
         deps = {
             container: document.createElement('div'),
-            session: { install },
+            session: { install, uninstall },
             fitView,
             persistNewPuzzle,
             backgroundColor: { adopt },
@@ -253,6 +255,56 @@ describe('loadSharedPuzzle', () => {
 
         await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('generation boom');
         expect(hideLoadingOverlay).toHaveBeenCalled();
+    });
+
+    // #500: a throw after `install` but before the puzzle is saved leaves the
+    // session holding a half-applied puzzle. Rolling it back keeps the boot
+    // fallback's `hasGame()` gate from mistaking that for a finished game and
+    // suppressing the last-resort puzzle.
+    it('rolls the session back when fitView throws after install', async () => {
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
+        fitView.mockImplementation(() => { throw new Error('fit boom'); });
+
+        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('fit boom');
+
+        expect(install).toHaveBeenCalledTimes(1);
+        expect(uninstall).toHaveBeenCalledTimes(1);
+        // Rolled back, not rolled back before it was even installed.
+        expect(uninstall.mock.invocationCallOrder[0])
+            .toBeGreaterThan(install.mock.invocationCallOrder[0]);
+    });
+
+    it('rolls the session back when install itself throws', async () => {
+        // The wrapped trio's first step: a mid-install throw leaves the session
+        // holding a stale reference (see game-session's render-throw case), so
+        // the rollback must reach install too, not just fit/persist.
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
+        install.mockImplementation(() => { throw new Error('install boom'); });
+
+        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('install boom');
+
+        expect(uninstall).toHaveBeenCalledTimes(1);
+    });
+
+    it('rolls the session back when persisting the new puzzle throws', async () => {
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
+        persistNewPuzzle.mockImplementation(() => { throw new Error('persist boom'); });
+
+        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('persist boom');
+
+        expect(uninstall).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not roll back when a step after the puzzle is saved throws', async () => {
+        // The save already succeeded, so boot restores the puzzle — tearing it
+        // back down here would be the regression. The window closes at persist.
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
+        onGameAnalytics.mockImplementation(() => { throw new Error('analytics boom'); });
+
+        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('analytics boom');
+
+        expect(persistNewPuzzle).toHaveBeenCalledTimes(1);
+        expect(uninstall).not.toHaveBeenCalled();
     });
 
     it('reports piece-count-mismatch with repro params when generation flags one', async () => {

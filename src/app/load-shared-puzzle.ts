@@ -34,8 +34,8 @@ import type { GameSession } from './game-session.js';
 
 export interface LoadSharedPuzzleDeps {
     container: HTMLElement;
-    /** Install-only slice: this flow regenerates and installs, never reads back. */
-    session: Pick<GameSession, 'install'>;
+    /** Installs the regenerated puzzle, and rolls it back if applying it fails; never reads the previous one back. */
+    session: Pick<GameSession, 'install' | 'uninstall'>;
     fitView: (state: GameState) => void;
     persistNewPuzzle: (state: GameState) => void;
     /**
@@ -126,9 +126,19 @@ export async function loadSharedPuzzle(
             }
         }
 
-        deps.session.install(state);
-        deps.fitView(state);
-        deps.persistNewPuzzle(state);
+        // Install, fit and save as a unit. A throw before the save leaves a
+        // rendered-but-unsaved puzzle the boot fallback would read as finished
+        // and refuse to replace (#500), so roll the session back. Past the save
+        // the puzzle is on disk and boot restores it, so a later throw needs no
+        // rollback — the window closes here.
+        try {
+            deps.session.install(state);
+            deps.fitView(state);
+            deps.persistNewPuzzle(state);
+        } catch (err) {
+            deps.session.uninstall();
+            throw err;
+        }
 
         // 'none' means the link carried no color; a present-but-unrecognized
         // id reports as 'invalid' so palette drift that drops a live link's
