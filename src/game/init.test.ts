@@ -456,6 +456,7 @@ describe('createNewGame piece-count mismatch reporting', () => {
         // with no callback — legacy Classic never reports one, so this installs
         // the fake strategy to make dropping the `?.` fail.
         const fakeStrategy: CutStyleStrategy = {
+            configKey: 'classicConfig',
             scaleGrid: (grid) => grid,
             inscribePuzzleSize: (imageSize) => imageSize,
             generatePieces: () => ({
@@ -478,6 +479,7 @@ describe('createNewGame piece-count mismatch reporting', () => {
         // check for the destructure/invoke wiring in `init.ts`.
         const mismatch: PieceCountMismatch = { expected: 4, actual: 3, baseCutId: 'fake' };
         const fakeStrategy: CutStyleStrategy = {
+            configKey: 'classicConfig',
             scaleGrid: (grid) => grid,
             inscribePuzzleSize: (imageSize) => imageSize,
             generatePieces: () => ({ pieces: [], pieceCountMismatch: mismatch }),
@@ -534,6 +536,7 @@ describe('createNewGameAsync', () => {
         // the `await`).
         const mismatch: PieceCountMismatch = { expected: 4, actual: 3, baseCutId: 'fake' };
         const fakeStrategy: CutStyleStrategy = {
+            configKey: 'classicConfig',
             scaleGrid: (grid) => grid,
             inscribePuzzleSize: (size) => size,
             generatePieces: () => ({ pieces: [], pieceCountMismatch: mismatch }),

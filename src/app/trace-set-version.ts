@@ -1,4 +1,5 @@
 import type { GameState } from '../model/types.js';
+import { configKeyForCutStyle } from '../game/cut-style-strategies.js';
 
 /**
  * The version survives in the per-style config on the saved state, so resumed
@@ -10,11 +11,7 @@ import type { GameState } from '../model/types.js';
  * can't mis-attribute a version to a style that didn't generate with one.
  */
 export function traceSetVersionOf(state: GameState): number | undefined {
-    return state.cutStyle === 'triangles'
-        ? state.trianglesConfig?.traceSetVersion
-        : state.cutStyle === 'wavy'
-          ? state.wavyConfig?.traceSetVersion
-          : state.cutStyle === 'classic'
-            ? state.classicConfig?.traceSetVersion
-            : undefined;
+    const key = configKeyForCutStyle(state.cutStyle);
+    const config = key && state[key];
+    return config && 'traceSetVersion' in config ? config.traceSetVersion : undefined;
 }

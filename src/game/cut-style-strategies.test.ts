@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { getCutStyleStrategy, selectTriangleRows } from './cut-style-strategies.js';
+import { configKeyForCutStyle, getCutStyleStrategy, selectTriangleRows } from './cut-style-strategies.js';
 import { createNewGame } from './init.js';
+import { CUT_STYLE_OPTIONS } from './cut-styles.js';
 
 describe('wavy strategy', () => {
     it('is registered for cutStyle "wavy"', () => {
@@ -192,5 +193,25 @@ describe('triangles strategy grid mapping', () => {
         const s = getCutStyleStrategy('triangles');
         const size = { width: 1080, height: 720 };
         expect(s.inscribePuzzleSize(size, { cols: 6, rows: 3 }, {})).toEqual(size);
+    });
+});
+
+describe('configKeyForCutStyle', () => {
+    it('returns each style\'s configKey', () => {
+        for (const option of CUT_STYLE_OPTIONS) {
+            expect(configKeyForCutStyle(option.id)).toBe(getCutStyleStrategy(option.id).configKey);
+        }
+    });
+
+    it('is undefined for an unknown or absent style', () => {
+        expect(configKeyForCutStyle('bogus')).toBeUndefined();
+        expect(configKeyForCutStyle('constructor')).toBeUndefined();
+        expect(configKeyForCutStyle(undefined)).toBeUndefined();
+    });
+
+    it('is undefined for a type-lying non-string id', () => {
+        // `hasOwnProperty` coerces its key, so `['classic']` would stringify to
+        // 'classic' and resolve a key without the `typeof` guard (as isCutStyle has).
+        expect(configKeyForCutStyle(['classic'] as unknown as string)).toBeUndefined();
     });
 });
