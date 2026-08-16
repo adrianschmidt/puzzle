@@ -242,6 +242,32 @@ describe('createGameSession', () => {
         expect(unwired).toEqual(wiredByFirst);
     });
 
+    it('reports no game and tears down interaction after uninstall', () => {
+        // #500: a failed share load rolls the session back so the boot
+        // fallback's `hasGame()` gate doesn't read a half-applied puzzle as a
+        // finished one. The listeners the install wired must come off too, or
+        // uninstall leaks a live pointer router.
+        const add = vi.spyOn(container, 'addEventListener');
+        const remove = vi.spyOn(container, 'removeEventListener');
+        const session = make();
+        session.install(makeState());
+        const wired = add.mock.calls.map(([type, listener]) => [type, listener]);
+        expect(wired.length).toBeGreaterThan(0);
+
+        session.uninstall();
+
+        expect(session.current()).toBeUndefined();
+        expect(session.hasGame()).toBe(false);
+        expect(remove.mock.calls.map(([type, listener]) => [type, listener])).toEqual(wired);
+    });
+
+    it('is a no-op when nothing is installed', () => {
+        const session = make();
+        expect(() => session.uninstall()).not.toThrow();
+        expect(session.current()).toBeUndefined();
+        expect(session.hasGame()).toBe(false);
+    });
+
     it('pans via applyTransform, which must not persist anything', () => {
         // `panViewport` fires every frame of an edge drag; routing it through
         // `onViewportChanged` (which saves) would restart the debounced save
