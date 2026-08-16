@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SharePayload } from '../sharing/index.js';
+import type { CutStyle } from '../game/cut-styles.js';
 import { needsTracedTabChunk, shareInitOptions } from './share-payload-to-init.js';
 
 /**
@@ -20,24 +21,36 @@ function payload(overrides: Partial<SharePayload> = {}): SharePayload {
 }
 
 describe('needsTracedTabChunk', () => {
-    it('is true for a composable link asking for traced tabs', () => {
-        expect(needsTracedTabChunk(payload({
-            c: 'composable',
-            cf: { bg: 'sine', bgc: {}, tg: 'traced', tgc: {} },
-        }))).toBe(true);
-    });
+    // Total Record over the game CutStyle union: adding a style won't compile
+    // until it declares whether its canonical link needs the traced-tab chunk,
+    // compile-forcing the preload touch point from the style's first sub-step.
+    const CHUNK_BY_STYLE: Record<
+        CutStyle,
+        { overrides: Partial<SharePayload>; needsChunk: boolean }
+    > = {
+        classic: { overrides: { c: 'classic', clf: { tv: 1 } }, needsChunk: true },
+        fractal: { overrides: { c: 'fractal', ff: { bl: false } }, needsChunk: false },
+        wavy: { overrides: { c: 'wavy', wf: { bl: false, tv: 1 } }, needsChunk: true },
+        triangles: { overrides: { c: 'triangles' }, needsChunk: true },
+        composable: {
+            overrides: { c: 'composable', cf: { bg: 'sine', bgc: {}, tg: 'traced', tgc: {} } },
+            needsChunk: true,
+        },
+    };
 
-    it('is true for a versioned Wavy link but false for a legacy one', () => {
-        expect(needsTracedTabChunk(payload({ c: 'wavy', wf: { bl: false, tv: 1 } }))).toBe(true);
+    it.each(Object.entries(CHUNK_BY_STYLE))(
+        'has the expected chunk need for a canonical %s link',
+        (_style, { overrides, needsChunk }) => {
+            expect(needsTracedTabChunk(payload(overrides))).toBe(needsChunk);
+        },
+    );
+
+    it('is false for a legacy (classic-tab) Wavy link', () => {
         expect(needsTracedTabChunk(payload({ c: 'wavy', wf: { bl: false } }))).toBe(false);
     });
 
-    it('is true for every Triangles link', () => {
-        expect(needsTracedTabChunk(payload({ c: 'triangles' }))).toBe(true);
-    });
-
-    it('is true for a Classic link carrying a trace-set version', () => {
-        expect(needsTracedTabChunk(payload({ c: 'classic', clf: { tv: 1 } }))).toBe(true);
+    it('is false for a plain Classic link', () => {
+        expect(needsTracedTabChunk(payload({ c: 'classic' }))).toBe(false);
     });
 
     it('denies a chunk fetch to a crafted link whose clf is falsy', () => {
@@ -46,10 +59,6 @@ describe('needsTracedTabChunk', () => {
         // deliberately malformed (never `0` in its real type) to exercise the
         // rejection, hence the cast.
         expect(needsTracedTabChunk(payload({ c: 'classic', clf: 0 as unknown as SharePayload['clf'] }))).toBe(false);
-    });
-
-    it('is false for a plain Classic link', () => {
-        expect(needsTracedTabChunk(payload({ c: 'classic' }))).toBe(false);
     });
 });
 

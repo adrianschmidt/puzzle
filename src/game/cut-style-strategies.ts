@@ -58,6 +58,13 @@ export interface StrategyPuzzle {
     pieceCountMismatch?: PieceCountMismatch;
 }
 
+export type StyleConfigKey =
+    | 'fractalConfig'
+    | 'composableConfig'
+    | 'wavyConfig'
+    | 'trianglesConfig'
+    | 'classicConfig';
+
 export interface CutStyleStrategy {
     /**
      * Map the user-facing grid (piece count for classic/composable, target
@@ -80,10 +87,11 @@ export interface CutStyleStrategy {
         ctx: StrategyContext,
     ): StrategyPuzzle;
     /**
-     * Where the generator's config is stored on `GameState`. Optional for a
-     * future config-less style; every current style has one.
+     * The `GameState`/`InitOptions` field holding this style's generator config.
+     * Required, so a new style must declare it to compile; `init.ts` gates on it
+     * to store only the matching block.
      */
-    configKey?: 'fractalConfig' | 'composableConfig' | 'wavyConfig' | 'trianglesConfig' | 'classicConfig';
+    configKey: StyleConfigKey;
 }
 
 const classicStrategy: CutStyleStrategy = {
@@ -273,6 +281,19 @@ const STRATEGIES: Record<CutStyle, CutStyleStrategy> = {
 
 export function getCutStyleStrategy(cutStyle: CutStyle): CutStyleStrategy {
     return STRATEGIES[cutStyle];
+}
+
+/**
+ * The config field a style stores on `GameState`, or `undefined` for an
+ * unrecognized id. `hasOwnProperty` membership, not a raw index: `STRATEGIES`
+ * has no index signature, so an unknown or inherited key (`'constructor'`) would
+ * otherwise read as a defined strategy (same guard as `isCutStyle`).
+ */
+export function configKeyForCutStyle(cutStyle: string | undefined): StyleConfigKey | undefined {
+    if (typeof cutStyle === 'string' && Object.prototype.hasOwnProperty.call(STRATEGIES, cutStyle)) {
+        return STRATEGIES[cutStyle as CutStyle].configKey;
+    }
+    return undefined;
 }
 
 /**

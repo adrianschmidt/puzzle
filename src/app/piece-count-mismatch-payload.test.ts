@@ -81,18 +81,6 @@ describe('buildPieceCountMismatchData', () => {
             // entries disagreed would compile and pass, shipping `styleConfig`
             // silently absent — indistinguishable from legacy Classic, whose
             // absence is load-bearing.
-            if (configKey === undefined) {
-                // The documented "future style with no config" allowance: no
-                // write side to cross-check, so pin what still holds — the
-                // fixture's `classicConfig` is foreign to such a style, and its
-                // reader must report nothing rather than pick that block up.
-                const data = buildPieceCountMismatchData(
-                    stateFixture({ cutStyle } as Partial<GameState>),
-                    MISMATCH, 'fresh');
-                expect(data.styleConfig).toBeUndefined();
-                return;
-            }
-
             const marker = { markerFor: cutStyle };
             const data = buildPieceCountMismatchData(
                 stateFixture({

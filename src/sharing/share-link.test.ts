@@ -10,6 +10,7 @@ import {
     type SharePayload,
 } from './share-link.js';
 import type { GameState } from '../model/types.js';
+import type { CutStyle } from '../game/cut-styles.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
 import { CURRENT_TRACE_SET_VERSION } from '../puzzle/composable/traces/trace-set-version.js';
 import { composePuzzle } from '../puzzle/composable/compose.js';
@@ -1754,4 +1755,50 @@ describe('share-link background color (bgc)', () => {
         const without = gameStateToPayload(state, { includeProgress: false });
         expect(without.bgc).toBeUndefined();
     });
+});
+
+describe('share-link codec — every wire cut style round-trips', () => {
+    // Total Record over the game CutStyle union (not the wire union): adding a
+    // style won't compile until it declares its wire key and a sample here, and
+    // the round-trip then stays red until encode/decode — and `SharePayload['c']`
+    // — handle the block. Keying on CutStyle forces the wire touch point from the
+    // style's first sub-step, which a `SharePayload['c']`-keyed record would not.
+    const STYLE_WIRE: Record<
+        CutStyle,
+        { wireKey: keyof SharePayload; state: Partial<GameState> }
+    > = {
+        classic: {
+            wireKey: 'clf',
+            state: { cutStyle: 'classic', seed: 7, classicConfig: { traceSetVersion: CURRENT_TRACE_SET_VERSION } },
+        },
+        fractal: {
+            wireKey: 'ff',
+            state: { cutStyle: 'fractal', seed: 7, fractalConfig: { borderless: false } },
+        },
+        wavy: {
+            wireKey: 'wf',
+            state: { cutStyle: 'wavy', seed: 7, wavyConfig: { borderless: false, traceSetVersion: CURRENT_TRACE_SET_VERSION } },
+        },
+        triangles: {
+            wireKey: 'tf',
+            state: { cutStyle: 'triangles', seed: 7, trianglesConfig: { traceSetVersion: CURRENT_TRACE_SET_VERSION } },
+        },
+        composable: {
+            wireKey: 'cf',
+            state: {
+                cutStyle: 'composable',
+                seed: 7,
+                composableConfig: { baseCutGenerator: 'sine', baseCutConfig: {}, tabGenerator: 'traced', tabConfig: {} },
+            },
+        },
+    };
+
+    it.each(Object.entries(STYLE_WIRE))(
+        'emits and round-trips %s\'s wire config block',
+        (_style, { wireKey, state }) => {
+            const payload = gameStateToPayload(makeGameState(state), { includeProgress: false });
+            expect(payload[wireKey]).toBeDefined();
+            expect(decodePayload(encodePayload(payload))).toEqual(payload);
+        },
+    );
 });
