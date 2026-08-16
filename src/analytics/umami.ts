@@ -86,11 +86,12 @@ export interface NewGameData {
      * So the query on `new-game-started` is: `cutStyle: 'classic'`, no
      * `traceSetVersion`, neither `tracedChunkDegraded` nor `bootFallback` —
      * then split on `source`. None of the three exclusions is a negated
-     * filter; all are subtractions. For the two flags that is the absence
-     * reason each flag's own doc spells out; `traceSetVersion` is likewise
-     * omitted rather than null on `new-game-started`, so
-     * `traceSetVersion != <n>` joins on the key and matches only rows that
-     * have one.
+     * filter; all are subtractions, the same absence arithmetic
+     * {@link SharedLoadFailedData}'s `source` documents: `traceSetVersion`
+     * is omitted rather than null here and the two flags are absent rather
+     * than `false` (each flag's own doc gives the reason), so a negated
+     * property filter joins on the key and matches only the rows that carry
+     * the property, never the ones that lack it.
      * Both halves count the same one thing: a Classic game that rendered
      * legacy geometry. `'fresh'` is the stale-build population and falls to
      * zero as the fleet turns over. `'shared'` is the link tail, and it is
