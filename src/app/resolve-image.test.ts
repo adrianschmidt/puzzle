@@ -9,7 +9,12 @@ vi.mock('../images/index.js', async (importOriginal) => ({
     fetchRandomImage: vi.fn(),
 }));
 
+vi.mock('../images/backup-pool.js', () => ({
+    resolveFromPool: vi.fn(),
+}));
+
 import { fetchRandomImage } from '../images/index.js';
+import { resolveFromPool } from '../images/backup-pool.js';
 import { GenerationCanceledError } from '../game/index.js';
 import { resolveUnsplashImage } from './resolve-image.js';
 
@@ -18,6 +23,7 @@ describe('resolveUnsplashImage', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(resolveFromPool).mockReturnValue(null);
         umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
         vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -58,13 +64,45 @@ describe('resolveUnsplashImage', () => {
         expect(umamiTrack).not.toHaveBeenCalled();
     });
 
-    it('returns null and reports nothing itself when no image is found (4xx/5xx is tracked one layer down)', async () => {
+    it('serves a pool image and reports a hit when the proxy refuses (HTTP error)', async () => {
         vi.mocked(fetchRandomImage).mockResolvedValue(undefined);
+        const poolImage = {
+            imageUrl: 'https://images.unsplash.com/photo-pool',
+            imageSize: { width: 1080, height: 720 },
+            attribution: {
+                photographerName: 'Ada',
+                photographerUrl: 'https://u.example/ada',
+                photoUrl: 'https://p.example/1',
+            },
+            downloadLocation: 'https://api.unsplash.com/photos/pool/download',
+        };
+        vi.mocked(resolveFromPool).mockReturnValue(poolImage);
 
-        const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'landscape');
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'nature', true, 'landscape');
+
+        expect(resolved).toEqual(poolImage);
+        expect(vi.mocked(resolveFromPool)).toHaveBeenCalledWith('nature', true, 'landscape');
+        expect(umamiTrack).toHaveBeenCalledWith('image-pool-fallback', {
+            imageCategory: 'nature',
+            orientation: 'landscape',
+            vibrant: true,
+            hit: true,
+        });
+    });
+
+    it('returns null and reports a miss when the matching bucket is empty', async () => {
+        vi.mocked(fetchRandomImage).mockResolvedValue(undefined);
+        vi.mocked(resolveFromPool).mockReturnValue(null);
+
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'space', false, 'portrait');
 
         expect(resolved).toBeNull();
-        expect(umamiTrack).not.toHaveBeenCalled();
+        expect(umamiTrack).toHaveBeenCalledWith('image-pool-fallback', {
+            imageCategory: 'space',
+            orientation: 'portrait',
+            vibrant: false,
+            hit: false,
+        });
     });
 
     it('reports image-fetch-failed and returns null when the fetch throws', async () => {

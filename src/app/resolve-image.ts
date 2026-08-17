@@ -1,9 +1,3 @@
-/**
- * A no-usable-photo result is reported one layer down as
- * `image-fetch-http-error`; only a thrown fetch is reported here, as
- * `image-fetch-failed`. Either way the caller falls back to its default image.
- */
-
 import { diagnostics } from '../diagnostics.js';
 import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { fetchRandomImage, toDisplayImage, type DisplayImage } from '../images/index.js';
@@ -26,7 +20,15 @@ export async function resolveUnsplashImage(
         const result = await fetchRandomImage(proxyBaseUrl, fetch, query, orientation, signal);
 
         if (!result) {
-            return null;
+            const { resolveFromPool } = await import('../images/backup-pool.js');
+            const poolImage = resolveFromPool(category.id, vibrant, orientation);
+            track('image-pool-fallback', {
+                imageCategory,
+                orientation,
+                vibrant,
+                hit: poolImage !== null,
+            });
+            return poolImage;
         }
 
         return toDisplayImage(result);
