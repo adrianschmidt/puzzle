@@ -188,14 +188,18 @@ export interface NewGameData {
     pieceCount: number;
     /**
      * How the puzzle's image was actually obtained, classified from the
-     * achieved image URL rather than from what was requested — so a fetch
-     * that fell back reports `bundled`, not the source it aimed at. The one
+     * achieved image URL rather than from what was requested. A rate-limited
+     * fetch the backup pool covers reports `unsplash` (the pool serves an
+     * `images.unsplash.com` URL) and is counted by `image-pool-fallback`; only
+     * an offline, pool-miss, or no-proxy fallback reports `bundled`. The one
      * exception is `first-run`, honored as a request sentinel because that
      * puzzle legitimately uses the bundled image and would otherwise be
      * indistinguishable from a failure (`resolveNewGameImageSource`).
      *
      * That exception is what makes the bundled:unsplash ratio the health check
-     * for the image path end to end. **Filter to `source = 'fresh'` first:** shared games set this
+     * for the offline/pool-miss image path — pool-covered rate-limits report
+     * `unsplash` and go to `image-pool-fallback`, not this ratio.
+     * **Filter to `source = 'fresh'` first:** shared games set this
      * field too, from the URL the payload already carries, and no proxy call
      * happens there — leaving them in makes the ratio drift with sharing
      * volume rather than with proxy health. Resumed saves need no exclusion:
@@ -582,6 +586,23 @@ export interface ImageFetchFailedData {
 export interface ImageFetchHttpErrorData {
     status: number;
     source: 'single' | 'batch';
+}
+
+/**
+ * Data attached to `image-pool-fallback` — the proxy refused a single
+ * random-photo request (the `image-fetch-http-error` tier, `source:'single'`:
+ * the network is up but the API said no; batch/picker errors never fall back,
+ * so correlate against `source:'single'` only) and the app served a backup-pool
+ * image instead of calling Unsplash. `hit` is false when the matching bucket
+ * was empty and the app dropped to the single offline image; those rows isolate
+ * a category whose pool needs refilling. All fields mandatory, so no
+ * absent-property arithmetic (cf. {@link SharedLoadFailedData}).
+ */
+export interface ImagePoolFallbackData {
+    imageCategory: string;
+    orientation: Orientation;
+    vibrant: boolean;
+    hit: boolean;
 }
 
 /**
@@ -1420,6 +1441,7 @@ export function track(name: 'pwa-register-failed', data: PwaRegisterFailedData):
 export function track(name: 'share-link-rescue-attempted', data: ShareLinkRescueAttemptedData): void;
 export function track(name: 'share-link-rescue-result', data: ShareLinkRescueResultData): void;
 export function track(name: 'generation-canceled', data: GenerationCanceledData): void;
+export function track(name: 'image-pool-fallback', data: ImagePoolFallbackData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);

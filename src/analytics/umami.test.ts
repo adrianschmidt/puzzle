@@ -255,6 +255,25 @@ describe('track', () => {
         });
     });
 
+    it('forwards image-pool-fallback with the typed payload', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('image-pool-fallback', {
+            imageCategory: 'nature',
+            orientation: 'landscape',
+            vibrant: true,
+            hit: true,
+        });
+
+        expect(umamiTrack).toHaveBeenCalledWith('image-pool-fallback', {
+            imageCategory: 'nature',
+            orientation: 'landscape',
+            vibrant: true,
+            hit: true,
+        });
+    });
+
     it('forwards new-game-failed with the typed payload', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
