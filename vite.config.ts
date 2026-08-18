@@ -20,6 +20,15 @@ export default defineConfig({
       filename: 'sw.ts',
       registerType: 'prompt',
       manifest: createManifestConfig(BASE_PATH),
+      // The backup-image-pool chunk is a rate-limit-only fallback: it loads via
+      // a lazy import() only when the API is refusing (an online state), and its
+      // images are CDN-hotlinked, so it has no offline value. Precaching would
+      // push the whole fallback-only chunk to every user's SW cache for a path
+      // most never hit; exclude it so the on-demand import fetches it only when
+      // a rate-limit actually occurs.
+      injectManifest: {
+        globIgnores: ['**/backup-pool-*.js'],
+      },
     }),
   ],
   // Vite's default worker build format is 'iife', which can't emit more
