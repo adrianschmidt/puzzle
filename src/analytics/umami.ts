@@ -54,7 +54,7 @@ export interface NewGameData {
     source: 'fresh' | 'shared';
     cutStyle: string;
     /**
-     * Trace-set version backing a puzzle's hand-traced tabs, read off the
+     * Trace-set version backing a puzzle's traced tabs, read off the
      * per-style config the puzzle was generated with. Present for traced-tab
      * Wavy games, Triangles games, and sine-based Classic games; omitted for
      * Fractal, Composable, legacy (classic-tab) Wavy links, pre-upgrade
