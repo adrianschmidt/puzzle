@@ -4,6 +4,7 @@
  */
 
 import type { SelectionManager } from '../interaction/selection-manager.js';
+import { createMarqueeToolIcon } from './tool-icons.js';
 
 export interface MarqueeToolButtonOptions {
     container: HTMLElement;
@@ -21,9 +22,7 @@ export function createMarqueeToolButton(
     button.setAttribute('aria-label', 'Marquee selection tool');
     button.setAttribute('aria-pressed', 'false');
 
-    button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3">
-      <rect x="3" y="3" width="18" height="18" rx="1.5"/>
-    </svg>`;
+    button.appendChild(createMarqueeToolIcon());
 
     // Purely cosmetic Shift observation, deliberately independent of the
     // authoritative gesture read (evt.shiftKey in setupInteraction). The two can

@@ -31,6 +31,7 @@ import {
 } from './piece-outline-color.js';
 import { createPieceOutlineColorPicker } from './piece-outline-color-picker.js';
 import { attachShareSection } from './share-section.js';
+import { createSelectToolIcon, createMarqueeToolIcon } from './tool-icons.js';
 import { buildReproParams } from '../sharing/index.js';
 
 export interface InfoModalOptions {
@@ -48,7 +49,12 @@ export interface InfoModalOptions {
 const DEBUG_PIECES_CLASS = 'show-debug-pieces';
 
 /** Keeps the static help-text builders compact without resorting to innerHTML. */
-type InlineNode = string | [tag: string, text: string, attrs?: Record<string, string>];
+type InlineNode = string | Node | [tag: string, text: string, attrs?: Record<string, string>];
+
+function inlineToolIcon(svg: SVGSVGElement): SVGSVGElement {
+    svg.classList.add('info-inline-icon');
+    return svg;
+}
 
 function appendInlineLi(parent: HTMLElement, parts: InlineNode[]): HTMLLIElement {
     const li = document.createElement('li');
@@ -61,6 +67,10 @@ function appendInline(target: HTMLElement, parts: InlineNode[]): void {
     for (const part of parts) {
         if (typeof part === 'string') {
             target.appendChild(document.createTextNode(part));
+            continue;
+        }
+        if (part instanceof Node) {
+            target.appendChild(part);
             continue;
         }
         const [tag, text, attrs] = part;
@@ -107,12 +117,14 @@ function buildHowToPlaySection(): HTMLElement {
     ]);
     appendInlineLi(buttons, ['🎨 ', ['strong', 'Background'], ' — Change table colour']);
     appendInlineLi(buttons, [
-        '⬚ ',
+        inlineToolIcon(createSelectToolIcon()),
+        ' ',
         ['strong', 'Multi-select'],
         ' (top-left) — When active, tap pieces to add/remove them from a selection; drag any selected piece to move the whole selection together. Tap ✕ (bottom) to deselect all.',
     ]);
     appendInlineLi(buttons, [
-        '▭ ',
+        inlineToolIcon(createMarqueeToolIcon()),
+        ' ',
         ['strong', 'Marquee'],
         ' (below Multi-select) — Turns on multi-select and lets you drag a box on empty space to select every group it covers (turn on ',
         ['strong', 'Enclose to select'],
