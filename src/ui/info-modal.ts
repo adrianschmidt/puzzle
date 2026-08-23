@@ -102,7 +102,6 @@ function buildHowToPlaySection(): HTMLElement {
 
     const buttons = document.createElement('ul');
     appendInlineLi(buttons, [
-        '🎮 ',
         ['strong', 'New Game'],
         ' — Choose puzzle size, cut style and picture type, then tap one of the suggested photos to start (↻ swaps them for a new set) — or ',
         ['strong', 'Surprise me'],
@@ -111,7 +110,6 @@ function buildHowToPlaySection(): HTMLElement {
         ' for more saturated photos.',
     ]);
     appendInlineLi(buttons, [
-        '🔄 ',
         ['strong', 'Gather Pieces'],
         ' — Organize all pieces in a compact grid',
     ]);
