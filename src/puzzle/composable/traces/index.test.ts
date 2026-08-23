@@ -8,7 +8,7 @@ describe('traced template library', () => {
         expect(TRACED_TEMPLATES.length).toBeGreaterThan(0);
     });
 
-    for (const template of TRACED_TEMPLATES) {
+    for (const template of getTracedTemplates(CURRENT_TRACE_SET_VERSION)) {
         describe(template.id, () => {
             it('has a path with length 3n+1 for n ≥ 1 cubic segments', () => {
                 expect(template.path.length).toBeGreaterThanOrEqual(4);
@@ -101,6 +101,17 @@ describe('trace-set versioning', () => {
 
     it('version 1 resolves to the original ordered library', () => {
         expect(getTracedTemplates(1)).toEqual(TRACED_TEMPLATES);
+    });
+
+    it('version 2 keeps the v1 prefix byte-for-byte and appends new traces', () => {
+        const v2 = getTracedTemplates(2);
+        expect(v2.length).toBeGreaterThan(TRACED_TEMPLATES.length);
+        expect(v2.slice(0, TRACED_TEMPLATES.length)).toEqual(TRACED_TEMPLATES);
+    });
+
+    it('has unique ids across the current set', () => {
+        const ids = getTracedTemplates(CURRENT_TRACE_SET_VERSION).map(t => t.id);
+        expect(new Set(ids).size).toBe(ids.length);
     });
 
     it('falls back to v1 for an unknown version', () => {

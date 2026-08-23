@@ -8,7 +8,7 @@
  * Bump when shipping a new trace set; never edit a shipped snapshot.
  * See `getTracedTemplates` and project_share_link_prng_contract.
  */
-export const CURRENT_TRACE_SET_VERSION = 1;
+export const CURRENT_TRACE_SET_VERSION = 2;
 
 /**
  * Callers diverge on the tail: the traced generator defaults an invalid config

@@ -12,6 +12,7 @@ import { getCutStyleStrategy } from './cut-style-strategies.js';
 import { createNewGame } from './init.js';
 import { registerTabGenerator } from '../puzzle/topology/generator-registry.js';
 import { tracedTabGenerator } from '../puzzle/topology/traced-tab-generator.js';
+import { CURRENT_TRACE_SET_VERSION } from '../puzzle/composable/traces/trace-set-version.js';
 
 // Swap the lazy-load stub for the real traced generator so traced generation
 // runs synchronously in tests (otherwise the stub throws "not loaded").
@@ -48,7 +49,10 @@ describe('triangles strategy generation', { timeout: 30_000 }, () => {
         getCutStyleStrategy('triangles').generatePieces({ cols: 6, rows: 3 }, size, 12345, {});
         expect(generateComposablePuzzle).toHaveBeenCalledWith(
             6, 3, size, 12345,
-            expect.objectContaining({ tabGenerator: 'traced', tabConfig: { traceSetVersion: 1 } }),
+            expect.objectContaining({
+                tabGenerator: 'traced',
+                tabConfig: { traceSetVersion: CURRENT_TRACE_SET_VERSION },
+            }),
         );
     });
 
