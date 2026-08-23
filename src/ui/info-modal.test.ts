@@ -4,8 +4,22 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createInfoModal } from './info-modal.js';
+import { createSelectToolButton } from './select-tool-button.js';
+import { createMarqueeToolButton } from './marquee-tool-button.js';
+import { SelectionManager } from '../interaction/selection-manager.js';
 import type { GameState } from '../model/types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
+
+function toolbarButtonIcon(
+    create: (opts: {
+        container: HTMLElement;
+        selectionManager: SelectionManager;
+    }) => unknown,
+): string {
+    const host = document.createElement('div');
+    create({ container: host, selectionManager: new SelectionManager() });
+    return host.querySelector('button')!.querySelector('svg')!.outerHTML;
+}
 
 function makeState(overrides?: Partial<GameState>): GameState {
     return makeGameState({
@@ -263,6 +277,20 @@ describe('createInfoModal — How to Play section', () => {
         const text = howToPlaySection().textContent ?? '';
         expect(text).toContain('Marquee');
         expect(text).toContain('drag a box');
+    });
+
+    it('shows the same multi-select and marquee icons as the toolbar buttons', () => {
+        createInfoModal({ container });
+        const rendered = [
+            ...howToPlaySection().querySelectorAll<SVGElement>('svg.info-inline-icon'),
+        ].map((svg) => {
+            const clone = svg.cloneNode(true) as SVGElement;
+            clone.classList.remove('info-inline-icon');
+            clone.removeAttribute('class');
+            return clone.outerHTML;
+        });
+        expect(rendered).toContain(toolbarButtonIcon(createSelectToolButton));
+        expect(rendered).toContain(toolbarButtonIcon(createMarqueeToolButton));
     });
 
     it('mentions Wavy and Classic alongside Free rotation', () => {

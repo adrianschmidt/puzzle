@@ -1272,6 +1272,12 @@ details.info-section[open] > .info-section-summary {
   margin-bottom: 4px;
 }
 
+.info-inline-icon {
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+}
+
 .info-section li:last-child {
   margin-bottom: 0;
 }
