@@ -6,7 +6,7 @@
 
 import type { Point } from '../model/types.js';
 
-export const MIN_SCALE = 0.2;
+export const MIN_SCALE = 0.05;
 export const MAX_SCALE = 5.0;
 
 /** Scroll-wheel zoom step (multiplier per tick). */

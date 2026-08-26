@@ -239,6 +239,7 @@ describe('clampScale', () => {
 
     it('should not clamp within range', () => {
         expect(clampScale(1.5)).toBe(1.5);
+        expect(clampScale(0.05)).toBe(0.05);
     });
 
     it('should return boundary values exactly', () => {
