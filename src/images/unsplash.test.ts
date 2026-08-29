@@ -322,6 +322,33 @@ describe('fetchRandomImage', () => {
         expect(calledUrl).toContain('orientation=portrait');
     });
 
+    it('refetches once when the draw lands on a blocked photographer', async () => {
+        const blocked = makeUnsplashResponse();
+        blocked.user.links.html = 'https://unsplash.com/@silverkblack';
+        const mockFetch = vi.fn()
+            .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(blocked) })
+            .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(makeUnsplashResponse()) });
+
+        const result = await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
+
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(result!.photographerUrl).toContain('@testphotographer');
+    });
+
+    it('returns undefined when the retry draws a blocked photographer too', async () => {
+        const blocked = makeUnsplashResponse();
+        blocked.user.links.html = 'https://unsplash.com/@silverkblack';
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve(blocked),
+        });
+
+        const result = await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
+
+        expect(result).toBeUndefined();
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
     it('forwards the abort signal to the fetch call', async () => {
         const mockFetch = vi.fn().mockResolvedValue({
             ok: true,
@@ -375,6 +402,20 @@ describe('fetchRandomImages', () => {
 
         expect(results).toBeUndefined();
         warnSpy.mockRestore();
+    });
+
+    it('filters out photos by blocked photographers', async () => {
+        const blocked = makeUnsplashResponse();
+        blocked.user.links.html = 'https://unsplash.com/@silverkblack';
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve([makeUnsplashResponse(), blocked]),
+        });
+
+        const results = await fetchRandomImages(PROXY, 2, mockFetch as unknown as typeof fetch);
+
+        expect(results).toHaveLength(1);
+        expect(results![0].photographerUrl).toContain('@testphotographer');
     });
 
     it('throws when the body is not an array', async () => {

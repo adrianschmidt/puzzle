@@ -10,6 +10,7 @@
 
 import { diagnostics } from '../diagnostics.js';
 import { track } from '../analytics/index.js';
+import { isBlockedPhotographerUrl } from './blocked-photographers.js';
 import type { Orientation } from '../model/types.js';
 
 /** Proxy route that forwards to Unsplash's `/photos/random`. */
@@ -173,17 +174,26 @@ export async function fetchRandomImage(
 ): Promise<UnsplashImageResult | undefined> {
     const url = buildRandomPhotoUrl(proxyBaseUrl, query, orientation);
 
-    const response = await fetchFn(url, { signal });
+    // A blocked-photographer draw costs one redraw; a second one falls
+    // through to the pool fallback rather than spending more quota.
+    for (let attempt = 0; attempt < 2; attempt++) {
+        const response = await fetchFn(url, { signal });
 
-    if (!response.ok) {
-        reportProxyHttpError(response, 'single');
+        if (!response.ok) {
+            reportProxyHttpError(response, 'single');
 
-        return undefined;
+            return undefined;
+        }
+
+        const data: unknown = await response.json();
+        const result = parseUnsplashResponse(data);
+
+        if (!isBlockedPhotographerUrl(result.photographerUrl)) {
+            return result;
+        }
     }
 
-    const data: unknown = await response.json();
-
-    return parseUnsplashResponse(data);
+    return undefined;
 }
 
 /**
@@ -215,7 +225,9 @@ export async function fetchRandomImages(
         throw new Error('Invalid Unsplash API response');
     }
 
-    return data.map(parseUnsplashResponse);
+    return data
+        .map(parseUnsplashResponse)
+        .filter((result) => !isBlockedPhotographerUrl(result.photographerUrl));
 }
 
 /**
