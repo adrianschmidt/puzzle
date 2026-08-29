@@ -46,7 +46,7 @@ describe('selectPoolRecord', () => {
 
     it('returns null when no record matches the bucket', () => {
         const records = [rec({ category: 'nature', vibrant: false, orientation: 'landscape' })];
-        expect(selectPoolRecord(records, 'space', false, 'landscape')).toBeNull();
+        expect(selectPoolRecord(records, 'astronomy', false, 'landscape')).toBeNull();
     });
 
     it('returns null when an out-of-contract random() lands past the last match', () => {

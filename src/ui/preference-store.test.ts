@@ -188,6 +188,51 @@ describe('createStringPreference', () => {
         });
     });
 
+    describe('with aliases', () => {
+        it('maps an aliased stored value to its replacement', () => {
+            const store = createStringPreference({
+                key: KEY,
+                defaultValue: 'fallback',
+                allowed: ['fallback', 'new'],
+                aliases: { old: 'new' },
+            });
+            localStorage.setItem(KEY, 'old');
+            expect(store.load()).toBe('new');
+        });
+
+        it('still rejects a value that is neither allowed nor aliased', () => {
+            const store = createStringPreference({
+                key: KEY,
+                defaultValue: 'fallback',
+                allowed: ['fallback', 'new'],
+                aliases: { old: 'new' },
+            });
+            localStorage.setItem(KEY, 'unknown');
+            expect(store.load()).toBe('fallback');
+        });
+
+        it('never resolves a stored value through the prototype chain', () => {
+            const store = createStringPreference({
+                key: KEY,
+                defaultValue: 'fallback',
+                aliases: { old: 'new' },
+            });
+            localStorage.setItem(KEY, '__proto__');
+            expect(store.load()).toBe('__proto__');
+        });
+
+        it('falls back to the default when an alias target is not in allowed', () => {
+            const store = createStringPreference({
+                key: KEY,
+                defaultValue: 'fallback',
+                allowed: ['fallback'],
+                aliases: { old: 'gone' },
+            });
+            localStorage.setItem(KEY, 'old');
+            expect(store.load()).toBe('fallback');
+        });
+    });
+
     describe('with defaultValue', () => {
         it('returns the default when nothing is saved', () => {
             const store = createStringPreference({

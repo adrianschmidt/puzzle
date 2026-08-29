@@ -56,9 +56,15 @@ describe('findImageCategory', () => {
         expect(result.query).toBe('nature');
     });
 
-    it("queries 'astronomy' for the space category", () => {
-        const result = findImageCategory('space');
+    it("has an Astronomy category querying 'astronomy'", () => {
+        const result = findImageCategory('astronomy');
+        expect(result.id).toBe('astronomy');
+        expect(result.label).toBe('Astronomy');
         expect(result.query).toBe('astronomy');
+    });
+
+    it("returns 'any' for the retired space id", () => {
+        expect(findImageCategory('space').id).toBe('any');
     });
 
     it('finds the people category with the bare tag query', () => {
@@ -94,8 +100,13 @@ describe('image category preference persistence', () => {
     });
 
     it('saves and loads a category preference', () => {
-        saveImageCategoryPreference('space');
-        expect(loadImageCategoryPreference()).toBe('space');
+        saveImageCategoryPreference('astronomy');
+        expect(loadImageCategoryPreference()).toBe('astronomy');
+    });
+
+    it("loads 'astronomy' when the retired space id is stored", () => {
+        localStorage.setItem(IMAGE_CATEGORY_PREFERENCE_KEY, 'space');
+        expect(loadImageCategoryPreference()).toBe('astronomy');
     });
 
     it('uses the correct localStorage key', () => {

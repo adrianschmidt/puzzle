@@ -87,18 +87,21 @@ export interface StringPreferenceStore<T extends string | undefined> {
 export function createStringPreference(opts: {
     key: string;
     allowed?: readonly string[];
+    aliases?: Readonly<Record<string, string>>;
 }): StringPreferenceStore<string | undefined>;
 export function createStringPreference(opts: {
     key: string;
     defaultValue: string;
     allowed?: readonly string[];
+    aliases?: Readonly<Record<string, string>>;
 }): StringPreferenceStore<string>;
 export function createStringPreference(opts: {
     key: string;
     defaultValue?: string;
     allowed?: readonly string[];
+    aliases?: Readonly<Record<string, string>>;
 }): StringPreferenceStore<string | undefined> {
-    const { key, defaultValue, allowed } = opts;
+    const { key, defaultValue, allowed, aliases } = opts;
 
     return {
         save(value) {
@@ -111,11 +114,15 @@ export function createStringPreference(opts: {
                     return defaultValue;
                 }
 
-                if (allowed !== undefined && !allowed.includes(raw)) {
+                const value = aliases !== undefined && Object.hasOwn(aliases, raw)
+                    ? aliases[raw]
+                    : raw;
+
+                if (allowed !== undefined && !allowed.includes(value)) {
                     return defaultValue;
                 }
 
-                return raw;
+                return value;
             } catch {
                 return defaultValue;
             }

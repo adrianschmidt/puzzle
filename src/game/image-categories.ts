@@ -8,7 +8,7 @@ export type ImageCategoryId =
     | 'nature'
     | 'animals'
     | 'architecture'
-    | 'space'
+    | 'astronomy'
     | 'abstract'
     | 'food'
     | 'travel'
@@ -54,10 +54,10 @@ export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
         description: 'Buildings & architecture',
     },
     {
-        id: 'space',
-        label: 'Space',
-        // Not 'space': with the vibrant terms appended it drifts to neon
-        // abstracts rather than astronomy (#568).
+        id: 'astronomy',
+        // Not 'space': that query with the vibrant terms appended drifts to
+        // neon abstracts rather than astronomy (#568).
+        label: 'Astronomy',
         query: 'astronomy',
         description: 'Space & astronomy',
     },
@@ -129,6 +129,7 @@ export function findImageCategory(
 const categoryStore = createStringPreference({
     key: IMAGE_CATEGORY_PREFERENCE_KEY,
     allowed: IMAGE_CATEGORY_OPTIONS.map((opt) => opt.id),
+    aliases: { space: 'astronomy' },
     defaultValue: 'any',
 });
 
