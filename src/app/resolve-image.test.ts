@@ -94,11 +94,11 @@ describe('resolveUnsplashImage', () => {
         vi.mocked(fetchRandomImage).mockResolvedValue(undefined);
         vi.mocked(resolveFromPool).mockReturnValue(null);
 
-        const resolved = await resolveUnsplashImage('https://proxy.example', 'space', false, 'portrait');
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'astronomy', false, 'portrait');
 
         expect(resolved).toBeNull();
         expect(umamiTrack).toHaveBeenCalledWith('image-pool-fallback', {
-            imageCategory: 'space',
+            imageCategory: 'astronomy',
             orientation: 'portrait',
             vibrant: false,
             hit: false,
