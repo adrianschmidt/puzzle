@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { selectPoolRecord, resolveFromPool, type BackupPoolRecord } from './backup-pool.js';
 import poolJson from './backup-pool.json';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
+import { isBlockedPhotographerUrl } from './blocked-photographers.js';
 
 function rec(over: Partial<BackupPoolRecord>): BackupPoolRecord {
     return {
@@ -113,6 +114,13 @@ describe('backup-pool.json catalog', () => {
             expect(download.protocol).toBe('https:');
             expect(download.host).toBe('api.unsplash.com');
         }
+    });
+
+    it('contains no photos by blocked photographers', () => {
+        const blocked = catalog.filter((r) =>
+            isBlockedPhotographerUrl(r.photographerUrl),
+        );
+        expect(blocked.map((r) => r.id)).toEqual([]);
     });
 
     it('resolveFromPool maps a real catalog record to a DisplayImage', () => {

@@ -15,6 +15,7 @@
 
 import { writeFileSync, readFileSync } from 'node:fs';
 import { IMAGE_CATEGORY_OPTIONS, buildImageQuery } from '../src/game/image-categories.js';
+import { isBlockedPhotographerUrl } from '../src/images/blocked-photographers.js';
 
 const PER_BUCKET = 12;
 const ORIENTATIONS = ['landscape', 'portrait'] as const;
@@ -86,6 +87,7 @@ async function main(): Promise<void> {
                     try {
                         const id = String(item.id);
                         if (seen.has(id)) continue;
+                        if (isBlockedPhotographerUrl(String(item.user.links.html))) continue;
                         const record = toRecord(item, category.id, vibrant, orientation);
                         seen.add(id);
                         records.push(record);
