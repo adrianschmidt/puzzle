@@ -56,6 +56,11 @@ describe('findImageCategory', () => {
         expect(result.query).toBe('nature');
     });
 
+    it("queries 'astronomy' for the space category", () => {
+        const result = findImageCategory('space');
+        expect(result.query).toBe('astronomy');
+    });
+
     it('finds the people category with the bare tag query', () => {
         const result = findImageCategory('people');
         expect(result.id).toBe('people');
