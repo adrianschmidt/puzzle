@@ -24,9 +24,9 @@ export interface ImageCategoryOption {
 }
 
 /**
- * `any` sends no query, so Unsplash picks from everything. Every other query is
- * the bare Unsplash tag term its label names. Keep them single words: extra
- * words AND-narrow the search rather than broadening it.
+ * `any` sends no query, so Unsplash picks from everything. Keep the other
+ * queries single words: extra words AND-narrow the search rather than
+ * broadening it.
  */
 export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
     {
@@ -56,7 +56,9 @@ export const IMAGE_CATEGORY_OPTIONS: readonly ImageCategoryOption[] = [
     {
         id: 'space',
         label: 'Space',
-        query: 'space',
+        // Not 'space': with the vibrant terms appended it drifts to neon
+        // abstracts rather than astronomy (#568).
+        query: 'astronomy',
         description: 'Space & astronomy',
     },
     {
