@@ -164,14 +164,17 @@ function reportProxyHttpError(
     track('image-fetch-http-error', { status: response.status, source });
 }
 
-/** Resolves `undefined` on HTTP failure; throws on a malformed response body. */
+/**
+ * Resolves `undefined` on HTTP failure, `'blocked'` when both draws landed on
+ * a blocked photographer; throws on a malformed response body.
+ */
 export async function fetchRandomImage(
     proxyBaseUrl: string,
     fetchFn: typeof fetch = fetch,
     query?: string,
     orientation: Orientation = 'landscape',
     signal?: AbortSignal,
-): Promise<UnsplashImageResult | undefined> {
+): Promise<UnsplashImageResult | 'blocked' | undefined> {
     const url = buildRandomPhotoUrl(proxyBaseUrl, query, orientation);
 
     // A blocked-photographer draw costs one redraw; a second one falls
@@ -193,7 +196,7 @@ export async function fetchRandomImage(
         }
     }
 
-    return undefined;
+    return 'blocked';
 }
 
 /**

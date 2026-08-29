@@ -87,6 +87,23 @@ describe('resolveUnsplashImage', () => {
             orientation: 'landscape',
             vibrant: true,
             hit: true,
+            cause: 'http-error',
+        });
+    });
+
+    it("reports cause 'blocked' when both draws hit a blocked photographer", async () => {
+        vi.mocked(fetchRandomImage).mockResolvedValue('blocked');
+        vi.mocked(resolveFromPool).mockReturnValue(null);
+
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'face', false, 'landscape');
+
+        expect(resolved).toBeNull();
+        expect(umamiTrack).toHaveBeenCalledWith('image-pool-fallback', {
+            imageCategory: 'face',
+            orientation: 'landscape',
+            vibrant: false,
+            hit: false,
+            cause: 'blocked',
         });
     });
 
@@ -102,6 +119,7 @@ describe('resolveUnsplashImage', () => {
             orientation: 'portrait',
             vibrant: false,
             hit: false,
+            cause: 'http-error',
         });
     });
 

@@ -230,8 +230,10 @@ describe('fetchRandomImage', () => {
         const result = await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
 
         expect(result).toBeDefined();
-        expect(result!.imageUrl).toBe(responseData.urls.regular);
-        expect(result!.photographerName).toBe('Test Photographer');
+        expect(result).toMatchObject({
+            imageUrl: responseData.urls.regular,
+            photographerName: 'Test Photographer',
+        });
     });
 
     it('calls the correct URL', async () => {
@@ -332,10 +334,13 @@ describe('fetchRandomImage', () => {
         const result = await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
 
         expect(mockFetch).toHaveBeenCalledTimes(2);
-        expect(result!.photographerUrl).toContain('@testphotographer');
+        expect(result).toMatchObject({
+            photographerUrl:
+                'https://unsplash.com/@testphotographer?utm_source=puzzle&utm_medium=referral',
+        });
     });
 
-    it('returns undefined when the retry draws a blocked photographer too', async () => {
+    it("returns 'blocked' when the retry draws a blocked photographer too", async () => {
         const blocked = makeUnsplashResponse();
         blocked.user.links.html = 'https://unsplash.com/@silverkblack';
         const mockFetch = vi.fn().mockResolvedValue({
@@ -345,7 +350,7 @@ describe('fetchRandomImage', () => {
 
         const result = await fetchRandomImage(PROXY, mockFetch as unknown as typeof fetch);
 
-        expect(result).toBeUndefined();
+        expect(result).toBe('blocked');
         expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 

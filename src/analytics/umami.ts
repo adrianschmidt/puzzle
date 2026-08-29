@@ -589,20 +589,27 @@ export interface ImageFetchHttpErrorData {
 }
 
 /**
- * Data attached to `image-pool-fallback` — the proxy refused a single
- * random-photo request (the `image-fetch-http-error` tier, `source:'single'`:
- * the network is up but the API said no; batch/picker errors never fall back,
- * so correlate against `source:'single'` only) and the app served a backup-pool
- * image instead of calling Unsplash. `hit` is false when the matching bucket
- * was empty and the app dropped to the single offline image; those rows isolate
- * a category whose pool needs refilling. All fields mandatory, so no
- * absent-property arithmetic (cf. {@link SharedLoadFailedData}).
+ * Data attached to `image-pool-fallback` — a single random-photo request
+ * produced no usable photo and the app served a backup-pool image instead of
+ * calling Unsplash. `cause` says why: `'http-error'` is a proxy refusal (the
+ * `image-fetch-http-error` tier, `source:'single'`: the network is up but the
+ * API said no — those rows correlate with an http-error event); `'blocked'`
+ * means both draws landed on a blocked photographer (#568) with every
+ * response ok, so no http-error row accompanies it. Batch/picker errors
+ * never fall back. `hit` is false when the matching bucket was empty and the
+ * app dropped to the single offline image; those rows isolate a category
+ * whose pool needs refilling.
  */
 export interface ImagePoolFallbackData {
     imageCategory: string;
     orientation: Orientation;
     vibrant: boolean;
     hit: boolean;
+    /**
+     * Absent on rows predating the blocklist, so split by key presence, not
+     * subtraction (same arithmetic {@link SharedLoadFailedData} documents).
+     */
+    cause: 'http-error' | 'blocked';
 }
 
 /**
