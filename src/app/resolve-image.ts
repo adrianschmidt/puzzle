@@ -19,7 +19,7 @@ export async function resolveUnsplashImage(
         const query = buildImageQuery(category.query, vibrant);
         const result = await fetchRandomImage(proxyBaseUrl, fetch, query, orientation, signal);
 
-        if (!result) {
+        if (!result || result === 'blocked') {
             const { resolveFromPool } = await import('../images/backup-pool.js');
             const poolImage = resolveFromPool(category.id, vibrant, orientation);
             track('image-pool-fallback', {
@@ -27,6 +27,7 @@ export async function resolveUnsplashImage(
                 orientation,
                 vibrant,
                 hit: poolImage !== null,
+                cause: result === 'blocked' ? 'blocked' : 'http-error',
             });
             return poolImage;
         }

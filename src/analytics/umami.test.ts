@@ -264,6 +264,7 @@ describe('track', () => {
             orientation: 'landscape',
             vibrant: true,
             hit: true,
+            cause: 'http-error',
         });
 
         expect(umamiTrack).toHaveBeenCalledWith('image-pool-fallback', {
@@ -271,6 +272,7 @@ describe('track', () => {
             orientation: 'landscape',
             vibrant: true,
             hit: true,
+            cause: 'http-error',
         });
     });
 
