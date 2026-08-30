@@ -190,8 +190,11 @@ export interface NewGameData {
      * How the puzzle's image was actually obtained, classified from the
      * achieved image URL rather than from what was requested. A rate-limited
      * fetch the backup pool covers reports `unsplash` (the pool serves an
-     * `images.unsplash.com` URL) and is counted by `image-pool-fallback`; only
-     * an offline, pool-miss, or no-proxy fallback reports `bundled`. The one
+     * `images.unsplash.com` URL) and is counted by `image-pool-fallback`, and
+     * an offline or pool-miss start the offline stash covers likewise reports
+     * `unsplash` and is counted by `image-stash-fallback`; only a start no
+     * source covered — offline or pool-miss with an empty stash, or no proxy
+     * — reports `bundled`. The one
      * exception is `first-run`, honored as a request sentinel because that
      * puzzle legitimately uses the bundled image and would otherwise be
      * indistinguishable from a failure (`resolveNewGameImageSource`).
@@ -610,6 +613,43 @@ export interface ImagePoolFallbackData {
      * subtraction (same arithmetic {@link SharedLoadFailedData} documents).
      */
     cause: 'http-error' | 'blocked';
+}
+
+/**
+ * Data attached to `image-stash-fallback` — every network image source had
+ * failed and the app consulted the player's offline stash. `cause` says which
+ * path led here: `'fetch-failed'` is a thrown fetch (the offline case) — the
+ * resolve path pairs it with an `image-fetch-failed` row, the picker path
+ * emits none; `'pool-miss'` follows an `image-pool-fallback` row with
+ * `hit: false`; `'no-candidates'` is the picker's batch fetch returning empty
+ * without throwing (that path consults no pool, so no pool row accompanies
+ * it). `hit: false` means no usable stashed image was present — an empty
+ * stash, or one whose cached blobs the browser had evicted out from under the
+ * surviving metadata — so it counts players who hit a dead image path with
+ * nothing to fall back on.
+ */
+export interface ImageStashFallbackData {
+    imageCategory: string;
+    orientation: Orientation;
+    vibrant: boolean;
+    hit: boolean;
+    cause: 'fetch-failed' | 'pool-miss' | 'no-candidates';
+}
+
+/**
+ * Data attached to `offline-images-saved` — the New Game dialog's
+ * offline-download attempt settled. `saved: 0` is failure (batch fetch
+ * refused or threw, cache unavailable, or no photo survived) with the
+ * previous stash left in place. `requested` is the batch size asked of
+ * Unsplash; blocked-photographer filtering and per-photo download failures
+ * account for any shortfall.
+ */
+export interface OfflineImagesSavedData {
+    requested: number;
+    saved: number;
+    imageCategory: string;
+    orientation: Orientation;
+    vibrant: boolean;
 }
 
 /**
@@ -1449,6 +1489,8 @@ export function track(name: 'share-link-rescue-attempted', data: ShareLinkRescue
 export function track(name: 'share-link-rescue-result', data: ShareLinkRescueResultData): void;
 export function track(name: 'generation-canceled', data: GenerationCanceledData): void;
 export function track(name: 'image-pool-fallback', data: ImagePoolFallbackData): void;
+export function track(name: 'image-stash-fallback', data: ImageStashFallbackData): void;
+export function track(name: 'offline-images-saved', data: OfflineImagesSavedData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);

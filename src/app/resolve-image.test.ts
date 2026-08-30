@@ -13,8 +13,13 @@ vi.mock('../images/backup-pool.js', () => ({
     resolveFromPool: vi.fn(),
 }));
 
+vi.mock('../images/offline-stash.js', () => ({
+    pickStashImage: vi.fn(),
+}));
+
 import { fetchRandomImage } from '../images/index.js';
 import { resolveFromPool } from '../images/backup-pool.js';
+import { pickStashImage } from '../images/offline-stash.js';
 import { GenerationCanceledError } from '../game/index.js';
 import { resolveUnsplashImage } from './resolve-image.js';
 
@@ -24,6 +29,7 @@ describe('resolveUnsplashImage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(resolveFromPool).mockReturnValue(null);
+        vi.mocked(pickStashImage).mockResolvedValue(null);
         umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
         vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -182,6 +188,90 @@ describe('resolveUnsplashImage', () => {
         await expect(
             resolveUnsplashImage('https://proxy.example', 'any', false, 'landscape', controller.signal),
         ).rejects.toBeInstanceOf(GenerationCanceledError);
+    });
+
+    const stashImage = {
+        imageUrl: 'https://images.unsplash.com/photo-stash?w=1080',
+        thumbUrl: 'https://images.unsplash.com/photo-stash?w=400',
+        imageSize: { width: 1080, height: 720 },
+        attribution: {
+            photographerName: 'Ada',
+            photographerUrl: 'https://u.example/ada',
+            photoUrl: 'https://p.example/1',
+        },
+        downloadLocation: 'https://api.unsplash.com/photos/stash/download',
+        orientation: 'landscape' as const,
+    };
+
+    it('serves a stash image when the pool also misses', async () => {
+        vi.mocked(fetchRandomImage).mockResolvedValue(undefined);
+        vi.mocked(pickStashImage).mockResolvedValue(stashImage);
+
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'nature', true, 'landscape');
+
+        expect(resolved).toBe(stashImage);
+        expect(vi.mocked(pickStashImage)).toHaveBeenCalledWith('landscape');
+        expect(umamiTrack).toHaveBeenCalledWith('image-stash-fallback', {
+            imageCategory: 'nature',
+            orientation: 'landscape',
+            vibrant: true,
+            hit: true,
+            cause: 'pool-miss',
+        });
+    });
+
+    it('serves a stash image when the fetch throws', async () => {
+        vi.mocked(fetchRandomImage).mockRejectedValue(new Error('network down'));
+        vi.mocked(pickStashImage).mockResolvedValue(stashImage);
+
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'landscape');
+
+        expect(resolved).toBe(stashImage);
+        expect(umamiTrack).toHaveBeenCalledWith('image-fetch-failed', {
+            reason: 'network down',
+            orientation: 'landscape',
+            imageCategory: 'any',
+        });
+        expect(umamiTrack).toHaveBeenCalledWith('image-stash-fallback', {
+            imageCategory: 'any',
+            orientation: 'landscape',
+            vibrant: false,
+            hit: true,
+            cause: 'fetch-failed',
+        });
+    });
+
+    it('reports a stash miss when the fetch throws and the stash is empty', async () => {
+        vi.mocked(fetchRandomImage).mockRejectedValue(new Error('network down'));
+
+        const resolved = await resolveUnsplashImage('https://proxy.example', 'any', false, 'portrait');
+
+        expect(resolved).toBeNull();
+        expect(umamiTrack).toHaveBeenCalledWith('image-stash-fallback', {
+            imageCategory: 'any',
+            orientation: 'portrait',
+            vibrant: false,
+            hit: false,
+            cause: 'fetch-failed',
+        });
+    });
+
+    it('does not consult the stash when the pool covers the failure', async () => {
+        vi.mocked(fetchRandomImage).mockResolvedValue(undefined);
+        vi.mocked(resolveFromPool).mockReturnValue({
+            imageUrl: 'https://images.unsplash.com/photo-pool',
+            imageSize: { width: 1080, height: 720 },
+            attribution: {
+                photographerName: 'Ada',
+                photographerUrl: 'https://u.example/ada',
+                photoUrl: 'https://p.example/1',
+            },
+            downloadLocation: 'https://api.unsplash.com/photos/pool/download',
+        });
+
+        await resolveUnsplashImage('https://proxy.example', 'nature', true, 'landscape');
+
+        expect(vi.mocked(pickStashImage)).not.toHaveBeenCalled();
     });
 
     it('does not report image-fetch-failed when the fetch is aborted', async () => {

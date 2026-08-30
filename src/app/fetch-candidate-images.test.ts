@@ -1,11 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+/**
+ * @vitest-environment jsdom
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../images/index.js', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../images/index.js')>()),
     fetchRandomImages: vi.fn(),
 }));
 
+vi.mock('../images/offline-stash.js', () => ({
+    stashCandidates: vi.fn(),
+}));
+
 import { fetchRandomImages } from '../images/index.js';
+import { stashCandidates } from '../images/offline-stash.js';
 import { fetchCandidateImages, CANDIDATE_IMAGE_COUNT } from './fetch-candidate-images.js';
 
 function makeResult(n: number) {
@@ -23,8 +32,17 @@ function makeResult(n: number) {
 }
 
 describe('fetchCandidateImages', () => {
+    let umamiTrack: ReturnType<typeof vi.fn>;
+
     beforeEach(() => {
         vi.mocked(fetchRandomImages).mockReset();
+        vi.mocked(stashCandidates).mockReset().mockResolvedValue([]);
+        umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+    });
+
+    afterEach(() => {
+        delete (window as unknown as { umami?: unknown }).umami;
     });
 
     it('maps results into candidates with 1080-scaled display size', async () => {
@@ -80,5 +98,65 @@ describe('fetchCandidateImages', () => {
         expect(await fetchCandidateImages('https://proxy.example', 'any', false, 'landscape')).toBeNull();
         expect(warnSpy).toHaveBeenCalled();
         warnSpy.mockRestore();
+    });
+
+    const stashEntry = {
+        imageUrl: 'https://images.unsplash.com/photo-stash?w=1080',
+        thumbUrl: 'https://images.unsplash.com/photo-stash?w=400',
+        imageSize: { width: 1080, height: 720 },
+        attribution: {
+            photographerName: 'Ada',
+            photographerUrl: 'https://u.example/ada',
+            photoUrl: 'https://p.example/1',
+        },
+        downloadLocation: 'https://api.unsplash.com/photos/stash/download',
+        orientation: 'landscape' as const,
+    };
+
+    it('serves stash candidates when the fetch throws', async () => {
+        vi.mocked(fetchRandomImages).mockRejectedValue(new Error('network down'));
+        vi.mocked(stashCandidates).mockResolvedValue([stashEntry]);
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const candidates = await fetchCandidateImages('https://proxy.example', 'nature', true, 'landscape');
+
+        expect(candidates).toEqual([stashEntry]);
+        expect(vi.mocked(stashCandidates)).toHaveBeenCalledWith('landscape', CANDIDATE_IMAGE_COUNT);
+        expect(umamiTrack).toHaveBeenCalledWith('image-stash-fallback', {
+            imageCategory: 'nature',
+            orientation: 'landscape',
+            vibrant: true,
+            hit: true,
+            cause: 'fetch-failed',
+        });
+    });
+
+    it('serves stash candidates when the fetch yields nothing', async () => {
+        vi.mocked(fetchRandomImages).mockResolvedValue(undefined);
+        vi.mocked(stashCandidates).mockResolvedValue([stashEntry]);
+
+        expect(await fetchCandidateImages('https://proxy.example', 'any', false, 'landscape'))
+            .toEqual([stashEntry]);
+    });
+
+    it('reports a stash miss when the fetch fails and the stash is empty', async () => {
+        vi.mocked(fetchRandomImages).mockResolvedValue(undefined);
+
+        expect(await fetchCandidateImages('https://proxy.example', 'any', false, 'portrait')).toBeNull();
+        expect(umamiTrack).toHaveBeenCalledWith('image-stash-fallback', {
+            imageCategory: 'any',
+            orientation: 'portrait',
+            vibrant: false,
+            hit: false,
+            cause: 'no-candidates',
+        });
+    });
+
+    it('does not consult the stash when the fetch succeeds', async () => {
+        vi.mocked(fetchRandomImages).mockResolvedValue([makeResult(1)]);
+
+        await fetchCandidateImages('https://proxy.example', 'any', false, 'landscape');
+
+        expect(vi.mocked(stashCandidates)).not.toHaveBeenCalled();
     });
 });

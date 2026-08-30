@@ -336,55 +336,82 @@ describe('loadStash', () => {
     });
 });
 
+/** A fake cache holding a blob under each given entry's `imageUrl`. */
+function cacheWith(...images: StashedImage[]): CacheStorage {
+    const { caches, entries } = makeFakeCaches();
+    for (const image of images) entries.set(image.imageUrl, 'blob');
+    return caches;
+}
+
 describe('pickStashImage', () => {
-    it('returns null when the stash is empty', () => {
-        expect(pickStashImage('landscape')).toBeNull();
+    it('returns null when the stash is empty', async () => {
+        expect(await pickStashImage('landscape', Math.random, cacheWith())).toBeNull();
     });
 
-    it('prefers an image matching the requested orientation', () => {
-        writeStash([
-            makeStashedImage(1, 'portrait'),
-            makeStashedImage(2, 'landscape'),
-        ]);
+    it('prefers an image matching the requested orientation', async () => {
+        const images = [makeStashedImage(1, 'portrait'), makeStashedImage(2, 'landscape')];
+        writeStash(images);
 
-        expect(pickStashImage('landscape', () => 0)?.imageUrl)
+        expect((await pickStashImage('landscape', () => 0, cacheWith(...images)))?.imageUrl)
             .toBe(makeStashedImage(2).imageUrl);
     });
 
-    it('falls back to any orientation when none matches', () => {
-        writeStash([makeStashedImage(1, 'portrait')]);
+    it('falls back to any orientation when none matches', async () => {
+        const images = [makeStashedImage(1, 'portrait')];
+        writeStash(images);
 
-        expect(pickStashImage('landscape', () => 0)?.imageUrl)
+        expect((await pickStashImage('landscape', () => 0, cacheWith(...images)))?.imageUrl)
             .toBe(makeStashedImage(1).imageUrl);
+    });
+
+    it('skips an entry whose blob was evicted from the cache', async () => {
+        writeStash([makeStashedImage(1, 'landscape'), makeStashedImage(2, 'landscape')]);
+        // Seed 0 orders #2 ahead of #1, but only #1's blob survives.
+        const cache = cacheWith(makeStashedImage(1));
+
+        expect((await pickStashImage('landscape', () => 0, cache))?.imageUrl)
+            .toBe(makeStashedImage(1).imageUrl);
+    });
+
+    it('returns null when the only entry has lost its blob', async () => {
+        writeStash([makeStashedImage(1, 'landscape')]);
+
+        expect(await pickStashImage('landscape', () => 0, cacheWith())).toBeNull();
     });
 });
 
 describe('stashCandidates', () => {
-    it('returns up to the requested number of distinct entries', () => {
-        writeStash([
-            makeStashedImage(1),
-            makeStashedImage(2),
-            makeStashedImage(3),
-        ]);
+    it('returns up to the requested number of distinct entries', async () => {
+        const images = [makeStashedImage(1), makeStashedImage(2), makeStashedImage(3)];
+        writeStash(images);
 
-        const candidates = stashCandidates('landscape', 2);
+        const candidates = await stashCandidates('landscape', 2, Math.random, cacheWith(...images));
 
         expect(candidates).toHaveLength(2);
         expect(new Set(candidates.map((c) => c.imageUrl)).size).toBe(2);
     });
 
-    it('lists entries matching the requested orientation first', () => {
-        writeStash([
-            makeStashedImage(1, 'portrait'),
-            makeStashedImage(2, 'landscape'),
-        ]);
+    it('lists entries matching the requested orientation first', async () => {
+        const images = [makeStashedImage(1, 'portrait'), makeStashedImage(2, 'landscape')];
+        writeStash(images);
 
-        const candidates = stashCandidates('landscape', 4, () => 0);
+        const candidates = await stashCandidates('landscape', 4, () => 0, cacheWith(...images));
 
         expect(candidates.map((c) => c.imageUrl)).toEqual([
             makeStashedImage(2).imageUrl,
             makeStashedImage(1).imageUrl,
         ]);
+    });
+
+    it('omits entries whose blob was evicted from the cache', async () => {
+        const present = [makeStashedImage(1), makeStashedImage(3)];
+        writeStash([makeStashedImage(1), makeStashedImage(2), makeStashedImage(3)]);
+        const cache = cacheWith(...present);
+
+        const candidates = await stashCandidates('landscape', 4, () => 0, cache);
+
+        expect(candidates.map((c) => c.imageUrl).sort())
+            .toEqual(present.map((image) => image.imageUrl).sort());
     });
 });
 
