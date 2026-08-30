@@ -448,6 +448,119 @@ describe('createNewGameDialog', () => {
     });
 });
 
+describe('createNewGameDialog — offline images', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    const downloadButton = () =>
+        container.querySelector<HTMLButtonElement>('[data-testid="offline-images-download"]');
+    const status = () =>
+        container.querySelector<HTMLElement>('[data-testid="offline-images-status"]')!;
+    const flush = async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+    };
+
+    function openWithOfflineImages(download: (
+        imageCategory: string,
+        vibrant: boolean,
+        onProgress: (done: number, total: number) => void,
+    ) => Promise<number>, count = 0): void {
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            onSelect: vi.fn(),
+            offlineImages: { count: () => count, download },
+        });
+    }
+
+    it('hides the offline row when offline downloads are unavailable', () => {
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
+
+        expect(downloadButton()).toBeNull();
+    });
+
+    it('shows how many photos are ready', () => {
+        openWithOfflineImages(vi.fn(), 3);
+
+        expect(status().textContent).toBe('3 ready');
+    });
+
+    it('shows no status for an empty stash', () => {
+        openWithOfflineImages(vi.fn(), 0);
+
+        expect(status().textContent).toBe('');
+    });
+
+    it('downloads with the currently selected category and vibrant options', () => {
+        const download = vi.fn().mockResolvedValue(8);
+        openWithOfflineImages(download);
+
+        const categorySelect = container.querySelector<HTMLSelectElement>(
+            '.image-options-section select',
+        )!;
+        categorySelect.value = 'nature';
+        categorySelect.dispatchEvent(new Event('change'));
+        downloadButton()!.click();
+
+        expect(download).toHaveBeenCalledWith('nature', false, expect.any(Function));
+    });
+
+    it('disables the button and reports progress while downloading', async () => {
+        let resolveDownload!: (saved: number) => void;
+        let onProgress!: (done: number, total: number) => void;
+        openWithOfflineImages((_category, _vibrant, progress) => {
+            onProgress = progress;
+            return new Promise((resolve) => {
+                resolveDownload = resolve;
+            });
+        });
+
+        downloadButton()!.click();
+        await flush();
+
+        expect(downloadButton()!.disabled).toBe(true);
+        onProgress(3, 8);
+        expect(status().textContent).toBe('Saving 3/8…');
+        resolveDownload(8);
+        await flush();
+        expect(downloadButton()!.disabled).toBe(false);
+    });
+
+    it('shows the saved count after a successful download', async () => {
+        openWithOfflineImages(vi.fn().mockResolvedValue(7));
+
+        downloadButton()!.click();
+        await flush();
+
+        expect(status().textContent).toBe('7 ready');
+    });
+
+    it('reports a failed download', async () => {
+        openWithOfflineImages(vi.fn().mockResolvedValue(0), 2);
+
+        downloadButton()!.click();
+        await flush();
+
+        expect(status().textContent).toBe("Couldn't download");
+        expect(downloadButton()!.disabled).toBe(false);
+    });
+
+    it('recovers when the download rejects', async () => {
+        openWithOfflineImages(vi.fn().mockRejectedValue(new Error('track threw')), 2);
+
+        downloadButton()!.click();
+        await flush();
+
+        expect(status().textContent).toBe("Couldn't download");
+        expect(downloadButton()!.disabled).toBe(false);
+    });
+});
+
 describe('createNewGameDialog — composable visibility', () => {
     let container: HTMLElement;
 

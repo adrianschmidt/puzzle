@@ -903,6 +903,32 @@ html, body {
   text-align: right;
 }
 
+.offline-images-button {
+  padding: 6px 12px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 8px;
+  background: var(--ui-overlay-subtle);
+  color: var(--ui-fg);
+  font-family: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.offline-images-button:hover:not(:disabled) {
+  background: var(--ui-overlay-hover);
+}
+
+.offline-images-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.offline-images-status {
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
 .segmented-control {
   display: inline-flex;
   border: 1px solid var(--ui-border);

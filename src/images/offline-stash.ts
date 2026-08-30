@@ -173,14 +173,37 @@ export interface DownloadOfflineImagesOptions {
 }
 
 /**
- * Resolves to the number of photos saved; 0 means the stash was left as it
- * was. Reports each saved photo as an Unsplash download here, at the moment
- * the raw file is actually fetched — the puzzle it later starts is created
- * offline, where the usual use-time report cannot reach Unsplash.
+ * Why the download settled the way it did. Every `saved: 0` path carries a
+ * distinct reason so a production `offline-images-saved` spike is triageable:
+ * `batch-threw` is the benign offline tap (the fetch threw); `batch-empty`
+ * (proxy HTTP error or every photographer blocked) and `no-photos` (the batch
+ * returned photos but every blob fetch failed) point at the proxy/CDN;
+ * `cache-unavailable` and `write-failed` are a real client fault (the Cache
+ * API or localStorage failing). `diagnostics.warn`, the only other signal,
+ * never runs in production builds.
+ */
+export type OfflineDownloadReason =
+    | 'saved'
+    | 'cache-unavailable'
+    | 'batch-threw'
+    | 'batch-empty'
+    | 'no-photos'
+    | 'write-failed';
+
+export interface OfflineDownloadResult {
+    saved: number;
+    reason: OfflineDownloadReason;
+}
+
+/**
+ * Reports each saved photo as an Unsplash download here, at the moment the raw
+ * file is actually fetched — the puzzle it later starts is created offline,
+ * where the usual use-time report cannot reach Unsplash. `saved: 0` leaves the
+ * stash as it was; `reason` says why.
  */
 export async function downloadOfflineImages(
     options: DownloadOfflineImagesOptions,
-): Promise<number> {
+): Promise<OfflineDownloadResult> {
     const {
         proxyBaseUrl,
         query,
@@ -190,7 +213,7 @@ export async function downloadOfflineImages(
         cacheStorage = globalThis.caches,
     } = options;
 
-    if (cacheStorage === undefined) return 0;
+    if (cacheStorage === undefined) return { saved: 0, reason: 'cache-unavailable' };
 
     let results;
     try {
@@ -203,17 +226,17 @@ export async function downloadOfflineImages(
         );
     } catch (error) {
         diagnostics.warn('Offline image download failed:', error);
-        return 0;
+        return { saved: 0, reason: 'batch-threw' };
     }
 
-    if (!results || results.length === 0) return 0;
+    if (!results || results.length === 0) return { saved: 0, reason: 'batch-empty' };
 
     let cache: Cache;
     try {
         cache = await cacheStorage.open(OFFLINE_STASH_CACHE);
     } catch (error) {
         diagnostics.warn('Offline image cache unavailable:', error);
-        return 0;
+        return { saved: 0, reason: 'cache-unavailable' };
     }
 
     const seen = new Set<string>();
@@ -256,7 +279,7 @@ export async function downloadOfflineImages(
         onProgress?.(done, unique.length);
     }
 
-    if (stored.length === 0) return 0;
+    if (stored.length === 0) return { saved: 0, reason: 'no-photos' };
 
     const record: StashRecord = {
         v: 1,
@@ -267,23 +290,34 @@ export async function downloadOfflineImages(
         localStorage.setItem(OFFLINE_STASH_KEY, JSON.stringify(record));
     } catch (error) {
         diagnostics.warn('Offline stash metadata write failed:', error);
-        return 0;
+        // The blobs are cached but the record referencing them was not
+        // persisted, so prune against the record still on disk — not `record`,
+        // which would evict the previous generation the persisted metadata
+        // still points at — to drop just the now-orphaned blobs.
+        await pruneCache(cache, loadRecord());
+        return { saved: 0, reason: 'write-failed' };
     }
 
     await pruneCache(cache, record);
 
-    return stored.length;
+    return { saved: stored.length, reason: 'saved' };
 }
 
 async function pruneCache(cache: Cache, record: StashRecord): Promise<void> {
-    const keep = new Set<string>();
-    for (const entry of [...record.images, ...record.previous]) {
-        keep.add(entry.imageUrl);
-        keep.add(entry.thumbUrl);
-    }
-    for (const request of await cache.keys()) {
-        if (!keep.has(request.url)) {
-            await cache.delete(request.url);
+    // A prune failure runs after the stash is already saved, so it must not
+    // turn a successful download into a reported failure.
+    try {
+        const keep = new Set<string>();
+        for (const entry of [...record.images, ...record.previous]) {
+            keep.add(entry.imageUrl);
+            keep.add(entry.thumbUrl);
         }
+        for (const request of await cache.keys()) {
+            if (!keep.has(request.url)) {
+                await cache.delete(request.url);
+            }
+        }
+    } catch (error) {
+        diagnostics.warn('Offline stash cache prune failed:', error);
     }
 }
