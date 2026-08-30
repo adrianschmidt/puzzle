@@ -112,19 +112,55 @@ function byOrientation(
     return [...shuffled(matching, random), ...shuffled(rest, random)];
 }
 
-export function pickStashImage(
-    orientation: Orientation,
-    random: () => number = Math.random,
-): StashedImage | null {
-    return byOrientation(loadStash(), orientation, random)[0] ?? null;
+async function openStashCache(
+    cacheStorage: CacheStorage | undefined,
+): Promise<Cache | undefined> {
+    if (cacheStorage === undefined) return undefined;
+    try {
+        return await cacheStorage.open(OFFLINE_STASH_CACHE);
+    } catch {
+        return undefined;
+    }
 }
 
-export function stashCandidates(
+/**
+ * The localStorage metadata and the Cache API blobs can diverge: a browser can
+ * evict the cache (or a user clears "cached images") while the metadata record
+ * survives. Serving such an entry would render an SVG `<image>` at a URL the
+ * cache-first route can no longer satisfy — a broken puzzle offline, worse than
+ * the bundled fallback the empty-stash path already gives. So confirm each
+ * entry's blob is actually present before offering it, which also keeps the
+ * `image-stash-fallback` `hit` flag honest.
+ */
+export async function pickStashImage(
+    orientation: Orientation,
+    random: () => number = Math.random,
+    cacheStorage: CacheStorage | undefined = globalThis.caches,
+): Promise<StashedImage | null> {
+    const cache = await openStashCache(cacheStorage);
+    if (cache === undefined) return null;
+    for (const image of byOrientation(loadStash(), orientation, random)) {
+        if (await cache.match(image.imageUrl)) return image;
+    }
+    return null;
+}
+
+export async function stashCandidates(
     orientation: Orientation,
     count: number,
     random: () => number = Math.random,
-): StashedImage[] {
-    return byOrientation(loadStash(), orientation, random).slice(0, count);
+    cacheStorage: CacheStorage | undefined = globalThis.caches,
+): Promise<StashedImage[]> {
+    const cache = await openStashCache(cacheStorage);
+    if (cache === undefined) return [];
+    const present: StashedImage[] = [];
+    for (const image of byOrientation(loadStash(), orientation, random)) {
+        if (await cache.match(image.imageUrl)) {
+            present.push(image);
+            if (present.length === count) break;
+        }
+    }
+    return present;
 }
 
 export interface DownloadOfflineImagesOptions {
