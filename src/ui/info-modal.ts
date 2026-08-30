@@ -107,7 +107,11 @@ function buildHowToPlaySection(): HTMLElement {
         ['strong', 'Surprise me'],
         ' for a fresh random photo. Tick ',
         ['strong', 'Vibrant colours'],
-        ' for more saturated photos.',
+        ' for more saturated photos. Going offline? Tap ',
+        ['strong', 'Download'],
+        ' next to ',
+        ['strong', 'Offline photos'],
+        ' first — new puzzles will use the downloaded photos while you have no connection.',
     ]);
     appendInlineLi(buttons, [
         ['strong', 'Gather Pieces'],

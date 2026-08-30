@@ -110,7 +110,7 @@ describe('downloadOfflineImages', () => {
         const { caches } = makeFakeCaches();
         const fetchFn = makeDownloadFetch(photos);
 
-        const saved = await downloadOfflineImages({
+        const { saved } = await downloadOfflineImages({
             proxyBaseUrl: PROXY,
             query: 'nature',
             orientation: 'landscape',
@@ -198,7 +198,7 @@ describe('downloadOfflineImages', () => {
         writeStash([makeStashedImage(9)]);
         const fetchFn = vi.fn(async () => ({ ok: false, status: 503 })) as unknown as typeof fetch;
 
-        const saved = await downloadOfflineImages({
+        const { saved } = await downloadOfflineImages({
             proxyBaseUrl: PROXY,
             query: undefined,
             orientation: 'landscape',
@@ -216,7 +216,7 @@ describe('downloadOfflineImages', () => {
             throw new Error('offline');
         }) as unknown as typeof fetch;
 
-        const saved = await downloadOfflineImages({
+        const { saved } = await downloadOfflineImages({
             proxyBaseUrl: PROXY,
             query: undefined,
             orientation: 'landscape',
@@ -231,7 +231,7 @@ describe('downloadOfflineImages', () => {
     it('skips a photo whose full-size download fails', async () => {
         const photos = [makePhoto(1), makePhoto(2)];
 
-        const saved = await downloadOfflineImages({
+        const { saved } = await downloadOfflineImages({
             proxyBaseUrl: PROXY,
             query: undefined,
             orientation: 'landscape',
@@ -246,7 +246,7 @@ describe('downloadOfflineImages', () => {
     it('keeps a photo whose thumbnail download fails', async () => {
         const photo = makePhoto(1);
 
-        const saved = await downloadOfflineImages({
+        const { saved } = await downloadOfflineImages({
             proxyBaseUrl: PROXY,
             query: undefined,
             orientation: 'landscape',
@@ -281,10 +281,99 @@ describe('downloadOfflineImages', () => {
         expect(loadStash()).toHaveLength(1);
     });
 
+    it('reports why a zero save happened', async () => {
+        const threw = vi.fn(async () => {
+            throw new Error('offline');
+        }) as unknown as typeof fetch;
+        await expect(downloadOfflineImages({
+            proxyBaseUrl: PROXY, query: undefined, orientation: 'landscape',
+            fetchFn: threw, cacheStorage: makeFakeCaches().caches,
+        })).resolves.toEqual({ saved: 0, reason: 'batch-threw' });
+
+        await expect(downloadOfflineImages({
+            proxyBaseUrl: PROXY, query: undefined, orientation: 'landscape',
+            fetchFn: makeDownloadFetch([makePhoto(1)]), cacheStorage: undefined,
+        })).resolves.toEqual({ saved: 0, reason: 'cache-unavailable' });
+
+        const empty = makeDownloadFetch([]);
+        await expect(downloadOfflineImages({
+            proxyBaseUrl: PROXY, query: undefined, orientation: 'landscape',
+            fetchFn: empty, cacheStorage: makeFakeCaches().caches,
+        })).resolves.toEqual({ saved: 0, reason: 'batch-empty' });
+
+        const photo = makePhoto(2);
+        await expect(downloadOfflineImages({
+            proxyBaseUrl: PROXY, query: undefined, orientation: 'landscape',
+            fetchFn: makeDownloadFetch([photo], [photo.urls.regular]),
+            cacheStorage: makeFakeCaches().caches,
+        })).resolves.toEqual({ saved: 0, reason: 'no-photos' });
+    });
+
+    it('reports a write failure after photos were fetched', async () => {
+        const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new Error('quota');
+        });
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        await expect(downloadOfflineImages({
+            proxyBaseUrl: PROXY, query: undefined, orientation: 'landscape',
+            fetchFn: makeDownloadFetch([makePhoto(1)]), cacheStorage: makeFakeCaches().caches,
+        })).resolves.toEqual({ saved: 0, reason: 'write-failed' });
+
+        setItem.mockRestore();
+        vi.restoreAllMocks();
+    });
+
+    it('drops the orphaned blobs but keeps the previous generation on a write failure', async () => {
+        const prev = makeStashedImage(9);
+        writeStash([prev]);
+        const { caches, entries } = makeFakeCaches();
+        entries.set(prev.imageUrl, 'blob-prev');
+        entries.set(prev.thumbUrl, 'thumb-prev');
+        const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key: string) => {
+            if (key === OFFLINE_STASH_KEY) throw new Error('quota');
+        });
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const photo = makePhoto(1);
+        await expect(downloadOfflineImages({
+            proxyBaseUrl: PROXY, query: undefined, orientation: 'landscape',
+            fetchFn: makeDownloadFetch([photo]), cacheStorage: caches,
+        })).resolves.toEqual({ saved: 0, reason: 'write-failed' });
+
+        expect(entries.has(photo.urls.regular)).toBe(false);
+        expect(entries.has(photo.urls.small)).toBe(false);
+        expect(entries.has(prev.imageUrl)).toBe(true);
+        expect(entries.has(prev.thumbUrl)).toBe(true);
+
+        setItem.mockRestore();
+        vi.restoreAllMocks();
+    });
+
+    it('still reports a successful save when pruning the cache throws', async () => {
+        const entries = new Map<string, unknown>();
+        const cache = {
+            put: async (url: string, response: unknown) => { entries.set(url, response); },
+            match: async (url: string) => entries.get(url),
+            keys: async () => { throw new Error('cache keys unavailable'); },
+            delete: async (url: string) => entries.delete(url),
+        };
+        const caches = { open: async () => cache } as unknown as CacheStorage;
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        await expect(downloadOfflineImages({
+            proxyBaseUrl: PROXY, query: undefined, orientation: 'landscape',
+            fetchFn: makeDownloadFetch([makePhoto(1)]), cacheStorage: caches,
+        })).resolves.toEqual({ saved: 1, reason: 'saved' });
+        expect(loadStash()).toHaveLength(1);
+
+        vi.restoreAllMocks();
+    });
+
     it('collapses duplicate photos from the batch into one stash entry', async () => {
         const { caches, entries } = makeFakeCaches();
 
-        const saved = await downloadOfflineImages({
+        const { saved } = await downloadOfflineImages({
             proxyBaseUrl: PROXY,
             query: undefined,
             orientation: 'landscape',
@@ -300,7 +389,7 @@ describe('downloadOfflineImages', () => {
     it('returns 0 when the cache storage is unavailable', async () => {
         writeStash([makeStashedImage(9)]);
 
-        const saved = await downloadOfflineImages({
+        const { saved } = await downloadOfflineImages({
             proxyBaseUrl: PROXY,
             query: undefined,
             orientation: 'landscape',

@@ -11,6 +11,7 @@
  */
 
 import type { Orientation } from '../model/types.js';
+import type { OfflineDownloadReason } from '../images/offline-stash.js';
 
 declare global {
     interface Window {
@@ -638,15 +639,17 @@ export interface ImageStashFallbackData {
 
 /**
  * Data attached to `offline-images-saved` — the New Game dialog's
- * offline-download attempt settled. `saved: 0` is failure (batch fetch
- * refused or threw, cache unavailable, or no photo survived) with the
- * previous stash left in place. `requested` is the batch size asked of
- * Unsplash; blocked-photographer filtering and per-photo download failures
- * account for any shortfall.
+ * offline-download attempt settled. `saved: 0` is failure, with the previous
+ * stash left in place, and `reason` discriminates the ~five causes so a spike
+ * separates a benign offline tap from a real client fault (see
+ * {@link OfflineDownloadReason}); `reason: 'saved'` accompanies any `saved > 0`
+ * row. `requested` is the batch size asked of Unsplash; blocked-photographer
+ * filtering and per-photo download failures account for any shortfall.
  */
 export interface OfflineImagesSavedData {
     requested: number;
     saved: number;
+    reason: OfflineDownloadReason;
     imageCategory: string;
     orientation: Orientation;
     vibrant: boolean;

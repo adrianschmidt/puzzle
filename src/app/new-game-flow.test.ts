@@ -20,6 +20,9 @@ vi.mock('../puzzle/topology/traced-tab-loader.js', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../puzzle/topology/traced-tab-loader.js')>();
     return { ...actual, preloadTracedTabGenerator: vi.fn() };
 });
+vi.mock('./download-offline-images.js', () => ({
+    downloadOfflineImagesForCategory: vi.fn(),
+}));
 
 import { showToast } from '../ui/toast.js';
 import {
@@ -37,6 +40,7 @@ import { loadImageSourcePreference } from '../game/image-source.js';
 import { loadImageCategoryPreference, loadVibrantPreference } from '../game/image-categories.js';
 import { loadState, saveNewPuzzle } from '../persistence/index.js';
 import { makeSavedGameState } from '../test-helpers/fixtures.js';
+import { downloadOfflineImagesForCategory } from './download-offline-images.js';
 import { openNewGameDialog } from './new-game-flow.js';
 
 describe('openNewGameDialog', () => {
@@ -276,6 +280,45 @@ describe('openNewGameDialog', () => {
         expect(umamiTrack).toHaveBeenCalledWith('new-game-failed', {
             reason: 'chunk boom',
             cutStyle: 'wavy',
+        });
+    });
+
+    describe('offline images wiring', () => {
+        const fakeCaches = {} as CacheStorage;
+
+        afterEach(() => {
+            vi.unstubAllEnvs();
+            delete (globalThis as { caches?: CacheStorage }).caches;
+        });
+
+        it('offers offline downloads when the proxy and the Cache API are available', async () => {
+            vi.stubEnv('VITE_IMAGE_PROXY_URL', 'https://proxy.example');
+            (globalThis as { caches?: CacheStorage }).caches = fakeCaches;
+            vi.mocked(downloadOfflineImagesForCategory).mockResolvedValue(8);
+
+            const opts = open();
+
+            expect(opts.offlineImages).toBeDefined();
+            expect(opts.offlineImages!.count()).toBe(0);
+
+            const onProgress = vi.fn();
+            await opts.offlineImages!.download('nature', true, onProgress);
+            expect(vi.mocked(downloadOfflineImagesForCategory)).toHaveBeenCalledWith(
+                'https://proxy.example', 'nature', true, 'landscape', onProgress,
+            );
+        });
+
+        it('omits offline downloads when the Cache API is missing', () => {
+            vi.stubEnv('VITE_IMAGE_PROXY_URL', 'https://proxy.example');
+
+            expect(open().offlineImages).toBeUndefined();
+        });
+
+        it('omits offline downloads when no proxy is configured', () => {
+            vi.stubEnv('VITE_IMAGE_PROXY_URL', '');
+            (globalThis as { caches?: CacheStorage }).caches = fakeCaches;
+
+            expect(open().offlineImages).toBeUndefined();
         });
     });
 });

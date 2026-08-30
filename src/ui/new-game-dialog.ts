@@ -62,6 +62,11 @@ export interface NewGameDialogOptions {
         imageCategory: string,
         vibrant: boolean,
     ) => Promise<CandidateImage[] | null>;
+    /**
+     * Absent when no image proxy is configured or the Cache API is missing —
+     * the offline-download row is hidden.
+     */
+    offlineImages?: OfflineImagesOptions;
     /** Called when the player picks an image (photo tile, Surprise me, or Blank puzzle). */
     onSelect: (selection: NewGameSelection) => void;
     /** Called when the dialog is dismissed without selecting. */
@@ -100,6 +105,17 @@ interface ComposableSection {
 interface ImageOptionsSection {
     element: HTMLElement;
     getValues(): { imageCategory: string; vibrant: boolean };
+}
+
+export interface OfflineImagesOptions {
+    /** Photos currently stashed for offline play. */
+    count: () => number;
+    /** Resolves to the number of photos saved; 0 means the attempt failed. */
+    download: (
+        imageCategory: string,
+        vibrant: boolean,
+        onProgress: (done: number, total: number) => void,
+    ) => Promise<number>;
 }
 
 function buildSizeSelectRow(args: {
@@ -166,9 +182,69 @@ function buildBorderlessOptionsSection(args: {
     };
 }
 
+function appendOfflineImagesRow(
+    section: HTMLElement,
+    offlineImages: OfflineImagesOptions,
+    getValues: () => { imageCategory: string; vibrant: boolean },
+): void {
+    const row = document.createElement('div');
+    row.className = 'dialog-row';
+
+    const label = document.createElement('label');
+    label.className = 'dialog-row-label';
+    label.textContent = 'Offline photos';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'offline-images-button';
+    button.dataset.testid = 'offline-images-download';
+    button.textContent = 'Download';
+    button.setAttribute('aria-label', 'Download photos for offline play');
+
+    const status = document.createElement('span');
+    status.className = 'offline-images-status';
+    status.dataset.testid = 'offline-images-status';
+    status.setAttribute('aria-live', 'polite');
+    const showCount = (count: number): void => {
+        status.textContent = count > 0 ? `${count} ready` : '';
+    };
+    showCount(offlineImages.count());
+
+    button.addEventListener('click', () => {
+        button.disabled = true;
+        status.textContent = 'Saving…';
+        const { imageCategory, vibrant } = getValues();
+        void offlineImages
+            .download(imageCategory, vibrant, (done, total) => {
+                status.textContent = `Saving ${done}/${total}…`;
+            })
+            .then(
+                (saved) => {
+                    if (saved > 0) {
+                        showCount(saved);
+                    } else {
+                        status.textContent = "Couldn't download";
+                    }
+                },
+                () => {
+                    status.textContent = "Couldn't download";
+                },
+            )
+            .finally(() => {
+                button.disabled = false;
+            });
+    });
+
+    row.appendChild(label);
+    row.appendChild(button);
+    row.appendChild(status);
+    section.appendChild(row);
+}
+
 function buildImageOptionsSection(args: {
     savedImageCategory?: string;
     savedVibrant?: boolean;
+    offlineImages?: OfflineImagesOptions;
     onChange: () => void;
 }): ImageOptionsSection {
     const section = document.createElement('div');
@@ -211,13 +287,16 @@ function buildImageOptionsSection(args: {
     categorySelect.addEventListener('change', args.onChange);
     vibrantCheckbox.addEventListener('change', args.onChange);
 
-    return {
-        element: section,
-        getValues: () => ({
-            imageCategory: categorySelect.value,
-            vibrant: vibrantCheckbox.checked,
-        }),
-    };
+    const getValues = (): { imageCategory: string; vibrant: boolean } => ({
+        imageCategory: categorySelect.value,
+        vibrant: vibrantCheckbox.checked,
+    });
+
+    if (args.offlineImages) {
+        appendOfflineImagesRow(section, args.offlineImages, getValues);
+    }
+
+    return { element: section, getValues };
 }
 
 function buildComposableSlidersSection(args: {
@@ -525,6 +604,7 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     const imageOptionsSection = buildImageOptionsSection({
         savedImageCategory: options.savedImageCategory,
         savedVibrant: options.savedVibrant,
+        offlineImages: options.offlineImages,
         onChange: () => imagePicker?.refresh(),
     });
 

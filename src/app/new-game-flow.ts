@@ -34,6 +34,7 @@ import {
     saveVibrantPreference,
 } from '../game/image-categories.js';
 import { getImageProxyBaseUrl } from '../images/index.js';
+import { isOfflineStashSupported, stashCount } from '../images/offline-stash.js';
 import { getBaseCutGenerator } from '../puzzle/topology/generator-registry.js';
 import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.js';
 import {
@@ -41,6 +42,7 @@ import {
     loadRotationEnabledPreference,
     saveRotationEnabledPreference,
 } from '../ui/index.js';
+import { downloadOfflineImagesForCategory } from './download-offline-images.js';
 import { fetchCandidateImages } from './fetch-candidate-images.js';
 import { orientationForViewport } from './orientation.js';
 import { runWithErrorReport } from './run-with-error-report.js';
@@ -59,6 +61,7 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
     const savedRotationEnabled = loadRotationEnabledPreference();
     const savedImageCategory = loadImageCategoryPreference();
     const savedVibrant = loadVibrantPreference();
+    const proxyBaseUrl = getImageProxyBaseUrl();
 
     createNewGameDialog({
         container: deps.container,
@@ -73,7 +76,6 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
         savedImageCategory,
         savedVibrant,
         fetchImageCandidates: (() => {
-            const proxyBaseUrl = getImageProxyBaseUrl();
             if (!proxyBaseUrl) return undefined;
             return (imageCategory: string, vibrant: boolean) =>
                 fetchCandidateImages(
@@ -85,6 +87,27 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
                         height: deps.container.clientHeight || window.innerHeight,
                     }),
                 );
+        })(),
+        offlineImages: (() => {
+            if (!proxyBaseUrl || !isOfflineStashSupported()) return undefined;
+            return {
+                count: stashCount,
+                download: (
+                    imageCategory: string,
+                    vibrant: boolean,
+                    onProgress: (done: number, total: number) => void,
+                ) =>
+                    downloadOfflineImagesForCategory(
+                        proxyBaseUrl,
+                        imageCategory,
+                        vibrant,
+                        orientationForViewport({
+                            width: deps.container.clientWidth || window.innerWidth,
+                            height: deps.container.clientHeight || window.innerHeight,
+                        }),
+                        onProgress,
+                    ),
+            };
         })(),
         onPreloadTracedTabs: () => {
             // Fire-and-forget: `preloadTracedTabGenerator` is idempotent and

@@ -279,6 +279,13 @@ describe('createInfoModal — How to Play section', () => {
         expect(text).toContain('drag a box');
     });
 
+    it('documents the offline photo download', () => {
+        createInfoModal({ container });
+        const text = howToPlaySection().textContent ?? '';
+        expect(text).toContain('Offline photos');
+        expect(text).toContain('no connection');
+    });
+
     it('shows the same multi-select and marquee icons as the toolbar buttons', () => {
         createInfoModal({ container });
         const rendered = [
