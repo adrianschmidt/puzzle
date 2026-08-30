@@ -16,6 +16,7 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { createSwErrorReporter } from './sw-error-reporter.js';
+import { createStashImageHandler, isStashImageRequest } from './stash-image-handler.js';
 
 // Workbox replaces `self.__WB_MANIFEST` at build time (its configured
 // injectionPoint), so the string must appear verbatim — don't rename `self`.
@@ -37,6 +38,14 @@ registerRoute(
     new NavigationRoute(createHandlerBoundToURL(`${base}index.html`), {
         denylist: [new RegExp(`^${escapedBase}[^/]+/`)],
     }),
+);
+
+// Cache-first keeps a stashed photo's real CDN URL loadable offline, which is
+// what lets saves and share links treat it like any other Unsplash image; a
+// miss is a plain network fetch, so unstashed CDN traffic is unaffected.
+registerRoute(
+    ({ url }) => isStashImageRequest(url),
+    createStashImageHandler(self.caches),
 );
 
 // `registerType: 'prompt'`: never activate a waiting worker on our own.
