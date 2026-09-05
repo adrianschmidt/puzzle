@@ -8,6 +8,7 @@ import {
     IMAGE_CATEGORY_PREFERENCE_KEY,
     VIBRANT_PREFERENCE_KEY,
     buildImageQuery,
+    resolveQueryOverride,
     findImageCategory,
     loadImageCategoryPreference,
     loadVibrantPreference,
@@ -156,6 +157,32 @@ describe('vibrant preference persistence', () => {
     it('returns false for a garbage saved value', () => {
         localStorage.setItem(VIBRANT_PREFERENCE_KEY, 'not-a-boolean');
         expect(loadVibrantPreference()).toBe(false);
+    });
+});
+
+describe('resolveQueryOverride', () => {
+    it('uses the override when it is a non-empty string', () => {
+        expect(resolveQueryOverride('nature', 'red bicycles')).toBe('red bicycles');
+    });
+
+    it('overrides even the empty "any" category (undefined query)', () => {
+        expect(resolveQueryOverride(undefined, 'red bicycles')).toBe('red bicycles');
+    });
+
+    it('trims surrounding whitespace from the override', () => {
+        expect(resolveQueryOverride('nature', '  red bicycles  ')).toBe('red bicycles');
+    });
+
+    it('falls back to the category query when the override is undefined', () => {
+        expect(resolveQueryOverride('nature', undefined)).toBe('nature');
+    });
+
+    it('falls back to the category query when the override is empty', () => {
+        expect(resolveQueryOverride('nature', '')).toBe('nature');
+    });
+
+    it('falls back to the category query when the override is whitespace only', () => {
+        expect(resolveQueryOverride('nature', '   ')).toBe('nature');
     });
 });
 

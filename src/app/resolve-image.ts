@@ -3,7 +3,7 @@ import { track, sanitizeErrorReason } from '../analytics/index.js';
 import { fetchRandomImage, toDisplayImage, type DisplayImage } from '../images/index.js';
 import { pickStashImage } from '../images/offline-stash.js';
 import { GenerationCanceledError } from '../game/index.js';
-import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
+import { findImageCategory, buildImageQuery, resolveQueryOverride } from '../game/image-categories.js';
 import type { Orientation } from '../model/types.js';
 
 export type ResolvedImage = DisplayImage;
@@ -31,10 +31,11 @@ export async function resolveUnsplashImage(
     vibrant: boolean,
     orientation: Orientation,
     signal?: AbortSignal,
+    queryOverride?: string,
 ): Promise<ResolvedImage | null> {
     try {
         const category = findImageCategory(imageCategory);
-        const query = buildImageQuery(category.query, vibrant);
+        const query = buildImageQuery(resolveQueryOverride(category.query, queryOverride), vibrant);
         const result = await fetchRandomImage(proxyBaseUrl, fetch, query, orientation, signal);
 
         if (!result || result === 'blocked') {

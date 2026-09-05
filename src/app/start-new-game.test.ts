@@ -349,6 +349,21 @@ describe('startNewGame', () => {
         expect(resolveUnsplashImage).toHaveBeenCalled();
     });
 
+    it('passes the query override through to the Unsplash resolve', async () => {
+        vi.mocked(getImageProxyBaseUrl).mockReturnValue('https://proxy.example');
+        vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
+
+        await startNewGame(
+            { cols: 2, rows: 2 },
+            { cutStyle: 'wavy', imageCategory: 'nature', vibrant: true, queryOverride: 'red bicycles' },
+            deps,
+        );
+
+        expect(resolveUnsplashImage).toHaveBeenCalledWith(
+            'https://proxy.example', 'nature', true, expect.any(String), expect.anything(), 'red bicycles',
+        );
+    });
+
     // Pins ordering step 4: the overlay paints before generation (the yield
     // still matters for the sync fallback jsdom exercises here).
     it('yields for paint before generation starts', async () => {
