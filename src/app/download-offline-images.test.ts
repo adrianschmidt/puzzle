@@ -41,6 +41,21 @@ describe('downloadOfflineImagesForCategory', () => {
         });
     });
 
+    it('uses the query override in place of the category query', async () => {
+        const onProgress = vi.fn();
+
+        await downloadOfflineImagesForCategory(
+            'https://proxy.example', 'nature', true, 'portrait', onProgress, 'red bicycles',
+        );
+
+        expect(vi.mocked(downloadOfflineImages)).toHaveBeenCalledWith({
+            proxyBaseUrl: 'https://proxy.example',
+            query: 'red bicycles vibrant colorful',
+            orientation: 'portrait',
+            onProgress,
+        });
+    });
+
     it('tracks the settled attempt', async () => {
         await downloadOfflineImagesForCategory('https://proxy.example', 'nature', false, 'landscape');
 

@@ -5,7 +5,7 @@
 
 import { PUZZLE_SIZE_OPTIONS } from '../game/puzzle-sizes.js';
 import { createCutStylePicker } from './cut-style-picker.js';
-import { cutStyleNeedsTracedTabs, DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOptions } from '../game/cut-styles.js';
+import { cutStyleNeedsTracedTabs, DEFAULT_CUT_STYLE_ID, getVisibleCutStyleOptions, isDevDeploy } from '../game/cut-styles.js';
 import { IMAGE_CATEGORY_OPTIONS } from '../game/image-categories.js';
 import { createDismissableOverlay } from './dismissable-overlay.js';
 import { createImagePicker, type ImagePicker, type NewGameImageChoice } from './image-picker.js';
@@ -44,6 +44,8 @@ export interface NewGameSelection {
     imageChoice: NewGameImageChoice;
     imageCategory: string;
     vibrant: boolean;
+    /** Dev-only raw Unsplash query; when set, supersedes `imageCategory`'s query. */
+    queryOverride?: string;
 }
 
 export interface NewGameDialogOptions {
@@ -61,6 +63,7 @@ export interface NewGameDialogOptions {
     fetchImageCandidates?: (
         imageCategory: string,
         vibrant: boolean,
+        queryOverride?: string,
     ) => Promise<CandidateImage[] | null>;
     /**
      * Absent when no image proxy is configured or the Cache API is missing —
@@ -104,7 +107,7 @@ interface ComposableSection {
 
 interface ImageOptionsSection {
     element: HTMLElement;
-    getValues(): { imageCategory: string; vibrant: boolean };
+    getValues(): { imageCategory: string; vibrant: boolean; queryOverride?: string };
 }
 
 export interface OfflineImagesOptions {
@@ -115,6 +118,7 @@ export interface OfflineImagesOptions {
         imageCategory: string,
         vibrant: boolean,
         onProgress: (done: number, total: number) => void,
+        queryOverride?: string,
     ) => Promise<number>;
 }
 
@@ -185,7 +189,7 @@ function buildBorderlessOptionsSection(args: {
 function appendOfflineImagesRow(
     section: HTMLElement,
     offlineImages: OfflineImagesOptions,
-    getValues: () => { imageCategory: string; vibrant: boolean },
+    getValues: () => { imageCategory: string; vibrant: boolean; queryOverride?: string },
 ): void {
     const row = document.createElement('div');
     row.className = 'dialog-row';
@@ -213,11 +217,11 @@ function appendOfflineImagesRow(
     button.addEventListener('click', () => {
         button.disabled = true;
         status.textContent = 'Saving…';
-        const { imageCategory, vibrant } = getValues();
+        const { imageCategory, vibrant, queryOverride } = getValues();
         void offlineImages
             .download(imageCategory, vibrant, (done, total) => {
                 status.textContent = `Saving ${done}/${total}…`;
-            })
+            }, queryOverride)
             .then(
                 (saved) => {
                     if (saved > 0) {
@@ -270,6 +274,25 @@ function buildImageOptionsSection(args: {
     categoryRow.appendChild(categorySelect);
     section.appendChild(categoryRow);
 
+    // Dev-only escape hatch: a raw Unsplash query that supersedes Picture Type
+    // when non-empty, gated to dev-deploys like the Composable cut style.
+    let queryOverrideInput: HTMLInputElement | undefined;
+    if (isDevDeploy()) {
+        const overrideRow = document.createElement('div');
+        overrideRow.className = 'dialog-row';
+        const overrideLabel = document.createElement('label');
+        overrideLabel.className = 'dialog-row-label';
+        overrideLabel.textContent = 'Query (dev)';
+        queryOverrideInput = document.createElement('input');
+        queryOverrideInput.type = 'text';
+        queryOverrideInput.className = 'dialog-row-input';
+        queryOverrideInput.dataset.testid = 'image-query-override';
+        queryOverrideInput.placeholder = 'Overrides Picture Type';
+        overrideRow.appendChild(overrideLabel);
+        overrideRow.appendChild(queryOverrideInput);
+        section.appendChild(overrideRow);
+    }
+
     // Appends keywords to the Unsplash query to bias results toward saturated photos.
     const vibrantRow = document.createElement('div');
     vibrantRow.className = 'dialog-row';
@@ -287,10 +310,15 @@ function buildImageOptionsSection(args: {
     categorySelect.addEventListener('change', args.onChange);
     vibrantCheckbox.addEventListener('change', args.onChange);
 
-    const getValues = (): { imageCategory: string; vibrant: boolean } => ({
-        imageCategory: categorySelect.value,
-        vibrant: vibrantCheckbox.checked,
-    });
+    const getValues = (): { imageCategory: string; vibrant: boolean; queryOverride?: string } => {
+        const values: { imageCategory: string; vibrant: boolean; queryOverride?: string } = {
+            imageCategory: categorySelect.value,
+            vibrant: vibrantCheckbox.checked,
+        };
+        const override = queryOverrideInput?.value.trim();
+        if (override) values.queryOverride = override;
+        return values;
+    };
 
     if (args.offlineImages) {
         appendOfflineImagesRow(section, args.offlineImages, getValues);
@@ -628,8 +656,8 @@ export function createNewGameDialog(options: NewGameDialogOptions): () => void {
     imagePicker = createImagePicker({
         fetchCandidates: options.fetchImageCandidates
             ? () => {
-                const { imageCategory, vibrant } = imageOptionsSection.getValues();
-                return options.fetchImageCandidates!(imageCategory, vibrant);
+                const { imageCategory, vibrant, queryOverride } = imageOptionsSection.getValues();
+                return options.fetchImageCandidates!(imageCategory, vibrant, queryOverride);
             }
             : undefined,
         onPick: (imageChoice) => {

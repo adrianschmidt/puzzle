@@ -70,6 +70,44 @@ describe('resolveUnsplashImage', () => {
         expect(umamiTrack).not.toHaveBeenCalled();
     });
 
+    it('uses the query override in place of the category query', async () => {
+        vi.mocked(fetchRandomImage).mockResolvedValue({
+            imageUrl: 'https://images.example/photo',
+            width: 2000,
+            height: 1000,
+            photographerName: 'Ada',
+            photographerUrl: 'https://u.example/ada',
+            photoUrl: 'https://p.example/1',
+            thumbUrl: 'https://images.unsplash.com/photo-abc?w=400',
+            downloadLocation: 'https://api.unsplash.com/photos/abc123/download',
+        });
+
+        await resolveUnsplashImage('https://proxy.example', 'nature', false, 'landscape', undefined, 'red bicycles');
+
+        expect(fetchRandomImage).toHaveBeenCalledWith(
+            'https://proxy.example', fetch, 'red bicycles', 'landscape', undefined,
+        );
+    });
+
+    it('appends the vibrant terms to the query override', async () => {
+        vi.mocked(fetchRandomImage).mockResolvedValue({
+            imageUrl: 'https://images.example/photo',
+            width: 2000,
+            height: 1000,
+            photographerName: 'Ada',
+            photographerUrl: 'https://u.example/ada',
+            photoUrl: 'https://p.example/1',
+            thumbUrl: 'https://images.unsplash.com/photo-abc?w=400',
+            downloadLocation: 'https://api.unsplash.com/photos/abc123/download',
+        });
+
+        await resolveUnsplashImage('https://proxy.example', 'nature', true, 'portrait', undefined, 'red bicycles');
+
+        expect(fetchRandomImage).toHaveBeenCalledWith(
+            'https://proxy.example', fetch, 'red bicycles vibrant colorful', 'portrait', undefined,
+        );
+    });
+
     it('serves a pool image and reports a hit when the proxy refuses (HTTP error)', async () => {
         vi.mocked(fetchRandomImage).mockResolvedValue(undefined);
         const poolImage = {

@@ -9,7 +9,7 @@ import { diagnostics } from '../diagnostics.js';
 import { track } from '../analytics/index.js';
 import { fetchRandomImages, CANDIDATE_COUNT, toDisplayImage, type CandidateImage } from '../images/index.js';
 import { stashCandidates } from '../images/offline-stash.js';
-import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
+import { findImageCategory, buildImageQuery, resolveQueryOverride } from '../game/image-categories.js';
 import type { Orientation } from '../model/types.js';
 
 /** Candidates per picker fetch — one per grid tile, so tied to the tile count. */
@@ -37,11 +37,12 @@ export async function fetchCandidateImages(
     imageCategory: string,
     vibrant: boolean,
     orientation: Orientation,
+    queryOverride?: string,
     fetchFn: typeof fetch = fetch,
 ): Promise<CandidateImage[] | null> {
     try {
         const category = findImageCategory(imageCategory);
-        const query = buildImageQuery(category.query, vibrant);
+        const query = buildImageQuery(resolveQueryOverride(category.query, queryOverride), vibrant);
         const results = await fetchRandomImages(
             proxyBaseUrl,
             CANDIDATE_IMAGE_COUNT,

@@ -13,6 +13,7 @@ import {
     loadCutStylePreference,
     getVisibleCutStyleOptions,
     isComposableVisible,
+    isDevDeploy,
     rotationModeForNewGame,
     cutStyleNeedsTracedTabs,
 } from './cut-styles.js';
@@ -153,6 +154,30 @@ describe('isComposableVisible', () => {
         vi.stubEnv('DEV', true);
         vi.stubEnv('BASE_URL', '/');
         expect(isComposableVisible()).toBe(true);
+    });
+});
+
+describe('isDevDeploy', () => {
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it('returns false on a production build (no DEV, no /dev/ in BASE_URL)', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/');
+        expect(isDevDeploy()).toBe(false);
+    });
+
+    it('returns true when BASE_URL contains "/dev/"', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/dev/');
+        expect(isDevDeploy()).toBe(true);
+    });
+
+    it('returns true when DEV is set', () => {
+        vi.stubEnv('DEV', true);
+        vi.stubEnv('BASE_URL', '/');
+        expect(isDevDeploy()).toBe(true);
     });
 });
 
