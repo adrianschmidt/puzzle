@@ -1,5 +1,5 @@
 import { track } from '../analytics/index.js';
-import { findImageCategory, buildImageQuery } from '../game/image-categories.js';
+import { findImageCategory, buildImageQuery, resolveQueryOverride } from '../game/image-categories.js';
 import { downloadOfflineImages, OFFLINE_STASH_COUNT } from '../images/offline-stash.js';
 import type { Orientation } from '../model/types.js';
 
@@ -9,9 +9,10 @@ export async function downloadOfflineImagesForCategory(
     vibrant: boolean,
     orientation: Orientation,
     onProgress?: (done: number, total: number) => void,
+    queryOverride?: string,
 ): Promise<number> {
     const category = findImageCategory(imageCategory);
-    const query = buildImageQuery(category.query, vibrant);
+    const query = buildImageQuery(resolveQueryOverride(category.query, queryOverride), vibrant);
     const { saved, reason } = await downloadOfflineImages({
         proxyBaseUrl,
         query,

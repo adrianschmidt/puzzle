@@ -77,7 +77,7 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
         savedVibrant,
         fetchImageCandidates: (() => {
             if (!proxyBaseUrl) return undefined;
-            return (imageCategory: string, vibrant: boolean) =>
+            return (imageCategory: string, vibrant: boolean, queryOverride?: string) =>
                 fetchCandidateImages(
                     proxyBaseUrl,
                     imageCategory,
@@ -86,6 +86,7 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
                         width: deps.container.clientWidth || window.innerWidth,
                         height: deps.container.clientHeight || window.innerHeight,
                     }),
+                    queryOverride,
                 );
         })(),
         offlineImages: (() => {
@@ -96,6 +97,7 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
                     imageCategory: string,
                     vibrant: boolean,
                     onProgress: (done: number, total: number) => void,
+                    queryOverride?: string,
                 ) =>
                     downloadOfflineImagesForCategory(
                         proxyBaseUrl,
@@ -106,6 +108,7 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
                             height: deps.container.clientHeight || window.innerHeight,
                         }),
                         onProgress,
+                        queryOverride,
                     ),
             };
         })(),
@@ -116,7 +119,7 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
             // unhandled-rejection warning.
             preloadTracedTabGenerator().catch(() => {});
         },
-        onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, imageChoice, imageCategory, vibrant }) => {
+        onSelect: ({ sizeId, cutStyleId, composableConfig, fractalConfig, wavyConfig, rotationEnabled, imageChoice, imageCategory, vibrant, queryOverride }) => {
             saveSizePreference(sizeId);
             saveCutStylePreference(cutStyleId);
             if (composableConfig) {
@@ -151,6 +154,7 @@ export function openNewGameDialog(deps: OpenNewGameDialogDeps): void {
                     : undefined,
                 imageSource: imageChoice.kind === 'blank' ? 'blank' : 'random',
                 imageCategory,
+                queryOverride,
                 fractalConfig,
                 wavyConfig,
                 vibrant,

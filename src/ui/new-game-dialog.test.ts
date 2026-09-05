@@ -410,7 +410,7 @@ describe('createNewGameDialog', () => {
             fetchImageCandidates,
         });
         expect(fetchImageCandidates).toHaveBeenCalledTimes(1);
-        expect(fetchImageCandidates).toHaveBeenLastCalledWith('any', false);
+        expect(fetchImageCandidates).toHaveBeenLastCalledWith('any', false, undefined);
 
         const categorySelect = container.querySelector<HTMLSelectElement>(
             '.image-options-section select',
@@ -418,7 +418,7 @@ describe('createNewGameDialog', () => {
         categorySelect.value = 'nature';
         categorySelect.dispatchEvent(new Event('change'));
         expect(fetchImageCandidates).toHaveBeenCalledTimes(2);
-        expect(fetchImageCandidates).toHaveBeenLastCalledWith('nature', false);
+        expect(fetchImageCandidates).toHaveBeenLastCalledWith('nature', false, undefined);
 
         const vibrant = container.querySelector<HTMLInputElement>(
             '.image-options-section input[type="checkbox"]',
@@ -426,7 +426,42 @@ describe('createNewGameDialog', () => {
         vibrant.checked = true;
         vibrant.dispatchEvent(new Event('change'));
         expect(fetchImageCandidates).toHaveBeenCalledTimes(3);
-        expect(fetchImageCandidates).toHaveBeenLastCalledWith('nature', true);
+        expect(fetchImageCandidates).toHaveBeenLastCalledWith('nature', true, undefined);
+    });
+
+    it('passes the typed query override through onSelect', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect });
+
+        const override = container.querySelector<HTMLInputElement>(
+            '[data-testid="image-query-override"]',
+        )!;
+        override.value = 'red bicycles';
+        pickSurprise(container);
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.objectContaining({ queryOverride: 'red bicycles' }),
+        );
+    });
+
+    it('uses the typed query override when reloading the previews', () => {
+        const fetchImageCandidates = vi.fn().mockResolvedValue(null);
+        createNewGameDialog({
+            container,
+            selectedSizeId: '48',
+            onSelect: vi.fn(),
+            fetchImageCandidates,
+        });
+
+        const override = container.querySelector<HTMLInputElement>(
+            '[data-testid="image-query-override"]',
+        )!;
+        override.value = 'red bicycles';
+        container
+            .querySelector<HTMLButtonElement>('[data-testid="image-picker-refresh"]')!
+            .click();
+
+        expect(fetchImageCandidates).toHaveBeenLastCalledWith('any', false, 'red bicycles');
     });
 
     it('hides the candidate grid when no fetchImageCandidates is provided', () => {
@@ -507,7 +542,20 @@ describe('createNewGameDialog — offline images', () => {
         categorySelect.dispatchEvent(new Event('change'));
         downloadButton()!.click();
 
-        expect(download).toHaveBeenCalledWith('nature', false, expect.any(Function));
+        expect(download).toHaveBeenCalledWith('nature', false, expect.any(Function), undefined);
+    });
+
+    it('uses the typed query override for the offline download', () => {
+        const download = vi.fn().mockResolvedValue(8);
+        openWithOfflineImages(download);
+
+        const override = container.querySelector<HTMLInputElement>(
+            '[data-testid="image-query-override"]',
+        )!;
+        override.value = 'red bicycles';
+        downloadButton()!.click();
+
+        expect(download).toHaveBeenCalledWith('any', false, expect.any(Function), 'red bicycles');
     });
 
     it('disables the button and reports progress while downloading', async () => {
@@ -617,6 +665,51 @@ describe('createNewGameDialog — composable visibility', () => {
             '[data-cut-style-id="classic"]',
         ) as HTMLElement | null;
         expect(classicBtn?.classList.contains('cut-style-option--selected')).toBe(true);
+    });
+});
+
+describe('createNewGameDialog — dev query override', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+    });
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+        container.remove();
+    });
+
+    it('shows the query override input on dev-deploys', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/dev/');
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
+
+        expect(
+            container.querySelector('[data-testid="image-query-override"]'),
+        ).not.toBeNull();
+    });
+
+    it('hides the query override input on production', () => {
+        vi.stubEnv('DEV', false);
+        vi.stubEnv('BASE_URL', '/puzzle/');
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
+
+        expect(
+            container.querySelector('[data-testid="image-query-override"]'),
+        ).toBeNull();
+    });
+
+    it('does not emit queryOverride when the input is left blank', () => {
+        const onSelect = vi.fn();
+        createNewGameDialog({ container, selectedSizeId: '48', onSelect });
+
+        pickSurprise(container);
+
+        expect(onSelect).toHaveBeenCalledWith(
+            expect.not.objectContaining({ queryOverride: expect.anything() }),
+        );
     });
 });
 
