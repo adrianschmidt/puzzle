@@ -86,14 +86,18 @@ export const saveCutStylePreference = store.save;
 export const loadCutStylePreference = store.load;
 
 /**
- * Whether Composable is selectable in the new-game dialog: true on `npm run dev`
- * (`import.meta.env.DEV`) and the PR-preview deploy (`/puzzle/dev/`), false on
- * production. Computed per call, not cached, so tests can stub the env.
+ * True on `npm run dev` (`import.meta.env.DEV`) and the PR-preview deploy
+ * (`/puzzle/dev/`), false on production. Gates dev-only affordances. Computed
+ * per call, not cached, so tests can stub the env.
  */
-export function isComposableVisible(): boolean {
+export function isDevDeploy(): boolean {
     if (import.meta.env.DEV) return true;
     const base = import.meta.env.BASE_URL ?? '';
     return base.includes('/dev/');
+}
+
+export function isComposableVisible(): boolean {
+    return isDevDeploy();
 }
 
 export function getVisibleCutStyleOptions(): readonly CutStyleOption[] {

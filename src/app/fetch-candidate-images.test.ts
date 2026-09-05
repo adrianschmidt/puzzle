@@ -79,6 +79,48 @@ describe('fetchCandidateImages', () => {
         );
     });
 
+    it('uses the query override in place of the category query', async () => {
+        vi.mocked(fetchRandomImages).mockResolvedValue([makeResult(1)]);
+
+        await fetchCandidateImages('https://proxy.example', 'nature', false, 'landscape', 'red bicycles');
+
+        expect(fetchRandomImages).toHaveBeenCalledWith(
+            'https://proxy.example',
+            CANDIDATE_IMAGE_COUNT,
+            fetch,
+            'red bicycles',
+            'landscape',
+        );
+    });
+
+    it('appends the vibrant terms to the query override', async () => {
+        vi.mocked(fetchRandomImages).mockResolvedValue([makeResult(1)]);
+
+        await fetchCandidateImages('https://proxy.example', 'nature', true, 'portrait', 'red bicycles');
+
+        expect(fetchRandomImages).toHaveBeenCalledWith(
+            'https://proxy.example',
+            CANDIDATE_IMAGE_COUNT,
+            fetch,
+            'red bicycles vibrant colorful',
+            'portrait',
+        );
+    });
+
+    it('falls back to the category query when the override is blank', async () => {
+        vi.mocked(fetchRandomImages).mockResolvedValue([makeResult(1)]);
+
+        await fetchCandidateImages('https://proxy.example', 'nature', false, 'landscape', '   ');
+
+        expect(fetchRandomImages).toHaveBeenCalledWith(
+            'https://proxy.example',
+            CANDIDATE_IMAGE_COUNT,
+            fetch,
+            'nature',
+            'landscape',
+        );
+    });
+
     it('returns null when the fetch yields nothing', async () => {
         vi.mocked(fetchRandomImages).mockResolvedValue(undefined);
 

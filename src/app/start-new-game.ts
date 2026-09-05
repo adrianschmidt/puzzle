@@ -38,6 +38,8 @@ export interface StartNewGameOptions {
     composableConfig?: ComposableConfig;
     imageSource?: string;
     imageCategory?: string;
+    /** Raw Unsplash query from the dev-only override; supersedes `imageCategory`'s query. */
+    queryOverride?: string;
     fractalConfig?: FractalDialogConfig;
     wavyConfig?: WavyDialogConfig;
     vibrant?: boolean;
@@ -93,6 +95,7 @@ export async function startNewGame(
         composableConfig,
         imageSource,
         imageCategory,
+        queryOverride,
         fractalConfig,
         wavyConfig,
         vibrant = false,
@@ -176,7 +179,7 @@ export async function startNewGame(
             attribution = pickedImage.attribution;
             downloadLocation = pickedImage.downloadLocation;
         } else if (proxyBaseUrl) {
-            const resolved = await resolveUnsplashImage(proxyBaseUrl, imageCategory ?? 'any', vibrant, orientation, controller.signal);
+            const resolved = await resolveUnsplashImage(proxyBaseUrl, imageCategory ?? 'any', vibrant, orientation, controller.signal, queryOverride);
             if (resolved) {
                 imageUrl = resolved.imageUrl;
                 imageSize = resolved.imageSize;

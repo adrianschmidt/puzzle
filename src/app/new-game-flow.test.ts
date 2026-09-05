@@ -23,6 +23,9 @@ vi.mock('../puzzle/topology/traced-tab-loader.js', async (importOriginal) => {
 vi.mock('./download-offline-images.js', () => ({
     downloadOfflineImagesForCategory: vi.fn(),
 }));
+vi.mock('./fetch-candidate-images.js', () => ({
+    fetchCandidateImages: vi.fn(),
+}));
 
 import { showToast } from '../ui/toast.js';
 import {
@@ -41,6 +44,7 @@ import { loadImageCategoryPreference, loadVibrantPreference } from '../game/imag
 import { loadState, saveNewPuzzle } from '../persistence/index.js';
 import { makeSavedGameState } from '../test-helpers/fixtures.js';
 import { downloadOfflineImagesForCategory } from './download-offline-images.js';
+import { fetchCandidateImages } from './fetch-candidate-images.js';
 import { openNewGameDialog } from './new-game-flow.js';
 
 describe('openNewGameDialog', () => {
@@ -212,6 +216,14 @@ describe('openNewGameDialog', () => {
         );
     });
 
+    it('passes the query override through to the start call', () => {
+        selectWith({ queryOverride: 'red bicycles' });
+        expect(start).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ queryOverride: 'red bicycles' }),
+        );
+    });
+
     it('omits the seed so every dialog game is a fresh random puzzle', () => {
         selectWith();
         expect(start.mock.calls[0][1]).not.toHaveProperty('seed');
@@ -304,7 +316,21 @@ describe('openNewGameDialog', () => {
             const onProgress = vi.fn();
             await opts.offlineImages!.download('nature', true, onProgress);
             expect(vi.mocked(downloadOfflineImagesForCategory)).toHaveBeenCalledWith(
-                'https://proxy.example', 'nature', true, 'landscape', onProgress,
+                'https://proxy.example', 'nature', true, 'landscape', onProgress, undefined,
+            );
+        });
+
+        it('threads the query override into the offline download', async () => {
+            vi.stubEnv('VITE_IMAGE_PROXY_URL', 'https://proxy.example');
+            (globalThis as { caches?: CacheStorage }).caches = fakeCaches;
+            vi.mocked(downloadOfflineImagesForCategory).mockResolvedValue(8);
+
+            const opts = open();
+
+            const onProgress = vi.fn();
+            await opts.offlineImages!.download('nature', true, onProgress, 'red bicycles');
+            expect(vi.mocked(downloadOfflineImagesForCategory)).toHaveBeenCalledWith(
+                'https://proxy.example', 'nature', true, 'landscape', onProgress, 'red bicycles',
             );
         });
 
@@ -319,6 +345,24 @@ describe('openNewGameDialog', () => {
             (globalThis as { caches?: CacheStorage }).caches = fakeCaches;
 
             expect(open().offlineImages).toBeUndefined();
+        });
+    });
+
+    describe('candidate fetch wiring', () => {
+        afterEach(() => {
+            vi.unstubAllEnvs();
+        });
+
+        it('threads the query override into the candidate fetch', async () => {
+            vi.stubEnv('VITE_IMAGE_PROXY_URL', 'https://proxy.example');
+            vi.mocked(fetchCandidateImages).mockResolvedValue(null);
+
+            const opts = open();
+
+            await opts.fetchImageCandidates!('nature', true, 'red bicycles');
+            expect(vi.mocked(fetchCandidateImages)).toHaveBeenCalledWith(
+                'https://proxy.example', 'nature', true, expect.any(String), 'red bicycles',
+            );
         });
     });
 });

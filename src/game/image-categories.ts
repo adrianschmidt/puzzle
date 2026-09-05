@@ -118,6 +118,19 @@ export function buildImageQuery(
     return `${categoryQuery} ${VIBRANT_QUERY_TERMS}`;
 }
 
+/**
+ * A non-empty (trimmed) override replaces the category's query outright; an
+ * absent/blank one leaves the category query in force. The override is the raw
+ * Unsplash search from the dev-only field in the new-game dialog.
+ */
+export function resolveQueryOverride(
+    categoryQuery: string | undefined,
+    queryOverride: string | undefined,
+): string | undefined {
+    const trimmed = queryOverride?.trim();
+    return trimmed ? trimmed : categoryQuery;
+}
+
 export function findImageCategory(
     id: string,
 ): ImageCategoryOption {
