@@ -36,6 +36,14 @@ describe('createUpdateController', () => {
         expect(showIndicator).toHaveBeenCalledOnce();
     });
 
+    it('ignores a repeat onNeedRefresh within the same page load', () => {
+        const showIndicator = vi.fn();
+        const controller = createUpdateController({ flush: vi.fn(), showIndicator });
+        controller.onNeedRefresh();
+        controller.onNeedRefresh();
+        expect(showIndicator).toHaveBeenCalledOnce();
+    });
+
     it('reloadNow flushes before calling updateSW(true)', () => {
         const flush = vi.fn();
         const updateSW = vi.fn().mockResolvedValue(undefined);
@@ -173,6 +181,16 @@ describe('createUpdateController analytics', () => {
         const controller = createUpdateController({ flush: vi.fn(), showIndicator: vi.fn() });
         controller.onNeedRefresh();
         expect(track).toHaveBeenCalledWith('pwa-update-detected', {});
+    });
+
+    it('tracks pwa-update-detected once per page load when onNeedRefresh repeats', () => {
+        const controller = createUpdateController({ flush: vi.fn(), showIndicator: vi.fn() });
+        controller.onNeedRefresh();
+        controller.onNeedRefresh();
+        const detected = track.mock.calls.filter(
+            ([name]) => name === 'pwa-update-detected',
+        );
+        expect(detected).toHaveLength(1);
     });
 
     it('tracks pwa-update-applied with the manual trigger on a tap', () => {
