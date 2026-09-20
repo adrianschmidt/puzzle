@@ -99,6 +99,7 @@ export function createUpdateController(
 
     return {
         onNeedRefresh() {
+            if (pending) return;
             pending = true;
             track('pwa-update-detected', {});
             deps.showIndicator(() => apply('manual'));
