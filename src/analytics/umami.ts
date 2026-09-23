@@ -2,8 +2,8 @@
  * Umami analytics wrapper.
  *
  * Injects the Umami tracking script at startup (when configured) and
- * exposes a typed `track()` function for custom events. Both functions
- * are no-ops when:
+ * exposes a typed `track()` function for custom events. Nothing is sent
+ * when:
  * - `VITE_UMAMI_WEBSITE_ID` is unset (e.g. localhost), or
  * - the Umami script hasn't loaded / has been blocked by an ad-blocker.
  *
@@ -12,6 +12,7 @@
 
 import type { Orientation } from '../model/types.js';
 import type { OfflineDownloadReason } from '../images/offline-stash.js';
+import { resolveDistinctId } from './distinct-id.js';
 
 declare global {
     interface Window {
@@ -1431,8 +1432,16 @@ export interface GenerationCanceledData {
  *
  * Call exactly once, early in app startup, before any rendering.
  * Calling more than once would inject duplicate script tags.
+ *
+ * On devices opted in by visiting any app URL with `?userid=<id>`
+ * (`?userid=off` opts out), the export's `distinct_id` carries the id on
+ * pageview and custom-event rows. Umami stores `event_type` 5 (Web
+ * Vitals) rows without it even though the tracker sends it, so attribute
+ * those via `session_id`. It labels known devices; it does not exclude
+ * them.
  */
 export function initAnalytics(): void {
+    const distinctId = resolveDistinctId();
     const websiteId = import.meta.env.VITE_UMAMI_WEBSITE_ID as string | undefined;
     if (!websiteId) {
         return;
@@ -1451,6 +1460,9 @@ export function initAnalytics(): void {
     // stay null. Collection happens in the browser and is reported
     // straight to Umami, so it's independent of the (Pro-gated) REST API.
     script.dataset.performance = 'true';
+    if (distinctId) {
+        script.dataset.distinctId = distinctId;
+    }
     document.head.appendChild(script);
 }
 

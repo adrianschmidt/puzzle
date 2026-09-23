@@ -8,11 +8,14 @@ import { initAnalytics, track } from './umami.js';
 describe('initAnalytics', () => {
     beforeEach(() => {
         document.head.replaceChildren();
+        localStorage.clear();
+        history.replaceState(null, '', '/');
         vi.unstubAllEnvs();
     });
 
     afterEach(() => {
         vi.unstubAllEnvs();
+        vi.restoreAllMocks();
     });
 
     it('does nothing when VITE_UMAMI_WEBSITE_ID is unset', () => {
@@ -43,6 +46,36 @@ describe('initAnalytics', () => {
 
         const script = document.head.querySelector('script')!;
         expect(script.dataset.performance).toBe('true');
+    });
+
+    it('omits data-distinct-id when no device id is set', () => {
+        vi.stubEnv('VITE_UMAMI_WEBSITE_ID', 'abc-123');
+
+        initAnalytics();
+
+        const script = document.head.querySelector('script')!;
+        expect(script.hasAttribute('data-distinct-id')).toBe(false);
+    });
+
+    it('sets data-distinct-id on the injected script from ?userid=', () => {
+        vi.stubEnv('VITE_UMAMI_WEBSITE_ID', 'abc-123');
+        history.replaceState(null, '', '/puzzle/?userid=adrian-ipad');
+
+        initAnalytics();
+
+        const script = document.head.querySelector('script')!;
+        expect(script.getAttribute('data-distinct-id')).toBe('adrian-ipad');
+        expect(window.location.search).toBe('');
+    });
+
+    it('persists and strips ?userid= even when analytics is not configured', () => {
+        vi.stubEnv('VITE_UMAMI_WEBSITE_ID', '');
+        history.replaceState(null, '', '/puzzle/?userid=adrian');
+
+        initAnalytics();
+
+        expect(localStorage.getItem('puzzle-analytics-userid')).toBe('adrian');
+        expect(window.location.search).toBe('');
     });
 
     it('honours VITE_UMAMI_SCRIPT_URL override when provided', () => {
