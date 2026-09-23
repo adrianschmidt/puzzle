@@ -476,8 +476,8 @@ export function shareCfToComposableConfig(
 }
 
 export function buildShareUrl(baseUrl: string, payload: SharePayload): string {
-    const withoutHash = baseUrl.split('#')[0];
-    return `${withoutHash}#p=${encodePayload(payload)}`;
+    const withoutQueryOrHash = baseUrl.split('#')[0].split('?')[0];
+    return `${withoutQueryOrHash}#p=${encodePayload(payload)}`;
 }
 
 export function parseLocationHash(hash: string): SharePayload | null {

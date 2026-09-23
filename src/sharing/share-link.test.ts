@@ -845,6 +845,14 @@ describe('buildShareUrl', () => {
         expect(url.includes('#stale')).toBe(false);
         expect(url.includes('#p=')).toBe(true);
     });
+
+    it("drops the sharer's query params so ?userid= or ?tabDebug= never reach the recipient", () => {
+        const payload: SharePayload = {
+            v: 1, i: 'x', is: [1, 1], g: [2, 2], c: 'classic', s: 0, r: 'none',
+        };
+        const url = buildShareUrl('https://example.com/puzzle/?userid=adrian&tabDebug=1#stale', payload);
+        expect(url.startsWith('https://example.com/puzzle/#p=')).toBe(true);
+    });
 });
 
 describe('parseLocationHash', () => {
