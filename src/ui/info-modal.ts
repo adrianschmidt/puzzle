@@ -33,6 +33,11 @@ import { createPieceOutlineColorPicker } from './piece-outline-color-picker.js';
 import { attachShareSection } from './share-section.js';
 import { createSelectToolIcon, createMarqueeToolIcon } from './tool-icons.js';
 import { buildReproParams } from '../sharing/index.js';
+import {
+    isValidDistinctId,
+    readDistinctId,
+    writeDistinctId,
+} from '../analytics/distinct-id.js';
 
 export interface InfoModalOptions {
     container: HTMLElement;
@@ -460,6 +465,8 @@ function buildDebugSection(args: {
 
     details.appendChild(buildReproSetting(args.state));
 
+    details.appendChild(buildDeviceLabelSetting());
+
     details.appendChild(buildOpacitySetting());
 
     details.appendChild(
@@ -527,6 +534,90 @@ function buildReproSetting(state: GameState | null | undefined): HTMLElement {
         setting.style.display = 'none';
     }
 
+    return setting;
+}
+
+function buildDeviceLabelSetting(): HTMLElement {
+    const setting = document.createElement('div');
+    setting.className = 'info-setting';
+    setting.dataset.testid = 'device-label-setting';
+
+    const label = document.createElement('label');
+    label.className = 'info-setting-label';
+    label.htmlFor = 'device-label-input';
+    label.textContent = 'Device label';
+    setting.appendChild(label);
+
+    const desc = document.createElement('p');
+    desc.className = 'info-setting-description';
+    desc.textContent =
+        'Tags this device\'s analytics events. Changes apply from the next launch.';
+    setting.appendChild(desc);
+
+    const form = document.createElement('form');
+    form.className = 'info-device-label-form';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'device-label-input';
+    input.dataset.testid = 'device-label-input';
+    input.placeholder = 'No label set';
+    input.maxLength = 32;
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('autocapitalize', 'none');
+    input.setAttribute('autocorrect', 'off');
+    form.appendChild(input);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'submit';
+    saveBtn.dataset.testid = 'device-label-save';
+    saveBtn.textContent = 'Save';
+    form.appendChild(saveBtn);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.dataset.testid = 'device-label-clear';
+    clearBtn.textContent = 'Clear';
+    form.appendChild(clearBtn);
+
+    setting.appendChild(form);
+
+    const error = document.createElement('p');
+    error.className = 'info-device-label-error';
+    error.dataset.testid = 'device-label-error';
+    error.hidden = true;
+    error.setAttribute('aria-live', 'polite');
+    setting.appendChild(error);
+
+    function syncSaveButton(): void {
+        saveBtn.disabled = input.value.trim() === (readDistinctId() ?? '');
+    }
+
+    function apply(id: string | undefined): void {
+        writeDistinctId(id);
+        input.value = readDistinctId() ?? '';
+        error.hidden = true;
+        syncSaveButton();
+    }
+
+    input.addEventListener('input', syncSaveButton);
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const value = input.value.trim();
+        if (value === '' || isValidDistinctId(value)) {
+            apply(value || undefined);
+            return;
+        }
+        error.textContent = value === 'off'
+            ? '"off" is reserved. Use Clear to remove the label.'
+            : 'Use 1–32 lowercase letters, digits or hyphens.';
+        error.hidden = false;
+    });
+    clearBtn.addEventListener('click', () => apply(undefined));
+
+    input.value = readDistinctId() ?? '';
+    syncSaveButton();
     return setting;
 }
 

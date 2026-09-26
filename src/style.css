@@ -1371,6 +1371,48 @@ details.info-section[open] > .info-section-summary {
   opacity: 0.7;
 }
 
+.info-device-label-form {
+  display: flex;
+  gap: 8px;
+}
+
+.info-device-label-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  background: var(--ui-overlay-subtle);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-fg);
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.info-device-label-form button {
+  padding: 6px 12px;
+  background: var(--ui-overlay);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-fg);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.info-device-label-form button:hover:not(:disabled) {
+  background: var(--ui-overlay-hover);
+}
+
+.info-device-label-form button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.info-section .info-device-label-error {
+  font-size: 0.75rem;
+  color: #e57373;
+  margin: 6px 0 0;
+}
+
 .preset-options {
   display: flex;
   gap: 8px;
