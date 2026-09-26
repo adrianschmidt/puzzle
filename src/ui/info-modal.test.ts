@@ -2,13 +2,14 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createInfoModal } from './info-modal.js';
 import { createSelectToolButton } from './select-tool-button.js';
 import { createMarqueeToolButton } from './marquee-tool-button.js';
 import { SelectionManager } from '../interaction/selection-manager.js';
 import type { GameState } from '../model/types.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
+import { DISTINCT_ID_KEY } from '../analytics/distinct-id.js';
 
 function toolbarButtonIcon(
     create: (opts: {
@@ -465,5 +466,127 @@ describe('createInfoModal — Piece outline setting', () => {
         checkbox!.dispatchEvent(new Event('change'));
 
         expect(localStorage.getItem('puzzle-marquee-contain')).toBe('true');
+    });
+});
+
+describe('createInfoModal — Device label setting', () => {
+    let container: HTMLElement;
+
+    beforeEach(() => {
+        container = document.createElement('div');
+        document.body.appendChild(container);
+        localStorage.clear();
+    });
+
+    afterEach(() => {
+        while (document.body.firstChild) {
+            document.body.removeChild(document.body.firstChild);
+        }
+    });
+
+    function el(testid: string): HTMLElement {
+        const found = container.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
+        expect(found).not.toBeNull();
+        return found!;
+    }
+
+    function save(value: string): void {
+        (el('device-label-input') as HTMLInputElement).value = value;
+        el('device-label-save').click();
+    }
+
+    it('lives in the Debug section', () => {
+        createInfoModal({ container });
+
+        expect(
+            el('debug-section').querySelector('[data-testid="device-label-setting"]'),
+        ).not.toBeNull();
+    });
+
+    it('says when no label is set', () => {
+        createInfoModal({ container });
+
+        expect(el('device-label-status').textContent).toBe('No label set.');
+    });
+
+    it('shows the stored label', () => {
+        localStorage.setItem(DISTINCT_ID_KEY, 'test-device');
+        createInfoModal({ container });
+
+        expect(el('device-label-status').textContent).toBe('Label: test-device');
+    });
+
+    it('says a change applies from the next launch', () => {
+        createInfoModal({ container });
+
+        expect(el('device-label-setting').textContent).toContain('next launch');
+    });
+
+    it('saves a valid label and shows it', () => {
+        createInfoModal({ container });
+
+        save(' test-device ');
+
+        expect(localStorage.getItem(DISTINCT_ID_KEY)).toBe('test-device');
+        expect(el('device-label-status').textContent).toBe('Label: test-device');
+        expect(el('device-label-error').hidden).toBe(true);
+    });
+
+    it.each(['Test', 'a_b', 'a'.repeat(33), ''])(
+        'shows an inline error for the invalid label %j and keeps the stored one',
+        (value) => {
+            localStorage.setItem(DISTINCT_ID_KEY, 'test-device');
+            createInfoModal({ container });
+
+            save(value);
+
+            const error = el('device-label-error');
+            expect(error.hidden).toBe(false);
+            expect(error.textContent).toContain('lowercase');
+            expect(localStorage.getItem(DISTINCT_ID_KEY)).toBe('test-device');
+            expect(el('device-label-status').textContent).toBe('Label: test-device');
+        },
+    );
+
+    it('rejects "off" with a pointer to Clear', () => {
+        createInfoModal({ container });
+
+        save('off');
+
+        const error = el('device-label-error');
+        expect(error.hidden).toBe(false);
+        expect(error.textContent).toContain('Clear');
+        expect(localStorage.getItem(DISTINCT_ID_KEY)).toBeNull();
+    });
+
+    it('hides a previous error after a successful save', () => {
+        createInfoModal({ container });
+
+        save('Bad');
+        save('good');
+
+        expect(el('device-label-error').hidden).toBe(true);
+    });
+
+    it('clears the stored label', () => {
+        localStorage.setItem(DISTINCT_ID_KEY, 'test-device');
+        createInfoModal({ container });
+
+        el('device-label-clear').click();
+
+        expect(localStorage.getItem(DISTINCT_ID_KEY)).toBeNull();
+        expect(el('device-label-status').textContent).toBe('No label set.');
+    });
+
+    it('shows the label actually stored when storage rejects the write', () => {
+        createInfoModal({ container });
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new DOMException('full', 'QuotaExceededError');
+        });
+
+        save('test-device');
+
+        expect(el('device-label-status').textContent).toBe('No label set.');
+        vi.restoreAllMocks();
     });
 });

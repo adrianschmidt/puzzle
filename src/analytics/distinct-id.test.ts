@@ -3,7 +3,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { DISTINCT_ID_KEY, resolveDistinctId } from './distinct-id.js';
+import {
+    DISTINCT_ID_KEY,
+    isValidDistinctId,
+    readDistinctId,
+    resolveDistinctId,
+    writeDistinctId,
+} from './distinct-id.js';
 
 function visit(pathAndQuery: string): void {
     history.replaceState(null, '', pathAndQuery);
@@ -134,5 +140,53 @@ describe('resolveDistinctId', () => {
         });
 
         expect(resolveDistinctId()).toBeUndefined();
+    });
+});
+
+describe('isValidDistinctId', () => {
+    it.each(['a', 'test-device', '0-9', 'a'.repeat(32)])('accepts %j', (id) => {
+        expect(isValidDistinctId(id)).toBe(true);
+    });
+
+    it.each(['', 'Test', 'a b', 'a_b', 'a'.repeat(33), 'off'])('rejects %j', (id) => {
+        expect(isValidDistinctId(id)).toBe(false);
+    });
+});
+
+describe('readDistinctId / writeDistinctId', () => {
+    beforeEach(() => {
+        localStorage.clear();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('round-trips a stored id', () => {
+        writeDistinctId('test-device');
+
+        expect(readDistinctId()).toBe('test-device');
+    });
+
+    it('removes the stored id when written undefined', () => {
+        writeDistinctId('test-device');
+        writeDistinctId(undefined);
+
+        expect(localStorage.getItem(DISTINCT_ID_KEY)).toBeNull();
+        expect(readDistinctId()).toBeUndefined();
+    });
+
+    it.each(['Not Valid', 'off'])('reads the invalid stored value %j as unset', (value) => {
+        localStorage.setItem(DISTINCT_ID_KEY, value);
+
+        expect(readDistinctId()).toBeUndefined();
+    });
+
+    it('does not throw when storage rejects the write', () => {
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new DOMException('full', 'QuotaExceededError');
+        });
+
+        expect(() => writeDistinctId('test-device')).not.toThrow();
     });
 });
