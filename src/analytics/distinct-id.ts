@@ -3,20 +3,43 @@ export const DISTINCT_ID_KEY = 'puzzle-analytics-userid';
 const QUERY_PARAM = 'userid';
 const VALID_ID = /^[a-z0-9-]{1,32}$/;
 
+export function isValidDistinctId(id: string): boolean {
+    return id !== 'off' && VALID_ID.test(id);
+}
+
 export function resolveDistinctId(): string | undefined {
     const param = takeQueryParam();
 
     if (param === '' || param === 'off') {
-        writeStoredId(null);
+        writeDistinctId(undefined);
         return undefined;
     }
-    if (param !== null && VALID_ID.test(param)) {
-        writeStoredId(param);
+    if (param !== null && isValidDistinctId(param)) {
+        writeDistinctId(param);
         return param;
     }
 
-    const stored = readStoredId();
-    return stored !== null && VALID_ID.test(stored) ? stored : undefined;
+    return readDistinctId();
+}
+
+export function readDistinctId(): string | undefined {
+    let stored: string | null;
+    try {
+        stored = localStorage.getItem(DISTINCT_ID_KEY);
+    } catch {
+        return undefined;
+    }
+    return stored !== null && isValidDistinctId(stored) ? stored : undefined;
+}
+
+export function writeDistinctId(id: string | undefined): void {
+    try {
+        if (id === undefined) {
+            localStorage.removeItem(DISTINCT_ID_KEY);
+        } else {
+            localStorage.setItem(DISTINCT_ID_KEY, id);
+        }
+    } catch {}
 }
 
 function takeQueryParam(): string | null {
@@ -29,22 +52,4 @@ function takeQueryParam(): string | null {
         } catch {}
     }
     return value;
-}
-
-function readStoredId(): string | null {
-    try {
-        return localStorage.getItem(DISTINCT_ID_KEY);
-    } catch {
-        return null;
-    }
-}
-
-function writeStoredId(id: string | null): void {
-    try {
-        if (id === null) {
-            localStorage.removeItem(DISTINCT_ID_KEY);
-        } else {
-            localStorage.setItem(DISTINCT_ID_KEY, id);
-        }
-    } catch {}
 }
