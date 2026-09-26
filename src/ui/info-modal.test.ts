@@ -482,6 +482,7 @@ describe('createInfoModal — Device label setting', () => {
         while (document.body.firstChild) {
             document.body.removeChild(document.body.firstChild);
         }
+        vi.restoreAllMocks();
     });
 
     function el(testid: string): HTMLElement {
@@ -490,9 +491,22 @@ describe('createInfoModal — Device label setting', () => {
         return found!;
     }
 
+    function input(): HTMLInputElement {
+        return el('device-label-input') as HTMLInputElement;
+    }
+
+    function saveButton(): HTMLButtonElement {
+        return el('device-label-save') as HTMLButtonElement;
+    }
+
+    function type(value: string): void {
+        input().value = value;
+        input().dispatchEvent(new Event('input'));
+    }
+
     function save(value: string): void {
-        (el('device-label-input') as HTMLInputElement).value = value;
-        el('device-label-save').click();
+        type(value);
+        saveButton().click();
     }
 
     it('lives in the Debug section', () => {
@@ -503,17 +517,18 @@ describe('createInfoModal — Device label setting', () => {
         ).not.toBeNull();
     });
 
-    it('says when no label is set', () => {
-        createInfoModal({ container });
-
-        expect(el('device-label-status').textContent).toBe('No label set.');
-    });
-
-    it('shows the stored label', () => {
+    it('prefills the input with the stored label', () => {
         localStorage.setItem(DISTINCT_ID_KEY, 'test-device');
         createInfoModal({ container });
 
-        expect(el('device-label-status').textContent).toBe('Label: test-device');
+        expect(input().value).toBe('test-device');
+    });
+
+    it('leaves the input empty with a "no label" placeholder when none is set', () => {
+        createInfoModal({ container });
+
+        expect(input().value).toBe('');
+        expect(input().placeholder).toBe('No label set');
     });
 
     it('says a change applies from the next launch', () => {
@@ -522,17 +537,40 @@ describe('createInfoModal — Device label setting', () => {
         expect(el('device-label-setting').textContent).toContain('next launch');
     });
 
-    it('saves a valid label and shows it', () => {
+    it('enables Save only while the input differs from the stored label', () => {
+        localStorage.setItem(DISTINCT_ID_KEY, 'test-device');
+        createInfoModal({ container });
+        expect(saveButton().disabled).toBe(true);
+
+        type('other-device');
+        expect(saveButton().disabled).toBe(false);
+
+        type(' test-device ');
+        expect(saveButton().disabled).toBe(true);
+    });
+
+    it('saves a valid label, trimmed, and disables Save again', () => {
         createInfoModal({ container });
 
         save(' test-device ');
 
         expect(localStorage.getItem(DISTINCT_ID_KEY)).toBe('test-device');
-        expect(el('device-label-status').textContent).toBe('Label: test-device');
+        expect(input().value).toBe('test-device');
+        expect(saveButton().disabled).toBe(true);
         expect(el('device-label-error').hidden).toBe(true);
     });
 
-    it.each(['Test', 'a_b', 'a'.repeat(33), ''])(
+    it('removes the label when saved empty', () => {
+        localStorage.setItem(DISTINCT_ID_KEY, 'test-device');
+        createInfoModal({ container });
+
+        save('');
+
+        expect(localStorage.getItem(DISTINCT_ID_KEY)).toBeNull();
+        expect(el('device-label-error').hidden).toBe(true);
+    });
+
+    it.each(['Test', 'a_b', 'a'.repeat(33)])(
         'shows an inline error for the invalid label %j and keeps the stored one',
         (value) => {
             localStorage.setItem(DISTINCT_ID_KEY, 'test-device');
@@ -544,7 +582,6 @@ describe('createInfoModal — Device label setting', () => {
             expect(error.hidden).toBe(false);
             expect(error.textContent).toContain('lowercase');
             expect(localStorage.getItem(DISTINCT_ID_KEY)).toBe('test-device');
-            expect(el('device-label-status').textContent).toBe('Label: test-device');
         },
     );
 
@@ -568,14 +605,14 @@ describe('createInfoModal — Device label setting', () => {
         expect(el('device-label-error').hidden).toBe(true);
     });
 
-    it('clears the stored label', () => {
+    it('clears the stored label and the input', () => {
         localStorage.setItem(DISTINCT_ID_KEY, 'test-device');
         createInfoModal({ container });
 
         el('device-label-clear').click();
 
         expect(localStorage.getItem(DISTINCT_ID_KEY)).toBeNull();
-        expect(el('device-label-status').textContent).toBe('No label set.');
+        expect(input().value).toBe('');
     });
 
     it('shows the label actually stored when storage rejects the write', () => {
@@ -586,7 +623,6 @@ describe('createInfoModal — Device label setting', () => {
 
         save('test-device');
 
-        expect(el('device-label-status').textContent).toBe('No label set.');
-        vi.restoreAllMocks();
+        expect(input().value).toBe('');
     });
 });

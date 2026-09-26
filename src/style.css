@@ -1398,8 +1398,13 @@ details.info-section[open] > .info-section-summary {
   cursor: pointer;
 }
 
-.info-device-label-form button:hover {
+.info-device-label-form button:hover:not(:disabled) {
   background: var(--ui-overlay-hover);
+}
+
+.info-device-label-form button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .info-section .info-device-label-error {

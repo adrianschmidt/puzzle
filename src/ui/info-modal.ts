@@ -554,11 +554,6 @@ function buildDeviceLabelSetting(): HTMLElement {
         'Tags this device\'s analytics events. Changes apply from the next launch.';
     setting.appendChild(desc);
 
-    const status = document.createElement('p');
-    status.className = 'info-setting-description';
-    status.dataset.testid = 'device-label-status';
-    setting.appendChild(status);
-
     const form = document.createElement('form');
     form.className = 'info-device-label-form';
 
@@ -566,7 +561,7 @@ function buildDeviceLabelSetting(): HTMLElement {
     input.type = 'text';
     input.id = 'device-label-input';
     input.dataset.testid = 'device-label-input';
-    input.placeholder = 'e.g. my-phone';
+    input.placeholder = 'No label set';
     input.maxLength = 32;
     input.autocomplete = 'off';
     input.spellcheck = false;
@@ -595,23 +590,23 @@ function buildDeviceLabelSetting(): HTMLElement {
     error.setAttribute('aria-live', 'polite');
     setting.appendChild(error);
 
-    function render(): void {
-        const id = readDistinctId();
-        status.textContent = id ? `Label: ${id}` : 'No label set.';
+    function syncSaveButton(): void {
+        saveBtn.disabled = input.value.trim() === (readDistinctId() ?? '');
     }
 
     function apply(id: string | undefined): void {
         writeDistinctId(id);
-        input.value = '';
+        input.value = readDistinctId() ?? '';
         error.hidden = true;
-        render();
+        syncSaveButton();
     }
 
+    input.addEventListener('input', syncSaveButton);
     form.addEventListener('submit', (event) => {
         event.preventDefault();
         const value = input.value.trim();
-        if (isValidDistinctId(value)) {
-            apply(value);
+        if (value === '' || isValidDistinctId(value)) {
+            apply(value || undefined);
             return;
         }
         error.textContent = value === 'off'
@@ -621,7 +616,8 @@ function buildDeviceLabelSetting(): HTMLElement {
     });
     clearBtn.addEventListener('click', () => apply(undefined));
 
-    render();
+    input.value = readDistinctId() ?? '';
+    syncSaveButton();
     return setting;
 }
 
