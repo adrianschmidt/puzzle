@@ -105,6 +105,16 @@ describe('createSaveCoordinator', () => {
         expect(flush).not.toHaveBeenCalled();
     });
 
+    it.each([
+        ['ok', true],
+        ['ok-compressed', true],
+        ['failed', false],
+    ] as const)('reports a %s new-puzzle save as persisted=%s', (result, persisted) => {
+        vi.mocked(saveNewPuzzle).mockReturnValue(result);
+
+        expect(make().persistNewPuzzle(makeGameState())).toBe(persisted);
+    });
+
     it('toasts and reports when a new-puzzle save fails', () => {
         vi.mocked(saveNewPuzzle).mockReturnValue('failed');
         make().persistNewPuzzle(makeGameState({ cutStyle: 'wavy' }));

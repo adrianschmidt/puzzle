@@ -67,7 +67,7 @@ export interface StartNewGameDeps {
     resetViewport: () => void;
     fitView: (state: GameState) => void;
     persistNewPuzzle: (state: GameState) => void;
-    onGameAnalytics: (data: NewGameData) => void;
+    onGameAnalytics: (data: NewGameData, state: GameState) => void;
     /**
      * Whether a puzzle is installed. Gates the overlay's Cancel affordance:
      * canceling means "return to your current puzzle", so with nothing installed
@@ -275,7 +275,7 @@ export async function startNewGame(
             bootFallback,
             generation,
         });
-        deps.onGameAnalytics(data);
+        deps.onGameAnalytics(data, state);
         track('new-game-started', data);
 
         // Reported after `new-game-started` so that event still lands first if

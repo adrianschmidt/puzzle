@@ -10,9 +10,11 @@ import { traceSetVersionOf } from './trace-set-version.js';
  */
 export function buildPuzzleCompletedData(
     state: GameState,
-    cached: NewGameData | null,
+    cached: Partial<NewGameData> | null,
+    resumed: boolean,
 ): PuzzleCompletedData {
     const derived: PuzzleCompletedData = {
+        resumed,
         cutStyle: state.cutStyle ?? 'classic',
         rotationMode: state.rotationMode ?? 'none',
         cols: state.gridSize.cols,

@@ -5,15 +5,13 @@ import { buildPuzzleCompletedData } from './completed-payload.js';
 
 describe('buildPuzzleCompletedData', () => {
     it('derives geometry and style from state when nothing was cached', () => {
-        // A resumed session has no cached NewGameData, so the event must be
-        // useful from gameState alone.
         const state = makeGameState({
             cutStyle: 'triangles',
             rotationMode: 'free',
             gridSize: { cols: 5, rows: 3 },
         });
 
-        const data = buildPuzzleCompletedData(state, null);
+        const data = buildPuzzleCompletedData(state, null, false);
 
         expect(data.cutStyle).toBe('triangles');
         expect(data.rotationMode).toBe('free');
@@ -26,6 +24,7 @@ describe('buildPuzzleCompletedData', () => {
         const data = buildPuzzleCompletedData(
             makeGameState({ cutStyle: undefined, rotationMode: undefined }),
             null,
+            false,
         );
         expect(data.cutStyle).toBe('classic');
         expect(data.rotationMode).toBe('none');
@@ -40,7 +39,7 @@ describe('buildPuzzleCompletedData', () => {
             imageSource: 'unsplash', imageCategory: 'nature', vibrant: true,
         } as NewGameData;
 
-        const data = buildPuzzleCompletedData(makeGameState({ cutStyle: 'classic' }), cached);
+        const data = buildPuzzleCompletedData(makeGameState({ cutStyle: 'classic' }), cached, false);
 
         expect(data.cutStyle).toBe('wavy');
         expect(data.imageCategory).toBe('nature');
@@ -52,7 +51,7 @@ describe('buildPuzzleCompletedData', () => {
             cutStyle: 'classic',
             classicConfig: { traceSetVersion: 3 },
         });
-        expect(buildPuzzleCompletedData(state, null).traceSetVersion).toBe(3);
+        expect(buildPuzzleCompletedData(state, null, false).traceSetVersion).toBe(3);
     });
 
     it('omits traceSetVersion rather than setting it undefined when the state carries none', () => {
@@ -60,6 +59,23 @@ describe('buildPuzzleCompletedData', () => {
         // pre-upgrade-tail query subtracts on presence, so an unconditional
         // `undefined` would silently break it.
         const state = makeGameState({ cutStyle: 'classic' });
-        expect('traceSetVersion' in buildPuzzleCompletedData(state, null)).toBe(false);
+        expect('traceSetVersion' in buildPuzzleCompletedData(state, null, false)).toBe(false);
+    });
+
+    it.each([true, false])('reports resumed=%s as given', (resumed) => {
+        expect(buildPuzzleCompletedData(makeGameState(), null, resumed).resumed).toBe(resumed);
+    });
+
+    it('keeps resumed when a cached payload is merged in', () => {
+        const cached = {
+            source: 'shared', cutStyle: 'classic', rotationMode: 'none',
+            orientation: 'landscape', cols: 2, rows: 2, pieceCount: 4,
+            generationMode: 'worker', generationMs: 10,
+        } as NewGameData;
+
+        const data = buildPuzzleCompletedData(makeGameState(), cached, true);
+
+        expect(data.resumed).toBe(true);
+        expect(data.source).toBe('shared');
     });
 });

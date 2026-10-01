@@ -20,7 +20,7 @@ export const SAVE_FAILED_TOAST_DEDUP_MS = 10_000;
 
 export interface SaveCoordinator {
     autoSave(state: GameState): void;
-    persistNewPuzzle(state: GameState): void;
+    persistNewPuzzle(state: GameState): boolean;
     flush(): void;
     /** Drop any pending debounced save without flushing it (see `GameSession.install`). */
     cancel(): void;
@@ -91,7 +91,7 @@ export function createSaveCoordinator(deps: {
          * alone: `saveNewPuzzle` reports the worse of the two writes. See
          * `SaveCompressedData` in `analytics/umami.ts`.
          */
-        persistNewPuzzle(state: GameState): void {
+        persistNewPuzzle(state: GameState): boolean {
             const result = saveNewPuzzle(
                 state,
                 selectionManager.selectedGroupIds,
@@ -100,13 +100,16 @@ export function createSaveCoordinator(deps: {
             if (result === 'failed') {
                 // Synchronous with the write, so the current state is the saved state.
                 notifySaveFailed('new-puzzle', state);
-            } else if (result === 'ok-compressed') {
+                return false;
+            }
+            if (result === 'ok-compressed') {
                 track('save-compressed', {
                     cutStyle: state.cutStyle ?? 'classic',
                     pieceCount: state.pieces.length,
                     traceSetVersion: traceSetVersionOf(state),
                 });
             }
+            return true;
         },
 
         flush(): void {

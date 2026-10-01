@@ -48,6 +48,7 @@ describe('runBootSequence', () => {
     let umamiTrack: ReturnType<typeof vi.fn>;
     let install: Mock<(state: GameState) => void>;
     let restoreSelection: Mock<(saved: readonly number[]) => void>;
+    let onResumed: Mock<(state: GameState) => void>;
     let start: Mock<(gridSize: GridSize, options: StartNewGameOptions) => Promise<void>>;
     let hasGame: boolean;
 
@@ -58,6 +59,7 @@ describe('runBootSequence', () => {
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
         install = vi.fn();
         restoreSelection = vi.fn();
+        onResumed = vi.fn();
         start = vi.fn(async () => { hasGame = true; });
         hasGame = false;
         vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -79,6 +81,7 @@ describe('runBootSequence', () => {
             tryLoadShared: vi.fn(async () => false),
             isRescueReloadPending: () => false,
             start,
+            onResumed,
             ...overrides,
         };
     }
@@ -91,12 +94,14 @@ describe('runBootSequence', () => {
         await runBootSequence(d);
         expect(start).not.toHaveBeenCalled();
         expect(install).not.toHaveBeenCalled();
+        expect(onResumed).not.toHaveBeenCalled();
         expect(console.error).not.toHaveBeenCalled();
     });
 
     it('starts a fresh puzzle when there is no save', async () => {
         await runBootSequence(deps());
         expect(start).toHaveBeenCalledTimes(1);
+        expect(onResumed).not.toHaveBeenCalled();
         expect(console.error).not.toHaveBeenCalled();
     });
 
@@ -247,6 +252,18 @@ describe('runBootSequence', () => {
             expect(restoreSelection).toHaveBeenCalledWith([0]);
             expect(start).not.toHaveBeenCalled();
             expect(console.error).not.toHaveBeenCalled();
+        });
+
+        it('reports the installed state as resumed, after installing it', async () => {
+            // #507: `install` clears the cached analytics, so restoring them
+            // before it would be wiped.
+            saveNewPuzzle(makeSavedGameState(), [0]);
+            await runBootSequence(deps());
+            expect(onResumed).toHaveBeenCalledTimes(1);
+            expect(onResumed.mock.calls[0][0]).toBe(install.mock.calls[0][0]);
+            expect(install.mock.invocationCallOrder[0]).toBeLessThan(
+                onResumed.mock.invocationCallOrder[0],
+            );
         });
 
         it('applies a saved viewport', async () => {

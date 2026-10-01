@@ -44,7 +44,7 @@ export interface LoadSharedPuzzleDeps {
      * picker's selection can't diverge.
      */
     backgroundColor: BackgroundColorControl;
-    onGameAnalytics: (data: NewGameData) => void;
+    onGameAnalytics: (data: NewGameData, state: GameState) => void;
     /**
      * Gates the overlay's Cancel affordance: canceling means "return to your
      * current puzzle", so with nothing installed there is nothing to return to.
@@ -155,7 +155,7 @@ export async function loadSharedPuzzle(
             sharedColor,
             generation,
         });
-        deps.onGameAnalytics(data);
+        deps.onGameAnalytics(data, state);
         track('new-game-started', data);
 
         // After the normal event so that still lands first if anything below
