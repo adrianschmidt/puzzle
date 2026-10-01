@@ -24,6 +24,7 @@ import {
 } from '../ui/index.js';
 import { SelectionManager } from '../interaction/selection-manager.js';
 import type { NewGameData } from '../analytics/index.js';
+import { clearGameContext, loadGameContext, saveGameContext } from '../analytics/game-context.js';
 import { startNewGame, type StartNewGameDeps } from './start-new-game.js';
 import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './load-shared-puzzle.js';
 import { createShareLinkLoader } from './share-link-loader.js';
@@ -60,14 +61,13 @@ export function bootstrap(
     installGeometryTokenInvalidation();
 
     /**
-     * Populated when a puzzle starts (fresh or shared); null when resuming
-     * from localStorage, where `puzzle-completed` derives fields from the game
-     * state alone. `createOnInstalled` clears it on every install (#507): both
-     * start flows install first and assign this several statements later, so a
-     * throw in that gap would otherwise cache the *previous* puzzle's payload
-     * against the *new* game and misattribute its completion.
+     * `createOnInstalled` clears it on every install (#507): both start flows
+     * install first and assign this several statements later, so a throw in
+     * that gap would otherwise cache the *previous* puzzle's payload against
+     * the *new* game and misattribute its completion.
      */
-    let currentGameAnalytics: NewGameData | null = null;
+    let currentGameAnalytics: Partial<NewGameData> | null = null;
+    let currentGameResumed = false;
 
     const renderer = new SvgDomRenderer();
     renderer.init(root);
@@ -131,6 +131,7 @@ export function bootstrap(
             selectionManager,
             rotationFocus,
             currentGameAnalytics: () => currentGameAnalytics,
+            isResumedGame: () => currentGameResumed,
             onCompleted: onPuzzleCompleted,
         });
     };
@@ -164,6 +165,7 @@ export function bootstrap(
             // Drop the outgoing puzzle's cached analytics (#507; the field's
             // contract covers why this can't wipe the incoming game's payload).
             currentGameAnalytics = null;
+            currentGameResumed = false;
             // Remove the previous game's overlay first — `show` no-ops while
             // one is already up.
             completionPresenter.remove();
@@ -231,6 +233,8 @@ export function bootstrap(
         }
     }
 
+    let savedNewPuzzle: GameState | null = null;
+
     /**
      * `fitView` folds gather-and-zoom-to-fit with a follow-up render:
      * `session.install` already rendered at pre-gather positions, so the
@@ -247,9 +251,17 @@ export function bootstrap(
             gatherAndZoomToFit(state, viewportFitDeps);
             renderer.renderState(state);
         },
-        persistNewPuzzle: (state) => saveCoordinator.persistNewPuzzle(state),
-        onGameAnalytics: (data) => {
+        persistNewPuzzle: (state) => {
+            if (saveCoordinator.persistNewPuzzle(state)) {
+                savedNewPuzzle = state;
+                clearGameContext();
+            } else {
+                savedNewPuzzle = null;
+            }
+        },
+        onGameAnalytics: (data, state) => {
             currentGameAnalytics = data;
+            if (state === savedNewPuzzle) saveGameContext(state.seed, data);
         },
         // `hasGame()`, not `current() !== undefined` (same distinction as
         // `boot-sequence.ts`): `install` makes the state current before wiring
@@ -339,6 +351,10 @@ export function bootstrap(
         tryLoadShared: () => shareLinks.tryLoad(),
         isRescueReloadPending: () => shareLinks.isRescueReloadPending(),
         start: (gridSize, options) => startNewGame(gridSize, options, startNewGameDeps),
+        onResumed: (state) => {
+            currentGameAnalytics = loadGameContext(state.seed);
+            currentGameResumed = true;
+        },
     });
 
     // Handle a share link pasted into an already-loaded tab: the hash changes

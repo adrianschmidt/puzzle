@@ -73,7 +73,7 @@ describe('startNewGame', () => {
     let resetViewport: Mock<() => void>;
     let fitView: Mock<(state: GameState) => void>;
     let persistNewPuzzle: Mock<(state: GameState) => void>;
-    let onGameAnalytics: Mock<(data: unknown) => void>;
+    let onGameAnalytics: Mock<(data: unknown, state: GameState) => void>;
     let deps: StartNewGameDeps;
     /**
      * Restored one by one, not via `vi.restoreAllMocks()`: `vite.config.ts`
@@ -130,7 +130,7 @@ describe('startNewGame', () => {
 
         expect(install).toHaveBeenCalledTimes(1);
         expect(fitView).toHaveBeenCalled();
-        expect(persistNewPuzzle).toHaveBeenCalled();
+        expect(persistNewPuzzle.mock.calls[0][0]).toBe(install.mock.calls[0][0]);
         expect(resetViewport).toHaveBeenCalled();
         // The viewport is reset only after generation resolves and before
         // install — not earlier, so a canceled/throwing start never touches the
@@ -168,7 +168,9 @@ describe('startNewGame', () => {
         );
         expect(onGameAnalytics).toHaveBeenCalledWith(
             expect.objectContaining({ source: 'fresh' }),
+            expect.anything(),
         );
+        expect(onGameAnalytics.mock.calls[0][1]).toBe(install.mock.calls[0][0]);
         // #507: bootstrap clears the cached analytics on every `session.install`,
         // which is safe only because this assignment runs *after* it. Pin that
         // order — a reorder above `install` would let the clear wipe the fresh
@@ -227,6 +229,7 @@ describe('startNewGame', () => {
         );
         expect(onGameAnalytics).toHaveBeenCalledWith(
             expect.objectContaining({ tracedChunkDegraded: true }),
+            expect.anything(),
         );
         // Quiet for the player, not for us — carries the reason so a dev
         // console says why Classic changed shape.

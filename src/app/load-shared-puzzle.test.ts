@@ -70,7 +70,7 @@ describe('loadSharedPuzzle', () => {
     let uninstall: Mock<() => void>;
     let fitView: Mock<(state: GameState) => void>;
     let persistNewPuzzle: Mock<(state: GameState) => void>;
-    let onGameAnalytics: Mock<(data: unknown) => void>;
+    let onGameAnalytics: Mock<(data: unknown, state: GameState) => void>;
     let adopt: Mock<BackgroundColorControl['adopt']>;
     let deps: LoadSharedPuzzleDeps;
     /**
@@ -122,7 +122,7 @@ describe('loadSharedPuzzle', () => {
             'https://images.unsplash.com/photo-123?w=1080',
         );
         expect(fitView).toHaveBeenCalledWith(installedState);
-        expect(persistNewPuzzle).toHaveBeenCalledWith(installedState);
+        expect(persistNewPuzzle.mock.calls[0][0]).toBe(installedState);
     });
 
     it('preloads the traced chunk only when the payload needs it', async () => {
@@ -214,7 +214,8 @@ describe('loadSharedPuzzle', () => {
             recipientHadSavedState: true,
             includesProgress: true,
         });
-        expect(onGameAnalytics).toHaveBeenCalledWith(expected);
+        expect(onGameAnalytics).toHaveBeenCalledWith(expected, expect.anything());
+        expect(onGameAnalytics.mock.calls[0][1]).toBe(install.mock.calls[0][0]);
         expect(umamiTrack).toHaveBeenCalledWith('new-game-started', expected);
         // #507: bootstrap clears the cached analytics on every `session.install`,
         // which is safe only because this assignment runs *after* it. Pin that
@@ -233,6 +234,7 @@ describe('loadSharedPuzzle', () => {
         expect(adopt).not.toHaveBeenCalled();
         expect(onGameAnalytics).toHaveBeenCalledWith(
             expect.objectContaining({ sharedColor: 'none' }),
+            expect.anything(),
         );
     });
 
@@ -247,6 +249,7 @@ describe('loadSharedPuzzle', () => {
         expect(adopt).toHaveBeenCalledWith('indigo-darker');
         expect(onGameAnalytics).toHaveBeenCalledWith(
             expect.objectContaining({ sharedColor: 'invalid' }),
+            expect.anything(),
         );
     });
 

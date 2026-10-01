@@ -5,7 +5,7 @@
  * it, so a fresh start can never race ahead of that decision.
  */
 
-import type { GridSize } from '../model/types.js';
+import type { GameState, GridSize } from '../model/types.js';
 import type { GameSession } from './game-session.js';
 import type { ViewportTransform } from '../interaction/index.js';
 import type { StartNewGameOptions } from './start-new-game.js';
@@ -51,6 +51,8 @@ export interface BootSequenceDeps {
     /** True when a rescue reload is imminent — leave the overlay up. */
     isRescueReloadPending: () => boolean;
     start: (gridSize: GridSize, options: StartNewGameOptions) => Promise<void>;
+    /** Runs after `session.install`, whose `onInstalled` hook clears the cached analytics (#507). */
+    onResumed: (state: GameState) => void;
 }
 
 /**
@@ -66,6 +68,7 @@ export async function runBootSequence(deps: BootSequenceDeps): Promise<void> {
         const saved = loadSavedGame();
         if (saved.status === 'ok') {
             deps.session.install(saved.state);
+            deps.onResumed(saved.state);
             deps.session.restoreSelection(saved.selection);
             if (saved.viewport) {
                 // Restore last zoom/pan (#420). Absent on pre-feature saves,

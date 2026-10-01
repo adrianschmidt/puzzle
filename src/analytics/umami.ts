@@ -120,15 +120,6 @@ export interface NewGameData {
      * `new-game-started` the degraded volume is a single filter and can be
      * subtracted from the "Classic without traceSetVersion" bucket above.
      *
-     * On `puzzle-completed` that guarantee holds only within the session
-     * that started the game: the flag rides along in the cached new-game
-     * payload but is not persisted, so a degraded game completed after a
-     * reload reads as pre-upgrade traffic. Deliberate — the completion event
-     * is still correct about the *geometry regime* (it genuinely is legacy
-     * geometry), and `new-game-started` is the right denominator for the
-     * retire-the-legacy-generator question and stays clean. Not worth
-     * persisting a telemetry-only failure flag onto the saved state.
-     *
      * A boot fallback sets `bootFallback` instead — it never attempts the
      * fetch, so there is no failure to record.
      */
@@ -171,10 +162,6 @@ export interface NewGameData {
      * subtracting both double-counts nothing. Unlike `tracedChunkDegraded`,
      * the cause need not be the chunk at all — a saved config the build
      * cannot generate lands here too.
-     *
-     * Also like `tracedChunkDegraded`, it isn't persisted onto the saved
-     * puzzle, so the same `puzzle-completed`-after-reload caveat documented
-     * there applies here too.
      */
     bootFallback?: boolean;
     rotationMode: 'none' | 'quarter-turn' | 'free';
@@ -219,7 +206,7 @@ export interface NewGameData {
     /**
      * Fresh unsplash games only: true when the player tapped a specific
      * candidate thumbnail, false for "Surprise me". Measures picker
-     * adoption. Absent for shared/resumed games and non-photo sources.
+     * adoption. Absent for shared games and non-photo sources.
      */
     imagePicked?: boolean;
     includesProgress?: boolean;
@@ -246,16 +233,9 @@ export interface NewGameData {
      * Present on every `new-game-started` from the off-thread release on;
      * absent on events from older clients (PWA caches).
      *
-     * This field and the other three generation fields — `generationMs`,
-     * `generationFallbackKind`, `generationFallbackReason` — also ride
-     * along on `puzzle-completed`, which spreads the cached
-     * `new-game-started` payload — but only for a puzzle completed in the
-     * session that started it. After a reload the cache is gone (it is
-     * telemetry, not saved state), so a resumed completion carries none of
-     * them. Averaging `generationMs` over `puzzle-completed` therefore
-     * measures a completion-survivorship-biased, same-session-only subset;
-     * `new-game-started` is the unbiased denominator. Same caveat, and the
-     * same reason, as `tracedChunkDegraded` and `bootFallback` below.
+     * Averaging `generationMs` over `puzzle-completed` measures a
+     * completion-survivorship-biased subset; `new-game-started` is the
+     * unbiased denominator.
      */
     generationMode: 'worker' | 'sync-fallback';
     /**
@@ -334,15 +314,27 @@ export interface NewGameData {
 /**
  * Data attached to `puzzle-completed`.
  *
- * Same field names as `NewGameData`, but every field outside the
- * puzzle-shape core is optional — for resumed-then-completed games we
- * only know the puzzle's geometry, not how it was originally started.
+ * Same field names as `NewGameData`. The game's own `new-game-started`
+ * payload, where available, is merged over the fields derived from the game
+ * state (the puzzle-shape core, `imageSource`, `traceSetVersion`). A
+ * `resumed` completion has that payload only for games started on a build
+ * from #601 on whose stored copy survived. The resumed completions without
+ * it — older saves, plus a small permanent remainder of lost copies — are
+ * `resumed = true` minus `resumed = true` with any `source`: a subtraction,
+ * because a negated filter matches only rows that carry the property.
  */
 export type PuzzleCompletedData = Pick<
     NewGameData,
     'cutStyle' | 'rotationMode' | 'cols' | 'rows' | 'pieceCount'
 > &
-    Partial<NewGameData>;
+    Partial<NewGameData> & {
+        /**
+         * True when the game was restored from the save at boot, false when
+         * it was started — fresh or from a link — in the page load that
+         * completed it.
+         */
+        resumed: boolean;
+    };
 
 /** Data attached to `puzzle-shared`. */
 export interface PuzzleSharedData {

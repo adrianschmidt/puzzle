@@ -93,6 +93,7 @@ describe('applyMergeResult', () => {
             selectionManager,
             rotationFocus,
             currentGameAnalytics: () => null,
+            isResumedGame: () => false,
             onCompleted,
         };
     }
@@ -206,6 +207,21 @@ describe('applyMergeResult', () => {
 
         expect(umamiTrack).toHaveBeenCalledWith('puzzle-completed', expect.any(Object));
         expect(onCompleted).toHaveBeenCalledWith(state);
+    });
+
+    it.each([true, false])('reports resumed=%s from the session', (resumed) => {
+        const state = makeCompletedState();
+        const survivor = state.groups[0];
+
+        applyMergeResult(state, { group: survivor, mergeCount: 1 }, [survivor.id], {
+            ...deps(),
+            isResumedGame: () => resumed,
+        });
+
+        expect(umamiTrack).toHaveBeenCalledWith(
+            'puzzle-completed',
+            expect.objectContaining({ resumed }),
+        );
     });
 
     it('reports the completion before handing off to the celebration', () => {

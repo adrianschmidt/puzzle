@@ -15,7 +15,9 @@
  * network, the save file, or the dialog's own preference loading and DOM.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock, type MockInstance } from 'vitest';
+import {
+    describe, it, expect, beforeEach, afterEach, onTestFinished, vi, type Mock, type MockInstance,
+} from 'vitest';
 import type { GameState, PieceGroup } from '../model/types.js';
 import type { MergeResult } from '../game/group-merging.js';
 import type { SharePayload } from '../sharing/index.js';
@@ -112,7 +114,7 @@ vi.mock('../analytics/index.js', async (importOriginal) => {
 
 import { installGlobalHandlers } from './global-handlers.js';
 import { runBootSequence } from './boot-sequence.js';
-import { startNewGame } from './start-new-game.js';
+import { startNewGame, type StartNewGameDeps } from './start-new-game.js';
 import { loadSharedPuzzle } from './load-shared-puzzle.js';
 import { openNewGameDialog } from './new-game-flow.js';
 import { createRotationUi } from './rotation-ui.js';
@@ -128,6 +130,7 @@ import type { NewGameData, PuzzleCompletedData } from '../analytics/index.js';
 // From the module, not the barrel: the token key is deliberately not part of
 // the persistence layer's public surface.
 import { STORAGE_KEY, GEOMETRY_SEED_KEY } from '../persistence/storage.js';
+import { loadGameContext, saveGameContext } from '../analytics/game-context.js';
 import { bootstrap } from './bootstrap.js';
 
 const HOOK_NAMES = [
@@ -596,7 +599,7 @@ describe('bootstrap', () => {
             imageSource: 'unsplash', imageCategory: 'nature', vibrant: true,
             generationMode: 'worker', generationMs: 42,
         };
-        startNewGameDeps.onGameAnalytics(staleAnalytics);
+        startNewGameDeps.onGameAnalytics(staleAnalytics, makeGameState());
 
         const completed = makeCompletedState();
         session.install(completed);
@@ -618,6 +621,134 @@ describe('bootstrap', () => {
         expect(payload).not.toHaveProperty('source');
         expect(payload).not.toHaveProperty('imageCategory');
         expect(payload).not.toHaveProperty('vibrant');
+    });
+
+    describe('game analytics across page loads (#601)', () => {
+        const startedData: NewGameData = {
+            source: 'fresh', cutStyle: 'classic', rotationMode: 'none',
+            orientation: 'landscape', cols: 2, rows: 1, pieceCount: 2,
+            imageSource: 'unsplash', imageCategory: 'nature', vibrant: true,
+            generationMode: 'worker', generationMs: 42,
+        };
+
+        function completeAndReadPayload(state: GameState): PuzzleCompletedData {
+            vi.mocked(track).mockClear();
+            const { applyMerge } = vi.mocked(createGameSession).mock.calls[0][0];
+            applyMerge(state, { group: state.groups[0], mergeCount: 1 } satisfies MergeResult, [0]);
+            const calls = vi.mocked(track).mock.calls as unknown as Array<[string, PuzzleCompletedData]>;
+            const completedCall = calls.find(([name]) => name === 'puzzle-completed');
+            expect(completedCall, 'no puzzle-completed event fired').toBeDefined();
+            return completedCall![1];
+        }
+
+        function resume(state: GameState): void {
+            createdSession().install(state);
+            vi.mocked(runBootSequence).mock.calls[0][0].onResumed(state);
+        }
+
+        function startDeps(): StartNewGameDeps {
+            const { start } = vi.mocked(installDevHooks).mock.calls[0][0];
+            void start({ cols: 2, rows: 1 }, {});
+            return vi.mocked(startNewGame).mock.calls.at(-1)![2];
+        }
+
+        it('persists a started game\'s analytics against its seed', () => {
+            bootstrap(root);
+            const deps = startDeps();
+            const state = makeCompletedState();
+            state.seed = 11;
+
+            deps.persistNewPuzzle(state);
+            deps.onGameAnalytics(startedData, state);
+
+            expect(loadGameContext(11)).toEqual(startedData);
+        });
+
+        it('keeps the slot owner\'s analytics when the new puzzle fails to save', () => {
+            // The previous puzzle stays in the slot and resumes on reload.
+            saveGameContext(11, startedData);
+            bootstrap(root);
+            const deps = startDeps();
+            const realSetItem = Storage.prototype.setItem;
+            const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+                this: Storage, key: string, value: string,
+            ) {
+                if (key === STORAGE_KEY) throw new DOMException('quota', 'QuotaExceededError');
+                realSetItem.call(this, key, value);
+            });
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            onTestFinished(() => {
+                setItem.mockRestore();
+                warn.mockRestore();
+            });
+            const unsaved = makeCompletedState();
+            unsaved.seed = 12;
+            const unsavedData: NewGameData = { ...startedData, source: 'shared' };
+
+            deps.persistNewPuzzle(unsaved);
+            deps.onGameAnalytics(unsavedData, unsaved);
+
+            expect(loadGameContext(11)).toEqual(startedData);
+            expect(loadGameContext(12)).toBeNull();
+            expect(completeAndReadPayload(unsaved).source).toBe('shared');
+        });
+
+        it('drops the previous analytics as soon as a new puzzle is saved', () => {
+            // A share link reuses its originator's seed, so if the start
+            // throws before its own analytics are known, a leftover record
+            // for that seed would be read back as this game's.
+            saveGameContext(11, startedData);
+            bootstrap(root);
+            const deps = startDeps();
+            const state = makeCompletedState();
+            state.seed = 11;
+
+            deps.persistNewPuzzle(state);
+
+            expect(loadGameContext(11)).toBeNull();
+        });
+
+        it('restores the saved game\'s analytics on resume and reports it resumed', () => {
+            saveGameContext(11, startedData);
+            bootstrap(root);
+            const state = makeCompletedState();
+            state.seed = 11;
+
+            resume(state);
+            const payload = completeAndReadPayload(state);
+
+            expect(payload).toMatchObject({
+                resumed: true, source: 'fresh', imageCategory: 'nature', vibrant: true,
+            });
+        });
+
+        it('reports a resumed game with no persisted analytics as resumed, without source', () => {
+            bootstrap(root);
+            const state = makeCompletedState();
+            state.seed = 11;
+
+            resume(state);
+            const payload = completeAndReadPayload(state);
+
+            expect(payload.resumed).toBe(true);
+            expect(payload).not.toHaveProperty('source');
+        });
+
+        it('reports a game started after a resumed one as not resumed', () => {
+            saveGameContext(11, startedData);
+            bootstrap(root);
+            const resumed = makeCompletedState();
+            resumed.seed = 11;
+            resume(resumed);
+
+            const fresh = makeCompletedState();
+            fresh.seed = 12;
+            createdSession().install(fresh);
+            const payload = completeAndReadPayload(fresh);
+
+            expect(payload.resumed).toBe(false);
+            expect(payload).not.toHaveProperty('source');
+        });
     });
 
     it('renders the toolbar into the given root', () => {

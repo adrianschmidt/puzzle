@@ -31,11 +31,14 @@ export function applyMergeResult(
         renderer: Renderer;
         selectionManager: SelectionManager;
         rotationFocus: RotationFocus;
-        currentGameAnalytics: () => NewGameData | null;
+        currentGameAnalytics: () => Partial<NewGameData> | null;
+        isResumedGame: () => boolean;
         onCompleted: (state: GameState) => void;
     },
 ): void {
-    const { renderer, selectionManager, rotationFocus, currentGameAnalytics, onCompleted } = deps;
+    const {
+        renderer, selectionManager, rotationFocus, currentGameAnalytics, isResumedGame, onCompleted,
+    } = deps;
 
     // The survivor inherits selection if any absorbed group was selected.
     const validIds = new Set(state.groups.map(g => g.id));
@@ -68,7 +71,10 @@ export function applyMergeResult(
     reorderGroupsAfterDrop(unique, state, (gId) => renderer.bringGroupToFront(gId));
 
     if (checkAndMarkWin(state)) {
-        track('puzzle-completed', buildPuzzleCompletedData(state, currentGameAnalytics()));
+        track(
+            'puzzle-completed',
+            buildPuzzleCompletedData(state, currentGameAnalytics(), isResumedGame()),
+        );
         onCompleted(state);
     }
 }
