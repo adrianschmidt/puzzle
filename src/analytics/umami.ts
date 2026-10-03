@@ -437,9 +437,12 @@ export interface TracedChunkLoadFailedData {
  * avoid colliding with the failure-class `kind` on
  * {@link TracedChunkLoadFailedData} — the two carry different semantics.)
  *
- * `name` is the low-cardinality bucket for aggregation/alerting: the
- * thrown value's constructor name (`TypeError`, `RangeError`, …), or
- * `'unknown'` when the rejection/error value isn't an `Error`.
+ * `name` is the low-cardinality bucket for aggregation/alerting: an
+ * `Error`'s `name` (`TypeError`, `SecurityError`, …), or for any other value
+ * its `valueType` as {@link PwaRegisterFailedData} defines it (`string`,
+ * `undefined`, `Object`, …). An `error`-channel event that carried no error
+ * object reports `'null'`. Rows from builds before #597 carry `'unknown'` for
+ * every non-`Error` value instead.
  *
  * `reason` is the sanitized message (URLs/extension origins redacted,
  * empty falls back to `'unknown'`, length-capped); see
@@ -1326,10 +1329,31 @@ export interface PwaUpdateApplyFailedData {
  *
  * `registerSW` is called exactly once per page load, so `onRegisterError` fires
  * at most once; unlike `pwa-update-check-failed` this needs no per-reason dedup
- * or cardinality guard. `reason` is the sanitized rejection message.
+ * or cardinality guard. vite-plugin-pwa 1.3.0 also routes a failed
+ * `import('workbox-window')` chunk load here, indistinguishable from a
+ * failed `register()` except by the error itself.
+ *
+ * `reason` is the sanitized rejection message, which drops a non-`Error`
+ * value's type (#597's bare `Rejected`). `valueType` keeps it: `typeof`, or
+ * the constructor name for an object (`DOMException`, `TypeError`,
+ * `Object`). `name` is the {@link UnhandledErrorData} dimension, so it
+ * equals `valueType` for a non-`Error`.
+ *
+ * `registerFunction` is `navigator.serviceWorker.register` at failure time:
+ * `replaced` when page or extension script swapped it out, `unavailable` when
+ * `navigator.serviceWorker` was absent or threw on access. `native` is not
+ * proof it was untouched — a bound or `Proxy` wrapper also stringifies as
+ * native code.
+ *
+ * Rows from builds before #597 carry `reason` alone.
  */
 export interface PwaRegisterFailedData {
     reason: string;
+    valueType: string;
+    name: string;
+    registerFunction: 'native' | 'replaced' | 'unavailable';
+    displayMode: 'standalone' | 'browser';
+    visibilityState: DocumentVisibilityState;
 }
 
 /**

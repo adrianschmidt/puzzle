@@ -6,7 +6,7 @@
  * is injected, keeping the sanitize + rate-limit logic unit-testable.
  */
 
-import { sanitizeErrorReason } from '../analytics/sanitize-error-reason.js';
+import { errorName, sanitizeErrorReason } from '../analytics/sanitize-error-reason.js';
 
 export const SW_ERROR_MESSAGE_TYPE = 'sw-error-report';
 
@@ -35,17 +35,12 @@ export interface SwErrorReport {
 const MAX_PER_REASON = 5;
 const MAX_TOTAL = 50;
 
-/** Keeps the `name` analytics dimension low-cardinality. */
-function errorName(value: unknown): string {
-    return value instanceof Error ? value.name || 'Error' : 'unknown';
-}
-
 export interface SwErrorReporterDeps {
     post: (report: SwErrorReport) => void;
 }
 
 export interface SwErrorReporter {
-    report(source: SwErrorSource, cause: unknown): void;
+    report(source: SwErrorSource, cause: unknown, message?: string): void;
 }
 
 export function createSwErrorReporter(deps: SwErrorReporterDeps): SwErrorReporter {
@@ -67,8 +62,8 @@ export function createSwErrorReporter(deps: SwErrorReporterDeps): SwErrorReporte
     }
 
     return {
-        report(source, cause): void {
-            const reason = sanitizeErrorReason(cause);
+        report(source, cause, message): void {
+            const reason = sanitizeErrorReason(cause ?? message);
             if (reportingAllowed(reason)) {
                 emit(source, errorName(cause), reason);
                 return;

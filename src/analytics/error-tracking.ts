@@ -11,20 +11,12 @@
 
 import { diagnostics } from '../diagnostics.js';
 import { track } from './umami.js';
-import { sanitizeErrorReason } from './sanitize-error-reason.js';
+import { errorName, sanitizeErrorReason } from './sanitize-error-reason.js';
 
 /** Max reports per distinct `reason`, per session. */
 const MAX_PER_REASON = 5;
 /** Max total reports per session. */
 const MAX_TOTAL = 50;
-
-/**
- * Constructor name of a thrown value (low-cardinality `name` dimension);
- * `'unknown'` when it isn't an `Error`.
- */
-function errorName(value: unknown): string {
-    return value instanceof Error ? (value.name || 'Error') : 'unknown';
-}
 
 /**
  * Drop pure-noise `error` events: opaque cross-origin `"Script error."` (the
@@ -66,12 +58,12 @@ export function initErrorTracking(): () => void {
         return true;
     }
 
-    function report(source: 'rejection' | 'error', cause: unknown): void {
-        const reason = sanitizeErrorReason(cause);
+    function report(source: 'rejection' | 'error', cause: unknown, message?: string): void {
+        const reason = sanitizeErrorReason(cause ?? message);
         if (reportingAllowed(reason)) {
             diagnostics.warn(
                 source === 'rejection' ? 'Unhandled promise rejection:' : 'Uncaught error:',
-                cause,
+                cause ?? message,
             );
             track('unhandled-error', { source, name: errorName(cause), reason });
             return;
@@ -96,7 +88,7 @@ export function initErrorTracking(): () => void {
     // window in capture) never land here — only uncaught script exceptions.
     const onError = (event: ErrorEvent): void => {
         if (isIgnorableErrorEvent(event)) return;
-        report('error', event.error ?? event.message);
+        report('error', event.error, event.message);
     };
 
     // A CSP refusal has its own event, not an `error` event. Without this,

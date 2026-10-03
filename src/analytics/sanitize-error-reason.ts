@@ -31,3 +31,15 @@ export function sanitizeErrorReason(value: unknown, maxLength = DEFAULT_MAX_LENG
     const reason = redacted || 'unknown';
     return reason.length > maxLength ? reason.slice(0, maxLength) : reason;
 }
+
+export function describeValueType(value: unknown): string {
+    if (value === null) return 'null';
+    if (typeof value !== 'object') return typeof value;
+    const name: unknown = Object.getPrototypeOf(value)?.constructor?.name;
+    return typeof name === 'string' && name !== '' ? name : 'object';
+}
+
+/** Low-cardinality `name` dimension for analytics. */
+export function errorName(value: unknown): string {
+    return value instanceof Error ? value.name || 'Error' : describeValueType(value);
+}

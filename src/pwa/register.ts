@@ -15,8 +15,9 @@ import {
     type RescueOutcome,
     type RescueRegistration,
 } from './share-link-rescue.js';
+import { describeRegisterFailure } from './register-failure.js';
 import { createUpdateAvailableIndicator } from '../ui/index.js';
-import { track, sanitizeErrorReason } from '../analytics/index.js';
+import { track } from '../analytics/index.js';
 import { diagnostics } from '../diagnostics.js';
 
 export interface PwaUpdates {
@@ -59,7 +60,7 @@ export function initPwaUpdates(flush: () => void): PwaUpdates {
         onRegisterError(error) {
             resolveRegistration(null);
             diagnostics.warn('[pwa] service worker registration failed', error);
-            track('pwa-register-failed', { reason: sanitizeErrorReason(error) });
+            track('pwa-register-failed', describeRegisterFailure(error));
         },
     });
 

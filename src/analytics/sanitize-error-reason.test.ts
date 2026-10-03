@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeErrorReason } from './sanitize-error-reason.js';
+import { describeValueType, errorName, sanitizeErrorReason } from './sanitize-error-reason.js';
 
 describe('sanitizeErrorReason', () => {
     it('uses an Error message', () => {
@@ -58,5 +58,55 @@ describe('sanitizeErrorReason', () => {
 
     it('honours a custom max length', () => {
         expect(sanitizeErrorReason(new Error('x'.repeat(50)), 10)).toBe('x'.repeat(10));
+    });
+});
+
+describe('describeValueType', () => {
+    it('reports typeof for primitives', () => {
+        expect(describeValueType('Rejected')).toBe('string');
+        expect(describeValueType(undefined)).toBe('undefined');
+        expect(describeValueType(42)).toBe('number');
+        expect(describeValueType(() => {})).toBe('function');
+    });
+
+    it('reports null distinctly from objects', () => {
+        expect(describeValueType(null)).toBe('null');
+    });
+
+    it('reports the constructor name for objects', () => {
+        expect(describeValueType(new TypeError('x'))).toBe('TypeError');
+        expect(describeValueType(new DOMException('x', 'SecurityError'))).toBe('DOMException');
+        expect(describeValueType({ message: 'x' })).toBe('Object');
+        class CustomRejection {
+            code = 'E_REJECTED';
+        }
+        expect(describeValueType(new CustomRejection())).toBe('CustomRejection');
+    });
+
+    it('ignores an own constructor property', () => {
+        expect(describeValueType({ constructor: { name: 'Spoofed' } })).toBe('Object');
+    });
+
+    it('falls back to "object" without a prototype constructor', () => {
+        expect(describeValueType(Object.create(null))).toBe('object');
+    });
+});
+
+describe('errorName', () => {
+    it('uses an Error\'s name', () => {
+        expect(errorName(new TypeError('x'))).toBe('TypeError');
+        expect(errorName(new DOMException('x', 'SecurityError'))).toBe('SecurityError');
+    });
+
+    it('falls back to "Error" for an Error with an empty name', () => {
+        const err = new Error('x');
+        err.name = '';
+        expect(errorName(err)).toBe('Error');
+    });
+
+    it('describes the value type for non-Errors', () => {
+        expect(errorName('Rejected')).toBe('string');
+        expect(errorName(undefined)).toBe('undefined');
+        expect(errorName({ message: 'x' })).toBe('Object');
     });
 });
