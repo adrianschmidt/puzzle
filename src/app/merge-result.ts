@@ -11,6 +11,7 @@ import { reorderGroupsAfterDrop } from '../game/z-order.js';
 import { track } from '../analytics/index.js';
 import type { NewGameData } from '../analytics/index.js';
 import { buildPuzzleCompletedData } from './completed-payload.js';
+import { elapsedMsSince } from './game-clock.js';
 import type { Renderer } from '../renderer/index.js';
 import type { SelectionManager } from '../interaction/selection-manager.js';
 import type { RotationFocus } from '../interaction/index.js';
@@ -33,11 +34,13 @@ export function applyMergeResult(
         rotationFocus: RotationFocus;
         currentGameAnalytics: () => Partial<NewGameData> | null;
         isResumedGame: () => boolean;
+        gameStartedAt: () => number | undefined;
         onCompleted: (state: GameState) => void;
     },
 ): void {
     const {
-        renderer, selectionManager, rotationFocus, currentGameAnalytics, isResumedGame, onCompleted,
+        renderer, selectionManager, rotationFocus,
+        currentGameAnalytics, isResumedGame, gameStartedAt, onCompleted,
     } = deps;
 
     // The survivor inherits selection if any absorbed group was selected.
@@ -73,7 +76,12 @@ export function applyMergeResult(
     if (checkAndMarkWin(state)) {
         track(
             'puzzle-completed',
-            buildPuzzleCompletedData(state, currentGameAnalytics(), isResumedGame()),
+            buildPuzzleCompletedData(
+                state,
+                currentGameAnalytics(),
+                isResumedGame(),
+                elapsedMsSince(gameStartedAt(), Date.now()),
+            ),
         );
         onCompleted(state);
     }

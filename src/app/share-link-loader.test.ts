@@ -15,6 +15,7 @@ import {
 } from '../pwa/share-link-rescue.js';
 import { loadState, saveNewPuzzle } from '../persistence/index.js';
 import { makeSavedGameState } from '../test-helpers/fixtures.js';
+import type { GameState } from '../model/types.js';
 import { createShareLinkLoader } from './share-link-loader.js';
 
 /**
@@ -27,7 +28,7 @@ function decodablePayload(): SharePayload {
 
 describe('createShareLinkLoader', () => {
     let umamiTrack: ReturnType<typeof vi.fn>;
-    let loadShared: Mock<(payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>>;
+    let loadShared: Mock<(payload: SharePayload, savedState: GameState | undefined) => Promise<void>>;
     let attemptRescue: Mock<() => Promise<RescueOutcome>>;
 
     beforeEach(() => {
@@ -190,7 +191,7 @@ describe('createShareLinkLoader', () => {
         const handled = await make().tryLoad();
 
         expect(handled).toBe(true);
-        expect(loadShared).toHaveBeenCalledWith(payload, false);
+        expect(loadShared).toHaveBeenCalledWith(payload, undefined);
         expect(umamiTrack).toHaveBeenCalledWith(
             'share-link-rescue-result',
             expect.objectContaining({ decoded: true }),
@@ -234,7 +235,7 @@ describe('createShareLinkLoader', () => {
     it('accepts discarding existing progress and loads the shared puzzle', async () => {
         const payload = decodablePayload();
         const hashBody = encodePayload(payload);
-        saveNewPuzzle(makeSavedGameState());
+        saveNewPuzzle({ ...makeSavedGameState(), imageUrl: 'saved-puzzle.jpg' });
         history.replaceState(null, '', '/#p=' + hashBody);
         // Production's `loadShared` (`loadSharedPuzzle`) persists the new puzzle
         // itself once generation succeeds — the loader no longer clears storage,
@@ -246,9 +247,7 @@ describe('createShareLinkLoader', () => {
         const handled = await make(true).tryLoad();
 
         expect(handled).toBe(true);
-        // `recipientHadSavedState` (true here) feeds shared-load analytics, so
-        // it must be the real "had progress" reading, not a constant.
-        expect(loadShared).toHaveBeenCalledWith(payload, true);
+        expect(loadShared.mock.calls[0][1]?.imageUrl).toBe('saved-puzzle.jpg');
         // Previous save replaced by the shared puzzle's own — not merely
         // cleared: `loadShared`'s persist did it.
         expect(loadState()?.imageUrl).toBe('shared-puzzle.jpg');

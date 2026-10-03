@@ -23,8 +23,15 @@ import {
     removeAttribution,
 } from '../ui/index.js';
 import { SelectionManager } from '../interaction/selection-manager.js';
-import type { NewGameData } from '../analytics/index.js';
-import { clearGameContext, loadGameContext, saveGameContext } from '../analytics/game-context.js';
+import type { NewGameData, ReplacedGameData } from '../analytics/index.js';
+import {
+    clearGameContext,
+    loadGameContext,
+    loadGameStartedAt,
+    saveGameContext,
+} from '../analytics/game-context.js';
+import { elapsedMsSince } from './game-clock.js';
+import { buildReplacedGameData } from './replaced-game-payload.js';
 import { startNewGame, type StartNewGameDeps } from './start-new-game.js';
 import { loadSharedPuzzle, type LoadSharedPuzzleDeps } from './load-shared-puzzle.js';
 import { createShareLinkLoader } from './share-link-loader.js';
@@ -68,6 +75,7 @@ export function bootstrap(
      */
     let currentGameAnalytics: Partial<NewGameData> | null = null;
     let currentGameResumed = false;
+    let currentGameStartedAt: number | undefined;
 
     const renderer = new SvgDomRenderer();
     renderer.init(root);
@@ -132,6 +140,7 @@ export function bootstrap(
             rotationFocus,
             currentGameAnalytics: () => currentGameAnalytics,
             isResumedGame: () => currentGameResumed,
+            gameStartedAt: () => currentGameStartedAt,
             onCompleted: onPuzzleCompleted,
         });
     };
@@ -166,6 +175,7 @@ export function bootstrap(
             // contract covers why this can't wipe the incoming game's payload).
             currentGameAnalytics = null;
             currentGameResumed = false;
+            currentGameStartedAt = undefined;
             // Remove the previous game's overlay first — `show` no-ops while
             // one is already up.
             completionPresenter.remove();
@@ -235,6 +245,18 @@ export function bootstrap(
 
     let savedNewPuzzle: GameState | null = null;
 
+    function replacedGameAnalytics(savedState?: GameState): ReplacedGameData | undefined {
+        const installed = session.hasGame() ? session.current() : undefined;
+        if (installed) {
+            return buildReplacedGameData(installed, elapsedMsSince(currentGameStartedAt, Date.now()));
+        }
+        if (savedState) {
+            const savedStartedAt = loadGameStartedAt(savedState.seed);
+            return buildReplacedGameData(savedState, elapsedMsSince(savedStartedAt, Date.now()));
+        }
+        return undefined;
+    }
+
     /**
      * `fitView` folds gather-and-zoom-to-fit with a follow-up render:
      * `session.install` already rendered at pre-gather positions, so the
@@ -261,8 +283,10 @@ export function bootstrap(
         },
         onGameAnalytics: (data, state) => {
             currentGameAnalytics = data;
-            if (state === savedNewPuzzle) saveGameContext(state.seed, data);
+            currentGameStartedAt = Date.now();
+            if (state === savedNewPuzzle) saveGameContext(state.seed, data, currentGameStartedAt);
         },
+        replacedGameAnalytics,
         // `hasGame()`, not `current() !== undefined` (same distinction as
         // `boot-sequence.ts`): `install` makes the state current before wiring
         // interaction, so `current()` can be set over a blank canvas — and
@@ -277,7 +301,12 @@ export function bootstrap(
      * would silently desync the console hook from the button.
      */
     const solve = (): void =>
-        solvePuzzle({ session, renderer, onSolved: celebrateCompletion });
+        solvePuzzle({
+            session,
+            renderer,
+            gameStartedAt: () => currentGameStartedAt,
+            onSolved: celebrateCompletion,
+        });
 
     installDevHooks({
         // 'dev': exclusively dev-console starts (e.g. `__newComposableGame`).
@@ -291,8 +320,8 @@ export function bootstrap(
         // 'repro': exclusively `__reproPuzzle`'s replay path, never a real
         // `#p=` link — a mismatch it surfaces is a developer re-running a
         // known-bad puzzle, not a field incident.
-        loadShared: (payload, recipientHadSavedState) =>
-            loadSharedPuzzle(payload, recipientHadSavedState, sharedDeps, 'repro'),
+        loadShared: (payload, savedState) =>
+            loadSharedPuzzle(payload, savedState, sharedDeps, 'repro'),
         solve,
     });
 
@@ -334,12 +363,13 @@ export function bootstrap(
         persistNewPuzzle: startNewGameDeps.persistNewPuzzle,
         backgroundColor,
         onGameAnalytics: startNewGameDeps.onGameAnalytics,
+        replacedGameAnalytics,
         hasCurrentGame: startNewGameDeps.hasCurrentGame,
     };
 
     const shareLinks = createShareLinkLoader({
-        loadShared: (payload, recipientHadSavedState) =>
-            loadSharedPuzzle(payload, recipientHadSavedState, sharedDeps),
+        loadShared: (payload, savedState) =>
+            loadSharedPuzzle(payload, savedState, sharedDeps),
         attemptRescue: () => pwaUpdates.attemptShareLinkRescue(),
     });
 
@@ -354,6 +384,7 @@ export function bootstrap(
         onResumed: (state) => {
             currentGameAnalytics = loadGameContext(state.seed);
             currentGameResumed = true;
+            currentGameStartedAt = loadGameStartedAt(state.seed);
         },
     });
 

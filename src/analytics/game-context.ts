@@ -11,6 +11,7 @@ export const GAME_CONTEXT_KEY = 'puzzle-game-analytics';
 
 interface StoredGameContext {
     seed: number;
+    startedAt: number;
     data: NewGameData;
 }
 
@@ -50,9 +51,13 @@ const FIELD_TYPES: { [K in keyof NewGameData]-?: TagOf<NewGameData[K]> } = {
  * Keyed by `seed` so a record left behind by another puzzle — another tab's
  * start, or a write that failed — is never read back against this one.
  */
-export function saveGameContext(seed: number | undefined, data: NewGameData): void {
+export function saveGameContext(
+    seed: number | undefined,
+    data: NewGameData,
+    startedAt: number,
+): void {
     if (seed === undefined) return;
-    const record: StoredGameContext = { seed, data };
+    const record: StoredGameContext = { seed, startedAt, data };
     try {
         localStorage.setItem(GAME_CONTEXT_KEY, JSON.stringify(record));
     } catch (error) {
@@ -68,6 +73,17 @@ export function clearGameContext(): void {
 }
 
 export function loadGameContext(seed: number | undefined): Partial<NewGameData> | null {
+    const record = readRecord(seed);
+    if (!record || !isRecord(record.data)) return null;
+    return readNewGameData(record.data);
+}
+
+export function loadGameStartedAt(seed: number | undefined): number | undefined {
+    const startedAt = readRecord(seed)?.startedAt;
+    return typeof startedAt === 'number' && Number.isFinite(startedAt) ? startedAt : undefined;
+}
+
+function readRecord(seed: number | undefined): Record<string, unknown> | null {
     if (seed === undefined) return null;
     let parsed: unknown;
     try {
@@ -77,8 +93,7 @@ export function loadGameContext(seed: number | undefined): Partial<NewGameData> 
     } catch {
         return null;
     }
-    if (!isRecord(parsed) || parsed.seed !== seed || !isRecord(parsed.data)) return null;
-    return readNewGameData(parsed.data);
+    return isRecord(parsed) && parsed.seed === seed ? parsed : null;
 }
 
 /**

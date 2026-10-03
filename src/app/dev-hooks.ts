@@ -26,6 +26,10 @@ import {
     loadVibrantPreference,
 } from '../game/image-categories.js';
 import { runWithErrorReport } from './run-with-error-report.js';
+import { track } from '../analytics/index.js';
+import type { PuzzleSolvedData } from '../analytics/index.js';
+import { gameProgress } from './game-progress.js';
+import { elapsedMsSince } from './game-clock.js';
 import type { StartNewGameOptions } from './start-new-game.js';
 import type { GameSession } from './game-session.js';
 
@@ -33,6 +37,7 @@ export interface SolvePuzzleDeps {
     /** Read-only slice: solves whatever is installed, never replaces it. */
     session: Pick<GameSession, 'current'>;
     renderer: Renderer;
+    gameStartedAt: () => number | undefined;
     onSolved: (state: GameState, group: PieceGroup) => void;
 }
 
@@ -44,6 +49,7 @@ export interface SolvePuzzleDeps {
 export function solvePuzzle(deps: SolvePuzzleDeps): void {
     const state = deps.session.current();
     if (!state) return;
+    if (!state.completed) reportSolve(state, deps.gameStartedAt());
 
     const solvedGroup: PieceGroup = {
         id: 0,
@@ -69,9 +75,20 @@ export function solvePuzzle(deps: SolvePuzzleDeps): void {
     deps.onSolved(state, solvedGroup);
 }
 
+function reportSolve(state: GameState, startedAt: number | undefined): void {
+    const data: PuzzleSolvedData = {
+        progress: gameProgress(state),
+        pieceCount: state.pieces.length,
+        cutStyle: state.cutStyle ?? 'classic',
+    };
+    const elapsedMs = elapsedMsSince(startedAt, Date.now());
+    if (elapsedMs !== undefined) data.elapsedMs = elapsedMs;
+    track('puzzle-solved', data);
+}
+
 export interface DevHooksDeps {
     start: (gridSize: GridSize, options: StartNewGameOptions) => Promise<void>;
-    loadShared: (payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>;
+    loadShared: (payload: SharePayload, savedState: GameState | undefined) => Promise<void>;
     /**
      * Injected, not built here, so `window.__solvePuzzle` and the info modal's
      * Solve button are the same reference — otherwise an edit to either
@@ -204,16 +221,13 @@ export function installDevHooks(deps: DevHooksDeps): void {
         // Const captures the narrowing: the async closure below would un-narrow
         // if `decoded` gained a second assignment.
         const validated = decoded;
-        // `!!loadState()`, not a cheaper key probe, for parity with the share
-        // path: `recipientHadSavedState` means "had a *readable* save". The
-        // decompress is fine for a one-shot dev action.
-        const hadSavedState = !!loadState();
+        const savedState = loadState();
         // Previous save left alone until `loadShared`'s own `persistNewPuzzle`
         // replaces it on success — same fix as `share-link-loader.ts`; an eager
         // clear used to destroy it on a canceled or failing replay too.
         return runWithErrorReport({
             run: async () => {
-                await deps.loadShared(validated, hadSavedState);
+                await deps.loadShared(validated, savedState);
                 return true;
             },
             warnMessage: 'Failed to load repro puzzle:',

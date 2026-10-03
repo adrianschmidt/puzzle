@@ -23,7 +23,7 @@ import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.
 import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { applyProgress } from '../game/reconstruct-groups.js';
 import { track } from '../analytics/index.js';
-import type { NewGameData } from '../analytics/index.js';
+import type { NewGameData, ReplacedGameData } from '../analytics/index.js';
 import { needsTracedTabChunk, shareInitOptions } from './share-payload-to-init.js';
 import { buildSharedGameData } from './new-game-payload.js';
 import { buildPieceCountMismatchData } from './piece-count-mismatch-payload.js';
@@ -46,6 +46,12 @@ export interface LoadSharedPuzzleDeps {
     backgroundColor: BackgroundColorControl;
     onGameAnalytics: (data: NewGameData, state: GameState) => void;
     /**
+     * Read before `session.install`, which replaces the game it describes.
+     * Takes the saved game, which a link opened on a fresh page load replaces
+     * without it ever being installed.
+     */
+    replacedGameAnalytics: (savedState: GameState | undefined) => ReplacedGameData | undefined;
+    /**
      * Gates the overlay's Cancel affordance: canceling means "return to your
      * current puzzle", so with nothing installed there is nothing to return to.
      */
@@ -53,7 +59,7 @@ export interface LoadSharedPuzzleDeps {
 }
 
 /**
- * @param recipientHadSavedState - Carried into the analytics field untouched.
+ * @param savedState - The recipient's readable save, if any.
  * @param source - `'shared'` for a real `#p=` link, `'repro'` for a
  * `__reproPuzzle` replay. Only affects the `source` field of
  * `piece-count-mismatch` and `generation-canceled`, separating real incidents
@@ -63,7 +69,7 @@ export interface LoadSharedPuzzleDeps {
  */
 export async function loadSharedPuzzle(
     payload: SharePayload,
-    recipientHadSavedState: boolean,
+    savedState: GameState | undefined,
     deps: LoadSharedPuzzleDeps,
     source: 'shared' | 'repro' = 'shared',
 ): Promise<void> {
@@ -126,6 +132,8 @@ export async function loadSharedPuzzle(
             }
         }
 
+        const replaced = deps.replacedGameAnalytics(savedState);
+
         // Install, fit and save as a unit. A throw before the save leaves a
         // rendered-but-unsaved puzzle the boot fallback would read as finished
         // and refuse to replace (#500), so roll the session back. Past the save
@@ -151,12 +159,12 @@ export async function loadSharedPuzzle(
         const data = buildSharedGameData({
             state,
             includesProgress: payload.pr !== undefined,
-            recipientHadSavedState,
+            recipientHadSavedState: savedState !== undefined,
             sharedColor,
             generation,
         });
         deps.onGameAnalytics(data, state);
-        track('new-game-started', data);
+        track('new-game-started', { ...data, ...replaced });
 
         // After the normal event so that still lands first if anything below
         // throws. A diagnostic, never a load blocker.

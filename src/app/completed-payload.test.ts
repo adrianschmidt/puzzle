@@ -11,7 +11,7 @@ describe('buildPuzzleCompletedData', () => {
             gridSize: { cols: 5, rows: 3 },
         });
 
-        const data = buildPuzzleCompletedData(state, null, false);
+        const data = buildPuzzleCompletedData(state, null, false, undefined);
 
         expect(data.cutStyle).toBe('triangles');
         expect(data.rotationMode).toBe('free');
@@ -25,6 +25,7 @@ describe('buildPuzzleCompletedData', () => {
             makeGameState({ cutStyle: undefined, rotationMode: undefined }),
             null,
             false,
+            undefined,
         );
         expect(data.cutStyle).toBe('classic');
         expect(data.rotationMode).toBe('none');
@@ -39,7 +40,7 @@ describe('buildPuzzleCompletedData', () => {
             imageSource: 'unsplash', imageCategory: 'nature', vibrant: true,
         } as NewGameData;
 
-        const data = buildPuzzleCompletedData(makeGameState({ cutStyle: 'classic' }), cached, false);
+        const data = buildPuzzleCompletedData(makeGameState({ cutStyle: 'classic' }), cached, false, undefined);
 
         expect(data.cutStyle).toBe('wavy');
         expect(data.imageCategory).toBe('nature');
@@ -51,7 +52,7 @@ describe('buildPuzzleCompletedData', () => {
             cutStyle: 'classic',
             classicConfig: { traceSetVersion: 3 },
         });
-        expect(buildPuzzleCompletedData(state, null, false).traceSetVersion).toBe(3);
+        expect(buildPuzzleCompletedData(state, null, false, undefined).traceSetVersion).toBe(3);
     });
 
     it('omits traceSetVersion rather than setting it undefined when the state carries none', () => {
@@ -59,11 +60,31 @@ describe('buildPuzzleCompletedData', () => {
         // pre-upgrade-tail query subtracts on presence, so an unconditional
         // `undefined` would silently break it.
         const state = makeGameState({ cutStyle: 'classic' });
-        expect('traceSetVersion' in buildPuzzleCompletedData(state, null, false)).toBe(false);
+        expect('traceSetVersion' in buildPuzzleCompletedData(state, null, false, undefined)).toBe(false);
+    });
+
+    it('reports the elapsed time and the whole days it spans', () => {
+        const data = buildPuzzleCompletedData(makeGameState(), null, true, 90_000_000);
+
+        expect(data.elapsedMs).toBe(90_000_000);
+        expect(data.daysSinceStart).toBe(1);
+    });
+
+    it('reports zero days for a puzzle completed within 24 hours', () => {
+        const data = buildPuzzleCompletedData(makeGameState(), null, true, 86_399_999);
+
+        expect(data.daysSinceStart).toBe(0);
+    });
+
+    it('omits the elapsed time and days when the start is unknown', () => {
+        const data = buildPuzzleCompletedData(makeGameState(), null, true, undefined);
+
+        expect('elapsedMs' in data).toBe(false);
+        expect('daysSinceStart' in data).toBe(false);
     });
 
     it.each([true, false])('reports resumed=%s as given', (resumed) => {
-        expect(buildPuzzleCompletedData(makeGameState(), null, resumed).resumed).toBe(resumed);
+        expect(buildPuzzleCompletedData(makeGameState(), null, resumed, undefined).resumed).toBe(resumed);
     });
 
     it('keeps resumed when a cached payload is merged in', () => {
@@ -73,7 +94,7 @@ describe('buildPuzzleCompletedData', () => {
             generationMode: 'worker', generationMs: 10,
         } as NewGameData;
 
-        const data = buildPuzzleCompletedData(makeGameState(), cached, true);
+        const data = buildPuzzleCompletedData(makeGameState(), cached, true, undefined);
 
         expect(data.resumed).toBe(true);
         expect(data.source).toBe('shared');

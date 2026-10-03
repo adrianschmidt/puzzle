@@ -8,6 +8,7 @@
  * reload-looping.
  */
 
+import type { GameState } from '../model/types.js';
 import { parseLocationHash, type SharePayload } from '../sharing/index.js';
 import {
     wasRescueAttempted,
@@ -32,7 +33,7 @@ export interface ShareLinkLoader {
 
 export interface ShareLinkLoaderDeps {
     /** `loadSharedPuzzle` bound to the composition root's deps. */
-    loadShared: (payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>;
+    loadShared: (payload: SharePayload, savedState: GameState | undefined) => Promise<void>;
     /** `pwaUpdates.attemptShareLinkRescue`. */
     attemptRescue: () => Promise<RescueOutcome>;
     /** Injected for testing. */
@@ -140,8 +141,8 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
         // aren't offered — corrupt-save recovery is deliberately startup-only. A
         // successful load's `persistNewPuzzle` (inside `deps.loadShared`)
         // overwrites the blobs anyway.
-        const hasExistingProgress = !!loadState();
-        if (hasExistingProgress) {
+        const savedState = loadState();
+        if (savedState) {
             const ok = confirmDiscard('Load shared puzzle? Your current progress will be lost.');
             if (!ok) {
                 // Leave the hash in place so the user can reload to retry.
@@ -164,7 +165,7 @@ export function createShareLinkLoader(deps: ShareLinkLoaderDeps): ShareLinkLoade
         // than let it surface as an unhandled rejection.
         return runWithErrorReport({
             run: async () => {
-                await deps.loadShared(payload, hasExistingProgress);
+                await deps.loadShared(payload, savedState);
                 return true;
             },
             warnMessage: 'Failed to load shared puzzle:',

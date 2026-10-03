@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock, type MockInstance } from 'vitest';
 import type { GameState } from '../model/types.js';
+import type { ReplacedGameData } from '../analytics/index.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
 import { diagnostics } from '../diagnostics.js';
 
@@ -74,6 +75,7 @@ describe('startNewGame', () => {
     let fitView: Mock<(state: GameState) => void>;
     let persistNewPuzzle: Mock<(state: GameState) => void>;
     let onGameAnalytics: Mock<(data: unknown, state: GameState) => void>;
+    let replacedGameAnalytics: Mock<() => ReplacedGameData | undefined>;
     let deps: StartNewGameDeps;
     /**
      * Restored one by one, not via `vi.restoreAllMocks()`: `vite.config.ts`
@@ -97,6 +99,7 @@ describe('startNewGame', () => {
         fitView = vi.fn();
         persistNewPuzzle = vi.fn();
         onGameAnalytics = vi.fn();
+        replacedGameAnalytics = vi.fn(() => undefined);
         deps = {
             container: document.createElement('div'),
             session: { install },
@@ -104,6 +107,7 @@ describe('startNewGame', () => {
             fitView,
             persistNewPuzzle,
             onGameAnalytics,
+            replacedGameAnalytics,
             hasCurrentGame: () => false,
         };
     });
@@ -184,6 +188,40 @@ describe('startNewGame', () => {
         // bucket, and nothing else in the suite catches it.
         expect(umamiTrack).toHaveBeenCalledTimes(1);
         expect(umamiTrack.mock.calls[0][1]).not.toHaveProperty('bootFallback');
+    });
+
+    it('reports the game it replaced on new-game-started only', async () => {
+        const replaced: ReplacedGameData = {
+            replacedProgress: 0.5,
+            replacedCompleted: false,
+            replacedPieceCount: 24,
+            replacedCutStyle: 'triangles',
+            replacedElapsedMs: 60_000,
+        };
+        replacedGameAnalytics.mockReturnValue(replaced);
+
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+
+        expect(umamiTrack).toHaveBeenCalledWith(
+            'new-game-started',
+            expect.objectContaining({ source: 'fresh', ...replaced }),
+        );
+        // The cached payload is persisted and spread onto this game's
+        // `puzzle-completed`, which must not report the previous game.
+        expect(onGameAnalytics.mock.calls[0][0]).not.toHaveProperty('replacedProgress');
+    });
+
+    it('reads the replaced game before the new one is installed', async () => {
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+
+        expect(replacedGameAnalytics.mock.invocationCallOrder[0])
+            .toBeLessThan(install.mock.invocationCallOrder[0]);
+    });
+
+    it('reports no replaced game when there was none', async () => {
+        await startNewGame({ cols: 2, rows: 2 }, noTracedTabsOptions(), deps);
+
+        expect(umamiTrack.mock.calls[0][1]).not.toHaveProperty('replacedProgress');
     });
 
     // Pins ordering step 1: the boot fallback forces the plan before

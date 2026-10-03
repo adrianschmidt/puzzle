@@ -130,7 +130,8 @@ import type { NewGameData, PuzzleCompletedData } from '../analytics/index.js';
 // From the module, not the barrel: the token key is deliberately not part of
 // the persistence layer's public surface.
 import { STORAGE_KEY, GEOMETRY_SEED_KEY } from '../persistence/storage.js';
-import { loadGameContext, saveGameContext } from '../analytics/game-context.js';
+import { loadGameContext, loadGameStartedAt, saveGameContext } from '../analytics/game-context.js';
+import type { LoadSharedPuzzleDeps } from './load-shared-puzzle.js';
 import { bootstrap } from './bootstrap.js';
 
 const HOOK_NAMES = [
@@ -180,6 +181,20 @@ function makeCompletedState(): GameState {
         rotation: 0,
     };
     return makeGameState({ pieces, groups: [group] });
+}
+
+function makeUnfinishedState(): GameState {
+    const pieces = [
+        makeRectPiece({ id: 0, width: 100, height: 100 }),
+        makeRectPiece({ id: 1, width: 100, height: 100 }),
+    ];
+    const groups: PieceGroup[] = pieces.map((piece) => ({
+        id: piece.id,
+        pieces: new Map([[piece.id, { x: 0, y: 0 }]]),
+        position: { x: 0, y: 0 },
+        rotation: 0,
+    }));
+    return makeGameState({ pieces, groups });
 }
 
 function createdSession(): GameSession {
@@ -353,7 +368,7 @@ describe('bootstrap', () => {
 
         const { start, loadShared } = vi.mocked(installDevHooks).mock.calls[0][0];
         void start({ cols: 2, rows: 2 }, {});
-        void loadShared({} as SharePayload, false);
+        void loadShared({} as SharePayload, undefined);
 
         const startNewGameDeps = vi.mocked(startNewGame).mock.calls.at(-1)![2];
         const sharedDeps = vi.mocked(loadSharedPuzzle).mock.calls.at(-1)![2];
@@ -412,11 +427,11 @@ describe('bootstrap', () => {
         expect(control, 'no background-color handle to hand over').toBeDefined();
 
         const { loadShared } = vi.mocked(installDevHooks).mock.calls[0][0];
-        void loadShared({} as SharePayload, false);
+        void loadShared({} as SharePayload, undefined);
 
         expect(loadSharedPuzzle).toHaveBeenCalledWith(
             {},
-            false,
+            undefined,
             expect.objectContaining({ backgroundColor: control }),
             'repro',
         );
@@ -431,11 +446,11 @@ describe('bootstrap', () => {
     it('leaves the real share-link binding at the default source', () => {
         bootstrap(root);
         const { loadShared } = vi.mocked(createShareLinkLoader).mock.calls[0][0];
-        void loadShared({} as SharePayload, false);
+        void loadShared({} as SharePayload, undefined);
 
         const call = vi.mocked(loadSharedPuzzle).mock.calls.at(-1);
         expect(call?.[0]).toEqual({});
-        expect(call?.[1]).toBe(false);
+        expect(call?.[1]).toBeUndefined();
         expect(call?.[3] ?? 'shared').toBe('shared');
     });
 
@@ -646,6 +661,18 @@ describe('bootstrap', () => {
             vi.mocked(runBootSequence).mock.calls[0][0].onResumed(state);
         }
 
+        function mockNow(now: number): MockInstance<typeof Date.now> {
+            const spy = vi.spyOn(Date, 'now').mockReturnValue(now);
+            onTestFinished(() => spy.mockRestore());
+            return spy;
+        }
+
+        function sharedDeps(): LoadSharedPuzzleDeps {
+            const { loadShared } = vi.mocked(installDevHooks).mock.calls[0][0];
+            void loadShared({} as SharePayload, undefined);
+            return vi.mocked(loadSharedPuzzle).mock.calls.at(-1)![2];
+        }
+
         function startDeps(): StartNewGameDeps {
             const { start } = vi.mocked(installDevHooks).mock.calls[0][0];
             void start({ cols: 2, rows: 1 }, {});
@@ -666,7 +693,7 @@ describe('bootstrap', () => {
 
         it('keeps the slot owner\'s analytics when the new puzzle fails to save', () => {
             // The previous puzzle stays in the slot and resumes on reload.
-            saveGameContext(11, startedData);
+            saveGameContext(11, startedData, 1_000);
             bootstrap(root);
             const deps = startDeps();
             const realSetItem = Storage.prototype.setItem;
@@ -697,7 +724,7 @@ describe('bootstrap', () => {
             // A share link reuses its originator's seed, so if the start
             // throws before its own analytics are known, a leftover record
             // for that seed would be read back as this game's.
-            saveGameContext(11, startedData);
+            saveGameContext(11, startedData, 1_000);
             bootstrap(root);
             const deps = startDeps();
             const state = makeCompletedState();
@@ -709,7 +736,7 @@ describe('bootstrap', () => {
         });
 
         it('restores the saved game\'s analytics on resume and reports it resumed', () => {
-            saveGameContext(11, startedData);
+            saveGameContext(11, startedData, 1_000);
             bootstrap(root);
             const state = makeCompletedState();
             state.seed = 11;
@@ -734,8 +761,65 @@ describe('bootstrap', () => {
             expect(payload).not.toHaveProperty('source');
         });
 
+        it('persists a started game\'s start time against its seed', () => {
+            bootstrap(root);
+            const deps = startDeps();
+            const state = makeCompletedState();
+            state.seed = 11;
+            mockNow(1_000);
+
+            deps.persistNewPuzzle(state);
+            deps.onGameAnalytics(startedData, state);
+
+            expect(loadGameStartedAt(11)).toBe(1_000);
+        });
+
+        it('reports the time from a game\'s start to its completion', () => {
+            bootstrap(root);
+            const deps = startDeps();
+            const state = makeCompletedState();
+            state.seed = 11;
+            const now = mockNow(1_000);
+            createdSession().install(state);
+            deps.persistNewPuzzle(state);
+            deps.onGameAnalytics(startedData, state);
+
+            now.mockReturnValue(91_000);
+            const payload = completeAndReadPayload(state);
+
+            expect(payload.elapsedMs).toBe(90_000);
+        });
+
+        it('reports the time since its stored start for a resumed game', () => {
+            saveGameContext(11, startedData, 1_000);
+            bootstrap(root);
+            const state = makeCompletedState();
+            state.seed = 11;
+            mockNow(91_000);
+
+            resume(state);
+            const payload = completeAndReadPayload(state);
+
+            expect(payload.elapsedMs).toBe(90_000);
+        });
+
+        it('drops the previous game\'s start time when a game is installed', () => {
+            bootstrap(root);
+            const deps = startDeps();
+            const previous = makeCompletedState();
+            mockNow(1_000);
+            createdSession().install(previous);
+            deps.onGameAnalytics(startedData, previous);
+
+            const next = makeCompletedState();
+            createdSession().install(next);
+            const payload = completeAndReadPayload(next);
+
+            expect(payload).not.toHaveProperty('elapsedMs');
+        });
+
         it('reports a game started after a resumed one as not resumed', () => {
-            saveGameContext(11, startedData);
+            saveGameContext(11, startedData, 1_000);
             bootstrap(root);
             const resumed = makeCompletedState();
             resumed.seed = 11;
@@ -748,6 +832,86 @@ describe('bootstrap', () => {
 
             expect(payload.resumed).toBe(false);
             expect(payload).not.toHaveProperty('source');
+        });
+
+        it('reports the time since the game started when it is solved', () => {
+            bootstrap(root);
+            const deps = startDeps();
+            const installed = makeUnfinishedState();
+            const now = mockNow(1_000);
+            createdSession().install(installed);
+            deps.onGameAnalytics(startedData, installed);
+            vi.mocked(track).mockClear();
+
+            now.mockReturnValue(91_000);
+            vi.mocked(installDevHooks).mock.calls[0][0].solve();
+
+            expect(track).toHaveBeenCalledWith(
+                'puzzle-solved',
+                expect.objectContaining({ elapsedMs: 90_000 }),
+            );
+        });
+
+        it('reports the installed game as replaced, with its time so far', () => {
+            bootstrap(root);
+            const deps = startDeps();
+            const installed = makeUnfinishedState();
+            const now = mockNow(1_000);
+            createdSession().install(installed);
+            deps.onGameAnalytics(startedData, installed);
+
+            now.mockReturnValue(31_000);
+
+            expect(deps.replacedGameAnalytics()).toEqual({
+                replacedProgress: 0,
+                replacedCompleted: false,
+                replacedPieceCount: 2,
+                replacedCutStyle: 'classic',
+                replacedElapsedMs: 30_000,
+            });
+        });
+
+        it('reports no replaced game when none is installed', () => {
+            bootstrap(root);
+
+            expect(startDeps().replacedGameAnalytics()).toBeUndefined();
+            expect(sharedDeps().replacedGameAnalytics(undefined)).toBeUndefined();
+        });
+
+        it('reports no replaced game for one installed but never made playable', () => {
+            // `install` makes the state current before wiring interaction, so
+            // a start that threw there leaves a puzzle nobody played (#488).
+            bootstrap(root);
+            const session = createdSession();
+            session.install(makeUnfinishedState());
+            vi.spyOn(session, 'hasGame').mockReturnValue(false);
+
+            expect(startDeps().replacedGameAnalytics()).toBeUndefined();
+        });
+
+        it('reports the saved game as replaced when none is installed', () => {
+            saveGameContext(11, startedData, 1_000);
+            bootstrap(root);
+            const saved = makeUnfinishedState();
+            saved.seed = 11;
+            mockNow(31_000);
+
+            expect(sharedDeps().replacedGameAnalytics(saved)).toEqual({
+                replacedProgress: 0,
+                replacedCompleted: false,
+                replacedPieceCount: 2,
+                replacedCutStyle: 'classic',
+                replacedElapsedMs: 30_000,
+            });
+        });
+
+        it('reports the installed game as replaced over the saved one', () => {
+            bootstrap(root);
+            createdSession().install(makeCompletedState());
+
+            const replaced = sharedDeps().replacedGameAnalytics(makeUnfinishedState());
+
+            expect(replaced?.replacedProgress).toBe(1);
         });
     });
 

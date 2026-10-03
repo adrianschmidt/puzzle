@@ -55,16 +55,67 @@ function validReproParams(): ReproParams {
 describe('solvePuzzle', () => {
     let renderer: FakeRenderer;
     let onSolved: Mock<(state: GameState, group: PieceGroup) => void>;
+    let umamiTrack: Mock<(eventName: string, eventData?: Record<string, unknown>) => void>;
 
     beforeEach(() => {
         renderer = createFakeRenderer();
         onSolved = vi.fn();
+        umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
     });
 
+    afterEach(() => {
+        delete (window as unknown as { umami?: unknown }).umami;
+    });
+
+    function makeUnsolvedState(overrides: Partial<GameState> = {}): GameState {
+        const pieces = [makeRectPiece({ id: 0 }), makeRectPiece({ id: 1, col: 1 })];
+        const groups: PieceGroup[] = [
+            { id: 0, pieces: new Map([[0, { x: 0, y: 0 }]]), position: { x: 0, y: 0 }, rotation: 0 },
+            { id: 1, pieces: new Map([[1, { x: 0, y: 0 }]]), position: { x: 5, y: 5 }, rotation: 0 },
+        ];
+        return makeGameState({ pieces, groups, ...overrides });
+    }
+
     it('is a no-op with no game', () => {
-        solvePuzzle({ session: makeSession(undefined), renderer, onSolved });
+        solvePuzzle({ session: makeSession(undefined), renderer, gameStartedAt: () => undefined, onSolved });
         expect(renderer.renderState).not.toHaveBeenCalled();
         expect(onSolved).not.toHaveBeenCalled();
+        expect(umamiTrack).not.toHaveBeenCalled();
+    });
+
+    it('reports the puzzle as it stood before the solve', () => {
+        const state = makeUnsolvedState({ cutStyle: 'wavy' });
+        const now = vi.spyOn(Date, 'now').mockReturnValue(91_000);
+
+        solvePuzzle({ session: makeSession(state), renderer, gameStartedAt: () => 1_000, onSolved });
+        now.mockRestore();
+
+        expect(umamiTrack).toHaveBeenCalledWith('puzzle-solved', {
+            progress: 0,
+            pieceCount: 2,
+            cutStyle: 'wavy',
+            elapsedMs: 90_000,
+        });
+    });
+
+    it('omits the elapsed time when the start is unknown', () => {
+        solvePuzzle({
+            session: makeSession(makeUnsolvedState()),
+            renderer,
+            gameStartedAt: () => undefined,
+            onSolved,
+        });
+
+        expect(umamiTrack.mock.calls[0][1]).not.toHaveProperty('elapsedMs');
+    });
+
+    it('does not report solving a puzzle that is already completed', () => {
+        const state = makeUnsolvedState({ completed: true });
+
+        solvePuzzle({ session: makeSession(state), renderer, gameStartedAt: () => undefined, onSolved });
+
+        expect(umamiTrack).not.toHaveBeenCalled();
     });
 
     it('collapses every piece into a single completed group and celebrates', () => {
@@ -75,7 +126,7 @@ describe('solvePuzzle', () => {
         ];
         const state = makeGameState({ pieces, groups });
 
-        solvePuzzle({ session: makeSession(state), renderer, onSolved });
+        solvePuzzle({ session: makeSession(state), renderer, gameStartedAt: () => undefined, onSolved });
 
         expect(state.groups).toHaveLength(1);
         expect(state.completed).toBe(true);
@@ -88,7 +139,7 @@ describe('solvePuzzle', () => {
 
 describe('installDevHooks', () => {
     let start: Mock<(gridSize: GridSize, options: StartNewGameOptions) => Promise<void>>;
-    let loadShared: Mock<(payload: SharePayload, recipientHadSavedState: boolean) => Promise<void>>;
+    let loadShared: Mock<(payload: SharePayload, savedState: GameState | undefined) => Promise<void>>;
     let solve: Mock<() => void>;
     let consoleErrorSpy: MockInstance<typeof console.error>;
     let umamiTrack: ReturnType<typeof vi.fn>;
@@ -176,7 +227,7 @@ describe('installDevHooks', () => {
     });
 
     it('__reproPuzzle replaces the saved state on a successful replay, but leaves the address bar alone', async () => {
-        saveNewPuzzle(makeSavedGameState());
+        saveNewPuzzle({ ...makeSavedGameState(), imageUrl: 'saved-puzzle.jpg' });
         expect(loadState()).not.toBeUndefined();
         history.replaceState(null, '', '/#p=something');
         // Production's `loadShared` (`loadSharedPuzzle`) persists the new
@@ -193,8 +244,7 @@ describe('installDevHooks', () => {
         expect(window.location.hash).toBe('#p=something');
         // Previous save replaced by the repro's own — not merely cleared.
         expect(loadState()?.imageUrl).toBe('repro-puzzle.jpg');
-        // `recipientHadSavedState` reflects the pre-replace read.
-        expect(loadShared).toHaveBeenCalledWith(expect.anything(), true);
+        expect(loadShared.mock.calls[0][1]?.imageUrl).toBe('saved-puzzle.jpg');
     });
 
     it('__reproPuzzle leaves the previous save intact when the replay is canceled', async () => {

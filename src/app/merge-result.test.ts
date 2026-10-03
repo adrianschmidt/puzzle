@@ -94,6 +94,7 @@ describe('applyMergeResult', () => {
             rotationFocus,
             currentGameAnalytics: () => null,
             isResumedGame: () => false,
+            gameStartedAt: () => undefined,
             onCompleted,
         };
     }
@@ -221,6 +222,23 @@ describe('applyMergeResult', () => {
         expect(umamiTrack).toHaveBeenCalledWith(
             'puzzle-completed',
             expect.objectContaining({ resumed }),
+        );
+    });
+
+    it('reports the time since the game started', () => {
+        const state = makeCompletedState();
+        const survivor = state.groups[0];
+        const now = vi.spyOn(Date, 'now').mockReturnValue(91_000);
+
+        applyMergeResult(state, { group: survivor, mergeCount: 1 }, [survivor.id], {
+            ...deps(),
+            gameStartedAt: () => 1_000,
+        });
+        now.mockRestore();
+
+        expect(umamiTrack).toHaveBeenCalledWith(
+            'puzzle-completed',
+            expect.objectContaining({ elapsedMs: 90_000 }),
         );
     });
 
