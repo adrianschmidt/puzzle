@@ -40,23 +40,27 @@ beforeEach(() => {
     track.mockClear();
     registerSW.mockClear();
     capturedOptions.current = undefined;
+    // jsdom has no matchMedia; the pwa-register-failed payload reads it.
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
 });
 
 afterEach(() => {
     // Safety net: restores real timers even if the fake-timers test throws
     // before its own cleanup.
     vi.useRealTimers();
+    vi.unstubAllGlobals();
 });
 
 describe('initPwaUpdates onRegisterError', () => {
-    it('tracks pwa-register-failed with a sanitized reason when registration fails', () => {
+    it('tracks pwa-register-failed with the described failure when registration fails', () => {
         initPwaUpdates(() => {});
 
-        capturedOptions.current?.onRegisterError?.(new Error('boom'));
+        capturedOptions.current?.onRegisterError?.('Rejected');
 
-        expect(track).toHaveBeenCalledWith('pwa-register-failed', {
-            reason: 'boom',
-        });
+        expect(track).toHaveBeenCalledWith('pwa-register-failed', expect.objectContaining({
+            reason: 'Rejected',
+            valueType: 'string',
+        }));
         // onRegisterError fires at most once per load, so one failure = one event.
         expect(track).toHaveBeenCalledTimes(1);
     });
@@ -68,9 +72,9 @@ describe('initPwaUpdates onRegisterError', () => {
             new Error('failed to fetch https://example.com/sw.js?v=abc123'),
         );
 
-        expect(track).toHaveBeenCalledWith('pwa-register-failed', {
+        expect(track).toHaveBeenCalledWith('pwa-register-failed', expect.objectContaining({
             reason: 'failed to fetch <url>',
-        });
+        }));
     });
 
     it('does not report a registration failure when none occurs', () => {

@@ -37,13 +37,23 @@ describe('createSwErrorReporter', () => {
         });
     });
 
-    it('uses name "unknown" for a non-Error value', () => {
+    it('uses the value type as name for a non-Error value', () => {
         const { post, reporter } = makeReporter();
 
         reporter.report('sw-rejection', 'a bare string rejection');
 
         expect(post).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'unknown', reason: 'a bare string rejection' }),
+            expect.objectContaining({ name: 'string', reason: 'a bare string rejection' }),
+        );
+    });
+
+    it('names a message-only error by its missing error object, not the message', () => {
+        const { post, reporter } = makeReporter();
+
+        reporter.report('sw-error', null, 'a message-only error');
+
+        expect(post).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'null', reason: 'a message-only error' }),
         );
     });
 

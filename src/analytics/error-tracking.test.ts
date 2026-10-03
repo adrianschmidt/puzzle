@@ -53,12 +53,12 @@ describe('initErrorTracking', () => {
         });
     });
 
-    it('uses name "unknown" for a non-Error rejection value', () => {
+    it('uses the value type as name for a non-Error rejection value', () => {
         rejectWith('a bare string rejection');
 
         expect(umamiTrack).toHaveBeenCalledWith('unhandled-error', {
             source: 'rejection',
-            name: 'unknown',
+            name: 'string',
             reason: 'a bare string rejection',
         });
     });
@@ -78,7 +78,7 @@ describe('initErrorTracking', () => {
 
         expect(umamiTrack).toHaveBeenCalledWith('unhandled-error', {
             source: 'error',
-            name: 'unknown',
+            name: 'null',
             reason: 'a real parse failure',
         });
     });

@@ -78,7 +78,7 @@ const reporter = createSwErrorReporter({
     },
 });
 self.addEventListener('error', (event) => {
-    reporter.report('sw-error', event.error ?? event.message);
+    reporter.report('sw-error', event.error, event.message);
 });
 self.addEventListener('unhandledrejection', (event) => {
     reporter.report('sw-rejection', event.reason);
