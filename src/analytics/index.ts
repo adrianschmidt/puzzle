@@ -3,7 +3,10 @@ export { initErrorTracking } from './error-tracking.js';
 export { sanitizeErrorReason } from './sanitize-error-reason.js';
 export type {
     NewGameData,
+    NewGameStartedData,
+    ReplacedGameData,
     PuzzleCompletedData,
+    PuzzleSolvedData,
     PuzzleSharedData,
     BackgroundColorChangedData,
     TracedChunkPreloadStartedData,

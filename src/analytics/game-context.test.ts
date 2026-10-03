@@ -8,8 +8,11 @@ import {
     GAME_CONTEXT_KEY,
     clearGameContext,
     loadGameContext,
+    loadGameStartedAt,
     saveGameContext,
 } from './game-context.js';
+
+const startedAt = 1_790_000_000_000;
 
 const freshData: NewGameData = {
     source: 'fresh',
@@ -60,44 +63,75 @@ describe('game context store', () => {
     });
 
     it('round-trips a fresh game payload for the same seed', () => {
-        saveGameContext(42, freshData);
+        saveGameContext(42, freshData, startedAt);
 
         expect(loadGameContext(42)).toEqual(freshData);
     });
 
     it('round-trips a shared game payload for the same seed', () => {
-        saveGameContext(7, sharedData);
+        saveGameContext(7, sharedData, startedAt);
 
         expect(loadGameContext(7)).toEqual(sharedData);
     });
 
     it('round-trips the degrade and fallback flags', () => {
         const degraded: NewGameData = { ...freshData, tracedChunkDegraded: true, bootFallback: true };
-        saveGameContext(42, degraded);
+        saveGameContext(42, degraded, startedAt);
 
         expect(loadGameContext(42)).toEqual(degraded);
     });
 
+    it('reads back the start time saved for the same seed', () => {
+        saveGameContext(42, freshData, startedAt);
+
+        expect(loadGameStartedAt(42)).toBe(startedAt);
+    });
+
+    it('has no start time for another puzzle', () => {
+        saveGameContext(42, freshData, startedAt);
+
+        expect(loadGameStartedAt(43)).toBeUndefined();
+    });
+
+    it('has no start time for a seedless puzzle', () => {
+        saveGameContext(42, freshData, startedAt);
+
+        expect(loadGameStartedAt(undefined)).toBeUndefined();
+    });
+
+    it('keeps the context of a record saved before start times were', () => {
+        writeRaw({ seed: 42, data: freshData });
+
+        expect(loadGameStartedAt(42)).toBeUndefined();
+        expect(loadGameContext(42)).toEqual(freshData);
+    });
+
+    it.each(['1790000000000', null])('ignores a start time stored as %j', (stored) => {
+        writeRaw({ seed: 42, startedAt: stored, data: freshData });
+
+        expect(loadGameStartedAt(42)).toBeUndefined();
+    });
+
     it('returns null when the stored context belongs to another puzzle', () => {
-        saveGameContext(42, freshData);
+        saveGameContext(42, freshData, startedAt);
 
         expect(loadGameContext(43)).toBeNull();
     });
 
     it('returns null for a seedless puzzle', () => {
-        saveGameContext(42, freshData);
+        saveGameContext(42, freshData, startedAt);
 
         expect(loadGameContext(undefined)).toBeNull();
     });
 
     it('does not write a context for a seedless puzzle', () => {
-        saveGameContext(undefined, freshData);
+        saveGameContext(undefined, freshData, startedAt);
 
         expect(localStorage.getItem(GAME_CONTEXT_KEY)).toBeNull();
     });
 
     it('clears a stored context', () => {
-        saveGameContext(42, freshData);
+        saveGameContext(42, freshData, startedAt);
 
         clearGameContext();
 
@@ -161,19 +195,19 @@ describe('game context store', () => {
         });
         vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-        expect(() => saveGameContext(42, freshData)).not.toThrow();
+        expect(() => saveGameContext(42, freshData, startedAt)).not.toThrow();
     });
 
     it('drops the previous record when the write fails', () => {
         // A share link replays its originator's seed, so a stale record for
         // the same seed would otherwise be read back as this game's context.
-        saveGameContext(42, freshData);
+        saveGameContext(42, freshData, startedAt);
         vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
             throw new DOMException('quota', 'QuotaExceededError');
         });
         vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-        saveGameContext(42, sharedData);
+        saveGameContext(42, sharedData, startedAt);
 
         expect(loadGameContext(42)).toBeNull();
     });

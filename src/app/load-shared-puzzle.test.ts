@@ -7,6 +7,7 @@ import {
 } from 'vitest';
 import type { GameState } from '../model/types.js';
 import type { SharePayload } from '../sharing/index.js';
+import type { ReplacedGameData } from '../analytics/index.js';
 import type { BackgroundColorControl } from './install-background-color.js';
 import { makeGameState } from '../test-helpers/fixtures.js';
 import { diagnostics } from '../diagnostics.js';
@@ -71,6 +72,7 @@ describe('loadSharedPuzzle', () => {
     let fitView: Mock<(state: GameState) => void>;
     let persistNewPuzzle: Mock<(state: GameState) => void>;
     let onGameAnalytics: Mock<(data: unknown, state: GameState) => void>;
+    let replacedGameAnalytics: Mock<(savedState: GameState | undefined) => ReplacedGameData | undefined>;
     let adopt: Mock<BackgroundColorControl['adopt']>;
     let deps: LoadSharedPuzzleDeps;
     /**
@@ -93,6 +95,7 @@ describe('loadSharedPuzzle', () => {
         fitView = vi.fn();
         persistNewPuzzle = vi.fn();
         onGameAnalytics = vi.fn();
+        replacedGameAnalytics = vi.fn(() => undefined);
         adopt = vi.fn();
         deps = {
             container: document.createElement('div'),
@@ -101,6 +104,7 @@ describe('loadSharedPuzzle', () => {
             persistNewPuzzle,
             backgroundColor: { adopt },
             onGameAnalytics,
+            replacedGameAnalytics,
             hasCurrentGame: () => false,
         };
     });
@@ -112,7 +116,7 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('installs the shared puzzle, fits the view and persists it', async () => {
-        await loadSharedPuzzle(payload(), false, deps);
+        await loadSharedPuzzle(payload(), undefined, deps);
 
         expect(install).toHaveBeenCalledTimes(1);
         const installedState = install.mock.calls[0][0];
@@ -129,23 +133,23 @@ describe('loadSharedPuzzle', () => {
         vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
         // A plain Classic link must not pay a chunk fetch.
-        await loadSharedPuzzle(payload({ c: 'classic' }), false, deps);
+        await loadSharedPuzzle(payload({ c: 'classic' }), undefined, deps);
         expect(preloadTracedTabGenerator).not.toHaveBeenCalled();
 
         // Triangles always needs the traced-tab chunk.
-        await loadSharedPuzzle(payload({ c: 'triangles', tf: { tv: 3 } }), false, deps);
+        await loadSharedPuzzle(payload({ c: 'triangles', tf: { tv: 3 } }), undefined, deps);
         expect(preloadTracedTabGenerator).toHaveBeenCalledTimes(1);
     });
 
     it('loads the blank sentinel as a puzzle with no image', async () => {
-        await loadSharedPuzzle(payload({ i: 'blank' }), false, deps);
+        await loadSharedPuzzle(payload({ i: 'blank' }), undefined, deps);
 
         expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
     });
 
     it('loads a legacy data: URL as a puzzle with no image', async () => {
         const legacy = 'data:image/png;base64,' + 'A'.repeat(64);
-        await loadSharedPuzzle(payload({ i: legacy }), false, deps);
+        await loadSharedPuzzle(payload({ i: legacy }), undefined, deps);
 
         expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
     });
@@ -154,7 +158,7 @@ describe('loadSharedPuzzle', () => {
         // `is` is part of the reproduction contract: a transposed or ignored
         // `is` cuts the puzzle differently than the sharer saw it. Non-square
         // on purpose — the helper's default wouldn't catch a transposition.
-        await loadSharedPuzzle(payload({ i: 'blank', is: [777, 555] }), false, deps);
+        await loadSharedPuzzle(payload({ i: 'blank', is: [777, 555] }), undefined, deps);
 
         expect(vi.mocked(createNewGameAsync).mock.calls.at(-1)![1]).toEqual({
             width: 777, height: 555,
@@ -166,7 +170,7 @@ describe('loadSharedPuzzle', () => {
         // `new URL` lowercases `.protocol`, so an uppercase `DATA:` link passes
         // wire validation; the collapse must match case-insensitively too.
         const legacy = 'DATA:image/png;base64,' + 'A'.repeat(64);
-        await loadSharedPuzzle(payload({ i: legacy }), false, deps);
+        await loadSharedPuzzle(payload({ i: legacy }), undefined, deps);
 
         expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
     });
@@ -176,7 +180,7 @@ describe('loadSharedPuzzle', () => {
         // leading-space `data:` link passes wire validation; the collapse must
         // match that too.
         const legacy = ' data:image/png;base64,' + 'A'.repeat(64);
-        await loadSharedPuzzle(payload({ i: legacy }), false, deps);
+        await loadSharedPuzzle(payload({ i: legacy }), undefined, deps);
 
         expect(install.mock.calls.at(-1)![0].imageUrl).toBeNull();
     });
@@ -184,7 +188,7 @@ describe('loadSharedPuzzle', () => {
     it('applies the attribution the link carried', async () => {
         await loadSharedPuzzle(payload({
             a: { n: 'A Photographer', u: 'https://unsplash.com/@photographer', p: 'https://unsplash.com/photos/abc123' },
-        }), false, deps);
+        }), undefined, deps);
 
         const installedState = install.mock.calls[0][0];
         expect(installedState.attribution).toEqual({
@@ -197,7 +201,7 @@ describe('loadSharedPuzzle', () => {
     it('toasts when progress in the link could not be applied', async () => {
         // A single-id merge entry is structurally invalid (a merge needs ≥2
         // pieces), so `applyProgress` rejects it regardless of geometry.
-        await loadSharedPuzzle(payload({ pr: { m: [[1]] } }), false, deps);
+        await loadSharedPuzzle(payload({ pr: { m: [[1]] } }), undefined, deps);
 
         expect(showToast).toHaveBeenCalledWith("Couldn't load progress — starting from scratch");
         // The puzzle still loads despite the rejected progress.
@@ -207,7 +211,7 @@ describe('loadSharedPuzzle', () => {
     it('reports new-game-started with source shared and recipientHadSavedState', async () => {
         vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
-        await loadSharedPuzzle(payload({ pr: { m: [] } }), true, deps);
+        await loadSharedPuzzle(payload({ pr: { m: [] } }), makeGameState(), deps);
 
         const expected = expect.objectContaining({
             source: 'shared',
@@ -226,10 +230,46 @@ describe('loadSharedPuzzle', () => {
         );
     });
 
+    it('reports recipientHadSavedState false without a saved game', async () => {
+        await loadSharedPuzzle(payload(), undefined, deps);
+
+        expect(umamiTrack).toHaveBeenCalledWith(
+            'new-game-started',
+            expect.objectContaining({ recipientHadSavedState: false }),
+        );
+    });
+
+    it('reports the game it replaced on new-game-started only', async () => {
+        const saved = makeGameState();
+        const replaced: ReplacedGameData = {
+            replacedProgress: 0.25,
+            replacedCompleted: false,
+            replacedPieceCount: 48,
+            replacedCutStyle: 'wavy',
+        };
+        replacedGameAnalytics.mockReturnValue(replaced);
+
+        await loadSharedPuzzle(payload(), saved, deps);
+
+        expect(replacedGameAnalytics).toHaveBeenCalledWith(saved);
+        expect(umamiTrack).toHaveBeenCalledWith(
+            'new-game-started',
+            expect.objectContaining({ source: 'shared', ...replaced }),
+        );
+        expect(onGameAnalytics.mock.calls[0][0]).not.toHaveProperty('replacedProgress');
+    });
+
+    it('reads the replaced game before the shared one is installed', async () => {
+        await loadSharedPuzzle(payload(), undefined, deps);
+
+        expect(replacedGameAnalytics.mock.invocationCallOrder[0])
+            .toBeLessThan(install.mock.invocationCallOrder[0]);
+    });
+
     it('reports sharedColor none when the link carried no color', async () => {
         vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
-        await loadSharedPuzzle(payload(), false, deps);
+        await loadSharedPuzzle(payload(), undefined, deps);
 
         expect(adopt).not.toHaveBeenCalled();
         expect(onGameAnalytics).toHaveBeenCalledWith(
@@ -244,7 +284,7 @@ describe('loadSharedPuzzle', () => {
         // `adopt` returns, not a value `loadSharedPuzzle` assumes.
         adopt.mockReturnValue('invalid');
 
-        await loadSharedPuzzle(payload({ bgc: 'indigo-darker' }), false, deps);
+        await loadSharedPuzzle(payload({ bgc: 'indigo-darker' }), undefined, deps);
 
         expect(adopt).toHaveBeenCalledWith('indigo-darker');
         expect(onGameAnalytics).toHaveBeenCalledWith(
@@ -256,7 +296,7 @@ describe('loadSharedPuzzle', () => {
     it('hides the loading overlay even when generation throws', async () => {
         vi.mocked(createNewGameAsync).mockRejectedValue(new Error('generation boom'));
 
-        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('generation boom');
+        await expect(loadSharedPuzzle(payload(), undefined, deps)).rejects.toThrow('generation boom');
         expect(hideLoadingOverlay).toHaveBeenCalled();
     });
 
@@ -268,7 +308,7 @@ describe('loadSharedPuzzle', () => {
         vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
         fitView.mockImplementation(() => { throw new Error('fit boom'); });
 
-        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('fit boom');
+        await expect(loadSharedPuzzle(payload(), undefined, deps)).rejects.toThrow('fit boom');
 
         expect(install).toHaveBeenCalledTimes(1);
         expect(uninstall).toHaveBeenCalledTimes(1);
@@ -284,7 +324,7 @@ describe('loadSharedPuzzle', () => {
         vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
         install.mockImplementation(() => { throw new Error('install boom'); });
 
-        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('install boom');
+        await expect(loadSharedPuzzle(payload(), undefined, deps)).rejects.toThrow('install boom');
 
         expect(uninstall).toHaveBeenCalledTimes(1);
     });
@@ -293,7 +333,7 @@ describe('loadSharedPuzzle', () => {
         vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
         persistNewPuzzle.mockImplementation(() => { throw new Error('persist boom'); });
 
-        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('persist boom');
+        await expect(loadSharedPuzzle(payload(), undefined, deps)).rejects.toThrow('persist boom');
 
         expect(uninstall).toHaveBeenCalledTimes(1);
     });
@@ -304,7 +344,7 @@ describe('loadSharedPuzzle', () => {
         vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
         onGameAnalytics.mockImplementation(() => { throw new Error('analytics boom'); });
 
-        await expect(loadSharedPuzzle(payload(), false, deps)).rejects.toThrow('analytics boom');
+        await expect(loadSharedPuzzle(payload(), undefined, deps)).rejects.toThrow('analytics boom');
 
         expect(persistNewPuzzle).toHaveBeenCalledTimes(1);
         expect(uninstall).not.toHaveBeenCalled();
@@ -320,7 +360,7 @@ describe('loadSharedPuzzle', () => {
             return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
-        await loadSharedPuzzle(payload(), false, deps);
+        await loadSharedPuzzle(payload(), undefined, deps);
 
         expect(umamiTrack).toHaveBeenCalledWith('piece-count-mismatch', expect.objectContaining({
             source: 'shared',
@@ -340,7 +380,7 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('reports nothing for a healthy shared puzzle', async () => {
-        await loadSharedPuzzle(payload(), false, deps);
+        await loadSharedPuzzle(payload(), undefined, deps);
         const names = umamiTrack.mock.calls.map(([name]) => name);
         expect(names).not.toContain('piece-count-mismatch');
     });
@@ -356,7 +396,7 @@ describe('loadSharedPuzzle', () => {
             return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
-        await loadSharedPuzzle(payload(), false, deps, 'repro');
+        await loadSharedPuzzle(payload(), undefined, deps, 'repro');
 
         expect(umamiTrack).toHaveBeenCalledWith(
             'piece-count-mismatch',
@@ -365,7 +405,7 @@ describe('loadSharedPuzzle', () => {
     });
 
     it('stamps generationMode and generationMs on new-game-started', async () => {
-        await loadSharedPuzzle(payload(), false, deps);
+        await loadSharedPuzzle(payload(), undefined, deps);
 
         expect(umamiTrack).toHaveBeenCalledWith('new-game-started', expect.objectContaining({
             generationMode: 'sync-fallback', // jsdom has no Worker
@@ -376,11 +416,11 @@ describe('loadSharedPuzzle', () => {
     it('passes onCancel to the overlay only when a game is installed', async () => {
         vi.mocked(createNewGameAsync).mockResolvedValue(makeAsyncGenerationResult());
 
-        await loadSharedPuzzle(payload(), false, { ...deps, hasCurrentGame: () => true });
+        await loadSharedPuzzle(payload(), undefined, { ...deps, hasCurrentGame: () => true });
         expect(vi.mocked(showLoadingOverlay).mock.calls[0][1]?.onCancel).toBeTypeOf('function');
 
         vi.mocked(showLoadingOverlay).mockClear();
-        await loadSharedPuzzle(payload(), false, { ...deps, hasCurrentGame: () => false });
+        await loadSharedPuzzle(payload(), undefined, { ...deps, hasCurrentGame: () => false });
         expect(vi.mocked(showLoadingOverlay).mock.calls[0][1]?.onCancel).toBeUndefined();
     });
 
@@ -396,7 +436,7 @@ describe('loadSharedPuzzle', () => {
             return realCreateNewGameAsync(imageUrl, imageSize, viewport, grid, options, signal);
         });
 
-        const promise = loadSharedPuzzle(payload(), false, { ...deps, hasCurrentGame: () => true });
+        const promise = loadSharedPuzzle(payload(), undefined, { ...deps, hasCurrentGame: () => true });
         const onCancel = vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!;
         onCancel();
 
@@ -427,7 +467,7 @@ describe('loadSharedPuzzle', () => {
         });
 
         const promise = loadSharedPuzzle(
-            payload(), false, { ...deps, hasCurrentGame: () => true }, 'repro',
+            payload(), undefined, { ...deps, hasCurrentGame: () => true }, 'repro',
         );
         vi.mocked(showLoadingOverlay).mock.calls[0][1]!.onCancel!();
         await promise;

@@ -334,7 +334,57 @@ export type PuzzleCompletedData = Pick<
          * completed it.
          */
         resumed: boolean;
+        /**
+         * Wall-clock ms from the puzzle's install to its completion, time in
+         * the background or with the app closed included. Absent when the
+         * start is unknown (games started before #602, a lost stored context,
+         * a clock set back since) and on events from older clients (PWA
+         * caches).
+         */
+        elapsedMs?: number;
+        /** `elapsedMs` in whole 24-hour periods; absent along with it. */
+        daysSinceStart?: number;
     };
+
+/**
+ * The game a `new-game-started` replaced, so each start doubles as the
+ * abandonment record of the one before it. Absent when no game was replaced,
+ * and on events from older clients (PWA caches). A filter can't match an
+ * absent property, so count starts that replaced nothing as all starts minus
+ * those with any `replacedCompleted`; older clients' starts inflate that count.
+ */
+export interface ReplacedGameData {
+    /** Share of the merges done, 0 to 1, including the sharer's for a link shared with progress. */
+    replacedProgress: number;
+    /**
+     * Also true after a Debug Solve, which sends `puzzle-solved`, not
+     * `puzzle-completed`. A solve isn't saved by itself, so a reload can undo
+     * it: one game can then send `puzzle-solved` more than once, or
+     * `puzzle-completed` as well.
+     */
+    replacedCompleted: boolean;
+    replacedPieceCount: number;
+    replacedCutStyle: string;
+    /** Wall-clock ms since that game started; absent when unknown, as `elapsedMs` is. */
+    replacedElapsedMs?: number;
+}
+
+/** Data attached to `new-game-started`. */
+export type NewGameStartedData = NewGameData & Partial<ReplacedGameData>;
+
+/**
+ * Data attached to `puzzle-solved`, sent instead of `puzzle-completed` when
+ * the Debug Solve finishes an unfinished puzzle. Players can use it to give
+ * up, so the fields describe the puzzle as it stood before the solve.
+ */
+export interface PuzzleSolvedData {
+    /** Share of the merges done, 0 to 1, including the sharer's for a link shared with progress. */
+    progress: number;
+    pieceCount: number;
+    cutStyle: string;
+    /** Wall-clock ms since the puzzle started; absent when unknown, as `elapsedMs` on `puzzle-completed` is. */
+    elapsedMs?: number;
+}
 
 /** Data attached to `puzzle-shared`. */
 export interface PuzzleSharedData {
@@ -1490,8 +1540,9 @@ export function initAnalytics(): void {
  * `window.umami` is undefined (the script hasn't loaded, is blocked, or
  * analytics aren't configured for this build). Never throws.
  */
-export function track(name: 'new-game-started', data: NewGameData): void;
+export function track(name: 'new-game-started', data: NewGameStartedData): void;
 export function track(name: 'puzzle-completed', data: PuzzleCompletedData): void;
+export function track(name: 'puzzle-solved', data: PuzzleSolvedData): void;
 export function track(name: 'puzzle-shared', data: PuzzleSharedData): void;
 export function track(name: 'background-color-changed', data: BackgroundColorChangedData): void;
 export function track(name: 'traced-chunk-preload-started', data: TracedChunkPreloadStartedData): void;

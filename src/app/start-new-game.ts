@@ -18,7 +18,7 @@ import { preloadTracedTabGenerator } from '../puzzle/topology/traced-tab-loader.
 import { createNewGameAsync, GenerationCanceledError } from '../game/index.js';
 import { diagnostics } from '../diagnostics.js';
 import { track } from '../analytics/index.js';
-import type { NewGameData } from '../analytics/index.js';
+import type { NewGameData, ReplacedGameData } from '../analytics/index.js';
 import { planTracedTabs, resolveTracedTabOutcome } from './traced-tab-plan.js';
 import { generatorConfigsForNewGame } from './generator-configs.js';
 import { buildFreshGameData } from './new-game-payload.js';
@@ -68,6 +68,8 @@ export interface StartNewGameDeps {
     fitView: (state: GameState) => void;
     persistNewPuzzle: (state: GameState) => void;
     onGameAnalytics: (data: NewGameData, state: GameState) => void;
+    /** Read before `session.install`, which replaces the game it describes. */
+    replacedGameAnalytics: () => ReplacedGameData | undefined;
     /**
      * Whether a puzzle is installed. Gates the overlay's Cancel affordance:
      * canceling means "return to your current puzzle", so with nothing installed
@@ -253,6 +255,8 @@ export async function startNewGame(
             state.attribution = attribution;
         }
 
+        const replaced = deps.replacedGameAnalytics();
+
         // Reset now that generation produced a puzzle, before install, so it
         // never renders under the previous zoom. Not earlier: every
         // cancellation checkpoint above must unwind without touching the transform.
@@ -276,7 +280,7 @@ export async function startNewGame(
             generation,
         });
         deps.onGameAnalytics(data, state);
-        track('new-game-started', data);
+        track('new-game-started', { ...data, ...replaced });
 
         // Reported after `new-game-started` so that event still lands first if
         // anything below throws. A diagnostic, not an error — must never block a start.

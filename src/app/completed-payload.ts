@@ -3,6 +3,8 @@ import type { NewGameData, PuzzleCompletedData } from '../analytics/index.js';
 import { classifyImageSource } from './classify-image-source.js';
 import { traceSetVersionOf } from './trace-set-version.js';
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 /**
  * Derives geometry/style from gameState (so resumed games still get a useful
  * event), then merges in any cached NewGameData fields state can't recover
@@ -12,6 +14,7 @@ export function buildPuzzleCompletedData(
     state: GameState,
     cached: Partial<NewGameData> | null,
     resumed: boolean,
+    elapsedMs: number | undefined,
 ): PuzzleCompletedData {
     const derived: PuzzleCompletedData = {
         resumed,
@@ -28,6 +31,11 @@ export function buildPuzzleCompletedData(
     const traceSetVersion = traceSetVersionOf(state);
     if (traceSetVersion !== undefined) {
         derived.traceSetVersion = traceSetVersion;
+    }
+
+    if (elapsedMs !== undefined) {
+        derived.elapsedMs = elapsedMs;
+        derived.daysSinceStart = Math.floor(elapsedMs / MS_PER_DAY);
     }
 
     if (cached) {
