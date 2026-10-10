@@ -81,7 +81,7 @@ jobs:
       - run: npm run build
         env:
           VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
-          VITE_APP_VERSION: "#${{ github.run_number }}"
+          VITE_APP_VERSION: "v${{ github.run_number }}"
           VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
 
       - name: Upload the built site
