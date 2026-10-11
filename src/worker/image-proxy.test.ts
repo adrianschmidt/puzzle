@@ -182,6 +182,10 @@ describe('ALLOWED_ORIGINS', () => {
         // test in this file would notice.
         expect(ALLOWED_ORIGINS).toContain(ALLOWED);
     });
+
+    it('includes the puzzlewise origin', () => {
+        expect(ALLOWED_ORIGINS).toContain('https://puzzlewise.github.io');
+    });
 });
 
 describe('resolveUpstream', () => {
