@@ -44,6 +44,7 @@ const UPSTREAM_TIMEOUT_MS = 10_000;
  */
 export const ALLOWED_ORIGINS: readonly string[] = [
     'https://adrianschmidt.github.io',
+    'https://puzzlewise.github.io',
 ];
 
 /**
