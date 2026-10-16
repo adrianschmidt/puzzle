@@ -115,6 +115,18 @@ describe('createMoveSource', () => {
         expect(track).toHaveBeenCalledWith('move-dialog-shown', { trigger: 'banner', variant: 'handoff' });
     });
 
+    it('switches the banner to the moved state once a move from it is done', async () => {
+        const { source, button, container, location } = setUp();
+        source.showBanner();
+        button('Puzzle has moved — bring your puzzle along')!.click();
+        button('Move to the new site')!.click();
+
+        await vi.waitFor(() => expect(button('Your puzzle is now at puzzlewise.github.io')).toBeDefined());
+        expect(container.querySelectorAll('.move-banner')).toHaveLength(1);
+        button('Your puzzle is now at puzzlewise.github.io')!.click();
+        expect(location.assign).toHaveBeenCalledWith(TARGET_URL);
+    });
+
     it('after a move, New puzzle and the banner go straight to the new site', () => {
         localStorage.setItem(MOVED_TO_KEY, TARGET_URL);
         const openNewGame = vi.fn();

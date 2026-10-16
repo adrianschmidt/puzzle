@@ -43,6 +43,17 @@ export function createMoveSource(deps: MoveSourceDeps): MoveSource {
     const targetHost = new URL(targetUrl).host;
     const iosStandalone = isIosStandalone(nav);
 
+    let removeBanner: (() => void) | undefined;
+
+    function showMovedBanner(): void {
+        removeBanner?.();
+        removeBanner = createMoveBanner({
+            container,
+            text: `Your puzzle is now at ${targetHost}`,
+            onOpen: () => location.assign(targetUrl),
+        });
+    }
+
     function openDialog(trigger: MoveTrigger, onStartHere?: () => void): void {
         const variant = iosStandalone ? 'ios-standalone' : 'handoff';
         track('move-dialog-shown', { trigger, variant });
@@ -56,7 +67,12 @@ export function createMoveSource(deps: MoveSourceDeps): MoveSource {
                 flushSave();
                 return handoff(signal);
             },
-            onOutcome: trackOutcome,
+            onOutcome: (outcome) => {
+                trackOutcome(outcome);
+                if (outcome.status === 'done' && container.querySelector('.move-banner') !== null) {
+                    showMovedBanner();
+                }
+            },
         });
     }
 
@@ -71,14 +87,10 @@ export function createMoveSource(deps: MoveSourceDeps): MoveSource {
         showBanner() {
             if (iosStandalone) return;
             if (hasMoved()) {
-                createMoveBanner({
-                    container,
-                    text: `Your puzzle is now at ${targetHost}`,
-                    onOpen: () => location.assign(targetUrl),
-                });
+                showMovedBanner();
                 return;
             }
-            createMoveBanner({
+            removeBanner = createMoveBanner({
                 container,
                 text: 'Puzzle has moved — bring your puzzle along',
                 onOpen: () => openDialog('banner'),
