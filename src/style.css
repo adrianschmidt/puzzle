@@ -1662,7 +1662,7 @@ details.info-section[open] > .info-section-summary {
 
 .move-banner {
   position: fixed;
-  bottom: 32px;
+  bottom: 96px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -1674,7 +1674,7 @@ details.info-section[open] > .info-section-summary {
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
-  z-index: 10002;
+  z-index: 10001;
   animation: app-toast-in 180ms ease-out;
 }
 
