@@ -173,3 +173,9 @@ describe('blank-piece CSS', () => {
         );
     });
 });
+
+describe('move banner', () => {
+    it('sizes to its text rather than the half-width a centered fixed box shrinks to', () => {
+        expect(declarationsFor(styleCss, '.move-banner')).toMatch(/width:\s*max-content/);
+    });
+});
