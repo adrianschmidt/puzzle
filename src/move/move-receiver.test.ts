@@ -407,6 +407,21 @@ describe('runMoveReceiver', () => {
         const { container, done } = setUp(1000);
         vi.advanceTimersByTime(1000);
         await expect(done).resolves.toBe('timeout');
-        expect(container.querySelector('.move-body')?.textContent).toMatch(/Nothing arrived/);
+        expect(container.querySelector('.move-body')?.textContent).toMatch(/Switch back to its tab/);
+    });
+
+    it('still applies a payload that arrives after the timeout', () => {
+        vi.useFakeTimers();
+        const { opener, navigate } = setUp(1000);
+        vi.advanceTimersByTime(1000);
+
+        window.dispatchEvent(messageFrom(opener, SOURCE_ORIGIN, encodeMoveMessage({
+            kind: 'payload',
+            entries: { 'puzzle-cut-style': 'wavy' },
+        })));
+
+        expect(localStorage.getItem('puzzle-cut-style')).toBe('wavy');
+        expect(opener.postMessage).toHaveBeenLastCalledWith(encodeMoveMessage({ kind: 'done' }), SOURCE_ORIGIN);
+        expect(navigate).toHaveBeenCalledWith(`${location.origin}/puzzle/`);
     });
 });
