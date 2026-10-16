@@ -60,13 +60,43 @@ describe('createMoveDialog', () => {
     it.each([
         [{ status: 'popup-blocked' } as MoveOutcome, 'Your browser blocked the new window — allow pop-ups and try again.'],
         [{ status: 'timeout' } as MoveOutcome, 'Couldn’t reach the new site.'],
-        [{ status: 'failed', reason: 'write-failed' } as MoveOutcome,
-            'The move didn’t work — the new site couldn’t store it. Your puzzle is still here.'],
+        [{ status: 'closed' } as MoveOutcome, 'The new site’s window was closed before the move finished.'],
     ])('explains %o and offers a retry', async (outcome, message) => {
         const { button, status } = mount({ move: async () => outcome });
         button('Move to the new site').click();
         await vi.waitFor(() => expect(status()).toBe(message));
         expect(button('Try again').disabled).toBe(false);
+    });
+
+    it('explains a failure without offering a retry that would fail the same way', async () => {
+        const { button, buttons, status } = mount({
+            move: async () => ({ status: 'failed', reason: 'write-failed' }),
+        });
+        button('Move to the new site').click();
+        await vi.waitFor(() => expect(status())
+            .toBe('The move didn’t work — the new site couldn’t store it. Your puzzle is still here.'));
+        expect(buttons().map((b) => b.textContent)).toEqual(['Close']);
+    });
+
+    it('keeps starting a new puzzle here available after a failure from New puzzle', async () => {
+        const onStartHere = vi.fn();
+        const { button, buttons, status } = mount({
+            onStartHere,
+            move: async () => ({ status: 'failed', reason: 'unloadable-save' }),
+        });
+        button('Move to the new site').click();
+        await vi.waitFor(() => expect(status()).toMatch(/The move didn’t work/));
+
+        expect(buttons().map((b) => b.textContent)).toEqual(['Start a new puzzle here anyway', 'Close']);
+        button('Start a new puzzle here anyway').click();
+        expect(onStartHere).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers only Close after a successful move, even from New puzzle', async () => {
+        const { button, buttons, status } = mount({ onStartHere: vi.fn() });
+        button('Move to the new site').click();
+        await vi.waitFor(() => expect(status()).toBe('Done — your puzzle is open in the new tab.'));
+        expect(buttons().map((b) => b.textContent)).toEqual(['Close']);
     });
 
     it('closes when the new site declines', async () => {

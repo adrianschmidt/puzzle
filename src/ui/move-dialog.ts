@@ -14,16 +14,16 @@ export interface MoveDialogOptions {
     onOutcome?: (outcome: MoveOutcome) => void;
 }
 
-type RetryableOutcome = Extract<MoveOutcome, { status: 'failed' | 'popup-blocked' | 'timeout' }>;
+type RetryableOutcome = Extract<MoveOutcome, { status: 'popup-blocked' | 'timeout' | 'closed' }>;
 
 function retryMessage(outcome: RetryableOutcome): string {
     switch (outcome.status) {
-        case 'failed':
-            return `The move didn’t work — ${MOVE_FAILURE_TEXT[outcome.reason]}. Your puzzle is still here.`;
         case 'popup-blocked':
             return 'Your browser blocked the new window — allow pop-ups and try again.';
         case 'timeout':
             return 'Couldn’t reach the new site.';
+        case 'closed':
+            return 'The new site’s window was closed before the move finished.';
     }
 }
 
@@ -65,8 +65,9 @@ export function createMoveDialog(options: MoveDialogOptions): () => void {
     const buttons = document.createElement('div');
     buttons.className = 'move-buttons';
 
+    let startHere: HTMLButtonElement | undefined;
     if (onStartHere) {
-        const startHere = moveButton('Start a new puzzle here anyway');
+        startHere = moveButton('Start a new puzzle here anyway');
         startHere.addEventListener('click', () => {
             close();
             onStartHere();
@@ -86,6 +87,12 @@ export function createMoveDialog(options: MoveDialogOptions): () => void {
         }
 
         const moveNow = moveButton('Move to the new site', true);
+        const endWith = (text: string, offerStartHere = false): void => {
+            status.textContent = text;
+            const closeButton = moveButton('Close', true);
+            closeButton.addEventListener('click', close);
+            buttons.replaceChildren(...(offerStartHere && startHere ? [startHere] : []), closeButton);
+        };
         const runMove = async (): Promise<void> => {
             moveNow.disabled = true;
             moveNow.textContent = 'Moving…';
@@ -98,13 +105,15 @@ export function createMoveDialog(options: MoveDialogOptions): () => void {
                 case 'declined':
                     close();
                     return;
-                case 'done': {
-                    status.textContent = 'Done — your puzzle is open in the new tab.';
-                    const closeButton = moveButton('Close', true);
-                    closeButton.addEventListener('click', close);
-                    buttons.replaceChildren(closeButton);
+                case 'done':
+                    endWith('Done — your puzzle is open in the new tab.');
                     return;
-                }
+                case 'failed':
+                    endWith(
+                        `The move didn’t work — ${MOVE_FAILURE_TEXT[outcome.reason]}. Your puzzle is still here.`,
+                        true,
+                    );
+                    return;
                 default:
                     status.textContent = retryMessage(outcome);
                     moveNow.disabled = false;
