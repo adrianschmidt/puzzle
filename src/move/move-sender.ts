@@ -42,7 +42,7 @@ export function runMoveHandoff(deps: MoveHandoffDeps): Promise<MoveOutcome> {
         timeoutMs = READY_TIMEOUT_MS,
         signal,
     } = deps;
-    const open = deps.open ?? ((url: string) => win.open(url, '_blank'));
+    const open = deps.open ?? ((url: string) => win.open(url, 'puzzle-move'));
     const targetOrigin = new URL(targetUrl).origin;
 
     const opened = open(receiveMoveUrl(targetUrl));
