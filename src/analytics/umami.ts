@@ -1463,7 +1463,7 @@ export interface MoveStartedData {
  * abandoned attempts. `reason` is present only with `failed`.
  */
 export interface MoveResultData {
-    outcome: 'done' | 'declined' | 'failed' | 'popup-blocked' | 'timeout';
+    outcome: 'done' | 'declined' | 'failed' | 'popup-blocked' | 'timeout' | 'closed';
     reason?: MoveFailureReason;
 }
 
