@@ -1667,7 +1667,8 @@ details.info-section[open] > .info-section-summary {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  max-width: calc(100% - 32px);
+  width: max-content;
+  max-width: calc(100vw - 32px);
   background: var(--ui-toast-bg);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
