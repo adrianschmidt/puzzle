@@ -120,9 +120,8 @@ export function runMoveReceiver(deps: MoveReceiverDeps): Promise<ApplyResult['st
 
     return new Promise((resolve) => {
         const timer = setTimeout(() => {
-            win.removeEventListener('message', onMessage);
             screen.showMessage(
-                'Nothing arrived from the old site. Go back to it and try again — your puzzle is still there.',
+                'Nothing has arrived from the old site yet. Switch back to its tab to finish — your puzzle is still there.',
                 continueToApp,
             );
             resolve('timeout');
