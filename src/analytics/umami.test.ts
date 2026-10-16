@@ -247,6 +247,19 @@ describe('track', () => {
         expect(umamiTrack).toHaveBeenCalledWith('share-link-rescue-attempted', { outcome: 'no-update' });
     });
 
+    it('forwards move events with their typed payloads', () => {
+        const umamiTrack = vi.fn();
+        (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
+
+        track('move-dialog-shown', { trigger: 'banner', variant: 'handoff' });
+        track('move-started', { trigger: 'new-game' });
+        track('move-result', { outcome: 'failed', reason: 'unloadable-save' });
+
+        expect(umamiTrack).toHaveBeenCalledWith('move-dialog-shown', { trigger: 'banner', variant: 'handoff' });
+        expect(umamiTrack).toHaveBeenCalledWith('move-started', { trigger: 'new-game' });
+        expect(umamiTrack).toHaveBeenCalledWith('move-result', { outcome: 'failed', reason: 'unloadable-save' });
+    });
+
     it('forwards share-link-rescue-result with the typed payload', () => {
         const umamiTrack = vi.fn();
         (window as unknown as { umami: { track: typeof umamiTrack } }).umami = { track: umamiTrack };
