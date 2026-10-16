@@ -38,6 +38,7 @@ import {
     readDistinctId,
     writeDistinctId,
 } from '../analytics/distinct-id.js';
+import { shareBaseUrl } from '../move/move-config.js';
 
 export interface InfoModalOptions {
     container: HTMLElement;
@@ -759,11 +760,8 @@ export function createInfoModal(options: InfoModalOptions): () => void {
     const content = document.createElement('div');
     content.className = 'info-modal-content';
 
-    // Share section first so it's most prominent. Strip the hash so
-    // attachShareSection gets the bare page URL, not a stale `#p=...`.
     if (options.state) {
-        const baseUrl = window.location.href.split('#')[0];
-        attachShareSection(content, options.state, baseUrl);
+        attachShareSection(content, options.state, shareBaseUrl());
     }
 
     content.appendChild(buildHowToPlaySection());
