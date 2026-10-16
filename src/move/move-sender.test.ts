@@ -55,6 +55,13 @@ describe('runMoveHandoff', () => {
         expect(open).toHaveBeenCalledWith('https://puzzlewise.github.io/?receive-move');
     });
 
+    it('opens one named window so a retry reuses it', async () => {
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+        await runMoveHandoff({ targetUrl: TARGET_URL });
+        expect(open).toHaveBeenCalledWith('https://puzzlewise.github.io/?receive-move', 'puzzle-move');
+        open.mockRestore();
+    });
+
     it('reports a blocked popup', async () => {
         await expect(runMoveHandoff({ targetUrl: TARGET_URL, open: () => null }))
             .resolves.toEqual({ status: 'popup-blocked' });
