@@ -27,5 +27,9 @@ export type {
     PwaRegisterFailedData,
     ShareLinkRescueAttemptedData,
     ShareLinkRescueResultData,
+    MoveTrigger,
+    MoveDialogShownData,
+    MoveStartedData,
+    MoveResultData,
     GenerationCanceledData,
 } from './umami.js';
