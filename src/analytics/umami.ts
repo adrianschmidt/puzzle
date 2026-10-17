@@ -12,6 +12,7 @@
 
 import type { Orientation } from '../model/types.js';
 import type { OfflineDownloadReason } from '../images/offline-stash.js';
+import type { MoveFailureReason } from '../move/move-protocol.js';
 import { resolveDistinctId } from './distinct-id.js';
 
 declare global {
@@ -1439,6 +1440,33 @@ export interface ShareLinkRescueResultData {
     decoded: boolean;
 }
 
+export type MoveTrigger = 'banner' | 'new-game';
+
+/**
+ * Move events come only from a build with `VITE_MOVED_TO` set — the legacy
+ * adrianschmidt.github.io deploy steering players to puzzlewise.github.io.
+ * `ios-standalone` is an installed iOS home-screen app: it is shown
+ * instructions instead of the handoff and never sends `move-started`.
+ */
+export interface MoveDialogShownData {
+    trigger: MoveTrigger;
+    variant: 'handoff' | 'ios-standalone';
+}
+
+export interface MoveStartedData {
+    trigger: MoveTrigger;
+}
+
+/**
+ * `done` means the new site confirmed it wrote the data. Closing the dialog
+ * mid-handoff sends no result, so `move-started` minus `move-result` counts
+ * abandoned attempts. `reason` is present only with `failed`.
+ */
+export interface MoveResultData {
+    outcome: 'done' | 'declined' | 'failed' | 'popup-blocked' | 'timeout' | 'closed';
+    reason?: MoveFailureReason;
+}
+
 /**
  * A game start was canceled from the loading overlay (#489). The Cancel
  * affordance only exists while a puzzle is already installed, so every
@@ -1573,6 +1601,9 @@ export function track(name: 'generation-canceled', data: GenerationCanceledData)
 export function track(name: 'image-pool-fallback', data: ImagePoolFallbackData): void;
 export function track(name: 'image-stash-fallback', data: ImageStashFallbackData): void;
 export function track(name: 'offline-images-saved', data: OfflineImagesSavedData): void;
+export function track(name: 'move-dialog-shown', data: MoveDialogShownData): void;
+export function track(name: 'move-started', data: MoveStartedData): void;
+export function track(name: 'move-result', data: MoveResultData): void;
 export function track(name: string, data: object): void {
     if (typeof window === 'undefined') return;
     window.umami?.track(name, data as Record<string, unknown>);

@@ -1810,3 +1810,13 @@ describe('share-link codec — every wire cut style round-trips', () => {
         },
     );
 });
+
+describe('links from the frozen legacy build', () => {
+    it('still decode', () => {
+        const hash = '#p=eyJ2IjoxLCJpIjoiaHR0cHM6Ly9pbWFnZXMudW5zcGxhc2guY29tL3Bob3RvLTEyMz93PTEwODAiLCJpcyI6WzEwODAsNzIwXSwiZyI6WzgsNl0sImMiOiJjbGFzc2ljIiwicyI6MTIzNDUsInIiOiJub25lIn0';
+        expect(parseLocationHash(hash)).toEqual({
+            v: 1, i: 'https://images.unsplash.com/photo-123?w=1080', is: [1080, 720],
+            g: [8, 6], c: 'classic', s: 12345, r: 'none',
+        });
+    });
+});

@@ -1563,7 +1563,8 @@ details.info-section[open] > .info-section-summary {
 
 /* Corrupt-save dialog (startup recovery prompt). z-index sits above the
    loading overlay (10003) so it is visible during boot. */
-.corrupt-save-overlay {
+.corrupt-save-overlay,
+.move-overlay {
   position: fixed;
   inset: 0;
   display: flex;
@@ -1574,7 +1575,8 @@ details.info-section[open] > .info-section-summary {
   animation: fade-in 0.2s ease-out;
 }
 
-.corrupt-save-dialog {
+.corrupt-save-dialog,
+.move-dialog {
   background: var(--ui-surface);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
@@ -1587,27 +1589,31 @@ details.info-section[open] > .info-section-summary {
   animation: pop-in 0.25s ease-out;
 }
 
-.corrupt-save-title {
+.corrupt-save-title,
+.move-title {
   font-size: 1.1rem;
   font-weight: 600;
   margin: 0 0 12px;
 }
 
-.corrupt-save-body {
+.corrupt-save-body,
+.move-body {
   font-size: 0.875rem;
   line-height: 1.5;
   opacity: 0.85;
   margin: 0 0 20px;
 }
 
-.corrupt-save-buttons {
+.corrupt-save-buttons,
+.move-buttons {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
 }
 
-.corrupt-save-btn {
+.corrupt-save-btn,
+.move-btn {
   padding: 10px 16px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 10px;
@@ -1619,25 +1625,75 @@ details.info-section[open] > .info-section-summary {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.corrupt-save-btn:hover {
+.corrupt-save-btn:hover,
+.move-btn:hover {
   background: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-.corrupt-save-btn:disabled {
+.corrupt-save-btn:disabled,
+.move-btn:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
-.corrupt-save-btn--primary {
+.corrupt-save-btn--primary,
+.move-btn--primary {
   background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
   border-color: color-mix(in srgb, var(--ui-accent) 45%, transparent);
   color: #fff;
 }
 
-.corrupt-save-btn--primary:hover {
+.corrupt-save-btn--primary:hover,
+.move-btn--primary:hover {
   background: color-mix(in srgb, var(--ui-accent) 32%, transparent);
   border-color: color-mix(in srgb, var(--ui-accent) 60%, transparent);
+}
+
+.move-status {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.move-status:empty {
+  display: none;
+}
+
+.move-banner {
+  position: fixed;
+  bottom: 96px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  background: var(--ui-toast-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  z-index: 10001;
+  animation: app-toast-in 180ms ease-out;
+}
+
+.move-banner-open,
+.move-banner-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 12px 16px;
+}
+
+.move-banner-close {
+  padding: 12px 14px 12px 4px;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0.7;
 }
 
 .share-section .share-primary-btn {
