@@ -45,7 +45,7 @@ describe('CUT_STYLE_OPTIONS', () => {
 
     it('renders wavy in the visible list on production', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/');
+        vi.stubEnv('BASE_URL', '/');
         const ids = getVisibleCutStyleOptions().map((o) => o.id);
         expect(ids).toContain('wavy');
         vi.unstubAllEnvs();
@@ -106,14 +106,14 @@ describe('getVisibleCutStyleOptions', () => {
 
     it('hides composable on production builds', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/');
+        vi.stubEnv('BASE_URL', '/');
         const ids = getVisibleCutStyleOptions().map((o) => o.id);
         expect(ids).not.toContain('composable');
     });
 
     it('shows composable on dev-deploys (BASE_URL contains /dev/)', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/dev/');
+        vi.stubEnv('BASE_URL', '/dev/');
         const ids = getVisibleCutStyleOptions().map((o) => o.id);
         expect(ids).toContain('composable');
     });
@@ -127,7 +127,7 @@ describe('getVisibleCutStyleOptions', () => {
 
     it('shows triangles on production builds', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/');
+        vi.stubEnv('BASE_URL', '/');
         const ids = getVisibleCutStyleOptions().map((o) => o.id);
         expect(ids).toContain('triangles');
     });
@@ -140,13 +140,13 @@ describe('isComposableVisible', () => {
 
     it('returns false on a production build (no DEV, no /dev/ in BASE_URL)', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/');
+        vi.stubEnv('BASE_URL', '/');
         expect(isComposableVisible()).toBe(false);
     });
 
     it('returns true when BASE_URL contains "/dev/"', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/dev/');
+        vi.stubEnv('BASE_URL', '/dev/');
         expect(isComposableVisible()).toBe(true);
     });
 
@@ -164,13 +164,13 @@ describe('isDevDeploy', () => {
 
     it('returns false on a production build (no DEV, no /dev/ in BASE_URL)', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/');
+        vi.stubEnv('BASE_URL', '/');
         expect(isDevDeploy()).toBe(false);
     });
 
     it('returns true when BASE_URL contains "/dev/"', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/dev/');
+        vi.stubEnv('BASE_URL', '/dev/');
         expect(isDevDeploy()).toBe(true);
     });
 

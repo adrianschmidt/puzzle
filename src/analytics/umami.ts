@@ -868,7 +868,8 @@ export interface NewGameFailedData {
  * arbitrary sine config — the new-game dialog offers Composable, with H/V
  * Frequency sliders reaching 10 (`new-game-dialog.ts`), wherever
  * `isComposableVisible()` is true, which is `npm run dev` AND the
- * `/puzzle/dev/` preview deploy (`cut-styles.ts`). That dialog binding is a
+ * `/dev/` preview deploy (`/puzzle/dev/` before the move to
+ * puzzlewise.github.io; `cut-styles.ts`). That dialog binding is a
  * plain `startNewGame(...)`, so it reports `'fresh'`. Those rows are still
  * developer traffic by construction: the production build filters Composable
  * out of the dialog, so a production player cannot select it, and the only
@@ -900,9 +901,9 @@ export interface NewGameFailedData {
  * label the dev routes some other way if they still need excluding.
  *
  * A residual neither rule removes: a composable share link CREATED on a dev
- * build and opened on `/puzzle/dev/` reports `'shared'` like any other
+ * build and opened on the preview reports `'shared'` like any other
  * recipient, and dev-deploy shares production's website ID — the page path
- * (`/puzzle/` vs `/puzzle/dev/`, as above) is the only thing separating the
+ * (the preview prefix, as above) is the only thing separating the
  * two. Since an extreme sine config mismatches on essentially
  * every seed, one review link opened a few times reads as several field
  * incidents. Slice by `url` before treating a cluster of `'shared'` +

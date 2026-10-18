@@ -435,8 +435,8 @@ function buildAboutSection(): HTMLElement {
         ' ',
         [
             'a',
-            'github.com/adrianschmidt/puzzle',
-            { href: 'https://github.com/adrianschmidt/puzzle', target: '_blank', rel: 'noopener' },
+            'github.com/puzzlewise/puzzlewise.github.io',
+            { href: 'https://github.com/puzzlewise/puzzlewise.github.io', target: '_blank', rel: 'noopener' },
         ],
     ]);
     appendInlineLi(list, [['strong', 'License:'], ' MIT']);

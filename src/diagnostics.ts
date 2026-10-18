@@ -1,6 +1,6 @@
 /**
  * Auto-enabled in dev and test, off in every production build — including
- * `/puzzle/dev/`, a production build served from a subpath, so `warn` is
+ * `/dev/`, a production build served from a subpath, so `warn` is
  * silent there too. Nothing binds `enableDiagnostics` to a window/dev-console
  * hook, so a deployed build can't turn it on at runtime — treat `warn` as a
  * local-loop signal only, not a base for production diagnostics.

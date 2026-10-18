@@ -144,8 +144,8 @@ function recordGeometrySeed(seed: number | undefined): void {
  * {@link GEOMETRY_SEED_KEY} the moment we can't vouch for it. Call once.
  *
  * A token is only correct while every writer of {@link STORAGE_KEY} maintains
- * it, but two tabs on one origin need not run the same build — `/puzzle/` and
- * `/puzzle/dev/` share a localStorage (keyed by origin, not path), as does a
+ * it, but two tabs on one origin need not run the same build — `/` and
+ * `/dev/` share a localStorage (keyed by origin, not path), as does a
  * tab left open across a deploy. A `storage` event fires regardless of the
  * writing tab's build, so it's the backstop against the #404 takeover.
  * `pageshow` covers a bfcached document, which receives no storage events while

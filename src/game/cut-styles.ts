@@ -87,7 +87,7 @@ export const loadCutStylePreference = store.load;
 
 /**
  * True on `npm run dev` (`import.meta.env.DEV`) and the PR-preview deploy
- * (`/puzzle/dev/`), false on production. Gates dev-only affordances. Computed
+ * (`/dev/`), false on production. Gates dev-only affordances. Computed
  * per call, not cached, so tests can stub the env.
  */
 export function isDevDeploy(): boolean {

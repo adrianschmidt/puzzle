@@ -223,7 +223,7 @@ Status: `todo` | `in-progress` | `done` | `blocked`
 **Depends on:** 5.2
 **Description:** Add an info/help button (ℹ️ or similar) that opens a modal overlay with:
 - **Credits:** algorithm inspirations (Dillo's CodePen, Fractal Jigsaw Generator), with links
-- **Project link:** link to our GitHub repo (adrianschmidt/puzzle)
+- **Project link:** link to our GitHub repo (puzzlewise/puzzlewise.github.io)
 - **License info:** MIT
 - **How to play:** brief help text explaining features — drag pieces, pinch to zoom, pan on empty space, piece merging, buttons (New Game, Gather Pieces, Centre View, Background Colour)
 - Keep the Unsplash photo credit in its current position (tied to the current image)

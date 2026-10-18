@@ -37,9 +37,9 @@ describe('resolveDistinctId', () => {
     });
 
     it('returns the stored id on a later boot without the param', () => {
-        visit('/puzzle/dev/?userid=adrian');
+        visit('/dev/?userid=adrian');
         resolveDistinctId();
-        visit('/puzzle/');
+        visit('/');
 
         expect(resolveDistinctId()).toBe('adrian');
     });
