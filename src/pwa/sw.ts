@@ -3,8 +3,8 @@
  * own scope (#430) needs real `self.addEventListener` handlers, so this file
  * IS the worker and the build only injects the precache manifest at
  * `self.__WB_MANIFEST`. It must reproduce what `generateSW` gave for free:
- * precache + cleanup, the SPA navigation fallback with the cross-deployment
- * denylist, and the `prompt`-mode skip-waiting handshake. Keep it thin — the
+ * precache + cleanup, the SPA navigation fallback, and the `prompt`-mode
+ * skip-waiting handshake. Keep it thin — the
  * testable error logic lives in `sw-error-reporter.ts`.
  */
 
@@ -17,6 +17,7 @@ import {
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { createSwErrorReporter } from './sw-error-reporter.js';
 import { createStashImageHandler, isStashImageRequest } from './stash-image-handler.js';
+import { appNavigationAllowlist } from './navigation-allowlist.js';
 
 // Workbox replaces `self.__WB_MANIFEST` at build time (its configured
 // injectionPoint), so the string must appear verbatim — don't rename `self`.
@@ -28,13 +29,13 @@ declare const self: ServiceWorkerGlobalScope & {
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
-// Don't serve this deployment's index.html for navigations into a sibling
-// deployment on the same origin (e.g. /dev/ when we're /).
+// The app's only URL is its base, with state in the query or hash. Every other
+// path goes to the network, since it may be a sibling deployment on the same
+// origin (e.g. /dev/ when we're /).
 const base = import.meta.env.BASE_URL;
-const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 registerRoute(
     new NavigationRoute(createHandlerBoundToURL(`${base}index.html`), {
-        denylist: [new RegExp(`^${escapedBase}[^/]+/`)],
+        allowlist: [appNavigationAllowlist(base)],
     }),
 );
 
