@@ -52,10 +52,12 @@ jobs:
       # stay green while Worker changes stopped reaching production. A warning
       # is visible in the checks summary; a notice is not.
       #
-      # CLOUDFLARE_API_TOKEN should come from Cloudflare's "Edit Cloudflare
-      # Workers" template, which is scoped to Workers on one account. A broader
-      # token would make a leak of this Actions secret reach DNS, zones and R2
-      # rather than just this Worker.
+      # CLOUDFLARE_API_TOKEN is an account API token with only Workers Scripts
+      # Write, Account Settings Read, Workers Observability Write and Workers
+      # Tail Read, so a leak of this Actions secret reaches this account's
+      # Workers and not its zones, R2, KV or Pages — all of which the "Edit
+      # Cloudflare Workers" template grants. An account token cannot look up
+      # its own account, hence CLOUDFLARE_ACCOUNT_ID.
       #
       # `npm exec --no-install` rather than `npx`: npx silently falls back to
       # fetching from the registry, which would defeat the lockfile-pinning
@@ -64,6 +66,7 @@ jobs:
       - name: Deploy worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::warning::CLOUDFLARE_API_TOKEN is not set — the Worker was NOT deployed."
