@@ -71,6 +71,7 @@ jobs:
           VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
           VITE_APP_VERSION: "PR #${{ github.event.pull_request.number }} (run ${{ github.run_number }})"
           VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
+          VITE_UMAMI_SCRIPT_URL: ${{ vars.VITE_UMAMI_SCRIPT_URL }}
 
       # `include-hidden-files` explained on deploy.yml's equivalent step.
       - name: Upload the built preview
