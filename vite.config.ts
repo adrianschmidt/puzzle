@@ -10,10 +10,9 @@ export default defineConfig({
   plugins: [
     // We use the `injectManifest` strategy (custom worker at src/pwa/sw.ts)
     // rather than `generateSW` so the worker can register its own `error` /
-    // `unhandledrejection` listeners (#430). The navigation fallback and its
-    // cross-deployment denylist — which `generateSW`'s `workbox` options used
-    // to configure — now live in the worker source; this config only injects
-    // the precache manifest.
+    // `unhandledrejection` listeners (#430). The navigation fallback — which
+    // `generateSW`'s `workbox` options used to configure — now lives in the
+    // worker source; this config only injects the precache manifest.
     VitePWA({
       strategies: 'injectManifest',
       srcDir: 'src/pwa',
