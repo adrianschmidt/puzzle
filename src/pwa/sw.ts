@@ -28,10 +28,8 @@ declare const self: ServiceWorkerGlobalScope & {
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
-// SPA navigation fallback → precached index.html. The denylist mirrors
-// vite.config.ts's `navigateFallbackDenylist`: don't serve this deployment's
-// index.html for navigations into a sibling deployment on the same origin
-// (e.g. /puzzle/dev/ when we're /puzzle/).
+// Don't serve this deployment's index.html for navigations into a sibling
+// deployment on the same origin (e.g. /dev/ when we're /).
 const base = import.meta.env.BASE_URL;
 const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 registerRoute(

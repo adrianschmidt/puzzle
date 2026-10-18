@@ -626,7 +626,7 @@ describe('createNewGameDialog — composable visibility', () => {
 
     it('hides the composable button on production', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/');
+        vi.stubEnv('BASE_URL', '/');
         createNewGameDialog({
             container,
             selectedSizeId: '48',
@@ -640,7 +640,7 @@ describe('createNewGameDialog — composable visibility', () => {
 
     it('shows the composable button on dev-deploys', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/dev/');
+        vi.stubEnv('BASE_URL', '/dev/');
         createNewGameDialog({
             container,
             selectedSizeId: '48',
@@ -654,7 +654,7 @@ describe('createNewGameDialog — composable visibility', () => {
 
     it('coerces a saved composable preference to the default on prod', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/');
+        vi.stubEnv('BASE_URL', '/');
         createNewGameDialog({
             container,
             selectedSizeId: '48',
@@ -683,7 +683,7 @@ describe('createNewGameDialog — dev query override', () => {
 
     it('shows the query override input on dev-deploys', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/dev/');
+        vi.stubEnv('BASE_URL', '/dev/');
         createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
 
         expect(
@@ -693,7 +693,7 @@ describe('createNewGameDialog — dev query override', () => {
 
     it('hides the query override input on production', () => {
         vi.stubEnv('DEV', false);
-        vi.stubEnv('BASE_URL', '/puzzle/');
+        vi.stubEnv('BASE_URL', '/');
         createNewGameDialog({ container, selectedSizeId: '48', onSelect: vi.fn() });
 
         expect(

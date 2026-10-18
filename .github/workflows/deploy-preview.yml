@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     # Dependabot PRs merge unattended (dependabot-auto-merge.yml) and nothing
     # tests against the dev deploy, so a preview would only clobber the single
-    # shared /puzzle/dev/ destination a human PR may be using — and waste a
+    # shared /dev/ destination a human PR may be using — and waste a
     # full build per PR. Guard on the PR author, not the actor, so a human
     # closing/reopening a Dependabot PR doesn't deploy either.
     if: ${{ github.event.pull_request.user.login != 'dependabot[bot]' }}
@@ -46,7 +46,7 @@ jobs:
       - run: npm ci --ignore-scripts
 
       # Same check as deploy.yml, which carries the full reasoning. Worth
-      # having on both: the preview at /puzzle/dev/ is the surface PRs are
+      # having on both: the preview at /dev/ is the surface PRs are
       # actually reviewed on, so a misconfigured proxy shows up here first —
       # and during a key rotation every preview would otherwise lose its
       # picker with a green checks summary.
@@ -67,7 +67,7 @@ jobs:
 
       - run: npm run build
         env:
-          VITE_BASE_PATH: /puzzle/dev/
+          VITE_BASE_PATH: /dev/
           VITE_IMAGE_PROXY_URL: ${{ vars.VITE_IMAGE_PROXY_URL }}
           VITE_APP_VERSION: "PR #${{ github.event.pull_request.number }} (run ${{ github.run_number }})"
           VITE_UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
@@ -119,7 +119,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const url = 'https://adrianschmidt.github.io/puzzle/dev/';
+            const url = 'https://puzzlewise.github.io/dev/';
             const body = `🧩 **Preview deployed:** ${url}`;
 
             const { data: comments } = await github.rest.issues.listComments({
