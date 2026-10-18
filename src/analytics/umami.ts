@@ -1530,9 +1530,9 @@ export interface GenerationCanceledData {
  * On devices opted in by visiting any app URL with `?userid=<id>`
  * (`?userid=off` opts out), the export's `distinct_id` carries the id on
  * pageview and custom-event rows. Umami stores `event_type` 5 (Web
- * Vitals) rows without it even though the tracker sends it, so attribute
- * those via `session_id`. It labels known devices; it does not exclude
- * them.
+ * Vitals) rows without it, and without `hostname`, even though the
+ * tracker sends both: attribute the id via `session_id` and the site via
+ * `url_path`. It labels known devices; it does not exclude them.
  */
 export function initAnalytics(): void {
     const distinctId = resolveDistinctId();
