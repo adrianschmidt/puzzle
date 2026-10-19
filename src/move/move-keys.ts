@@ -1,3 +1,8 @@
+/**
+ * The keys of the frozen legacy build (tag `legacy-frozen`), the only sender,
+ * not the keys this codebase declares. Keep a key here after `main` renames or
+ * drops it: the frozen build still sends it, under its old name.
+ */
 export const MOVED_KEYS: readonly string[] = [
     'puzzle-game-state',
     'puzzle-progress',
